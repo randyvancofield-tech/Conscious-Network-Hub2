@@ -1,10 +1,14 @@
 
 import { GoogleGenAI } from "@google/genai";
 
-const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+// Fixed: Moved initialization inside functions to ensure latest process.env.API_KEY is used.
 
 export interface GroundingChunk {
   web?: {
+    uri: string;
+    title: string;
+  };
+  maps?: {
     uri: string;
     title: string;
   };
@@ -15,14 +19,15 @@ export interface ChatMessage {
   parts: { text: string }[];
 }
 
-export const getEthicalAIAdvice = async (userPrompt: string) => {
+export const getWisdomSearch = async (userPrompt: string) => {
   try {
+    const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
     const response = await ai.models.generateContent({
       model: "gemini-3-flash-preview",
       contents: userPrompt,
       config: {
         tools: [{ googleSearch: {} }],
-        systemInstruction: "You are the Conscious Network Hub Ethical AI. Use Google Search to provide accurate, up-to-date information about decentralization, blockchain ethics, and social learning trends. Always verify platform-specific details: Ethical AI/Blockchain, Provider-Centric Model, Tier-Based Learning, Institutional Integration, and the Social Space.",
+        systemInstruction: "You are the Conscious Network Hub Wisdom Node. Use Google Search to provide accurate, up-to-date information about decentralization, blockchain ethics, and social learning trends.",
         temperature: 0.7,
       },
     });
@@ -31,29 +36,84 @@ export const getEthicalAIAdvice = async (userPrompt: string) => {
     const groundingChunks = response.candidates?.[0]?.groundingMetadata?.groundingChunks as GroundingChunk[] | undefined;
     
     return { text, groundingChunks };
-  } catch (error) {
-    console.error("Gemini API Error:", error);
-    return { text: "I am currently undergoing a security protocol update. Please try again in a moment.", groundingChunks: [] };
+  } catch (error: any) {
+    console.error("Search Error:", error);
+    return { text: "Search layer temporarily offline.", groundingChunks: [] };
   }
 };
 
-export const chatWithEthicalAI = async (message: string, history: ChatMessage[] = []) => {
+export const getWisdomMaps = async (userPrompt: string, location?: { latitude: number, longitude: number }) => {
   try {
-    const chat = ai.chats.create({
-      model: "gemini-3-pro-preview",
+    const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+    const response = await ai.models.generateContent({
+      model: "gemini-2.5-flash",
+      contents: userPrompt,
       config: {
-        systemInstruction: `You are the core intelligence of the Conscious Network Hub. 
-        Your mission is to provide deep, reflective, and ethically-sound guidance on decentralization, data sovereignty, and social learning. 
-        The platform restores autonomy and protects identity. 
-        If a user asks for recent news or facts outside your internal knowledge, suggest using a search-grounded query.
-        Keep your tone empowering, futuristic, and intellectually rigorous.`,
+        tools: [{ googleMaps: {} }],
+        toolConfig: {
+          retrievalConfig: {
+            latLng: location || { latitude: 37.7749, longitude: -122.4194 } // Default to SF if none provided
+          }
+        },
+        systemInstruction: "You are the Wisdom Node specializing in geographic and place-based information for the Conscious Network Hub. Use Google Maps to find restaurants, centers, or locations.",
       },
     });
 
-    const response = await chat.sendMessage({ message });
+    const text = response.text;
+    const groundingChunks = response.candidates?.[0]?.groundingMetadata?.groundingChunks as GroundingChunk[] | undefined;
+    
+    return { text, groundingChunks };
+  } catch (error) {
+    console.error("Maps Error:", error);
+    return { text: "Maps layer temporarily offline.", groundingChunks: [] };
+  }
+};
+
+export const fastWisdomChat = async (message: string) => {
+  try {
+    const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+    const response = await ai.models.generateContent({
+      // Fixed: Using gemini-3-flash-preview for basic text tasks as per guidelines
+      model: "gemini-3-flash-preview",
+      contents: message,
+      config: {
+        systemInstruction: "You are the Fast Wisdom Node of the Conscious Network Hub. Provide quick, concise, and futuristic guidance on the platform and its ethical frameworks.",
+      },
+    });
     return response.text;
   } catch (error) {
-    console.error("Chat Error:", error);
-    return "The neural link is temporarily unstable. Re-establishing connection...";
+    console.error("Fast Chat Error:", error);
+    return "Neural link lag detected.";
+  }
+};
+
+export const generateWisdomImage = async (prompt: string, aspectRatio: string = "1:1") => {
+  try {
+    const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+    const response = await ai.models.generateContent({
+      model: 'gemini-3-pro-image-preview',
+      contents: { parts: [{ text: prompt }] },
+      config: {
+        imageConfig: {
+          aspectRatio: aspectRatio as any,
+          imageSize: "1K"
+        }
+      },
+    });
+
+    // Fixed: Properly iterate through response parts to find image data
+    if (response.candidates?.[0]?.content?.parts) {
+      for (const part of response.candidates[0].content.parts) {
+        if (part.inlineData) {
+          return `data:image/png;base64,${part.inlineData.data}`;
+        }
+      }
+    }
+    return null;
+  } catch (error: any) {
+    console.error("Image Gen Error:", error);
+    // Note: If error contains "Requested entity was not found.", 
+    // the UI should trigger window.aistudio.openSelectKey()
+    return null;
   }
 };

@@ -6,23 +6,29 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Conscious Network Hub | Portal</title>
     <script src="https://cdn.tailwindcss.com"></script>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Outfit:wght@300;400;600;700&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;400;500;600;700&family=Orbitron:wght@400;500;600;700;800;900&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
     <style>
         body {
             margin: 0;
             padding: 0;
-            font-family: 'Inter', sans-serif;
+            font-family: 'Space Grotesk', sans-serif;
             background-color: #05070a;
             color: #e2e8f0;
             overflow-x: hidden;
+            letter-spacing: -0.01em;
         }
         h1, h2, h3, h4, .font-heading {
-            font-family: 'Outfit', sans-serif;
+            font-family: 'Orbitron', sans-serif;
+            letter-spacing: -0.02em;
+        }
+        .font-mono {
+            font-family: 'JetBrains Mono', monospace;
         }
         .glass-panel {
-            background: rgba(15, 23, 42, 0.6);
-            backdrop-filter: blur(12px);
-            border: 1px solid rgba(255, 255, 255, 0.1);
+            background: rgba(15, 23, 42, 0.4);
+            backdrop-filter: blur(16px);
+            border: 1px solid rgba(255, 255, 255, 0.08);
+            box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.37);
         }
         .glow-blue {
             box-shadow: 0 0 20px rgba(59, 130, 246, 0.3);
@@ -38,17 +44,25 @@
             100% { background-position: 0% 50%; }
         }
         ::-webkit-scrollbar {
-            width: 6px;
+            width: 4px;
         }
         ::-webkit-scrollbar-track {
-            background: #0f172a;
+            background: #05070a;
         }
         ::-webkit-scrollbar-thumb {
-            background: #334155;
+            background: #1e293b;
             border-radius: 10px;
         }
         ::-webkit-scrollbar-thumb:hover {
-            background: #475569;
+            background: #3b82f6;
+        }
+        
+        /* Futuristic text styles */
+        .text-glow {
+            text-shadow: 0 0 15px rgba(59, 130, 246, 0.5);
+        }
+        .tracking-widest-plus {
+            letter-spacing: 0.5em;
         }
     </style>
 <script type="importmap">
