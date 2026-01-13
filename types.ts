@@ -9,7 +9,9 @@ export enum AppView {
   MY_CONSCIOUS_IDENTITY = 'MY_CONSCIOUS_IDENTITY',
   MEMBERSHIP = 'MEMBERSHIP',
   KNOWLEDGE_PATHWAYS = 'KNOWLEDGE_PATHWAYS',
-  COMMUNITY = 'COMMUNITY'
+  COMMUNITY = 'COMMUNITY',
+  CONSCIOUS_SOCIAL_LEARNING = 'CONSCIOUS_SOCIAL_LEARNING',
+  CONSCIOUS_MEETINGS = 'CONSCIOUS_MEETINGS'
 }
 
 export interface Provider {
@@ -18,8 +20,29 @@ export interface Provider {
   specialty: string;
   rating: number;
   avatar: string;
-  courses: number;
+  courses?: number;
   bio: string;
+  availabilitySlots?: string[];
+  tokenPrice?: number;
+  tierIncludedMin?: string;
+}
+
+export interface Meeting {
+  id: string;
+  title: string;
+  hostUserId: string;
+  providerId: string;
+  startTime: string;
+  endTime: string;
+  participants: { id: string, name: string, role: 'User' | 'Provider' }[];
+  status: 'Upcoming' | 'Live' | 'Completed' | 'Cancelled';
+  paymentType: 'tier' | 'tokens';
+  notes?: {
+    transcript: string[];
+    summary: string;
+    decisions: string[];
+    actionItems: { owner: string, task: string, dueDate: string }[];
+  };
 }
 
 export interface Course {
@@ -49,6 +72,7 @@ export interface UserProfile {
   tier: string;
   identityVerified: boolean;
   reputationScore: number;
+  walletBalanceTokens: number;
   createdAt: string;
   hasProfile: boolean;
   avatarUrl?: string;

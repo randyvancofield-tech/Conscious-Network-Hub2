@@ -2,6 +2,7 @@
   "name": "Conscious Network Hub",
   "description": "An immersive decentralized social learning platform featuring Ethical AI, Blockchain integrity, and a provider-centric ecosystem for community resilience.",
   "requestFramePermissions": [
+    "camera",
     "microphone"
   ]
 }

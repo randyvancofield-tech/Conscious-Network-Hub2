@@ -1,9 +1,11 @@
 
 import React from 'react';
-import { Shield, Brain, Users, GraduationCap, Building2, Layout, UserCircle, Briefcase, CreditCard, BookOpen, Sparkles } from 'lucide-react';
+import { Shield, Brain, Users, GraduationCap, Building2, Layout, UserCircle, Briefcase, CreditCard, BookOpen, Sparkles, MessageSquareShare, Video } from 'lucide-react';
 
 export const NAVIGATION_ITEMS = [
   { id: 'dashboard', label: 'Portal Home', icon: <Layout className="w-5 h-5" /> },
+  { id: 'social-learning', label: 'Social Learning', icon: <MessageSquareShare className="w-5 h-5" /> },
+  { id: 'meetings', label: 'Conscious Meetings', icon: <Video className="w-5 h-5" /> },
   { id: 'my-courses', label: 'My Courses', icon: <BookOpen className="w-5 h-5" /> },
   { id: 'providers', label: 'Providers Market', icon: <Briefcase className="w-5 h-5" /> },
   { id: 'ai-consult', label: 'Wisdom Node', icon: <Sparkles className="w-5 h-5" /> },

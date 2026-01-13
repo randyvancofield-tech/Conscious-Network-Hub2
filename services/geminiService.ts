@@ -1,7 +1,5 @@
 
-import { GoogleGenAI } from "@google/genai";
-
-// Fixed: Moved initialization inside functions to ensure latest process.env.API_KEY is used.
+import { GoogleGenAI, Type } from "@google/genai";
 
 export interface GroundingChunk {
   web?: {
@@ -18,6 +16,41 @@ export interface ChatMessage {
   role: 'user' | 'model';
   parts: { text: string }[];
 }
+
+export const summarizeMeeting = async (transcript: string[]) => {
+  try {
+    const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+    const response = await ai.models.generateContent({
+      model: "gemini-3-flash-preview",
+      contents: `Please summarize the following meeting transcript and extract key decisions and action items in JSON format: \n\n ${transcript.join('\n')}`,
+      config: {
+        responseMimeType: "application/json",
+        responseSchema: {
+          type: Type.OBJECT,
+          properties: {
+            summary: { type: Type.STRING },
+            decisions: { type: Type.ARRAY, items: { type: Type.STRING } },
+            actionItems: { 
+              type: Type.ARRAY, 
+              items: { 
+                type: Type.OBJECT, 
+                properties: {
+                  owner: { type: Type.STRING },
+                  task: { type: Type.STRING },
+                  dueDate: { type: Type.STRING }
+                }
+              }
+            }
+          }
+        }
+      }
+    });
+    return JSON.parse(response.text);
+  } catch (error) {
+    console.error("Summary Error:", error);
+    return null;
+  }
+};
 
 export const getWisdomSearch = async (userPrompt: string) => {
   try {
@@ -52,7 +85,7 @@ export const getWisdomMaps = async (userPrompt: string, location?: { latitude: n
         tools: [{ googleMaps: {} }],
         toolConfig: {
           retrievalConfig: {
-            latLng: location || { latitude: 37.7749, longitude: -122.4194 } // Default to SF if none provided
+            latLng: location || { latitude: 37.7749, longitude: -122.4194 } 
           }
         },
         systemInstruction: "You are the Wisdom Node specializing in geographic and place-based information for the Conscious Network Hub. Use Google Maps to find restaurants, centers, or locations.",
@@ -73,7 +106,6 @@ export const fastWisdomChat = async (message: string) => {
   try {
     const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
     const response = await ai.models.generateContent({
-      // Fixed: Using gemini-3-flash-preview for basic text tasks as per guidelines
       model: "gemini-3-flash-preview",
       contents: message,
       config: {
@@ -101,7 +133,6 @@ export const generateWisdomImage = async (prompt: string, aspectRatio: string = 
       },
     });
 
-    // Fixed: Properly iterate through response parts to find image data
     if (response.candidates?.[0]?.content?.parts) {
       for (const part of response.candidates[0].content.parts) {
         if (part.inlineData) {
@@ -112,8 +143,6 @@ export const generateWisdomImage = async (prompt: string, aspectRatio: string = 
     return null;
   } catch (error: any) {
     console.error("Image Gen Error:", error);
-    // Note: If error contains "Requested entity was not found.", 
-    // the UI should trigger window.aistudio.openSelectKey()
     return null;
   }
 };

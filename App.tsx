@@ -8,13 +8,15 @@ import MyCourses from './components/MyCourses';
 import ProvidersMarket from './components/ProvidersMarket';
 import KnowledgePathways from './components/KnowledgePathways';
 import CommunityMembers from './components/CommunityMembers';
+import SocialLearningHub from './components/SocialLearningHub';
+import ConsciousMeetings from './components/ConsciousMeetings';
 import MusicBox from './components/MusicBox';
 import { ConsciousIdentity } from './components/community/CommunityLayout';
 import { AppView, UserProfile, Course } from './types';
 import { NAVIGATION_ITEMS } from './constants';
 import { 
   Shield, Brain, Menu, X, Search, Bell, Settings, 
-  ChevronRight, Wallet, LogIn, Home, LogOut, Compass, UserCircle, Building2, CheckCircle2, Sparkles, Key
+  ChevronRight, Wallet, LogIn, Home, LogOut, Compass, UserCircle, Building2, CheckCircle2, Sparkles, Key, Video
 } from 'lucide-react';
 
 const App: React.FC = () => {
@@ -29,7 +31,6 @@ const App: React.FC = () => {
   const [isAiOpen, setAiOpen] = useState(false);
   const [selectedTier, setSelectedTier] = useState('Free / Community');
   
-  // New: API Key Selection state
   const [hasApiKey, setHasApiKey] = useState<boolean | null>(null);
 
   const [emailInput, setEmailInput] = useState('');
@@ -65,7 +66,6 @@ const App: React.FC = () => {
   ];
 
   useEffect(() => {
-    // Fixed: Check for API Key selection on mount
     const checkApiKey = async () => {
       // @ts-ignore
       if (window.aistudio?.hasSelectedApiKey) {
@@ -94,7 +94,7 @@ const App: React.FC = () => {
     if (window.aistudio?.openSelectKey) {
       // @ts-ignore
       await window.aistudio.openSelectKey();
-      setHasApiKey(true); // Assume success as per guidelines
+      setHasApiKey(true);
     }
   };
 
@@ -148,6 +148,7 @@ const App: React.FC = () => {
       tier: selectedTier,
       identityVerified: true,
       reputationScore: 100,
+      walletBalanceTokens: 200, // Seed with some tokens for testing
       createdAt: new Date().toISOString(),
       hasProfile: false
     };
@@ -190,10 +191,19 @@ const App: React.FC = () => {
     setCurrentView(AppView.MY_COURSES);
   };
 
+  const updateActiveUser = (updated: UserProfile) => {
+    setUser(updated);
+    localStorage.setItem('hcn_active_user', JSON.stringify(updated));
+  };
+
   const renderActiveView = () => {
     switch (currentView) {
       case AppView.DASHBOARD: 
         return <Dashboard user={user} onEnroll={enrollCourse} />;
+      case AppView.CONSCIOUS_SOCIAL_LEARNING:
+        return <SocialLearningHub user={user} />;
+      case AppView.CONSCIOUS_MEETINGS:
+        return <ConsciousMeetings user={user} onUpdateUser={updateActiveUser} />;
       case AppView.MY_CONSCIOUS_IDENTITY: 
         return (
           <ConsciousIdentity 
@@ -202,8 +212,7 @@ const App: React.FC = () => {
             onComplete={(p) => {
               if (user) {
                 const updated = { ...user, ...p, hasProfile: true };
-                setUser(updated);
-                localStorage.setItem('hcn_active_user', JSON.stringify(updated));
+                updateActiveUser(updated);
               }
             }}
             onSignOut={handleSignOut}
@@ -249,7 +258,6 @@ const App: React.FC = () => {
 
       <div className="relative z-10 w-full h-full flex flex-col overflow-hidden">
         
-        {/* Fixed: Mandatory API Key Selection UI */}
         {hasApiKey === false && (
           <div className="fixed inset-0 z-[1000] flex items-center justify-center bg-black/90 backdrop-blur-3xl p-6">
             <div className="glass-panel max-w-md w-full p-10 rounded-[3rem] text-center border-blue-500/20 shadow-2xl">
@@ -448,6 +456,8 @@ const App: React.FC = () => {
                   {NAVIGATION_ITEMS.map((item) => {
                     const viewMap: any = {
                       'dashboard': AppView.DASHBOARD,
+                      'social-learning': AppView.CONSCIOUS_SOCIAL_LEARNING,
+                      'meetings': AppView.CONSCIOUS_MEETINGS,
                       'my-courses': AppView.MY_COURSES,
                       'providers': AppView.PROVIDERS,
                       'ai-consult': AppView.AI_CONSULT,
