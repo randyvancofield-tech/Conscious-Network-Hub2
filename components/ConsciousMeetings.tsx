@@ -1,11 +1,11 @@
 
-import React, { useState } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { 
   Video, Calendar, Users, ShieldCheck, Zap, 
   Search, Filter, Clock, CreditCard, CheckCircle2, 
   Plus, X, Camera, Mic, MicOff, CameraOff, 
   Settings, Download, Share2, Info, Loader2, Play,
-  ChevronRight
+  ChevronRight, Pause, Square, Image, Film, Upload
 } from 'lucide-react';
 import { UserProfile, Provider, Meeting } from '../types';
 import { summarizeMeeting } from '../services/geminiService';
@@ -95,6 +95,25 @@ const ConsciousMeetings: React.FC<ConsciousMeetingsProps> = ({ user, onUpdateUse
   const [searchQuery, setSearchQuery] = useState('');
   const [isJoining, setIsJoining] = useState(false);
 
+  // Solo Session States
+  const [isSoloSessionActive, setIsSoloSessionActive] = useState(false);
+  const [stream, setStream] = useState<MediaStream | null>(null);
+  const [isRecording, setIsRecording] = useState(false);
+  const [recordingState, setRecordingState] = useState<'idle' | 'recording' | 'paused'>('idle');
+  const [recordedChunks, setRecordedChunks] = useState<Blob[]>([]);
+  const [recordingDuration, setRecordingDuration] = useState(0);
+  const [selectedBackground, setSelectedBackground] = useState<string | null>(null);
+  const [backgroundType, setBackgroundType] = useState<'image' | 'video'>('image');
+  const [micLevel, setMicLevel] = useState(0);
+  const [customBackgroundFile, setCustomBackgroundFile] = useState<File | null>(null);
+
+  // Refs
+  const videoRef = useRef<HTMLVideoElement>(null);
+  const mediaRecorderRef = useRef<MediaRecorder | null>(null);
+  const recordingIntervalRef = useRef<NodeJS.Timeout | null>(null);
+  const analyserRef = useRef<AnalyserNode | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
   const mockTranscript = [
     "Jordan: Welcome to our session. How are you feeling about your digital boundaries?",
     "User: I'm feeling overwhelmed with information. I need to restrict my neural input.",
@@ -174,6 +193,200 @@ const ConsciousMeetings: React.FC<ConsciousMeetingsProps> = ({ user, onUpdateUse
     p.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
     p.specialty.toLowerCase().includes(searchQuery.toLowerCase())
   );
+
+  // Solo Session Functions
+  const startSoloSession = async () => {
+    try {
+      setPermissionState('pending');
+      const mediaStream = await navigator.mediaDevices.getUserMedia({ 
+        video: true, 
+        audio: true 
+      });
+      setStream(mediaStream);
+      setPermissionState('granted');
+      setIsSoloSessionActive(true);
+
+      if (videoRef.current) {
+        videoRef.current.srcObject = mediaStream;
+      }
+
+      // Setup audio analyser for mic level
+      const audioContext = new AudioContext();
+      const analyser = audioContext.createAnalyser();
+      const microphone = audioContext.createMediaStreamSource(mediaStream);
+      microphone.connect(analyser);
+      analyser.fftSize = 256;
+      analyserRef.current = analyser;
+
+      const dataArray = new Uint8Array(analyser.frequencyBinCount);
+      const updateMicLevel = () => {
+        if (analyserRef.current) {
+          analyserRef.current.getByteFrequencyData(dataArray);
+          const average = dataArray.reduce((a, b) => a + b) / dataArray.length;
+          setMicLevel(average / 255);
+          requestAnimationFrame(updateMicLevel);
+        }
+      };
+      updateMicLevel();
+
+    } catch (err) {
+      setPermissionState('denied');
+      alert('Camera and microphone access is required for solo sessions. Please check your browser permissions.');
+    }
+  };
+
+  const stopSoloSession = () => {
+    if (stream) {
+      stream.getTracks().forEach(track => track.stop());
+      setStream(null);
+    }
+    if (mediaRecorderRef.current && recordingState !== 'idle') {
+      stopRecording();
+    }
+    setIsSoloSessionActive(false);
+    setPermissionState('idle');
+    setRecordingState('idle');
+    setRecordedChunks([]);
+    setRecordingDuration(0);
+    if (recordingIntervalRef.current) {
+      clearInterval(recordingIntervalRef.current);
+    }
+  };
+
+  const startRecording = () => {
+    if (!stream) return;
+
+    // Check supported mime types
+    let mimeType = 'video/webm;codecs=vp9,opus';
+    if (!MediaRecorder.isTypeSupported(mimeType)) {
+      mimeType = 'video/webm;codecs=vp8,opus';
+      if (!MediaRecorder.isTypeSupported(mimeType)) {
+        mimeType = 'video/webm';
+        if (!MediaRecorder.isTypeSupported(mimeType)) {
+          mimeType = ''; // Let browser choose
+        }
+      }
+    }
+
+    const mediaRecorder = new MediaRecorder(stream, mimeType ? { mimeType } : {});
+
+    mediaRecorderRef.current = mediaRecorder;
+    const chunks: Blob[] = [];
+
+    mediaRecorder.ondataavailable = (event) => {
+      if (event.data.size > 0) {
+        chunks.push(event.data);
+      }
+    };
+
+    mediaRecorder.onstop = () => {
+      setRecordedChunks(chunks);
+    };
+
+    mediaRecorder.start();
+    setRecordingState('recording');
+    setIsRecording(true);
+    setRecordingDuration(0);
+
+    recordingIntervalRef.current = setInterval(() => {
+      setRecordingDuration(prev => prev + 1);
+    }, 1000);
+  };
+
+  const pauseRecording = () => {
+    if (mediaRecorderRef.current && recordingState === 'recording') {
+      mediaRecorderRef.current.pause();
+      setRecordingState('paused');
+      if (recordingIntervalRef.current) {
+        clearInterval(recordingIntervalRef.current);
+      }
+    }
+  };
+
+  const resumeRecording = () => {
+    if (mediaRecorderRef.current && recordingState === 'paused') {
+      mediaRecorderRef.current.resume();
+      setRecordingState('recording');
+      recordingIntervalRef.current = setInterval(() => {
+        setRecordingDuration(prev => prev + 1);
+      }, 1000);
+    }
+  };
+
+  const stopRecording = () => {
+    if (mediaRecorderRef.current) {
+      mediaRecorderRef.current.stop();
+      setRecordingState('idle');
+      setIsRecording(false);
+      if (recordingIntervalRef.current) {
+        clearInterval(recordingIntervalRef.current);
+      }
+    }
+  };
+
+  const downloadRecording = () => {
+    if (recordedChunks.length === 0) return;
+
+    const blob = new Blob(recordedChunks, { type: 'video/webm' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `conscious-session-${new Date().toISOString().slice(0, 19).replace(/:/g, '-')}.webm`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  };
+
+  const selectBackground = (background: string, type: 'image' | 'video') => {
+    setSelectedBackground(background);
+    setBackgroundType(type);
+    setCustomBackgroundFile(null); // Clear custom file when selecting preset
+  };
+
+  const handleCustomBackgroundUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (file) {
+      // Clean up previous custom background URL
+      if (customBackgroundFile && selectedBackground) {
+        URL.revokeObjectURL(selectedBackground);
+      }
+      
+      const url = URL.createObjectURL(file);
+      setSelectedBackground(url);
+      setBackgroundType(file.type.startsWith('video/') ? 'video' : 'image');
+      setCustomBackgroundFile(file);
+    }
+  };
+
+  const formatDuration = (seconds: number) => {
+    const mins = Math.floor(seconds / 60);
+    const secs = seconds % 60;
+    return `${mins}:${secs.toString().padStart(2, '0')}`;
+  };
+
+  // Cleanup effect
+  useEffect(() => {
+    return () => {
+      if (stream) {
+        stream.getTracks().forEach(track => track.stop());
+      }
+      if (recordingIntervalRef.current) {
+        clearInterval(recordingIntervalRef.current);
+      }
+      // Clean up custom background URL
+      if (customBackgroundFile && selectedBackground) {
+        URL.revokeObjectURL(selectedBackground);
+      }
+    };
+  }, [stream, customBackgroundFile, selectedBackground]);
+
+  // Set video srcObject when stream is available
+  useEffect(() => {
+    if (stream && videoRef.current) {
+      videoRef.current.srcObject = stream;
+    }
+  }, [stream]);
 
   return (
     <div className="min-h-0 flex flex-col gap-4 sm:gap-6 md:gap-8 animate-in fade-in duration-700 relative">
@@ -312,84 +525,303 @@ const ConsciousMeetings: React.FC<ConsciousMeetingsProps> = ({ user, onUpdateUse
 
         {activeTab === 'lobby' && (
           <div className="max-w-4xl mx-auto space-y-8 sm:space-y-10 md:space-y-12 animate-in fade-in py-4 sm:py-6 md:py-10">
-            <div className="glass-panel p-6 sm:p-8 md:p-10 rounded-2xl sm:rounded-[2.25rem] md:rounded-[2.5rem] lg:rounded-[3rem] border-white/5 shadow-2xl relative overflow-hidden group">
-              <div className="absolute top-0 right-0 p-8 sm:p-10 md:p-12 lg:p-16 opacity-5 group-hover:opacity-10 transition-opacity">
-                <Video className="w-32 h-32 sm:w-40 sm:h-40 md:w-48 md:h-48 text-blue-400" />
-              </div>
-
-              <div className="relative z-10 space-y-6 sm:space-y-8">
-                <div className="flex items-center gap-3 sm:gap-4">
-                  <div className="w-1.5 h-1.5 rounded-full bg-teal-400 animate-pulse" />
-                  <span className="text-[9px] sm:text-[10px] font-black text-teal-400 uppercase tracking-[0.4em]">Next Session Ready</span>
-                </div>
-
-                <div>
-                  <h3 className="text-xl sm:text-2xl md:text-3xl lg:text-4xl font-black text-white uppercase tracking-tighter leading-none mb-3 sm:mb-4">
-                    {meetings[0].title}
-                  </h3>
-                  <div className="flex flex-wrap items-center gap-3 sm:gap-4 md:gap-6 text-slate-400 text-xs sm:text-sm font-medium">
-                    <span className="flex items-center gap-2"><Clock className="w-3 h-3 sm:w-4 sm:h-4" /> {meetings[0].startTime}</span>
-                    <span className="flex items-center gap-2"><Users className="w-3 h-3 sm:w-4 sm:h-4" /> {meetings[0].participants.length} Participants</span>
-                  </div>
-                </div>
-
-                {/* Pre-join flow */}
-                <div className="space-y-4 sm:space-y-6 pt-4 sm:pt-6 border-t border-white/5">
-                  <h4 className="text-[9px] sm:text-[10px] font-black text-slate-500 uppercase tracking-widest">Hardware Manifest</h4>
-
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
-                    <button
-                      onClick={checkPermissions}
-                      className={`flex items-center justify-between p-4 sm:p-5 md:p-6 rounded-lg sm:rounded-2xl border transition-all ${
-                        permissionState === 'granted'
-                          ? 'bg-teal-500/10 border-teal-500/20 text-teal-400'
-                          : 'bg-white/5 border-white/10 text-slate-400 hover:bg-white/10'
-                      }`}
-                    >
-                      <div className="flex items-center gap-3 sm:gap-4">
-                        {permissionState === 'granted' ? <Camera className="w-5 h-5 sm:w-6 sm:h-6" /> : <CameraOff className="w-5 h-5 sm:w-6 sm:h-6" />}
-                        <span className="text-[8px] sm:text-xs font-bold uppercase tracking-widest">Visual Input</span>
-                      </div>
-                      {permissionState === 'granted'
-                        ? <CheckCircle2 className="w-4 h-4 sm:w-5 sm:h-5" />
-                        : permissionState === 'pending'
-                          ? <Loader2 className="w-4 h-4 sm:w-5 sm:h-5 animate-spin" />
-                          : <Settings className="w-4 h-4 sm:w-5 sm:h-5" />
-                      }
-                    </button>
-
-                    <button
-                      onClick={checkPermissions}
-                      className={`flex items-center justify-between p-4 sm:p-5 md:p-6 rounded-lg sm:rounded-2xl border transition-all ${
-                        permissionState === 'granted'
-                          ? 'bg-teal-500/10 border-teal-500/20 text-teal-400'
-                          : 'bg-white/5 border-white/10 text-slate-400 hover:bg-white/10'
-                      }`}
-                    >
-                      <div className="flex items-center gap-3 sm:gap-4">
-                        {permissionState === 'granted' ? <Mic className="w-5 h-5 sm:w-6 sm:h-6" /> : <MicOff className="w-5 h-5 sm:w-6 sm:h-6" />}
-                        <span className="text-[8px] sm:text-xs font-bold uppercase tracking-widest">Audio Input</span>
-                      </div>
-                      {permissionState === 'granted'
-                        ? <CheckCircle2 className="w-4 h-4 sm:w-5 sm:h-5" />
-                        : permissionState === 'pending'
-                          ? <Loader2 className="w-4 h-4 sm:w-5 sm:h-5 animate-spin" />
-                          : <Settings className="w-4 h-4 sm:w-5 sm:h-5" />
-                      }
-                    </button>
+            {!isSoloSessionActive ? (
+              <>
+                <div className="glass-panel p-6 sm:p-8 md:p-10 rounded-2xl sm:rounded-[2.25rem] md:rounded-[2.5rem] lg:rounded-[3rem] border-white/5 shadow-2xl relative overflow-hidden group">
+                  <div className="absolute top-0 right-0 p-8 sm:p-10 md:p-12 lg:p-16 opacity-5 group-hover:opacity-10 transition-opacity">
+                    <Video className="w-32 h-32 sm:w-40 sm:h-40 md:w-48 md:h-48 text-blue-400" />
                   </div>
 
-                  <button
-                    disabled={permissionState !== 'granted'}
-                    onClick={() => setIsJoining(true)}
-                    className="w-full py-4 sm:py-5 md:py-6 bg-blue-600 hover:bg-blue-500 disabled:bg-slate-800 disabled:text-slate-600 text-white rounded-xl sm:rounded-2xl md:rounded-3xl font-black text-sm sm:text-base md:text-lg lg:text-xl uppercase tracking-widest shadow-2xl transition-all hover:-translate-y-1 active:scale-95 flex items-center justify-center gap-3 sm:gap-4"
-                  >
-                    {isJoining ? <Loader2 className="w-5 h-5 sm:w-6 sm:h-6 animate-spin" /> : <Video className="w-5 h-5 sm:w-6 sm:h-6" />}
-                    Join Virtual Session
-                  </button>
+                  <div className="relative z-10 space-y-6 sm:space-y-8">
+                    <div className="flex items-center gap-3 sm:gap-4">
+                      <div className="w-1.5 h-1.5 rounded-full bg-teal-400 animate-pulse" />
+                      <span className="text-[9px] sm:text-[10px] font-black text-teal-400 uppercase tracking-[0.4em]">Next Session Ready</span>
+                    </div>
+
+                    <div>
+                      <h3 className="text-xl sm:text-2xl md:text-3xl lg:text-4xl font-black text-white uppercase tracking-tighter leading-none mb-3 sm:mb-4">
+                        {meetings[0].title}
+                      </h3>
+                      <div className="flex flex-wrap items-center gap-3 sm:gap-4 md:gap-6 text-slate-400 text-xs sm:text-sm font-medium">
+                        <span className="flex items-center gap-2"><Clock className="w-3 h-3 sm:w-4 sm:h-4" /> {meetings[0].startTime}</span>
+                        <span className="flex items-center gap-2"><Users className="w-3 h-3 sm:w-4 sm:h-4" /> {meetings[0].participants.length} Participants</span>
+                      </div>
+                    </div>
+
+                    {/* Pre-join flow */}
+                    <div className="space-y-4 sm:space-y-6 pt-4 sm:pt-6 border-t border-white/5">
+                      <h4 className="text-[9px] sm:text-[10px] font-black text-slate-500 uppercase tracking-widest">Hardware Manifest</h4>
+
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
+                        <button
+                          onClick={checkPermissions}
+                          className={`flex items-center justify-between p-4 sm:p-5 md:p-6 rounded-lg sm:rounded-2xl border transition-all ${
+                            permissionState === 'granted'
+                              ? 'bg-teal-500/10 border-teal-500/20 text-teal-400'
+                              : 'bg-white/5 border-white/10 text-slate-400 hover:bg-white/10'
+                          }`}
+                        >
+                          <div className="flex items-center gap-3 sm:gap-4">
+                            {permissionState === 'granted' ? <Camera className="w-5 h-5 sm:w-6 sm:h-6" /> : <CameraOff className="w-5 h-5 sm:w-6 sm:h-6" />}
+                            <span className="text-[8px] sm:text-xs font-bold uppercase tracking-widest">Visual Input</span>
+                          </div>
+                          {permissionState === 'granted'
+                            ? <CheckCircle2 className="w-4 h-4 sm:w-5 sm:h-5" />
+                            : permissionState === 'pending'
+                              ? <Loader2 className="w-4 h-4 sm:w-5 sm:h-5 animate-spin" />
+                              : <Settings className="w-4 h-4 sm:w-5 sm:h-5" />
+                          }
+                        </button>
+
+                        <button
+                          onClick={checkPermissions}
+                          className={`flex items-center justify-between p-4 sm:p-5 md:p-6 rounded-lg sm:rounded-2xl border transition-all ${
+                            permissionState === 'granted'
+                              ? 'bg-teal-500/10 border-teal-500/20 text-teal-400'
+                              : 'bg-white/5 border-white/10 text-slate-400 hover:bg-white/10'
+                          }`}
+                        >
+                          <div className="flex items-center gap-3 sm:gap-4">
+                            {permissionState === 'granted' ? <Mic className="w-5 h-5 sm:w-6 sm:h-6" /> : <MicOff className="w-5 h-5 sm:w-6 sm:h-6" />}
+                            <span className="text-[8px] sm:text-xs font-bold uppercase tracking-widest">Audio Input</span>
+                          </div>
+                          {permissionState === 'granted'
+                            ? <CheckCircle2 className="w-4 h-4 sm:w-5 sm:h-5" />
+                            : permissionState === 'pending'
+                              ? <Loader2 className="w-4 h-4 sm:w-5 sm:h-5 animate-spin" />
+                              : <Settings className="w-4 h-4 sm:w-5 sm:h-5" />
+                          }
+                        </button>
+                      </div>
+
+                      <div className="flex flex-col sm:flex-row gap-3 sm:gap-4">
+                        <button
+                          disabled={permissionState !== 'granted'}
+                          onClick={() => setIsJoining(true)}
+                          className="flex-1 py-4 sm:py-5 md:py-6 bg-blue-600 hover:bg-blue-500 disabled:bg-slate-800 disabled:text-slate-600 text-white rounded-xl sm:rounded-2xl md:rounded-3xl font-black text-sm sm:text-base md:text-lg lg:text-xl uppercase tracking-widest shadow-2xl transition-all hover:-translate-y-1 active:scale-95 flex items-center justify-center gap-3 sm:gap-4"
+                        >
+                          {isJoining ? <Loader2 className="w-5 h-5 sm:w-6 sm:h-6 animate-spin" /> : <Video className="w-5 h-5 sm:w-6 sm:h-6" />}
+                          Join Virtual Session
+                        </button>
+
+                        <button
+                          onClick={startSoloSession}
+                          className="flex-1 py-4 sm:py-5 md:py-6 bg-teal-600 hover:bg-teal-500 text-white rounded-xl sm:rounded-2xl md:rounded-3xl font-black text-sm sm:text-base md:text-lg lg:text-xl uppercase tracking-widest shadow-2xl transition-all hover:-translate-y-1 active:scale-95 flex items-center justify-center gap-3 sm:gap-4"
+                        >
+                          <Play className="w-5 h-5 sm:w-6 sm:h-6" />
+                          Start Solo Session
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </>
+            ) : (
+              // Solo Session Active UI
+              <div className="glass-panel p-6 sm:p-8 md:p-10 rounded-2xl sm:rounded-[2.25rem] md:rounded-[2.5rem] lg:rounded-[3rem] border-white/5 shadow-2xl relative overflow-hidden">
+                {/* Background */}
+                {selectedBackground && (
+                  <div className="absolute inset-0 -z-10">
+                    {backgroundType === 'image' ? (
+                      <img src={selectedBackground} className="w-full h-full object-cover opacity-30" alt="Background" />
+                    ) : (
+                      <video src={selectedBackground} className="w-full h-full object-cover opacity-30" autoPlay loop muted playsInline />
+                    )}
+                  </div>
+                )}
+
+                <div className="relative z-10 space-y-6 sm:space-y-8">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-3 sm:gap-4">
+                      <div className="w-1.5 h-1.5 rounded-full bg-red-400 animate-pulse" />
+                      <span className="text-[9px] sm:text-[10px] font-black text-red-400 uppercase tracking-[0.4em]">Solo Session Active</span>
+                    </div>
+                    <button
+                      onClick={stopSoloSession}
+                      className="px-4 sm:px-6 py-2 sm:py-3 bg-red-600 hover:bg-red-500 text-white rounded-lg sm:rounded-xl font-black text-[8px] sm:text-[9px] uppercase tracking-widest transition-all"
+                    >
+                      End Session
+                    </button>
+                  </div>
+
+                  {/* Video Preview */}
+                  <div className="relative">
+                    <video
+                      ref={videoRef}
+                      autoPlay
+                      muted
+                      playsInline
+                      className="w-full h-64 sm:h-80 md:h-96 bg-black rounded-lg sm:rounded-2xl object-cover"
+                    />
+                    
+                    {/* Recording Indicator */}
+                    {recordingState !== 'idle' && (
+                      <div className="absolute top-4 left-4 flex items-center gap-2 bg-red-600/90 text-white px-3 py-1 rounded-full text-xs font-bold">
+                        <div className="w-2 h-2 bg-white rounded-full animate-pulse" />
+                        REC {formatDuration(recordingDuration)}
+                      </div>
+                    )}
+
+                    {/* Mic Level Indicator */}
+                    <div className="absolute bottom-4 left-4 right-4">
+                      <div className="flex items-center gap-2 text-white">
+                        <Mic className="w-4 h-4" />
+                        <div className="flex-1 bg-black/50 rounded-full h-2">
+                          <div 
+                            className="bg-teal-400 h-full rounded-full transition-all duration-100"
+                            style={{ width: `${micLevel * 100}%` }}
+                          />
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Recording Controls */}
+                  <div className="space-y-4">
+                    <div className="flex items-center justify-center gap-4">
+                      {recordingState === 'idle' && (
+                        <button
+                          onClick={startRecording}
+                          className="px-6 sm:px-8 py-3 sm:py-4 bg-red-600 hover:bg-red-500 text-white rounded-lg sm:rounded-xl font-black text-sm uppercase tracking-widest flex items-center gap-2 transition-all"
+                        >
+                          <Play className="w-5 h-5" />
+                          Start Recording
+                        </button>
+                      )}
+
+                      {recordingState === 'recording' && (
+                        <>
+                          <button
+                            onClick={pauseRecording}
+                            className="px-6 sm:px-8 py-3 sm:py-4 bg-yellow-600 hover:bg-yellow-500 text-white rounded-lg sm:rounded-xl font-black text-sm uppercase tracking-widest flex items-center gap-2 transition-all"
+                          >
+                            <Pause className="w-5 h-5" />
+                            Pause
+                          </button>
+                          <button
+                            onClick={stopRecording}
+                            className="px-6 sm:px-8 py-3 sm:py-4 bg-red-600 hover:bg-red-500 text-white rounded-lg sm:rounded-xl font-black text-sm uppercase tracking-widest flex items-center gap-2 transition-all"
+                          >
+                            <Square className="w-5 h-5" />
+                            Stop
+                          </button>
+                        </>
+                      )}
+
+                      {recordingState === 'paused' && (
+                        <>
+                          <button
+                            onClick={resumeRecording}
+                            className="px-6 sm:px-8 py-3 sm:py-4 bg-green-600 hover:bg-green-500 text-white rounded-lg sm:rounded-xl font-black text-sm uppercase tracking-widest flex items-center gap-2 transition-all"
+                          >
+                            <Play className="w-5 h-5" />
+                            Resume
+                          </button>
+                          <button
+                            onClick={stopRecording}
+                            className="px-6 sm:px-8 py-3 sm:py-4 bg-red-600 hover:bg-red-500 text-white rounded-lg sm:rounded-xl font-black text-sm uppercase tracking-widest flex items-center gap-2 transition-all"
+                          >
+                            <Square className="w-5 h-5" />
+                            Stop
+                          </button>
+                        </>
+                      )}
+                    </div>
+
+                    {recordedChunks.length > 0 && (
+                      <div className="flex items-center justify-center gap-4">
+                        <button
+                          onClick={downloadRecording}
+                          className="px-6 sm:px-8 py-3 sm:py-4 bg-blue-600 hover:bg-blue-500 text-white rounded-lg sm:rounded-xl font-black text-sm uppercase tracking-widest flex items-center gap-2 transition-all"
+                        >
+                          <Download className="w-5 h-5" />
+                          Download ({formatDuration(recordingDuration)})
+                        </button>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Background Selection */}
+                  <div className="space-y-4">
+                    <h4 className="text-[9px] sm:text-[10px] font-black text-slate-500 uppercase tracking-widest">Meeting Background</h4>
+                    <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 sm:gap-4">
+                      <button
+                        onClick={() => selectBackground(null, 'image')}
+                        className={`p-3 sm:p-4 rounded-lg sm:rounded-xl border transition-all ${
+                          !selectedBackground ? 'bg-blue-600 border-blue-500 text-white' : 'bg-white/5 border-white/10 text-slate-400 hover:bg-white/10'
+                        }`}
+                      >
+                        <div className="text-center">
+                          <div className="w-8 h-8 sm:w-10 sm:h-10 bg-slate-600 rounded mx-auto mb-2 flex items-center justify-center">
+                            <X className="w-4 h-4 sm:w-5 sm:h-5" />
+                          </div>
+                          <span className="text-[8px] sm:text-[9px] font-black uppercase tracking-widest">None</span>
+                        </div>
+                      </button>
+
+                      {/* Sample backgrounds - in real app, these would be user-uploaded */}
+                      <button
+                        onClick={() => selectBackground('https://images.unsplash.com/photo-1441974231531-c6227db76b6e?auto=format&fit=crop&q=80&w=1000', 'image')}
+                        className={`p-3 sm:p-4 rounded-lg sm:rounded-xl border transition-all ${
+                          selectedBackground === 'https://images.unsplash.com/photo-1441974231531-c6227db76b6e?auto=format&fit=crop&q=80&w=1000' && !customBackgroundFile ? 'bg-blue-600 border-blue-500 text-white' : 'bg-white/5 border-white/10 text-slate-400 hover:bg-white/10'
+                        }`}
+                      >
+                        <div className="text-center">
+                          <Image className="w-8 h-8 sm:w-10 sm:h-10 mx-auto mb-2" />
+                          <span className="text-[8px] sm:text-[9px] font-black uppercase tracking-widest">Forest</span>
+                        </div>
+                      </button>
+
+                      <button
+                        onClick={() => selectBackground('https://images.unsplash.com/photo-1506905925346-21bda4d32df4?auto=format&fit=crop&q=80&w=1000', 'image')}
+                        className={`p-3 sm:p-4 rounded-lg sm:rounded-xl border transition-all ${
+                          selectedBackground === 'https://images.unsplash.com/photo-1506905925346-21bda4d32df4?auto=format&fit=crop&q=80&w=1000' && !customBackgroundFile ? 'bg-blue-600 border-blue-500 text-white' : 'bg-white/5 border-white/10 text-slate-400 hover:bg-white/10'
+                        }`}
+                      >
+                        <div className="text-center">
+                          <Image className="w-8 h-8 sm:w-10 sm:h-10 mx-auto mb-2" />
+                          <span className="text-[8px] sm:text-[9px] font-black uppercase tracking-widest">Mountains</span>
+                        </div>
+                      </button>
+
+                      <button
+                        onClick={() => selectBackground('https://images.unsplash.com/photo-1559827260-dc66d52bef19?auto=format&fit=crop&q=80&w=1000', 'image')}
+                        className={`p-3 sm:p-4 rounded-lg sm:rounded-xl border transition-all ${
+                          selectedBackground === 'https://images.unsplash.com/photo-1559827260-dc66d52bef19?auto=format&fit=crop&q=80&w=1000' && !customBackgroundFile ? 'bg-blue-600 border-blue-500 text-white' : 'bg-white/5 border-white/10 text-slate-400 hover:bg-white/10'
+                        }`}
+                      >
+                        <div className="text-center">
+                          <Image className="w-8 h-8 sm:w-10 sm:h-10 mx-auto mb-2" />
+                          <span className="text-[8px] sm:text-[9px] font-black uppercase tracking-widest">Ocean</span>
+                        </div>
+                      </button>
+
+                      {/* Custom Upload */}
+                      <button
+                        onClick={() => fileInputRef.current?.click()}
+                        className={`p-3 sm:p-4 rounded-lg sm:rounded-xl border transition-all ${
+                          customBackgroundFile ? 'bg-blue-600 border-blue-500 text-white' : 'bg-white/5 border-white/10 text-slate-400 hover:bg-white/10'
+                        }`}
+                      >
+                        <div className="text-center">
+                          <Upload className="w-8 h-8 sm:w-10 sm:h-10 mx-auto mb-2" />
+                          <span className="text-[8px] sm:text-[9px] font-black uppercase tracking-widest">Upload</span>
+                        </div>
+                      </button>
+
+                      {/* Hidden file input */}
+                      <input
+                        ref={fileInputRef}
+                        type="file"
+                        accept="image/*,video/*"
+                        onChange={handleCustomBackgroundUpload}
+                        className="hidden"
+                      />
+                    </div>
+                  </div>
                 </div>
               </div>
-            </div>
+            )}
 
             {/* AI Notetaker Preview Settings */}
             <div className="glass-panel p-6 sm:p-8 rounded-lg sm:rounded-2xl md:rounded-[2.25rem] md:rounded-[2.5rem] border-blue-500/10 shadow-xl flex flex-col sm:flex-row items-center justify-between gap-4 sm:gap-6">
