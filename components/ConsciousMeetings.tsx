@@ -9,6 +9,7 @@ import {
 } from 'lucide-react';
 import { UserProfile, Provider, Meeting } from '../types';
 import { summarizeMeeting } from '../services/geminiService';
+import { SelfieSegmentation } from '@mediapipe/selfie_segmentation';
 
 interface ConsciousMeetingsProps {
   user: UserProfile | null;
