@@ -52,6 +52,9 @@ const App: React.FC = () => {
 
   const [isPoliciesOpen, setIsPoliciesOpen] = useState(false);
 
+  const [isPolicyModalOpen, setIsPolicyModalOpen] = useState(false);
+  const [selectedPolicy, setSelectedPolicy] = useState<string | null>(null);
+
   const TIERS = [
     {
       name: "Free / Community Tier",
