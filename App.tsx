@@ -16,8 +16,9 @@ import { AppView, UserProfile, Course } from './types';
 import { NAVIGATION_ITEMS } from './constants';
 import { 
   Shield, Brain, Menu, X, Search, Bell, Settings, 
-  ChevronRight, Wallet, LogIn, Home, LogOut, Compass, UserCircle, Building2, CheckCircle2, Sparkles, Key, Video
+  ChevronRight, ChevronDown, Wallet, LogIn, Home, LogOut, Compass, UserCircle, Building2, CheckCircle2, Sparkles, Key, Video
 } from 'lucide-react';
+import logo from './assets/brand/logo.png';
 
 const App: React.FC = () => {
   const [currentView, setCurrentView] = useState<AppView>(AppView.ENTRY);
@@ -37,6 +38,12 @@ const App: React.FC = () => {
   const [passwordInput, setPasswordInput] = useState('');
   const [confirmPasswordInput, setConfirmPasswordInput] = useState('');
   const [error, setError] = useState('');
+
+  const [isConnectDropdownOpen, setConnectDropdownOpen] = useState(false);
+  const [isContactModalOpen, setContactModalOpen] = useState(false);
+  const [contactName, setContactName] = useState('');
+  const [contactEmail, setContactEmail] = useState('');
+  const [contactMessage, setContactMessage] = useState('');
 
   const TIERS = [
     {
@@ -281,6 +288,7 @@ const App: React.FC = () => {
         {currentView === AppView.ENTRY && (
           <div className="flex flex-col items-center justify-center min-h-screen p-4 sm:p-6 md:p-8 text-center animate-in fade-in zoom-in duration-1000">
             <div className="w-full max-w-4xl space-y-6 sm:space-y-8 md:space-y-12 backdrop-blur-[4px] p-6 sm:p-8 md:p-12 lg:p-16 rounded-2xl sm:rounded-3xl md:rounded-[2.5rem] lg:rounded-[4rem] border border-white/5 bg-white/[0.01] shadow-[0_0_100px_rgba(0,0,0,0.6)]">
+              <img src={logo} alt="Conscious Network Hub Logo" className="h-20 w-auto mx-auto mb-4" />
               <div className="flex justify-center">
                 <div className="p-4 sm:p-6 bg-blue-600/10 rounded-2xl sm:rounded-3xl md:rounded-[2.5rem] border border-blue-500/20 backdrop-blur-3xl shadow-[0_0_30px_rgba(37,99,235,0.2)] animate-pulse">
                   <Shield className="w-12 h-12 sm:w-14 sm:h-14 md:w-16 md:h-16 text-blue-400" />
@@ -307,6 +315,59 @@ const App: React.FC = () => {
                   <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/10 to-transparent -translate-x-full group-hover:translate-x-full transition-transform duration-1000" />
                   ENTER PORTAL <ChevronRight className="w-5 h-5 sm:w-6 sm:h-6 md:w-7 md:h-7 lg:w-8 lg:h-8 group-hover:translate-x-2 transition-transform" />
                 </button>
+              </div>
+              
+              <div className="flex justify-center pt-4">
+                <div className="relative">
+                  <button 
+                    onClick={() => setConnectDropdownOpen(!isConnectDropdownOpen)}
+                    onBlur={() => setTimeout(() => setConnectDropdownOpen(false), 100)}
+                    className="group relative px-6 py-3 bg-transparent hover:bg-white/5 text-blue-300 hover:text-blue-200 rounded-lg font-medium text-sm transition-all flex items-center gap-2 border border-blue-500/20 hover:border-blue-400/40"
+                    aria-haspopup="true"
+                    aria-expanded={isConnectDropdownOpen}
+                  >
+                    Connect with us <ChevronDown className={`w-4 h-4 transition-transform ${isConnectDropdownOpen ? 'rotate-180' : ''}`} />
+                  </button>
+                  {isConnectDropdownOpen && (
+                    <div className="absolute top-full mt-2 w-80 bg-black/90 backdrop-blur-xl border border-white/10 rounded-xl shadow-2xl p-6 z-20">
+                      <div className="space-y-4">
+                        <div>
+                          <h4 className="text-white font-semibold mb-2">Local</h4>
+                          <ul className="text-slate-400 text-sm space-y-1">
+                            <li>• Partnerships</li>
+                            <li>• Providers</li>
+                            <li>• Institutions</li>
+                            <li>• Community</li>
+                          </ul>
+                        </div>
+                        <div>
+                          <h4 className="text-white font-semibold mb-2">National</h4>
+                          <ul className="text-slate-400 text-sm space-y-1">
+                            <li>• Partnerships</li>
+                            <li>• Providers</li>
+                            <li>• Institutions</li>
+                            <li>• Community</li>
+                          </ul>
+                        </div>
+                        <div>
+                          <h4 className="text-white font-semibold mb-2">International</h4>
+                          <ul className="text-slate-400 text-sm space-y-1">
+                            <li>• Partnerships</li>
+                            <li>• Providers</li>
+                            <li>• Institutions</li>
+                            <li>• Community</li>
+                          </ul>
+                        </div>
+                        <button 
+                          onClick={() => { setContactModalOpen(true); setConnectDropdownOpen(false); }}
+                          className="w-full mt-4 py-3 bg-blue-600 hover:bg-blue-500 text-white rounded-lg font-medium transition-colors"
+                        >
+                          Get in Touch
+                        </button>
+                      </div>
+                    </div>
+                  )}
+                </div>
               </div>
               
               <div className="pt-6 sm:pt-8 md:pt-10 lg:pt-12 flex flex-col xs:flex-row flex-wrap justify-center gap-4 sm:gap-6 md:gap-8 lg:gap-16 opacity-30">
@@ -577,6 +638,34 @@ const App: React.FC = () => {
                   {isSigninModalOpen ? 'Register Identity' : 'Sync Existing'}
                 </button>
               </div>
+            </div>
+          </div>
+        )}
+
+        {isContactModalOpen && (
+          <div className="fixed inset-0 z-[200] flex items-center justify-center p-4 bg-black/95 backdrop-blur-3xl animate-in fade-in duration-300">
+            <div className="glass-panel w-full max-w-md p-12 rounded-[3rem] relative animate-in zoom-in duration-300 border-blue-500/20">
+              <button onClick={() => setContactModalOpen(false)} className="absolute top-8 right-8 p-3 hover:bg-white/5 rounded-full transition-colors">
+                <X className="w-5 h-5 text-slate-500" />
+              </button>
+              <h3 className="text-3xl font-black mb-10 text-white uppercase tracking-tighter">Contact Us</h3>
+              <form onSubmit={(e) => { e.preventDefault(); alert('Message sent!'); setContactModalOpen(false); setContactName(''); setContactEmail(''); setContactMessage(''); }} className="space-y-6">
+                <div className="space-y-3">
+                  <label className="text-[9px] font-black text-slate-500 uppercase tracking-widest ml-2">Name</label>
+                  <input type="text" value={contactName} onChange={e => setContactName(e.target.value)} className="w-full px-8 py-4 bg-white/5 border border-white/10 rounded-2xl text-white outline-none focus:ring-2 focus:ring-blue-500/50 transition-all font-medium text-sm" required />
+                </div>
+                <div className="space-y-3">
+                  <label className="text-[9px] font-black text-slate-500 uppercase tracking-widest ml-2">Email</label>
+                  <input type="email" value={contactEmail} onChange={e => setContactEmail(e.target.value)} className="w-full px-8 py-4 bg-white/5 border border-white/10 rounded-2xl text-white outline-none focus:ring-2 focus:ring-blue-500/50 transition-all font-medium text-sm" required />
+                </div>
+                <div className="space-y-3">
+                  <label className="text-[9px] font-black text-slate-500 uppercase tracking-widest ml-2">Message</label>
+                  <textarea value={contactMessage} onChange={e => setContactMessage(e.target.value)} className="w-full px-8 py-4 bg-white/5 border border-white/10 rounded-2xl text-white outline-none focus:ring-2 focus:ring-blue-500/50 transition-all font-medium text-sm" required rows={4}></textarea>
+                </div>
+                <button type="submit" className="w-full py-5 bg-blue-600 hover:bg-blue-500 text-white rounded-2xl font-black text-sm uppercase tracking-widest transition-all shadow-2xl shadow-blue-900/40 mt-6">
+                  Send Message
+                </button>
+              </form>
             </div>
           </div>
         )}
