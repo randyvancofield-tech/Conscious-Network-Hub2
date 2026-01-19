@@ -50,8 +50,6 @@ const App: React.FC = () => {
   const [contactEmail, setContactEmail] = useState('');
   const [contactMessage, setContactMessage] = useState('');
 
-  const [isPoliciesOpen, setIsPoliciesOpen] = useState(false);
-
   const [isPolicyModalOpen, setIsPolicyModalOpen] = useState(false);
   const [selectedPolicy, setSelectedPolicy] = useState<string | null>(null);
 
@@ -220,10 +218,15 @@ const App: React.FC = () => {
   const cleanPolicyContent = (content: string) => {
     return content
       .replace(/^#+\s*/gm, '') // remove headers
+      .replace(/\*\*\*(.*?)\*\*\*/g, '$1') // remove bold italic
       .replace(/\*\*(.*?)\*\*/g, '$1') // remove bold
       .replace(/\*(.*?)\*/g, '$1') // remove italic
-      .replace(/^- /gm, '') // remove list bullets
-      .replace(/^\d+\. /gm, '') // remove numbered lists
+      .replace(/^[-*+]\s+/gm, '') // remove list bullets
+      .replace(/^\d+\.\s+/gm, '') // remove numbered lists
+      .replace(/`([^`]+)`/g, '$1') // remove inline code
+      .replace(/```[\s\S]*?```/g, '') // remove code blocks
+      .replace(/\[([^\]]+)\]\([^)]+\)/g, '$1') // remove links, keep text
+      .replace(/!\[([^\]]+)\]\([^)]+\)/g, '$1') // remove images, keep alt
       .replace(/\n\n+/g, '\n\n') // normalize newlines
       .trim();
   };
@@ -307,7 +310,7 @@ const App: React.FC = () => {
             </button>
             <h1 className="text-3xl font-black text-white mb-6">Privacy Policy</h1>
             <div className="prose prose-invert max-w-none">
-              <pre className="whitespace-pre-wrap text-slate-300 leading-relaxed">{privacyPolicy}</pre>
+              <pre className="whitespace-pre-wrap text-slate-300 leading-relaxed">{cleanPolicyContent(privacyPolicy)}</pre>
             </div>
           </div>
         );
@@ -319,7 +322,7 @@ const App: React.FC = () => {
             </button>
             <h1 className="text-3xl font-black text-white mb-6">AI Transparency Policy</h1>
             <div className="prose prose-invert max-w-none">
-              <pre className="whitespace-pre-wrap text-slate-300 leading-relaxed">{aiTransparencyPolicy}</pre>
+              <pre className="whitespace-pre-wrap text-slate-300 leading-relaxed">{cleanPolicyContent(aiTransparencyPolicy)}</pre>
             </div>
           </div>
         );
@@ -331,7 +334,7 @@ const App: React.FC = () => {
             </button>
             <h1 className="text-3xl font-black text-white mb-6">Blockchain Data Policy</h1>
             <div className="prose prose-invert max-w-none">
-              <pre className="whitespace-pre-wrap text-slate-300 leading-relaxed">{blockchainDataPolicy}</pre>
+              <pre className="whitespace-pre-wrap text-slate-300 leading-relaxed">{cleanPolicyContent(blockchainDataPolicy)}</pre>
             </div>
           </div>
         );
@@ -343,7 +346,7 @@ const App: React.FC = () => {
             </button>
             <h1 className="text-3xl font-black text-white mb-6">Vendor API Governance Policy</h1>
             <div className="prose prose-invert max-w-none">
-              <pre className="whitespace-pre-wrap text-slate-300 leading-relaxed">{vendorApiGovernancePolicy}</pre>
+              <pre className="whitespace-pre-wrap text-slate-300 leading-relaxed">{cleanPolicyContent(vendorApiGovernancePolicy)}</pre>
             </div>
           </div>
         );
@@ -355,7 +358,7 @@ const App: React.FC = () => {
             </button>
             <h1 className="text-3xl font-black text-white mb-6">NIST Mapping Summary</h1>
             <div className="prose prose-invert max-w-none">
-              <pre className="whitespace-pre-wrap text-slate-300 leading-relaxed">{nistMappingSummary}</pre>
+              <pre className="whitespace-pre-wrap text-slate-300 leading-relaxed">{cleanPolicyContent(nistMappingSummary)}</pre>
             </div>
           </div>
         );
@@ -446,22 +449,6 @@ const App: React.FC = () => {
                   >
                     Schedule a Briefing <ChevronRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" />
                   </button>
-                  <div className="relative">
-                    <button onClick={() => setIsPoliciesOpen(!isPoliciesOpen)} onBlur={() => setTimeout(() => setIsPoliciesOpen(false), 100)} className="group relative px-6 py-3 bg-transparent hover:bg-white/5 text-blue-300 hover:text-blue-200 rounded-lg font-medium text-sm transition-all flex items-center gap-2 border border-blue-500/20 hover:border-blue-400/40" aria-haspopup="true" aria-expanded={isPoliciesOpen}>
-                      Policies <ChevronDown className={`w-4 h-4 transition-transform ${isPoliciesOpen ? 'rotate-180' : ''}`} />
-                    </button>
-                    {isPoliciesOpen && (
-                      <div className="absolute top-full mt-2 w-64 bg-black/90 backdrop-blur-xl border border-white/10 rounded-xl shadow-2xl p-4 z-50">
-                        <div className="space-y-2">
-                          <button onClick={() => { setCurrentView(AppView.PRIVACY_POLICY); setIsPoliciesOpen(false); }} className="w-full text-left py-2 px-3 text-slate-300 hover:text-white hover:bg-white/10 rounded-lg transition-colors text-sm">Privacy Policy</button>
-                          <button onClick={() => { setCurrentView(AppView.AI_TRANSPARENCY_POLICY); setIsPoliciesOpen(false); }} className="w-full text-left py-2 px-3 text-slate-300 hover:text-white hover:bg-white/10 rounded-lg transition-colors text-sm">AI Transparency Policy</button>
-                          <button onClick={() => { setCurrentView(AppView.BLOCKCHAIN_DATA_POLICY); setIsPoliciesOpen(false); }} className="w-full text-left py-2 px-3 text-slate-300 hover:text-white hover:bg-white/10 rounded-lg transition-colors text-sm">Blockchain Data Policy</button>
-                          <button onClick={() => { setCurrentView(AppView.VENDOR_API_GOVERNANCE_POLICY); setIsPoliciesOpen(false); }} className="w-full text-left py-2 px-3 text-slate-300 hover:text-white hover:bg-white/10 rounded-lg transition-colors text-sm">Vendor API Governance Policy</button>
-                          <button onClick={() => { setCurrentView(AppView.NIST_MAPPING_SUMMARY); setIsPoliciesOpen(false); }} className="w-full text-left py-2 px-3 text-slate-300 hover:text-white hover:bg-white/10 rounded-lg transition-colors text-sm">NIST Mapping Summary</button>
-                        </div>
-                      </div>
-                    )}
-                  </div>
                 </div>
               </div>
               
@@ -693,6 +680,15 @@ const App: React.FC = () => {
               <main className="flex-1 overflow-y-auto custom-scrollbar p-4 sm:p-6 md:p-8 lg:p-12 relative z-10">
                 {renderActiveView()}
               </main>
+              <footer className="p-4 bg-black/20 backdrop-blur-sm border-t border-white/5">
+                <div className="max-w-7xl mx-auto flex flex-wrap justify-center gap-4 text-xs">
+                  <button onClick={() => setCurrentView(AppView.PRIVACY_POLICY)} className="text-slate-400 hover:text-white transition-colors">Privacy Policy</button>
+                  <button onClick={() => setCurrentView(AppView.AI_TRANSPARENCY_POLICY)} className="text-slate-400 hover:text-white transition-colors">AI Transparency Policy</button>
+                  <button onClick={() => setCurrentView(AppView.BLOCKCHAIN_DATA_POLICY)} className="text-slate-400 hover:text-white transition-colors">Blockchain Data Policy</button>
+                  <button onClick={() => setCurrentView(AppView.VENDOR_API_GOVERNANCE_POLICY)} className="text-slate-400 hover:text-white transition-colors">Vendor API Governance Policy</button>
+                  <button onClick={() => setCurrentView(AppView.NIST_MAPPING_SUMMARY)} className="text-slate-400 hover:text-white transition-colors">NIST Mapping Summary</button>
+                </div>
+              </footer>
             </div>
           </div>
         )}
