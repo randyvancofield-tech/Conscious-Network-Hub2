@@ -252,7 +252,7 @@ const App: React.FC = () => {
   };
 
   return (
-    <div className="min-h-screen bg-[#05070a] text-slate-200 selection:bg-blue-500/30 flex overflow-hidden relative">
+    <div className="min-h-screen bg-[#05070a] text-slate-200 selection:bg-blue-500/30 flex relative">
       <ThreeScene />
       <MusicBox />
 
@@ -279,48 +279,48 @@ const App: React.FC = () => {
         )}
 
         {currentView === AppView.ENTRY && (
-          <div className="flex flex-col items-center justify-center min-h-screen p-6 text-center animate-in fade-in zoom-in duration-1000">
-            <div className="max-w-4xl space-y-12 backdrop-blur-[4px] p-12 rounded-[4rem] border border-white/5 bg-white/[0.01] shadow-[0_0_100px_rgba(0,0,0,0.6)]">
+          <div className="flex flex-col items-center justify-center min-h-screen p-4 sm:p-6 md:p-8 text-center animate-in fade-in zoom-in duration-1000">
+            <div className="w-full max-w-4xl space-y-6 sm:space-y-8 md:space-y-12 backdrop-blur-[4px] p-6 sm:p-8 md:p-12 lg:p-16 rounded-2xl sm:rounded-3xl md:rounded-[2.5rem] lg:rounded-[4rem] border border-white/5 bg-white/[0.01] shadow-[0_0_100px_rgba(0,0,0,0.6)]">
               <div className="flex justify-center">
-                <div className="p-6 bg-blue-600/10 rounded-[2.5rem] border border-blue-500/20 backdrop-blur-3xl shadow-[0_0_30px_rgba(37,99,235,0.2)] animate-pulse">
-                  <Shield className="w-16 h-16 text-blue-400" />
+                <div className="p-4 sm:p-6 bg-blue-600/10 rounded-2xl sm:rounded-3xl md:rounded-[2.5rem] border border-blue-500/20 backdrop-blur-3xl shadow-[0_0_30px_rgba(37,99,235,0.2)] animate-pulse">
+                  <Shield className="w-12 h-12 sm:w-14 sm:h-14 md:w-16 md:h-16 text-blue-400" />
                 </div>
               </div>
               
-              <div className="space-y-6">
-                <h1 className="text-5xl sm:text-7xl font-black text-white tracking-tight leading-[0.9] drop-shadow-2xl">
+              <div className="space-y-4 sm:space-y-5 md:space-y-6">
+                <h1 className="text-3xl xs:text-4xl sm:text-5xl md:text-6xl lg:text-7xl font-black text-white tracking-tight leading-[0.9] drop-shadow-2xl">
                   CONSCIOUS <br /> 
                   <span className="text-transparent bg-clip-text bg-gradient-to-r from-blue-400 via-blue-500 to-teal-400 uppercase tracking-tighter drop-shadow-sm">
                     Network Hub
                   </span>
                 </h1>
-                <p className="text-xl sm:text-2xl text-blue-100/70 max-w-2xl mx-auto leading-relaxed font-light drop-shadow-md">
+                <p className="text-base xs:text-lg sm:text-xl md:text-2xl text-blue-100/70 max-w-2xl mx-auto leading-relaxed font-light drop-shadow-md px-2 sm:px-0">
                   Restoring autonomy and protecting identity through a community-centered decentralized social learning infrastructure.
                 </p>
               </div>
 
-              <div className="flex justify-center pt-8">
+              <div className="flex justify-center pt-6 sm:pt-8 md:pt-10">
                 <button 
                   onClick={handleEnterHub}
-                  className="group relative px-20 py-7 bg-blue-600 hover:bg-blue-500 text-white rounded-[2rem] font-black text-2xl transition-all shadow-[0_0_60px_rgba(37,99,235,0.3)] hover:-translate-y-2 active:scale-95 flex items-center gap-4 overflow-hidden tracking-wider"
+                  className="group relative w-full sm:w-auto px-6 sm:px-12 md:px-16 lg:px-20 py-4 sm:py-5 md:py-6 lg:py-7 bg-blue-600 hover:bg-blue-500 text-white rounded-lg sm:rounded-xl md:rounded-[1.5rem] lg:rounded-[2rem] font-black text-base sm:text-lg md:text-xl lg:text-2xl transition-all shadow-[0_0_60px_rgba(37,99,235,0.3)] hover:-translate-y-2 active:scale-95 flex items-center justify-center gap-3 sm:gap-4 overflow-hidden tracking-wider"
                 >
                   <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/10 to-transparent -translate-x-full group-hover:translate-x-full transition-transform duration-1000" />
-                  ENTER PORTAL <ChevronRight className="w-8 h-8 group-hover:translate-x-2 transition-transform" />
+                  ENTER PORTAL <ChevronRight className="w-5 h-5 sm:w-6 sm:h-6 md:w-7 md:h-7 lg:w-8 lg:h-8 group-hover:translate-x-2 transition-transform" />
                 </button>
               </div>
               
-              <div className="pt-12 flex justify-center gap-16 opacity-30">
-                <div className="flex flex-col items-center gap-3">
+              <div className="pt-6 sm:pt-8 md:pt-10 lg:pt-12 flex flex-col xs:flex-row flex-wrap justify-center gap-4 sm:gap-6 md:gap-8 lg:gap-16 opacity-30">
+                <div className="flex flex-col items-center gap-2 sm:gap-3">
                   <span className="text-[9px] uppercase tracking-[0.6em] font-black">Encrypted</span>
-                  <div className="h-0.5 w-16 bg-blue-500/50" />
+                  <div className="h-0.5 w-12 sm:w-14 md:w-16 bg-blue-500/50" />
                 </div>
-                <div className="flex flex-col items-center gap-3">
+                <div className="flex flex-col items-center gap-2 sm:gap-3">
                   <span className="text-[9px] uppercase tracking-[0.6em] font-black">Decentralized</span>
-                  <div className="h-0.5 w-16 bg-teal-500/50" />
+                  <div className="h-0.5 w-12 sm:w-14 md:w-16 bg-teal-500/50" />
                 </div>
-                <div className="flex flex-col items-center gap-3">
+                <div className="flex flex-col items-center gap-2 sm:gap-3">
                   <span className="text-[9px] uppercase tracking-[0.6em] font-black">Sovereign</span>
-                  <div className="h-0.5 w-16 bg-indigo-500/50" />
+                  <div className="h-0.5 w-12 sm:w-14 md:w-16 bg-indigo-500/50" />
                 </div>
               </div>
             </div>
@@ -328,18 +328,18 @@ const App: React.FC = () => {
         )}
 
         {currentView === AppView.MEMBERSHIP_ACCESS && (
-          <div className="min-h-screen p-6 sm:p-12 lg:p-20 overflow-y-auto custom-scrollbar animate-in fade-in duration-700 relative z-10">
-            <div className="max-w-7xl mx-auto space-y-12">
-              <button onClick={handleGoHome} className="flex items-center gap-3 text-slate-500 hover:text-white transition-colors group">
-                <Home className="w-5 h-5" /> <span className="font-bold uppercase tracking-[0.4em] text-[10px]">Portal Entry</span>
+          <div className="min-h-screen p-4 sm:p-6 md:p-8 lg:p-12 xl:p-20 overflow-y-auto custom-scrollbar animate-in fade-in duration-700 relative z-10">
+            <div className="max-w-7xl mx-auto space-y-8 sm:space-y-10 md:space-y-12">
+              <button onClick={handleGoHome} className="flex items-center gap-2 sm:gap-3 text-slate-500 hover:text-white transition-colors group">
+                <Home className="w-4 h-4 sm:w-5 sm:h-5" /> <span className="font-bold uppercase tracking-[0.4em] text-[9px] sm:text-[10px]">Portal Entry</span>
               </button>
               
-              <div className="text-center space-y-4">
-                <h2 className="text-4xl sm:text-6xl font-black text-white tracking-tighter">Membership Access</h2>
-                <p className="text-slate-400 text-lg font-light">Select your level of integration within the decentralized ecosystem.</p>
+              <div className="text-center space-y-3 sm:space-y-4">
+                <h2 className="text-2xl xs:text-3xl sm:text-4xl md:text-5xl lg:text-6xl font-black text-white tracking-tighter">Membership Access</h2>
+                <p className="text-slate-400 text-sm sm:text-base md:text-lg font-light px-2 sm:px-0">Select your level of integration within the decentralized ecosystem.</p>
               </div>
 
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 sm:gap-7 md:gap-8">
                 {TIERS.map((tier) => (
                   <div key={tier.name} className={`glass-panel p-10 rounded-[2.5rem] border-white/5 hover:border-${tier.color}-500/30 transition-all flex flex-col justify-between group shadow-2xl relative overflow-hidden border-t-4 border-t-${tier.color}-500/20`}>
                     <div className={`absolute top-0 right-0 p-8 opacity-5 group-hover:opacity-10 transition-opacity text-${tier.color}-400`}><Shield className="w-24 h-24" /></div>
@@ -378,7 +378,7 @@ const App: React.FC = () => {
                 ))}
               </div>
 
-              <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 pt-8">
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 sm:gap-7 md:gap-8 pt-6 sm:pt-8 md:pt-10">
                 <div className="glass-panel p-10 rounded-[2.5rem] flex flex-col sm:flex-row items-center justify-between gap-8 border-l-8 border-cyan-500 shadow-2xl">
                   <div className="flex items-center gap-6">
                     <div className="p-5 bg-cyan-500/10 rounded-3xl">
@@ -502,21 +502,21 @@ const App: React.FC = () => {
               </div>
             </aside>
 
-            <div className="flex-1 flex flex-col h-screen overflow-hidden relative">
-              <header className="h-24 flex items-center justify-between px-8 sm:px-12 border-b border-white/5 z-20 backdrop-blur-3xl bg-black/20">
+            <div className="flex-1 flex flex-col min-h-0 overflow-hidden relative">
+              <header className="h-20 sm:h-24 flex items-center justify-between px-4 sm:px-6 md:px-8 lg:px-12 border-b border-white/5 z-20 backdrop-blur-3xl bg-black/20">
                 <div className="flex items-center gap-6">
                   {!isSidebarOpen && (
                     <button onClick={toggleSidebar} className="lg:hidden p-3 bg-white/5 hover:bg-white/10 rounded-xl text-slate-400 border border-white/10 shadow-lg">
                       <Menu className="w-5 h-5" />
                     </button>
                   )}
-                  <div className="relative group hidden sm:block">
-                    <Search className="absolute left-5 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-600 group-focus-within:text-blue-400 transition-colors" />
-                    <input type="text" placeholder="Search knowledge layers..." className="pl-14 pr-8 py-3.5 bg-white/5 border border-white/10 rounded-xl text-xs outline-none focus:ring-2 focus:ring-blue-500/30 w-80 transition-all font-medium placeholder:tracking-wider uppercase" />
+                  <div className="relative group hidden md:block">
+                    <Search className="absolute left-4 sm:left-5 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-600 group-focus-within:text-blue-400 transition-colors" />
+                    <input type="text" placeholder="Search..." className="pl-12 sm:pl-14 pr-6 sm:pr-8 py-3 sm:py-3.5 bg-white/5 border border-white/10 rounded-lg sm:rounded-xl text-xs outline-none focus:ring-2 focus:ring-blue-500/30 w-56 sm:w-72 md:w-80 transition-all font-medium placeholder:tracking-wider uppercase" />
                   </div>
                 </div>
                 
-                <div className="flex items-center gap-6">
+                <div className="flex items-center gap-3 sm:gap-4 md:gap-6">
                   <button className="p-3 hover:bg-white/5 rounded-xl text-slate-500 relative transition-colors">
                     <Bell className="w-5 h-5" />
                     <div className="absolute top-3 right-3 w-2 h-2 bg-blue-500 rounded-full ring-2 ring-black"></div>
@@ -534,7 +534,7 @@ const App: React.FC = () => {
                 </div>
               </header>
 
-              <main className="flex-1 overflow-y-auto custom-scrollbar p-8 sm:p-12 relative z-10">
+              <main className="flex-1 overflow-y-auto custom-scrollbar p-4 sm:p-6 md:p-8 lg:p-12 relative z-10">
                 {renderActiveView()}
               </main>
             </div>
@@ -596,3 +596,5 @@ const App: React.FC = () => {
 };
 
 export default App;
+
+

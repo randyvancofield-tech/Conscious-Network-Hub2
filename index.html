@@ -3,11 +3,29 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=5.0, user-scalable=yes, viewport-fit=cover">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="apple-mobile-web-app-title" content="Conscious Network">
+    <meta name="theme-color" content="#05070a">
+    <meta name="description" content="Conscious Network Hub - Decentralized learning and provider marketplace">
+    <meta name="format-detection" content="telephone=no">
     <title>Conscious Network Hub | Portal</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;400;500;600;700&family=Orbitron:wght@400;500;600;700;800;900&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
     <style>
+        * {
+            box-sizing: border-box;
+            -webkit-tap-highlight-color: transparent;
+        }
+        
+        html {
+            font-size: clamp(14px, 2vw, 16px);
+            scroll-behavior: smooth;
+            -webkit-font-smoothing: antialiased;
+            -moz-osx-font-smoothing: grayscale;
+        }
+        
         body {
             margin: 0;
             padding: 0;
@@ -16,43 +34,56 @@
             color: #e2e8f0;
             overflow-x: hidden;
             letter-spacing: -0.01em;
+            min-height: 100vh;
+            position: relative;
         }
+        
         h1, h2, h3, h4, .font-heading {
             font-family: 'Orbitron', sans-serif;
             letter-spacing: -0.02em;
         }
+        
         .font-mono {
             font-family: 'JetBrains Mono', monospace;
         }
+        
         .glass-panel {
             background: rgba(15, 23, 42, 0.4);
             backdrop-filter: blur(16px);
             border: 1px solid rgba(255, 255, 255, 0.08);
             box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.37);
         }
+        
         .glow-blue {
             box-shadow: 0 0 20px rgba(59, 130, 246, 0.3);
         }
+        
         .animated-gradient {
             background: linear-gradient(-45deg, #0f172a, #1e293b, #0369a1, #1e1b4b);
             background-size: 400% 400%;
             animation: gradient 15s ease infinite;
         }
+        
         @keyframes gradient {
             0% { background-position: 0% 50%; }
             50% { background-position: 100% 50%; }
             100% { background-position: 0% 50%; }
         }
+        
         ::-webkit-scrollbar {
             width: 4px;
+            height: 4px;
         }
+        
         ::-webkit-scrollbar-track {
             background: #05070a;
         }
+        
         ::-webkit-scrollbar-thumb {
             background: #1e293b;
             border-radius: 10px;
         }
+        
         ::-webkit-scrollbar-thumb:hover {
             background: #3b82f6;
         }
@@ -61,8 +92,174 @@
         .text-glow {
             text-shadow: 0 0 15px rgba(59, 130, 246, 0.5);
         }
+        
         .tracking-widest-plus {
             letter-spacing: 0.5em;
+        }
+        
+        /* Mobile-first responsive utilities */
+        @media (max-width: 640px) {
+            html {
+                font-size: clamp(13px, 3vw, 14px);
+            }
+            
+            body {
+                padding-bottom: env(safe-area-inset-bottom);
+            }
+            
+            /* Prevent text zoom on input focus */
+            input, select, textarea {
+                font-size: 16px !important;
+            }
+            
+            /* Safe area padding for notched devices */
+            .safe-area-top {
+                padding-top: max(0.5rem, env(safe-area-inset-top));
+            }
+            
+            .safe-area-bottom {
+                padding-bottom: max(0.5rem, env(safe-area-inset-bottom));
+            }
+            
+            .safe-area-left {
+                padding-left: max(0.5rem, env(safe-area-inset-left));
+            }
+            
+            .safe-area-right {
+                padding-right: max(0.5rem, env(safe-area-inset-right));
+            }
+        }
+        
+        @media (max-width: 768px) {
+            /* Touch-friendly button sizes */
+            button, a, input {
+                min-height: 44px;
+                min-width: 44px;
+            }
+        }
+        
+        /* Tablet and up */
+        @media (min-width: 769px) {
+            html {
+                font-size: 16px;
+            }
+        }
+        
+        /* Large screens optimization */
+        @media (min-width: 1920px) {
+            html {
+                font-size: 18px;
+            }
+        }
+        
+        /* Reduce motion for accessibility */
+        @media (prefers-reduced-motion: reduce) {
+            * {
+                animation-duration: 0.01ms !important;
+                animation-iteration-count: 1 !important;
+                transition-duration: 0.01ms !important;
+            }
+        }
+        
+        /* High DPI screens */
+        @media (min-resolution: 2dppx) {
+            .glass-panel {
+                border-width: 0.5px;
+            }
+        }
+        
+        /* Touch device optimizations */
+        @media (hover: none) and (pointer: coarse) {
+            button, .interactive {
+                padding: max(0.5rem, 12px);
+            }
+        }
+        
+        /* Responsive container helper */
+        .container-responsive {
+            width: 100%;
+            margin-left: auto;
+            margin-right: auto;
+            padding-left: max(1rem, 4vw);
+            padding-right: max(1rem, 4vw);
+        }
+        
+        /* Mobile grid helper */
+        @media (max-width: 640px) {
+            .grid-responsive {
+                display: grid;
+                grid-template-columns: 1fr;
+                gap: 1rem;
+            }
+        }
+        
+        @media (min-width: 641px) and (max-width: 1024px) {
+            .grid-responsive {
+                display: grid;
+                grid-template-columns: repeat(2, 1fr);
+                gap: 1.5rem;
+            }
+        }
+        
+        @media (min-width: 1025px) {
+            .grid-responsive {
+                display: grid;
+                grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+                gap: 2rem;
+            }
+        }
+        
+        /* Flexible text sizing */
+        .text-responsive-sm {
+            font-size: clamp(0.75rem, 2vw, 0.875rem);
+        }
+        
+        .text-responsive-base {
+            font-size: clamp(0.875rem, 2.5vw, 1rem);
+        }
+        
+        .text-responsive-lg {
+            font-size: clamp(1rem, 3vw, 1.125rem);
+        }
+        
+        .text-responsive-xl {
+            font-size: clamp(1.25rem, 4vw, 1.5rem);
+        }
+        
+        .text-responsive-2xl {
+            font-size: clamp(1.5rem, 5vw, 1.875rem);
+        }
+        
+        .text-responsive-3xl {
+            font-size: clamp(1.875rem, 6vw, 2.25rem);
+        }
+        
+        /* Flexible padding */
+        .p-responsive {
+            padding: clamp(0.5rem, 4vw, 2rem);
+        }
+        
+        .px-responsive {
+            padding-left: clamp(0.5rem, 4vw, 2rem);
+            padding-right: clamp(0.5rem, 4vw, 2rem);
+        }
+        
+        .py-responsive {
+            padding-top: clamp(0.5rem, 3vw, 1.5rem);
+            padding-bottom: clamp(0.5rem, 3vw, 1.5rem);
+        }
+        
+        /* Flexible gap */
+        .gap-responsive {
+            gap: clamp(0.5rem, 2vw, 1.5rem);
+        }
+        
+        /* No overflow on mobile */
+        @media (max-width: 640px) {
+            body, html {
+                max-width: 100vw;
+                overflow-x: hidden;
+            }
         }
     </style>
 <script type="importmap">
@@ -82,5 +279,7 @@
 </head>
 <body>
     <div id="root"></div>
+    <script type="module" src="/index.tsx"></script>
+
 </body>
 </html>
