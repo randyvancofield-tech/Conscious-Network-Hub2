@@ -1,6 +1,5 @@
 
-import React, { useState, useEffect, useMemo, useRef } from 'react';
-import { createPortal } from 'react-dom';
+import React, { useState, useEffect, useMemo } from 'react';
 import ThreeScene from './components/ThreeScene';
 import Dashboard from './components/Dashboard';
 import WalletPopout from './components/WalletPopout';
@@ -20,11 +19,6 @@ import {
   ChevronRight, ChevronDown, Wallet, LogIn, Home, LogOut, Compass, UserCircle, Building2, CheckCircle2, Sparkles, Key, Video
 } from 'lucide-react';
 import logo from './src/assets/brand/logo.png';
-import privacyPolicy from './docs/compliance/privacy-policy-draft.md?raw';
-import aiTransparencyPolicy from './docs/compliance/ai-transparency-policy-draft.md?raw';
-import blockchainDataPolicy from './docs/compliance/blockchain-data-policy-draft.md?raw';
-import vendorApiGovernancePolicy from './docs/compliance/vendor-api-governance-policy-draft.md?raw';
-import nistMappingSummary from './docs/compliance/nist-mapping-summary.md?raw';
 
 const App: React.FC = () => {
   const [currentView, setCurrentView] = useState<AppView>(AppView.ENTRY);
@@ -50,13 +44,6 @@ const App: React.FC = () => {
   const [contactName, setContactName] = useState('');
   const [contactEmail, setContactEmail] = useState('');
   const [contactMessage, setContactMessage] = useState('');
-
-  const [isPoliciesOpen, setIsPoliciesOpen] = useState(false);
-
-  const [dropdownPos, setDropdownPos] = useState({top: 0, left: 0});
-  const connectButtonRef = useRef<HTMLDivElement>(null);
-  const [isPolicyModalOpen, setIsPolicyModalOpen] = useState(false);
-  const [selectedPolicy, setSelectedPolicy] = useState<string | null>(null);
 
   const TIERS = [
     {
@@ -108,13 +95,6 @@ const App: React.FC = () => {
     const savedCourses = localStorage.getItem('hcn_enrolled_courses');
     if (savedCourses) setEnrolledCourses(JSON.parse(savedCourses));
   }, []);
-
-  useEffect(() => {
-    if (isConnectDropdownOpen && connectButtonRef.current) {
-      const rect = connectButtonRef.current.getBoundingClientRect();
-      setDropdownPos({ top: rect.bottom, left: rect.left });
-    }
-  }, [isConnectDropdownOpen]);
 
   const handleOpenSelectKey = async () => {
     // @ts-ignore
@@ -207,35 +187,6 @@ const App: React.FC = () => {
   const closeModals = () => {
     setSignupModalOpen(false); setSigninModalOpen(false);
     setError(''); setEmailInput(''); setPasswordInput(''); setConfirmPasswordInput('');
-  };
-
-  const getPolicyContent = (policy: string) => {
-    switch (policy) {
-      case 'privacy': return privacyPolicy;
-      case 'ai-transparency': return aiTransparencyPolicy;
-      case 'blockchain': return blockchainDataPolicy;
-      case 'vendor': return vendorApiGovernancePolicy;
-      case 'nist': return nistMappingSummary;
-      default: return '';
-    }
-  };
-
-  const cleanPolicyContent = (content: string) => {
-    return content
-      .replace(/^#+\s*/gm, '') // remove headers
-      .replace(/\*\*(.*?)\*\*/g, '$1') // remove bold
-      .replace(/\*(.*?)\*/g, '$1') // remove italic
-      .replace(/^- /gm, '') // remove list bullets
-      .replace(/^\d+\. /gm, '') // remove numbered lists
-      .replace(/\n\n+/g, '\n\n') // normalize newlines
-      .trim();
-  };
-
-  const policies = ['privacy', 'ai-transparency', 'blockchain', 'vendor', 'nist'];
-
-  const getNextPolicy = (current: string) => {
-    const index = policies.indexOf(current);
-    return policies[(index + 1) % policies.length];
   };
 
   const enrollCourse = (course: Course) => {
@@ -442,84 +393,14 @@ const App: React.FC = () => {
               </div>
               
               <div className="flex justify-center pt-4">
-                <div className="flex gap-4">
-                  <div className="relative" ref={connectButtonRef}>
-                    <button 
-                      onClick={() => setConnectDropdownOpen(!isConnectDropdownOpen)}
-                      onBlur={() => setTimeout(() => setConnectDropdownOpen(false), 100)}
-                      className="group relative px-6 py-3 bg-blue-600 hover:bg-blue-500 text-white rounded-lg font-black text-sm transition-all shadow-[0_0_30px_rgba(37,99,235,0.2)] hover:-translate-y-1 active:scale-95 flex items-center gap-2 border border-blue-500/20"
-                      aria-haspopup="true"
-                      aria-expanded={isConnectDropdownOpen}
-                    >
-                      Connect with us <ChevronDown className={`w-4 h-4 transition-transform ${isConnectDropdownOpen ? 'rotate-180' : ''}`} />
-                    </button>
-                    {isConnectDropdownOpen && createPortal(
-                      <div className="fixed w-80 max-h-[70vh] overflow-y-auto -webkit-overflow-scrolling-touch bg-black/90 backdrop-blur-xl border border-white/10 rounded-xl shadow-2xl p-6 z-50 pointer-events-auto touch-action-pan-y" style={{top: dropdownPos.top, left: dropdownPos.left}}>
-                        <div className="space-y-4">
-                          <div>
-                            <h4 className="text-white font-semibold mb-2">Local</h4>
-                            <ul className="text-slate-400 text-sm space-y-1">
-                              <li>• Partnerships</li>
-                              <li>• Providers</li>
-                              <li>• Institutions</li>
-                              <li>• Community</li>
-                            </ul>
-                          </div>
-                          <div>
-                            <h4 className="text-white font-semibold mb-2">National</h4>
-                            <ul className="text-slate-400 text-sm space-y-1">
-                              <li>• Partnerships</li>
-                              <li>• Providers</li>
-                              <li>• Institutions</li>
-                              <li>• Community</li>
-                            </ul>
-                          </div>
-                          <div>
-                            <h4 className="text-white font-semibold mb-2">International</h4>
-                            <ul className="text-slate-400 text-sm space-y-1">
-                              <li>• Partnerships</li>
-                              <li>• Providers</li>
-                              <li>• Institutions</li>
-                              <li>• Community</li>
-                            </ul>
-                          </div>
-                          <a 
-                            href="https://calendly.com/randycofield/buildingconnections" 
-                            target="_blank" 
-                            rel="noopener noreferrer"
-                            className="w-full mt-4 py-3 bg-blue-600 hover:bg-blue-500 text-white rounded-lg font-medium transition-colors text-center block"
-                          >
-                            Schedule a Briefing
-                          </a>
-                        </div>
-                      </div>, document.body
-                    )}
-                  </div>
-                  <div className="relative">
-                    <button onClick={() => setIsPoliciesOpen(!isPoliciesOpen)} onBlur={() => setTimeout(() => setIsPoliciesOpen(false), 100)} className="group relative px-6 py-3 bg-transparent hover:bg-white/5 text-blue-300 hover:text-blue-200 rounded-lg font-medium text-sm transition-all flex items-center gap-2 border border-blue-500/20 hover:border-blue-400/40" aria-haspopup="true" aria-expanded={isPoliciesOpen}>
-                      Policies <ChevronDown className={`w-4 h-4 transition-transform ${isPoliciesOpen ? 'rotate-180' : ''}`} />
-                    </button>
-                    {isPoliciesOpen && (
-                      <div className="absolute top-full mt-2 w-64 bg-black/90 backdrop-blur-xl border border-white/10 rounded-xl shadow-2xl p-4 z-50">
-                        <div className="space-y-2">
-                          <button onClick={() => { setCurrentView(AppView.PRIVACY_POLICY); setIsPoliciesOpen(false); }} className="w-full text-left py-2 px-3 text-slate-300 hover:text-white hover:bg-white/10 rounded-lg transition-colors text-sm">Privacy Policy</button>
-                          <button onClick={() => { setCurrentView(AppView.AI_TRANSPARENCY_POLICY); setIsPoliciesOpen(false); }} className="w-full text-left py-2 px-3 text-slate-300 hover:text-white hover:bg-white/10 rounded-lg transition-colors text-sm">AI Transparency Policy</button>
-                          <button onClick={() => { setCurrentView(AppView.BLOCKCHAIN_DATA_POLICY); setIsPoliciesOpen(false); }} className="w-full text-left py-2 px-3 text-slate-300 hover:text-white hover:bg-white/10 rounded-lg transition-colors text-sm">Blockchain Data Policy</button>
-                          <button onClick={() => { setCurrentView(AppView.VENDOR_API_GOVERNANCE_POLICY); setIsPoliciesOpen(false); }} className="w-full text-left py-2 px-3 text-slate-300 hover:text-white hover:bg-white/10 rounded-lg transition-colors text-sm">Vendor API Governance Policy</button>
-                          <button onClick={() => { setCurrentView(AppView.NIST_MAPPING_SUMMARY); setIsPoliciesOpen(false); }} className="w-full text-left py-2 px-3 text-slate-300 hover:text-white hover:bg-white/10 rounded-lg transition-colors text-sm">NIST Mapping Summary</button>
-                        </div>
-                      </div>
-                    )}
-                  </div>
-                  <div className="relative">
-                    <button 
-                      onClick={() => setIsPolicyModalOpen(true)}
-                      className="group relative px-6 py-3 bg-blue-600 hover:bg-blue-500 text-white rounded-lg font-black text-sm transition-all shadow-[0_0_30px_rgba(37,99,235,0.2)] hover:-translate-y-1 active:scale-95 flex items-center gap-2 border border-blue-500/20"
-                    >
-                      Policies <ChevronDown className="w-4 h-4" />
-                    </button>
-                  </div>
-                </div>
+                <a 
+                  href="https://calendly.com/randycofield/buildingconnections"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="group relative px-6 py-3 bg-blue-600 hover:bg-blue-500 text-white rounded-lg font-black text-sm transition-all shadow-[0_0_30px_rgba(37,99,235,0.2)] hover:-translate-y-1 active:scale-95 flex items-center gap-2 border border-blue-500/20"
+                >
+                  Schedule a Briefing <ChevronRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" />
+                </a>
               </div>
               
               <div className="pt-6 sm:pt-8 md:pt-10 lg:pt-12 flex flex-col xs:flex-row flex-wrap justify-center gap-4 sm:gap-6 md:gap-8 lg:gap-16 opacity-30">
