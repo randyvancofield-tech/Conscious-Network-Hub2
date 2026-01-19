@@ -1,5 +1,6 @@
 
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
+import { createPortal } from 'react-dom';
 import ThreeScene from './components/ThreeScene';
 import Dashboard from './components/Dashboard';
 import WalletPopout from './components/WalletPopout';
@@ -52,6 +53,11 @@ const App: React.FC = () => {
 
   const [isPoliciesOpen, setIsPoliciesOpen] = useState(false);
 
+  const [dropdownPos, setDropdownPos] = useState({top: 0, left: 0});
+  const connectButtonRef = useRef<HTMLDivElement>(null);
+  const [isPolicyModalOpen, setIsPolicyModalOpen] = useState(false);
+  const [selectedPolicy, setSelectedPolicy] = useState<string | null>(null);
+
   const TIERS = [
     {
       name: "Free / Community Tier",
@@ -102,6 +108,13 @@ const App: React.FC = () => {
     const savedCourses = localStorage.getItem('hcn_enrolled_courses');
     if (savedCourses) setEnrolledCourses(JSON.parse(savedCourses));
   }, []);
+
+  useEffect(() => {
+    if (isConnectDropdownOpen && connectButtonRef.current) {
+      const rect = connectButtonRef.current.getBoundingClientRect();
+      setDropdownPos({ top: rect.bottom, left: rect.left });
+    }
+  }, [isConnectDropdownOpen]);
 
   const handleOpenSelectKey = async () => {
     // @ts-ignore
@@ -194,6 +207,35 @@ const App: React.FC = () => {
   const closeModals = () => {
     setSignupModalOpen(false); setSigninModalOpen(false);
     setError(''); setEmailInput(''); setPasswordInput(''); setConfirmPasswordInput('');
+  };
+
+  const getPolicyContent = (policy: string) => {
+    switch (policy) {
+      case 'privacy': return privacyPolicy;
+      case 'ai-transparency': return aiTransparencyPolicy;
+      case 'blockchain': return blockchainDataPolicy;
+      case 'vendor': return vendorApiGovernancePolicy;
+      case 'nist': return nistMappingSummary;
+      default: return '';
+    }
+  };
+
+  const cleanPolicyContent = (content: string) => {
+    return content
+      .replace(/^#+\s*/gm, '') // remove headers
+      .replace(/\*\*(.*?)\*\*/g, '$1') // remove bold
+      .replace(/\*(.*?)\*/g, '$1') // remove italic
+      .replace(/^- /gm, '') // remove list bullets
+      .replace(/^\d+\. /gm, '') // remove numbered lists
+      .replace(/\n\n+/g, '\n\n') // normalize newlines
+      .trim();
+  };
+
+  const policies = ['privacy', 'ai-transparency', 'blockchain', 'vendor', 'nist'];
+
+  const getNextPolicy = (current: string) => {
+    const index = policies.indexOf(current);
+    return policies[(index + 1) % policies.length];
   };
 
   const enrollCourse = (course: Course) => {
@@ -401,18 +443,18 @@ const App: React.FC = () => {
               
               <div className="flex justify-center pt-4">
                 <div className="flex gap-4">
-                  <div className="relative">
+                  <div className="relative" ref={connectButtonRef}>
                     <button 
                       onClick={() => setConnectDropdownOpen(!isConnectDropdownOpen)}
                       onBlur={() => setTimeout(() => setConnectDropdownOpen(false), 100)}
-                      className="group relative px-6 py-3 bg-transparent hover:bg-white/5 text-blue-300 hover:text-blue-200 rounded-lg font-medium text-sm transition-all flex items-center gap-2 border border-blue-500/20 hover:border-blue-400/40"
+                      className="group relative px-6 py-3 bg-blue-600 hover:bg-blue-500 text-white rounded-lg font-black text-sm transition-all shadow-[0_0_30px_rgba(37,99,235,0.2)] hover:-translate-y-1 active:scale-95 flex items-center gap-2 border border-blue-500/20"
                       aria-haspopup="true"
                       aria-expanded={isConnectDropdownOpen}
                     >
                       Connect with us <ChevronDown className={`w-4 h-4 transition-transform ${isConnectDropdownOpen ? 'rotate-180' : ''}`} />
                     </button>
-                    {isConnectDropdownOpen && (
-                      <div className="absolute top-full mt-2 w-80 max-h-[min(70vh,520px)] overflow-y-auto -webkit-overflow-scrolling-touch bg-black/90 backdrop-blur-xl border border-white/10 rounded-xl shadow-2xl p-6 z-50 pointer-events-auto touch-action-pan-y">
+                    {isConnectDropdownOpen && createPortal(
+                      <div className="fixed w-80 max-h-[70vh] overflow-y-auto -webkit-overflow-scrolling-touch bg-black/90 backdrop-blur-xl border border-white/10 rounded-xl shadow-2xl p-6 z-50 pointer-events-auto touch-action-pan-y" style={{top: dropdownPos.top, left: dropdownPos.left}}>
                         <div className="space-y-4">
                           <div>
                             <h4 className="text-white font-semibold mb-2">Local</h4>
@@ -450,7 +492,7 @@ const App: React.FC = () => {
                             Schedule a Briefing
                           </a>
                         </div>
-                      </div>
+                      </div>, document.body
                     )}
                   </div>
                   <div className="relative">
@@ -468,6 +510,14 @@ const App: React.FC = () => {
                         </div>
                       </div>
                     )}
+                  </div>
+                  <div className="relative">
+                    <button 
+                      onClick={() => setIsPolicyModalOpen(true)}
+                      className="group relative px-6 py-3 bg-blue-600 hover:bg-blue-500 text-white rounded-lg font-black text-sm transition-all shadow-[0_0_30px_rgba(37,99,235,0.2)] hover:-translate-y-1 active:scale-95 flex items-center gap-2 border border-blue-500/20"
+                    >
+                      Policies <ChevronDown className="w-4 h-4" />
+                    </button>
                   </div>
                 </div>
               </div>
@@ -768,6 +818,39 @@ const App: React.FC = () => {
                   Send Message
                 </button>
               </form>
+            </div>
+          </div>
+        )}
+
+        {isPolicyModalOpen && (
+          <div className="fixed inset-0 z-[200] flex items-center justify-center p-4 bg-black/95 backdrop-blur-3xl animate-in fade-in duration-300">
+            <div className="glass-panel w-full max-w-4xl p-12 rounded-[3rem] relative animate-in zoom-in duration-300 border-blue-500/20 max-h-[80vh] overflow-y-auto">
+              <button onClick={() => { setIsPolicyModalOpen(false); setSelectedPolicy(null); }} className="absolute top-8 right-8 p-3 hover:bg-white/5 rounded-full transition-colors">
+                <X className="w-5 h-5 text-slate-500" />
+              </button>
+              {!selectedPolicy ? (
+                <div>
+                  <h3 className="text-3xl font-black mb-10 text-white uppercase tracking-tighter">Policies</h3>
+                  <div className="space-y-4">
+                    <button onClick={() => setSelectedPolicy('privacy')} className="w-full text-left py-3 px-4 bg-white/5 hover:bg-white/10 rounded-lg text-white font-medium">Privacy Policy</button>
+                    <button onClick={() => setSelectedPolicy('ai-transparency')} className="w-full text-left py-3 px-4 bg-white/5 hover:bg-white/10 rounded-lg text-white font-medium">AI Transparency Policy</button>
+                    <button onClick={() => setSelectedPolicy('blockchain')} className="w-full text-left py-3 px-4 bg-white/5 hover:bg-white/10 rounded-lg text-white font-medium">Blockchain Data Policy</button>
+                    <button onClick={() => setSelectedPolicy('vendor')} className="w-full text-left py-3 px-4 bg-white/5 hover:bg-white/10 rounded-lg text-white font-medium">Vendor API Governance Policy</button>
+                    <button onClick={() => setSelectedPolicy('nist')} className="w-full text-left py-3 px-4 bg-white/5 hover:bg-white/10 rounded-lg text-white font-medium">NIST Mapping Summary</button>
+                  </div>
+                </div>
+              ) : (
+                <div>
+                  <h3 className="text-3xl font-black mb-10 text-white uppercase tracking-tighter">{selectedPolicy.replace('-', ' ').toUpperCase()}</h3>
+                  <div className="text-slate-300 leading-relaxed font-light whitespace-pre-line">
+                    {cleanPolicyContent(getPolicyContent(selectedPolicy))}
+                  </div>
+                  <div className="flex justify-between mt-10">
+                    <button onClick={() => { setIsPolicyModalOpen(false); setSelectedPolicy(null); }} className="px-6 py-3 bg-slate-600 hover:bg-slate-500 text-white rounded-lg font-medium">Back to Home</button>
+                    <button onClick={() => setSelectedPolicy(getNextPolicy(selectedPolicy))} className="px-6 py-3 bg-blue-600 hover:bg-blue-500 text-white rounded-lg font-medium">Next Policy</button>
+                  </div>
+                </div>
+              )}
             </div>
           </div>
         )}
