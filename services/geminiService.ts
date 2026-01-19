@@ -102,14 +102,14 @@ export const getWisdomMaps = async (userPrompt: string, location?: { latitude: n
   }
 };
 
-export const fastWisdomChat = async (message: string) => {
+export const fastWisdomChat = async (message: string, systemContext?: string) => {
   try {
     const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
     const response = await ai.models.generateContent({
       model: "gemini-3-flash-preview",
       contents: message,
       config: {
-        systemInstruction: "You are the Fast Wisdom Node of the Conscious Network Hub. Provide quick, concise, and futuristic guidance on the platform and its ethical frameworks.",
+        systemInstruction: systemContext || "You are the Fast Wisdom Node of the Conscious Network Hub. Provide quick, concise, and futuristic guidance on the platform and its ethical frameworks.",
       },
     });
     return response.text;

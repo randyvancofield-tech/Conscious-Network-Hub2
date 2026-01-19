@@ -1,15 +1,17 @@
 
 import React, { useState, useRef, useEffect } from 'react';
-import { X, Send, Sparkles, Globe, Brain, Shield, ExternalLink, Loader2, User, MapPin, ImageIcon, Maximize, Square } from 'lucide-react';
+import { X, Send, Sparkles, Globe, Brain, Shield, ExternalLink, Loader2, User, MapPin, ImageIcon, Maximize, Square, Lock } from 'lucide-react';
 import { fastWisdomChat, getWisdomSearch, getWisdomMaps, generateWisdomImage, GroundingChunk } from '../services/geminiService';
+import { getHCNKnowledge, buildHCNSystemContext, isQuestionInScope, getClosedKnowledgeResponse, HCNKnowledge } from '../services/hcnKnowledge';
 
 interface Message {
   id: string;
   role: 'user' | 'ai';
   text: string;
-  type: 'reasoning' | 'search' | 'maps' | 'image';
+  type: 'reasoning' | 'search' | 'maps' | 'image' | 'hcn';
   sources?: GroundingChunk[];
   imageUrl?: string;
+  isScopedResponse?: boolean;
 }
 
 interface WisdomNodeProps {
@@ -28,11 +30,21 @@ const WisdomNode: React.FC<WisdomNodeProps> = ({ isOpen, onClose }) => {
   ]);
   const [input, setInput] = useState('');
   const [isLoading, setIsLoading] = useState(false);
-  const [mode, setMode] = useState<'reasoning' | 'search' | 'maps' | 'image'>('reasoning');
+  const [mode, setMode] = useState<'reasoning' | 'search' | 'maps' | 'image' | 'hcn'>('reasoning');
   const [aspectRatio, setAspectRatio] = useState('1:1');
+  const [hcnKnowledge, setHcnKnowledge] = useState<HCNKnowledge | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   const aspectRatios = ["1:1", "2:3", "3:2", "3:4", "4:3", "9:16", "16:9", "21:9"];
+
+  // Load HCN knowledge on mount
+  useEffect(() => {
+    const loadHCNKnowledge = async () => {
+      const knowledge = await getHCNKnowledge();
+      setHcnKnowledge(knowledge);
+    };
+    loadHCNKnowledge();
+  }, []);
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -61,8 +73,22 @@ const WisdomNode: React.FC<WisdomNodeProps> = ({ isOpen, onClose }) => {
       let aiText = '';
       let sources: GroundingChunk[] = [];
       let imageUrl = '';
+      let isScopedResponse = false;
 
-      if (mode === 'search') {
+      if (mode === 'hcn') {
+        // HCN-scoped mode with closed knowledge enforcement
+        const inScope = isQuestionInScope(input, hcnKnowledge);
+        
+        if (!inScope) {
+          // Out of scope - return closed knowledge message
+          aiText = getClosedKnowledgeResponse(hcnKnowledge);
+          isScopedResponse = true;
+        } else {
+          // In scope - use HCN system context
+          const systemContext = buildHCNSystemContext(hcnKnowledge);
+          aiText = await fastWisdomChat(input, systemContext) || "Unable to access HCN knowledge.";
+        }
+      } else if (mode === 'search') {
         const result = await getWisdomSearch(input);
         aiText = result.text || "No specific data found.";
         sources = result.groundingChunks || [];
@@ -88,7 +114,8 @@ const WisdomNode: React.FC<WisdomNodeProps> = ({ isOpen, onClose }) => {
         text: aiText,
         type: mode,
         sources: sources.length > 0 ? sources : undefined,
-        imageUrl: imageUrl || undefined
+        imageUrl: imageUrl || undefined,
+        isScopedResponse
       };
 
       setMessages(prev => [...prev, aiMessage]);
@@ -112,8 +139,10 @@ const WisdomNode: React.FC<WisdomNodeProps> = ({ isOpen, onClose }) => {
           <div>
             <h2 className="text-xl font-bold text-white leading-none">Wisdom Node</h2>
             <div className="flex items-center gap-2 mt-1">
-              <div className="w-2 h-2 rounded-full bg-blue-400 animate-pulse"></div>
-              <span className="text-[10px] text-slate-400 uppercase tracking-widest font-bold">Multimodal Active</span>
+              <div className={`w-2 h-2 rounded-full animate-pulse ${mode === 'hcn' ? 'bg-teal-400' : 'bg-blue-400'}`}></div>
+              <span className="text-[10px] text-slate-400 uppercase tracking-widest font-bold">
+                {mode === 'hcn' ? 'HCN MVP Active' : 'Multimodal Active'}
+              </span>
             </div>
           </div>
         </div>
@@ -122,21 +151,32 @@ const WisdomNode: React.FC<WisdomNodeProps> = ({ isOpen, onClose }) => {
         </button>
       </div>
 
+      {/* MVP Banner (shown when in HCN mode) */}
+      {mode === 'hcn' && (
+        <div className="px-6 py-3 bg-teal-500/10 border-b border-teal-500/20 flex items-center gap-3">
+          <Lock className="w-4 h-4 text-teal-400 shrink-0" />
+          <p className="text-[9px] text-teal-300 uppercase tracking-widest font-black">
+            MVP Mode: Answers limited to HCN official sources
+          </p>
+        </div>
+      )}
+
       {/* Mode Selector */}
-      <div className="px-6 py-4 grid grid-cols-4 gap-2 border-b border-white/5 bg-black/20">
+      <div className="px-6 py-4 grid grid-cols-2 sm:grid-cols-5 gap-2 border-b border-white/5 bg-black/20">
         {[
           { id: 'reasoning', icon: <Sparkles className="w-3 h-3" />, label: 'Fast' },
           { id: 'search', icon: <Globe className="w-3 h-3" />, label: 'Search' },
           { id: 'maps', icon: <MapPin className="w-3 h-3" />, label: 'Maps' },
-          { id: 'image', icon: <ImageIcon className="w-3 h-3" />, label: 'Create' }
+          { id: 'image', icon: <ImageIcon className="w-3 h-3" />, label: 'Create' },
+          { id: 'hcn', icon: <Shield className="w-3 h-3" />, label: 'HCN' }
         ].map((m) => (
           <button 
             key={m.id}
             onClick={() => setMode(m.id as any)}
-            className={`flex flex-col items-center justify-center gap-1 py-2 rounded-xl text-[9px] font-black uppercase tracking-widest transition-all border ${mode === m.id ? 'bg-blue-600/20 border-blue-500 text-blue-400' : 'bg-white/5 border-transparent text-slate-500 hover:bg-white/10'}`}
+            className={`flex flex-col items-center justify-center gap-1 py-2 rounded-xl text-[8px] sm:text-[9px] font-black uppercase tracking-widest transition-all border ${mode === m.id ? (m.id === 'hcn' ? 'bg-teal-600/20 border-teal-500 text-teal-400' : 'bg-blue-600/20 border-blue-500 text-blue-400') : 'bg-white/5 border-transparent text-slate-500 hover:bg-white/10'}`}
           >
             {m.icon}
-            {m.label}
+            <span className="hidden xs:inline">{m.label}</span>
           </button>
         ))}
       </div>
@@ -171,6 +211,14 @@ const WisdomNode: React.FC<WisdomNodeProps> = ({ isOpen, onClose }) => {
               </div>
               <div className={`p-4 rounded-2xl text-sm leading-relaxed ${msg.role === 'user' ? 'bg-blue-600 text-white rounded-tr-none shadow-lg' : 'glass-panel text-slate-200 rounded-tl-none border-blue-500/10 shadow-xl'}`}>
                 {msg.text}
+
+                {msg.isScopedResponse && (
+                  <div className="mt-3 pt-3 border-t border-white/10">
+                    <div className="flex items-center gap-2 text-[9px] text-teal-300 font-black uppercase tracking-widest">
+                      <Lock className="w-3 h-3" /> Scoped Knowledge Response
+                    </div>
+                  </div>
+                )}
                 
                 {msg.imageUrl && (
                   <div className="mt-4 rounded-xl overflow-hidden border border-white/10 shadow-2xl">
@@ -213,6 +261,7 @@ const WisdomNode: React.FC<WisdomNodeProps> = ({ isOpen, onClose }) => {
                 {mode === 'search' ? 'Scanning digital ley lines...' : 
                  mode === 'maps' ? 'Triangulating place-based wisdom...' :
                  mode === 'image' ? 'Synthesizing visual manifestation...' :
+                 mode === 'hcn' ? 'Accessing HCN scoped knowledge...' :
                  'Tapping into the collective hub...'}
               </div>
           </div>
@@ -230,8 +279,9 @@ const WisdomNode: React.FC<WisdomNodeProps> = ({ isOpen, onClose }) => {
             placeholder={
               mode === 'reasoning' ? "Quick query..." : 
               mode === 'search' ? "Search news or trends..." : 
-              mode === 'maps' ? "Find locations or centers..." : 
-              "Describe a visual concept..."
+              mode === 'maps' ? "Find locations or centers..." :
+              mode === 'image' ? "Describe a visual concept..." :
+              "Ask about HCN, CNH, or Conscious Careers..."
             }
             className="w-full pl-6 pr-14 py-4 bg-white/5 border border-white/10 rounded-2xl text-white text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/50 transition-all placeholder:text-slate-600 font-medium"
           />

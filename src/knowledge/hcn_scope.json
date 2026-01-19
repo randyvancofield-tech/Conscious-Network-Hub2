@@ -1,0 +1,53 @@
+{
+  "founder": {
+    "name": "Randy Van Cofield Jr.",
+    "linkedinUrl": "https://www.linkedin.com/in/rcofield",
+    "role": "Founder"
+  },
+  "organization": {
+    "name": "Higher Conscious Network LLC",
+    "shortName": "HCN",
+    "officialUrl": "https://higherconscious.network",
+    "description": "A decentralized social learning infrastructure designed to restore autonomy, protect identity, and create equitable economic opportunity through community-centered ethical technology."
+  },
+  "products": [
+    {
+      "name": "Conscious Network Hub",
+      "shortName": "CNH",
+      "description": "The primary platform for decentralized learning, provider marketplace, and community engagement.",
+      "features": [
+        "User identity management",
+        "Provider scheduling and billing",
+        "Conscious Careers marketplace",
+        "Social learning community",
+        "Meeting synthesis and notes"
+      ]
+    },
+    {
+      "name": "Conscious Careers",
+      "description": "Entrepreneurship support platform helping individuals and providers pursue business ownership with partnerships and revenue-sharing grants.",
+      "focus": "Minority empowerment and community resilience"
+    }
+  ],
+  "scope": {
+    "answerable": [
+      "Higher Conscious Network LLC",
+      "Conscious Network Hub",
+      "Conscious Careers",
+      "Founder profile and background",
+      "Platform features and capabilities",
+      "Decentralized learning and ethics",
+      "Community and social learning"
+    ],
+    "notAnswerable": [
+      "General web search topics",
+      "Real-time news and current events",
+      "Maps and location services",
+      "Image generation",
+      "Information outside HCN scope"
+    ]
+  },
+  "closedKnowledgeMessage": "At this time, Wisdom Node is limited to official Higher Conscious Network sources for accuracy. I can answer questions about Higher Conscious Network LLC, Conscious Network Hub (CNH), Conscious Careers, and the Founder profile. For anything else, please rephrase the question to relate to HCN/CNH/Conscious Careers, or consult external sources.",
+  "mvpNotice": "MVP Mode: Answers are limited to HCN official sources for accuracy and reliability.",
+  "lastUpdated": "2026-01-19"
+}
