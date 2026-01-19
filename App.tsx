@@ -1,6 +1,5 @@
 
-import React, { useState, useEffect, useMemo, useRef } from 'react';
-import { createPortal } from 'react-dom';
+import React, { useState, useEffect, useMemo } from 'react';
 import ThreeScene from './components/ThreeScene';
 import Dashboard from './components/Dashboard';
 import WalletPopout from './components/WalletPopout';
@@ -52,11 +51,6 @@ const App: React.FC = () => {
   const [contactMessage, setContactMessage] = useState('');
 
   const [isPoliciesOpen, setIsPoliciesOpen] = useState(false);
-
-  const [dropdownPos, setDropdownPos] = useState({top: 0, left: 0});
-  const connectButtonRef = useRef<HTMLDivElement>(null);
-  const [isPolicyModalOpen, setIsPolicyModalOpen] = useState(false);
-  const [selectedPolicy, setSelectedPolicy] = useState<string | null>(null);
 
   const TIERS = [
     {
@@ -442,59 +436,13 @@ const App: React.FC = () => {
               </div>
               
               <div className="flex justify-center pt-4">
-                <div className="flex gap-4">
-                  <div className="relative" ref={connectButtonRef}>
-                    <button 
-                      onClick={() => setConnectDropdownOpen(!isConnectDropdownOpen)}
-                      onBlur={() => setTimeout(() => setConnectDropdownOpen(false), 100)}
-                      className="group relative px-6 py-3 bg-blue-600 hover:bg-blue-500 text-white rounded-lg font-black text-sm transition-all shadow-[0_0_30px_rgba(37,99,235,0.2)] hover:-translate-y-1 active:scale-95 flex items-center gap-2 border border-blue-500/20"
-                      aria-haspopup="true"
-                      aria-expanded={isConnectDropdownOpen}
-                    >
-                      Connect with us <ChevronDown className={`w-4 h-4 transition-transform ${isConnectDropdownOpen ? 'rotate-180' : ''}`} />
-                    </button>
-                    {isConnectDropdownOpen && createPortal(
-                      <div className="fixed w-80 max-h-[70vh] overflow-y-auto -webkit-overflow-scrolling-touch bg-black/90 backdrop-blur-xl border border-white/10 rounded-xl shadow-2xl p-6 z-50 pointer-events-auto touch-action-pan-y" style={{top: dropdownPos.top, left: dropdownPos.left}}>
-                        <div className="space-y-4">
-                          <div>
-                            <h4 className="text-white font-semibold mb-2">Local</h4>
-                            <ul className="text-slate-400 text-sm space-y-1">
-                              <li>• Partnerships</li>
-                              <li>• Providers</li>
-                              <li>• Institutions</li>
-                              <li>• Community</li>
-                            </ul>
-                          </div>
-                          <div>
-                            <h4 className="text-white font-semibold mb-2">National</h4>
-                            <ul className="text-slate-400 text-sm space-y-1">
-                              <li>• Partnerships</li>
-                              <li>• Providers</li>
-                              <li>• Institutions</li>
-                              <li>• Community</li>
-                            </ul>
-                          </div>
-                          <div>
-                            <h4 className="text-white font-semibold mb-2">International</h4>
-                            <ul className="text-slate-400 text-sm space-y-1">
-                              <li>• Partnerships</li>
-                              <li>• Providers</li>
-                              <li>• Institutions</li>
-                              <li>• Community</li>
-                            </ul>
-                          </div>
-                          <a 
-                            href="https://calendly.com/randycofield/buildingconnections" 
-                            target="_blank" 
-                            rel="noopener noreferrer"
-                            className="w-full mt-4 py-3 bg-blue-600 hover:bg-blue-500 text-white rounded-lg font-medium transition-colors text-center block"
-                          >
-                            Schedule a Briefing
-                          </a>
-                        </div>
-                      </div>, document.body
-                    )}
-                  </div>
+                <div className="flex items-center justify-center gap-4">
+                  <button 
+                    onClick={() => window.open('https://calendly.com/randycofield/buildingconnections', '_blank', 'noopener,noreferrer')}
+                    className="group relative px-6 py-3 bg-blue-600 hover:bg-blue-500 text-white rounded-lg font-black text-sm transition-all shadow-[0_0_30px_rgba(37,99,235,0.2)] hover:-translate-y-1 active:scale-95 flex items-center gap-2 border border-blue-500/20"
+                  >
+                    Schedule a Briefing <ChevronRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" />
+                  </button>
                   <div className="relative">
                     <button onClick={() => setIsPoliciesOpen(!isPoliciesOpen)} onBlur={() => setTimeout(() => setIsPoliciesOpen(false), 100)} className="group relative px-6 py-3 bg-transparent hover:bg-white/5 text-blue-300 hover:text-blue-200 rounded-lg font-medium text-sm transition-all flex items-center gap-2 border border-blue-500/20 hover:border-blue-400/40" aria-haspopup="true" aria-expanded={isPoliciesOpen}>
                       Policies <ChevronDown className={`w-4 h-4 transition-transform ${isPoliciesOpen ? 'rotate-180' : ''}`} />
@@ -510,14 +458,6 @@ const App: React.FC = () => {
                         </div>
                       </div>
                     )}
-                  </div>
-                  <div className="relative">
-                    <button 
-                      onClick={() => setIsPolicyModalOpen(true)}
-                      className="group relative px-6 py-3 bg-blue-600 hover:bg-blue-500 text-white rounded-lg font-black text-sm transition-all shadow-[0_0_30px_rgba(37,99,235,0.2)] hover:-translate-y-1 active:scale-95 flex items-center gap-2 border border-blue-500/20"
-                    >
-                      Policies <ChevronDown className="w-4 h-4" />
-                    </button>
                   </div>
                 </div>
               </div>
