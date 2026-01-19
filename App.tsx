@@ -18,7 +18,7 @@ import {
   Shield, Brain, Menu, X, Search, Bell, Settings, 
   ChevronRight, ChevronDown, Wallet, LogIn, Home, LogOut, Compass, UserCircle, Building2, CheckCircle2, Sparkles, Key, Video
 } from 'lucide-react';
-import logo from './assets/brand/logo.png';
+import logo from './src/assets/brand/logo.png';
 
 const App: React.FC = () => {
   const [currentView, setCurrentView] = useState<AppView>(AppView.ENTRY);
