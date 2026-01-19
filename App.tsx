@@ -371,7 +371,6 @@ const App: React.FC = () => {
         {currentView === AppView.ENTRY && (
           <div className="flex flex-col items-center justify-center min-h-screen p-4 sm:p-6 md:p-8 text-center animate-in fade-in zoom-in duration-1000">
             <div className="w-full max-w-4xl space-y-6 sm:space-y-8 md:space-y-12 backdrop-blur-[4px] p-6 sm:p-8 md:p-12 lg:p-16 rounded-2xl sm:rounded-3xl md:rounded-[2.5rem] lg:rounded-[4rem] border border-white/5 bg-white/[0.01] shadow-[0_0_100px_rgba(0,0,0,0.6)]">
-              <img src={logo} alt="Conscious Network Hub Logo" className="h-20 w-auto mx-auto mb-4" />
               <div className="flex justify-center">
                 <div className="p-4 sm:p-6 bg-blue-600/10 rounded-2xl sm:rounded-3xl md:rounded-[2.5rem] border border-blue-500/20 backdrop-blur-3xl shadow-[0_0_30px_rgba(37,99,235,0.2)] animate-pulse">
                   <img src={logo} alt="Conscious Network Hub Logo" className="w-12 h-12 sm:w-14 sm:h-14 md:w-16 md:h-16" />
@@ -401,63 +400,75 @@ const App: React.FC = () => {
               </div>
               
               <div className="flex justify-center pt-4">
-                <div className="relative">
-                  <button 
-                    onClick={() => setConnectDropdownOpen(!isConnectDropdownOpen)}
-                    onBlur={() => setTimeout(() => setConnectDropdownOpen(false), 100)}
-                    className="group relative px-6 py-3 bg-transparent hover:bg-white/5 text-blue-300 hover:text-blue-200 rounded-lg font-medium text-sm transition-all flex items-center gap-2 border border-blue-500/20 hover:border-blue-400/40"
-                    aria-haspopup="true"
-                    aria-expanded={isConnectDropdownOpen}
-                  >
-                    Connect with us <ChevronDown className={`w-4 h-4 transition-transform ${isConnectDropdownOpen ? 'rotate-180' : ''}`} />
-                  </button>
-                  {isConnectDropdownOpen && (
-                    <div className="absolute top-full mt-2 w-80 max-h-[min(70vh,520px)] overflow-y-auto -webkit-overflow-scrolling-touch bg-black/90 backdrop-blur-xl border border-white/10 rounded-xl shadow-2xl p-6 z-20">
-                      <div className="space-y-4">
-                        <div>
-                          <h4 className="text-white font-semibold mb-2">Local</h4>
-                          <ul className="text-slate-400 text-sm space-y-1">
-                            <li>• Partnerships</li>
-                            <li>• Providers</li>
-                            <li>• Institutions</li>
-                            <li>• Community</li>
-                          </ul>
+                <div className="flex gap-4">
+                  <div className="relative">
+                    <button 
+                      onClick={() => setConnectDropdownOpen(!isConnectDropdownOpen)}
+                      onBlur={() => setTimeout(() => setConnectDropdownOpen(false), 100)}
+                      className="group relative px-6 py-3 bg-transparent hover:bg-white/5 text-blue-300 hover:text-blue-200 rounded-lg font-medium text-sm transition-all flex items-center gap-2 border border-blue-500/20 hover:border-blue-400/40"
+                      aria-haspopup="true"
+                      aria-expanded={isConnectDropdownOpen}
+                    >
+                      Connect with us <ChevronDown className={`w-4 h-4 transition-transform ${isConnectDropdownOpen ? 'rotate-180' : ''}`} />
+                    </button>
+                    {isConnectDropdownOpen && (
+                      <div className="absolute top-full mt-2 w-80 max-h-[min(70vh,520px)] overflow-y-auto -webkit-overflow-scrolling-touch bg-black/90 backdrop-blur-xl border border-white/10 rounded-xl shadow-2xl p-6 z-50 pointer-events-auto touch-action-pan-y">
+                        <div className="space-y-4">
+                          <div>
+                            <h4 className="text-white font-semibold mb-2">Local</h4>
+                            <ul className="text-slate-400 text-sm space-y-1">
+                              <li>• Partnerships</li>
+                              <li>• Providers</li>
+                              <li>• Institutions</li>
+                              <li>• Community</li>
+                            </ul>
+                          </div>
+                          <div>
+                            <h4 className="text-white font-semibold mb-2">National</h4>
+                            <ul className="text-slate-400 text-sm space-y-1">
+                              <li>• Partnerships</li>
+                              <li>• Providers</li>
+                              <li>• Institutions</li>
+                              <li>• Community</li>
+                            </ul>
+                          </div>
+                          <div>
+                            <h4 className="text-white font-semibold mb-2">International</h4>
+                            <ul className="text-slate-400 text-sm space-y-1">
+                              <li>• Partnerships</li>
+                              <li>• Providers</li>
+                              <li>• Institutions</li>
+                              <li>• Community</li>
+                            </ul>
+                          </div>
+                          <a 
+                            href="https://calendly.com/randycofield/buildingconnections" 
+                            target="_blank" 
+                            rel="noopener noreferrer"
+                            className="w-full mt-4 py-3 bg-blue-600 hover:bg-blue-500 text-white rounded-lg font-medium transition-colors text-center block"
+                          >
+                            Schedule a Briefing
+                          </a>
                         </div>
-                        <div>
-                          <h4 className="text-white font-semibold mb-2">National</h4>
-                          <ul className="text-slate-400 text-sm space-y-1">
-                            <li>• Partnerships</li>
-                            <li>• Providers</li>
-                            <li>• Institutions</li>
-                            <li>• Community</li>
-                          </ul>
-                        </div>
-                        <div>
-                          <h4 className="text-white font-semibold mb-2">International</h4>
-                          <ul className="text-slate-400 text-sm space-y-1">
-                            <li>• Partnerships</li>
-                            <li>• Providers</li>
-                            <li>• Institutions</li>
-                            <li>• Community</li>
-                          </ul>
-                        </div>
-                        <button 
-                          onClick={() => { setContactModalOpen(true); setConnectDropdownOpen(false); }}
-                          className="w-full mt-4 py-3 bg-blue-600 hover:bg-blue-500 text-white rounded-lg font-medium transition-colors"
-                        >
-                          Get in Touch
-                        </button>
-                        <a 
-                          href="https://calendly.com/randycofield/buildingconnections" 
-                          target="_blank" 
-                          rel="noopener noreferrer"
-                          className="w-full mt-2 py-3 bg-green-600 hover:bg-green-500 text-white rounded-lg font-medium transition-colors text-center block"
-                        >
-                          Schedule a Connection Call
-                        </a>
                       </div>
-                    </div>
-                  )}
+                    )}
+                  </div>
+                  <div className="relative">
+                    <button onClick={() => setIsPoliciesOpen(!isPoliciesOpen)} onBlur={() => setTimeout(() => setIsPoliciesOpen(false), 100)} className="group relative px-6 py-3 bg-transparent hover:bg-white/5 text-blue-300 hover:text-blue-200 rounded-lg font-medium text-sm transition-all flex items-center gap-2 border border-blue-500/20 hover:border-blue-400/40" aria-haspopup="true" aria-expanded={isPoliciesOpen}>
+                      Policies <ChevronDown className={`w-4 h-4 transition-transform ${isPoliciesOpen ? 'rotate-180' : ''}`} />
+                    </button>
+                    {isPoliciesOpen && (
+                      <div className="absolute top-full mt-2 w-64 bg-black/90 backdrop-blur-xl border border-white/10 rounded-xl shadow-2xl p-4 z-50">
+                        <div className="space-y-2">
+                          <button onClick={() => { setCurrentView(AppView.PRIVACY_POLICY); setIsPoliciesOpen(false); }} className="w-full text-left py-2 px-3 text-slate-300 hover:text-white hover:bg-white/10 rounded-lg transition-colors text-sm">Privacy Policy</button>
+                          <button onClick={() => { setCurrentView(AppView.AI_TRANSPARENCY_POLICY); setIsPoliciesOpen(false); }} className="w-full text-left py-2 px-3 text-slate-300 hover:text-white hover:bg-white/10 rounded-lg transition-colors text-sm">AI Transparency Policy</button>
+                          <button onClick={() => { setCurrentView(AppView.BLOCKCHAIN_DATA_POLICY); setIsPoliciesOpen(false); }} className="w-full text-left py-2 px-3 text-slate-300 hover:text-white hover:bg-white/10 rounded-lg transition-colors text-sm">Blockchain Data Policy</button>
+                          <button onClick={() => { setCurrentView(AppView.VENDOR_API_GOVERNANCE_POLICY); setIsPoliciesOpen(false); }} className="w-full text-left py-2 px-3 text-slate-300 hover:text-white hover:bg-white/10 rounded-lg transition-colors text-sm">Vendor API Governance Policy</button>
+                          <button onClick={() => { setCurrentView(AppView.NIST_MAPPING_SUMMARY); setIsPoliciesOpen(false); }} className="w-full text-left py-2 px-3 text-slate-300 hover:text-white hover:bg-white/10 rounded-lg transition-colors text-sm">NIST Mapping Summary</button>
+                        </div>
+                      </div>
+                    )}
+                  </div>
                 </div>
               </div>
               
@@ -662,22 +673,6 @@ const App: React.FC = () => {
                       <Menu className="w-5 h-5" />
                     </button>
                   )}
-                  <div className="relative">
-                    <button onClick={() => setIsPoliciesOpen(!isPoliciesOpen)} onBlur={() => setTimeout(() => setIsPoliciesOpen(false), 100)} className="p-3 bg-white/5 hover:bg-white/10 rounded-xl text-slate-400 border border-white/10 shadow-lg" aria-haspopup="true" aria-expanded={isPoliciesOpen}>
-                      <Menu className="w-5 h-5" />
-                    </button>
-                    {isPoliciesOpen && (
-                      <div className="absolute top-full mt-2 w-64 bg-black/90 backdrop-blur-xl border border-white/10 rounded-xl shadow-2xl p-4 z-30">
-                        <div className="space-y-2">
-                          <button onClick={() => { setCurrentView(AppView.PRIVACY_POLICY); setIsPoliciesOpen(false); }} className="w-full text-left py-2 px-3 text-slate-300 hover:text-white hover:bg-white/10 rounded-lg transition-colors text-sm">Privacy Policy</button>
-                          <button onClick={() => { setCurrentView(AppView.AI_TRANSPARENCY_POLICY); setIsPoliciesOpen(false); }} className="w-full text-left py-2 px-3 text-slate-300 hover:text-white hover:bg-white/10 rounded-lg transition-colors text-sm">AI Transparency Policy</button>
-                          <button onClick={() => { setCurrentView(AppView.BLOCKCHAIN_DATA_POLICY); setIsPoliciesOpen(false); }} className="w-full text-left py-2 px-3 text-slate-300 hover:text-white hover:bg-white/10 rounded-lg transition-colors text-sm">Blockchain Data Policy</button>
-                          <button onClick={() => { setCurrentView(AppView.VENDOR_API_GOVERNANCE_POLICY); setIsPoliciesOpen(false); }} className="w-full text-left py-2 px-3 text-slate-300 hover:text-white hover:bg-white/10 rounded-lg transition-colors text-sm">Vendor API Governance Policy</button>
-                          <button onClick={() => { setCurrentView(AppView.NIST_MAPPING_SUMMARY); setIsPoliciesOpen(false); }} className="w-full text-left py-2 px-3 text-slate-300 hover:text-white hover:bg-white/10 rounded-lg transition-colors text-sm">NIST Mapping Summary</button>
-                        </div>
-                      </div>
-                    )}
-                  </div>
                   <div className="relative group hidden md:block">
                     <Search className="absolute left-4 sm:left-5 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-600 group-focus-within:text-blue-400 transition-colors" />
                     <input type="text" placeholder="Search..." className="pl-12 sm:pl-14 pr-6 sm:pr-8 py-3 sm:py-3.5 bg-white/5 border border-white/10 rounded-lg sm:rounded-xl text-xs outline-none focus:ring-2 focus:ring-blue-500/30 w-56 sm:w-72 md:w-80 transition-all font-medium placeholder:tracking-wider uppercase" />
