@@ -2,8 +2,8 @@
 import React, { useState, useEffect } from 'react';
 import { Search, Bell, ShieldCheck, TrendingUp, Users, ExternalLink, PlayCircle, BookOpen, Layers, Globe, Plus, Target, Rocket, BarChart3, HeartHandshake } from 'lucide-react';
 import { CORE_COMPONENTS } from '../constants';
-// Fixed: Changed getEthicalAIAdvice to getWisdomSearch as getEthicalAIAdvice is not exported from geminiService
-import { getWisdomSearch, GroundingChunk } from '../services/geminiService';
+import EthicalAIInsight from './EthicalAIInsight';
+import { GroundingChunk } from '../services/geminiService';
 import { UserProfile, Course } from '../types';
 
 interface DashboardProps {
@@ -12,56 +12,12 @@ interface DashboardProps {
 }
 
 const Dashboard: React.FC<DashboardProps> = ({ user, onEnroll }) => {
-  const [aiMessage, setAiMessage] = useState<string>("Initializing secure connection to Ethical AI node...");
-  const [sources, setSources] = useState<GroundingChunk[]>([]);
-  const [loading, setLoading] = useState(true);
-
-  useEffect(() => {
-    const fetchInitialAi = async () => {
-      // Fixed: Using getWisdomSearch which is the correct exported function for grounding/search
-      const { text, groundingChunks } = await getWisdomSearch("Briefly mention a recent positive development in decentralized ethics for the Conscious Network Hub.");
-      setAiMessage(text || "Welcome to the future of learning.");
-      setSources(groundingChunks || []);
-      setLoading(false);
-    };
-    fetchInitialAi();
-  }, []);
-
   return (
     <div className="space-y-12 animate-in fade-in duration-700 pb-20">
-      {/* Welcome Hero */}
+      {/* Welcome Hero - Ethical AI Insight */}
       <section className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-        <div className="lg:col-span-2 glass-panel p-10 rounded-[2.5rem] relative overflow-hidden group shadow-2xl border-blue-500/10">
-          <div className="absolute top-0 right-0 p-10 opacity-5 group-hover:opacity-10 transition-opacity">
-             <ShieldCheck className="w-48 h-48 text-blue-400" />
-          </div>
-          <div className="relative z-10">
-            <h1 className="text-3xl sm:text-4xl font-black text-white mb-4 tracking-tighter uppercase leading-none">PROTOCOL ACTIVE, <span className="text-blue-400">{user?.name || 'SOVEREIGN'}</span></h1>
-            <p className="text-blue-200/60 mb-8 text-lg max-w-2xl leading-relaxed font-light">
-              Your decentralized identity node is secure. Accessing {user?.tier || 'Explore'} level knowledge layers.
-            </p>
-            
-            <div className="bg-blue-900/20 border border-blue-500/10 p-6 rounded-[1.5rem] shadow-inner backdrop-blur-xl">
-              <div className="flex items-center gap-3 mb-4">
-                <div className="w-2 h-2 rounded-full bg-teal-400 animate-pulse shadow-[0_0_10px_rgba(45,212,191,0.5)]"></div>
-                <span className="text-[9px] font-black uppercase tracking-[0.4em] text-blue-400">Ethical AI Insight</span>
-              </div>
-              <p className="text-slate-200 italic leading-relaxed text-base font-light">
-                {loading ? "Decrypting mission data..." : aiMessage}
-              </p>
-              
-              {!loading && sources.length > 0 && (
-                <div className="mt-6 flex flex-wrap gap-3">
-                  <span className="text-[9px] text-slate-500 flex items-center gap-2 uppercase tracking-[0.2em] font-black mr-2"><Globe className="w-3 h-3" /> Grounded In:</span>
-                  {sources.map((s, idx) => s.web && (
-                    <a key={idx} href={s.web.uri} target="_blank" rel="noopener noreferrer" className="text-[9px] text-blue-400 hover:text-blue-300 flex items-center gap-2 bg-blue-500/10 px-3 py-1.5 rounded-xl transition-all border border-blue-500/10 hover:border-blue-400/50 uppercase font-black tracking-widest">
-                      {s.web.title} <ExternalLink className="w-2.5 h-2.5" />
-                    </a>
-                  ))}
-                </div>
-              )}
-            </div>
-          </div>
+        <div className="lg:col-span-2">
+          <EthicalAIInsight userEmail={user?.email} />
         </div>
 
         <div className="glass-panel p-10 rounded-[2.5rem] flex flex-col justify-between border-blue-500/10 shadow-2xl">
