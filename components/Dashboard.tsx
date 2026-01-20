@@ -518,8 +518,8 @@ const Dashboard: React.FC<DashboardProps> = ({ user, onEnroll }) => {
         </div>
       </div>
     )}
-  </div>
   </>
 );
+};
 
 export default Dashboard;
