@@ -8,15 +8,14 @@ export const NAVIGATION_ITEMS = [
   { id: 'meetings', label: 'Conscious Meetings', icon: <Video className="w-5 h-5" /> },
   { id: 'my-courses', label: 'My Courses', icon: <BookOpen className="w-5 h-5" /> },
   { id: 'providers', label: 'Providers Market', icon: <Briefcase className="w-5 h-5" /> },
-  { id: 'ai-consult', label: 'Wisdom Node', icon: <Sparkles className="w-5 h-5" /> },
   { id: 'profile', label: 'My Conscious Identity', icon: <UserCircle className="w-5 h-5" /> },
   { id: 'membership', label: 'Memberships', icon: <CreditCard className="w-5 h-5" /> },
 ];
 
 export const CORE_COMPONENTS = [
   {
-    title: "Wisdom Node AI",
-    description: "Multimodal intelligence for reasoning, searching, mapping, and creating visualizations.",
+    title: "Portal Assistant",
+    description: "Intelligent platform guidance with system monitoring and support ticketing.",
     icon: <Brain className="w-8 h-8 text-blue-400" />
   },
   {

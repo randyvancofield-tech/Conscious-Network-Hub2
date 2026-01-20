@@ -3,7 +3,6 @@ import React, { useState, useEffect, useMemo } from 'react';
 import ThreeScene from './components/ThreeScene';
 import Dashboard from './components/Dashboard';
 import WalletPopout from './components/WalletPopout';
-import WisdomNode from './components/AIChatbot';
 import MyCourses from './components/MyCourses';
 import ProvidersMarket from './components/ProvidersMarket';
 import KnowledgePathways from './components/KnowledgePathways';
@@ -34,7 +33,6 @@ const App: React.FC = () => {
   const [isSignupModalOpen, setSignupModalOpen] = useState(false);
   const [isSigninModalOpen, setSigninModalOpen] = useState(false);
   const [isWalletOpen, setWalletOpen] = useState(false);
-  const [isAiOpen, setAiOpen] = useState(false);
   const [selectedTier, setSelectedTier] = useState('Free / Community');
   
   const [hasApiKey, setHasApiKey] = useState<boolean | null>(null);
@@ -282,24 +280,6 @@ const App: React.FC = () => {
         return <ProvidersMarket />;
       case AppView.MEMBERSHIP:
         return <CommunityMembers />;
-      case AppView.AI_CONSULT:
-        return (
-          <div className="flex flex-col items-center justify-center h-full space-y-8">
-            <div className="glass-panel p-12 rounded-[3rem] text-center max-w-2xl border-blue-500/20 shadow-2xl">
-              <Sparkles className="w-16 h-16 text-blue-400 mx-auto mb-6 animate-pulse" />
-              <h2 className="text-3xl font-black text-white uppercase tracking-tighter mb-4">The Wisdom Node</h2>
-              <p className="text-slate-400 leading-relaxed font-light mb-8">
-                Access multimodal intelligence designed to expand your consciousness. From deep reasoning to real-time search and visualization synthesis.
-              </p>
-              <button 
-                onClick={() => setAiOpen(true)}
-                className="px-10 py-5 bg-blue-600 hover:bg-blue-500 text-white rounded-2xl font-black text-xs uppercase tracking-widest transition-all shadow-xl"
-              >
-                Open Interface
-              </button>
-            </div>
-          </div>
-        );
       case AppView.KNOWLEDGE_PATHWAYS:
         return <KnowledgePathways onGoBack={() => setCurrentView(AppView.MY_COURSES)} onEnroll={enrollCourse} />;
       case AppView.PRIVACY_POLICY:
@@ -603,7 +583,6 @@ const App: React.FC = () => {
                       'meetings': AppView.CONSCIOUS_MEETINGS,
                       'my-courses': AppView.MY_COURSES,
                       'providers': AppView.PROVIDERS,
-                      'ai-consult': AppView.AI_CONSULT,
                       'profile': AppView.MY_CONSCIOUS_IDENTITY,
                       'membership': AppView.MEMBERSHIP,
                     };
@@ -694,7 +673,6 @@ const App: React.FC = () => {
         )}
 
         <WalletPopout isOpen={isWalletOpen} onClose={() => setWalletOpen(false)} user={user} />
-        <WisdomNode isOpen={isAiOpen} onClose={() => setAiOpen(false)} />
 
         {(isSignupModalOpen || isSigninModalOpen) && (
           <div className="fixed inset-0 z-[200] flex items-center justify-center p-4 bg-black/95 backdrop-blur-3xl animate-in fade-in duration-300">
