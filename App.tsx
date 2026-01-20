@@ -10,6 +10,7 @@ import CommunityMembers from './components/CommunityMembers';
 import SocialLearningHub from './components/SocialLearningHub';
 import ConsciousMeetings from './components/ConsciousMeetings';
 import MusicBox from './components/MusicBox';
+import EthicalAIInsight from './components/EthicalAIInsight';
 import { ConsciousIdentity } from './components/community/CommunityLayout';
 import { AppView, UserProfile, Course } from './types';
 import { NAVIGATION_ITEMS } from './constants';
@@ -772,7 +773,12 @@ const App: React.FC = () => {
           </div>
         )}
 
-
+        {/* Ethical AI Insight Widget - visible in all non-entry views */}
+        {(currentView !== AppView.ENTRY && currentView !== AppView.MEMBERSHIP_ACCESS) && (
+          <div className="fixed bottom-6 right-6 z-40 w-full max-w-sm">
+            <EthicalAIInsight userEmail={user?.email} userId={user?.id} />
+          </div>
+        )}
       </div>
     </div>
   );
