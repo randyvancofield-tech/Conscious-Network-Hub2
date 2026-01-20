@@ -66,14 +66,6 @@ const Dashboard: React.FC<DashboardProps> = ({ user, onEnroll }) => {
     localStorage.setItem('portal_assistant_history', JSON.stringify(conversationHistory));
   }, [assistantTab, aiMessage, conversationHistory]);
 
-  // Load persisted assistant state
-  useEffect(() => {
-    const savedTab = localStorage.getItem('portal_assistant_tab');
-    const savedMessage = localStorage.getItem('portal_assistant_message');
-    if (savedTab) setAssistantTab(savedTab as 'help' | 'support');
-    if (savedMessage) setAiMessage(savedMessage);
-  }, []);
-
   // Auto-refresh system data
   useEffect(() => {
     const refreshData = () => {
@@ -199,6 +191,7 @@ const Dashboard: React.FC<DashboardProps> = ({ user, onEnroll }) => {
   };
 
   return (
+    <>
     <div className="space-y-12 animate-in fade-in duration-700 pb-20">
       {/* Welcome Hero */}
       <section className="grid grid-cols-1 lg:grid-cols-3 gap-8">
@@ -526,6 +519,7 @@ const Dashboard: React.FC<DashboardProps> = ({ user, onEnroll }) => {
       </div>
     )}
   </div>
+  </>
 );
 
 export default Dashboard;
