@@ -772,15 +772,7 @@ const App: React.FC = () => {
           </div>
         )}
 
-        {(currentView !== AppView.ENTRY && currentView !== AppView.MEMBERSHIP_ACCESS) && (
-          <button 
-            onClick={() => setAiOpen(true)}
-            className="fixed bottom-10 right-10 z-[100] w-16 h-16 bg-blue-600 hover:bg-blue-500 rounded-2xl shadow-[0_15px_40px_rgba(37,99,235,0.4)] flex items-center justify-center transition-all hover:-translate-y-2 group active:scale-95 border-b-4 border-blue-800"
-          >
-            <Sparkles className="w-8 h-8 text-white group-hover:scale-110 transition-transform" />
-            <div className="absolute -top-1 -right-1 w-4 h-4 bg-teal-400 rounded-full border-2 border-black"></div>
-          </button>
-        )}
+
       </div>
     </div>
   );
