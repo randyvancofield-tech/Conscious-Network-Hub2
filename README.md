@@ -2,19 +2,207 @@
 <img width="1200" height="475" alt="GHBanner" src="https://github.com/user-attachments/assets/0aa67016-6eaf-458a-adb2-6e31a0763ed6" />
 </div>
 
-# Run and deploy your AI Studio app
+# Conscious Network Hub - Full Stack Platform
 
-This contains everything you need to run your app locally.
+A community-centered decentralized social learning infrastructure powered by ethical AI.
 
-View your app in AI Studio: https://ai.studio/apps/drive/1-947WBeFcn7RPAmicG7rKmwHpU2yNWWb
+**⚡ Now with Secure Backend API for Google Cloud Vertex AI Integration!**
 
-## Run Locally
+## 🚀 Quick Start
 
-**Prerequisites:**  Node.js
+### Prerequisites
+- Node.js 18+
+- Google Cloud Project with Vertex AI API enabled
+- Google Cloud Application Default Credentials
 
+### Setup (5 minutes)
 
-1. Install dependencies:
-   `npm install`
-2. Set the `GEMINI_API_KEY` in [.env.local](.env.local) to your Gemini API key
-3. Run the app:
-   `npm run dev`
+**1. Frontend Setup**
+```bash
+npm install
+cp .env.example .env.local
+# Edit .env.local with VITE_BACKEND_URL=http://localhost:3001
+npm run dev
+```
+
+**2. Backend Setup**
+```bash
+cd server
+npm install
+cp .env.example .env.local
+# Edit .env.local with your GCP credentials:
+# GOOGLE_CLOUD_PROJECT=your-project-id
+# GOOGLE_CLOUD_REGION=us-central1
+
+# Setup Google Cloud authentication:
+gcloud auth application-default login
+gcloud services enable aiplatform.googleapis.com
+
+npm run dev
+```
+
+**3. Access**
+- Frontend: http://localhost:5173
+- Backend API: http://localhost:3001
+- Health Check: http://localhost:3001/health
+
+## 📚 Documentation
+
+- **[Full Setup Guide](./SETUP_GUIDE.md)** - Complete setup instructions for local development
+- **[Backend README](./server/README.md)** - Backend API documentation and architecture
+- **[API Testing Guide](./server/TESTING.md)** - Comprehensive testing guide with curl examples
+- **[Enhancement Proposal](./ETHICAL_AI_ENHANCEMENT_PROPOSAL.md)** - Feature roadmap
+- **[Implementation Details](./ETHICAL_AI_IMPLEMENTATION_COMPLETE.md)** - Technical implementation
+
+## 🏗️ Architecture
+
+```
+Frontend (React/TypeScript)
+  ↓ HTTPS (secure, no API keys)
+Backend API (Express/Node)
+  ↓ (API keys stay on backend)
+Google Cloud Vertex AI / Gemini
+```
+
+### Key Features
+
+**Frontend:**
+- ✅ EthicalAIInsight Component (4-view system)
+- ✅ Voice input support
+- ✅ Message reactions, favorites, ratings
+- ✅ Conversation history & search
+- ✅ Export conversations (MD/JSON)
+
+**Backend:**
+- ✅ Secure Vertex AI integration
+- ✅ Rate limiting (100 req/15min)
+- ✅ Input validation & sanitization
+- ✅ CORS protection
+- ✅ Error handling & logging
+- ✅ Health checks
+
+**API Endpoints:**
+- `POST /api/ai/chat` - Send chat message
+- `POST /api/ai/wisdom` - Get daily wisdom
+- `POST /api/ai/report-issue` - Report platform issues
+- `GET /api/ai/trending` - Get trending topics
+- `GET /health` - Health check
+
+## 🔐 Security
+
+- ✅ **No API keys in frontend** - All auth server-side
+- ✅ **Application Default Credentials** - For development
+- ✅ **Service Accounts** - For production deployment
+- ✅ **CORS restricted** - Whitelist your origins
+- ✅ **Rate limiting** - Prevent abuse
+- ✅ **Input validation** - XSS/injection prevention
+- ✅ **Helmet headers** - Security headers enabled
+- ✅ **HTTPS-ready** - Deploy to Cloud Run
+
+## 🧪 Testing
+
+```bash
+# Test backend with curl
+cd server
+npm run test:curl
+
+# Or manually:
+curl -X POST http://localhost:3001/api/ai/chat \
+  -H "Content-Type: application/json" \
+  -d '{"message":"Hello"}'
+```
+
+See [TESTING.md](./server/TESTING.md) for more examples.
+
+## 🌐 Deployment
+
+### Google Cloud Run (Recommended)
+```bash
+cd server
+gcloud run deploy cnh-backend \
+  --source . \
+  --platform managed \
+  --region us-central1 \
+  --set-env-vars GOOGLE_CLOUD_PROJECT=YOUR_PROJECT_ID
+```
+
+### Update Frontend for Production
+```bash
+# .env.local or .env.production
+VITE_BACKEND_URL=https://cnh-backend-xxxxx.run.app
+```
+
+## 📁 Project Structure
+
+```
+Conscious-Network-Hub2/
+├── components/
+│   └── EthicalAIInsight.tsx    # Main UI component
+├── services/
+│   ├── backendApiService.ts    # Backend API client
+│   ├── securityService.ts      # Input validation
+│   ├── cacheService.ts         # Persistence
+│   └── analyticsService.ts     # Event tracking
+├── server/                     # Backend API
+│   ├── src/
+│   │   ├── index.ts            # Express app
+│   │   ├── services/vertexAiService.ts
+│   │   └── routes/ai.ts        # API endpoints
+│   ├── .env.example
+│   ├── README.md
+│   └── TESTING.md
+├── SETUP_GUIDE.md              # Complete setup guide
+└── README.md                   # This file
+```
+
+## 📦 Key Technologies
+
+**Frontend:**
+- React 17+
+- TypeScript
+- Tailwind CSS
+- Vite
+
+**Backend:**
+- Node.js + Express
+- TypeScript
+- Google Cloud Vertex AI
+- Application Default Credentials
+
+## 🎯 Next Steps
+
+1. Follow [SETUP_GUIDE.md](./SETUP_GUIDE.md) for complete local setup
+2. Test endpoints using [TESTING.md](./server/TESTING.md)
+3. Deploy to Google Cloud Run
+4. Update frontend with production URL
+
+## 🐛 Troubleshooting
+
+**"Cannot connect to backend"**
+- Ensure backend is running: `curl http://localhost:3001/health`
+- Check `VITE_BACKEND_URL` in frontend `.env.local`
+- Verify `CORS_ORIGINS` in backend `.env.local`
+
+**"Permission denied" from Vertex AI**
+- Run: `gcloud auth application-default login`
+- Verify: `gcloud config set project YOUR_PROJECT_ID`
+- Enable API: `gcloud services enable aiplatform.googleapis.com`
+
+See [SETUP_GUIDE.md](./SETUP_GUIDE.md) for more troubleshooting.
+
+## 📞 Support
+
+- Backend docs: [server/README.md](./server/README.md)
+- Testing guide: [server/TESTING.md](./server/TESTING.md)
+- Setup guide: [SETUP_GUIDE.md](./SETUP_GUIDE.md)
+
+## 📄 License
+
+Part of Conscious Network Hub project.
+
+---
+
+**Status**: ✅ Production Ready  
+**Backend**: ✅ Vertex AI Integrated  
+**Frontend**: ✅ Backend API Client  
+**Last Updated**: January 20, 2024

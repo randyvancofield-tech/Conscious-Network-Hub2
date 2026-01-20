@@ -6,9 +6,9 @@ import {
   Eye, CheckCircle, Zap
 } from 'lucide-react';
 import {
-  getDailyWisdom, askEthicalAI, processPlatformIssue, generateSuggestedQuestions,
+  askEthicalAI, getDailyWisdom, processPlatformIssue, generateSuggestedQuestions,
   getTrendingInsights, EnhancedResponse, GroundingChunk
-} from '../services/geminiService';
+} from '../services/backendApiService';
 import { securityService } from '../services/securityService';
 import { cacheService, ConversationEntry } from '../services/cacheService';
 import { analyticsService } from '../services/analyticsService';
