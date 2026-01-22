@@ -21,14 +21,28 @@ router.post('/chat', validateChatInput, async (req: Request, res: Response) => {
       req.body as ChatRequest;
 
     // Get Vertex AI service
-    const vertexAI = getVertexAIService();
+    let response;
+    try {
+      const vertexAI = getVertexAIService();
 
-    // Call Vertex AI
-    const response = await vertexAI.chat(
-      message,
-      conversationHistory,
-      context
-    );
+      // Call Vertex AI
+      response = await vertexAI.chat(
+        message,
+        conversationHistory,
+        context
+      );
+    } catch (innerError: any) {
+      console.warn('Vertex AI call failed, returning fallback response for dev:', innerError?.message || innerError);
+      // Minimal fallback to allow frontend development without Vertex AI access
+      return res.json({
+        reply: `Local fallback: Unable to reach Vertex AI model. Here's a sample reply to your question: "${message.substring(0, 200)}".`,
+        citations: [],
+        usage: {},
+        confidenceScore: 60,
+        processingTimeMs: 0,
+        conversationId: conversationId || `conv_${Date.now()}`,
+      });
+    }
 
     // Send response
     res.json({
@@ -55,8 +69,18 @@ router.post('/chat', validateChatInput, async (req: Request, res: Response) => {
  */
 router.post('/wisdom', async (req: Request, res: Response) => {
   try {
-    const vertexAI = getVertexAIService();
-    const response = await vertexAI.generateWisdom();
+    let response;
+    try {
+      const vertexAI = getVertexAIService();
+      response = await vertexAI.generateWisdom();
+    } catch (innerError: any) {
+      console.warn('Vertex AI wisdom generation failed, returning fallback:', innerError?.message || innerError);
+      return res.json({
+        wisdom: 'Local fallback wisdom: Practice compassion and guard privacy as fundamental rights.',
+        confidenceScore: 75,
+        processingTimeMs: 0,
+      });
+    }
 
     res.json({
       wisdom: response.reply,
@@ -116,8 +140,17 @@ router.post('/report-issue', validateChatInput, async (req: Request, res: Respon
  */
 router.get('/trending', async (req: Request, res: Response) => {
   try {
-    const vertexAI = getVertexAIService();
-    const response = await vertexAI.getTrendingTopics();
+    let response;
+    try {
+      const vertexAI = getVertexAIService();
+      response = await vertexAI.getTrendingTopics();
+    } catch (innerError: any) {
+      console.warn('Vertex AI trending fetch failed, returning fallback:', innerError?.message || innerError);
+      return res.json({
+        topics: ['AI Ethics', 'Privacy Protection', 'Decentralization'],
+        insights: 'Local fallback: Unable to fetch live trending data.',
+      });
+    }
 
     res.json({
       topics: response.topics,
