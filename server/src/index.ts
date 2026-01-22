@@ -48,6 +48,9 @@ try {
 // Security middleware
 app.use(helmet());
 
+// Trust proxy for rate limiting (safe for local dev)
+app.set('trust proxy', 1);
+
 // CORS configuration
 const corsOrigins = (process.env.CORS_ORIGINS || 'http://localhost:5173,http://localhost:3000').split(',');
 app.use(

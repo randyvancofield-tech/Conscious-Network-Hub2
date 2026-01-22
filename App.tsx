@@ -773,12 +773,7 @@ const App: React.FC = () => {
           </div>
         )}
 
-        {/* Ethical AI Insight Widget - visible in all non-entry views */}
-        {(currentView !== AppView.ENTRY && currentView !== AppView.MEMBERSHIP_ACCESS) && (
-          <div className="fixed bottom-6 right-6 z-40 w-full max-w-sm">
-            <EthicalAIInsight userEmail={user?.email} userId={user?.id} />
-          </div>
-        )}
+        {/* Ethical AI Insight Widget removed from floating mini panel. Kept in `Dashboard` only. */}
       </div>
     </div>
   );
