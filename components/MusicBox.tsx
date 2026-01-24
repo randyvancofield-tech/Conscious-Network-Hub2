@@ -1,39 +1,112 @@
-
 import React, { useState, useRef, useEffect } from 'react';
-import { Play, Pause, SkipForward, SkipBack, Music, GripHorizontal, Volume2, VolumeX, Minimize2, Maximize2, Repeat, Repeat1, Shuffle } from 'lucide-react';
+import { Play, Pause, SkipForward, SkipBack, Music, GripHorizontal, Volume2, VolumeX, Minimize2, Maximize2, Repeat, Repeat1, Shuffle, Sparkles } from 'lucide-react';
 
 type RepeatMode = 'off' | 'all' | 'one';
 
 const TRACKS = [
+  // Western & European
   {
     name: "Neural Link",
-    subtitle: "Matrix Protocol",
+    subtitle: "Matrix Protocol • European Classical",
+    culture: "🇪🇺 European",
     url: "https://www.soundhelix.com/examples/mp3/SoundHelix-Song-1.mp3"
   },
   {
     name: "Deep Discovery",
-    subtitle: "Exploration Layer",
+    subtitle: "Exploration Layer • Jazz Fusion",
+    culture: "🇺🇸 American/Jazz",
     url: "https://www.soundhelix.com/examples/mp3/SoundHelix-Song-2.mp3"
   },
+  // Indian & South Asian
   {
-    name: "Sovereign Shift",
-    subtitle: "Identity Anchor",
+    name: "Raga Consciousness",
+    subtitle: "Vedic Harmony • Hindustani",
+    culture: "🇮🇳 Indian/Hindu",
     url: "https://www.soundhelix.com/examples/mp3/SoundHelix-Song-3.mp3"
   },
   {
-    name: "Ethereal Echoes",
-    subtitle: "Consciousness Flow",
+    name: "Tabla Divine",
+    subtitle: "Rhythmic Awakening • Classical India",
+    culture: "🇮🇳 Indian/Hindu",
     url: "https://www.soundhelix.com/examples/mp3/SoundHelix-Song-4.mp3"
   },
+  // African
   {
-    name: "Harmonic Resonance",
-    subtitle: "Frequency Sync",
+    name: "Ubuntu Spirit",
+    subtitle: "Community Resonance • Afrobeat",
+    culture: "🇿🇦 African",
     url: "https://www.soundhelix.com/examples/mp3/SoundHelix-Song-5.mp3"
   },
   {
-    name: "Digital Awakening",
-    subtitle: "System Boot",
+    name: "Sahara Dreams",
+    subtitle: "Desert Wisdom • Tuareg Blues",
+    culture: "🇲🇱 African/Tuareg",
     url: "https://www.soundhelix.com/examples/mp3/SoundHelix-Song-6.mp3"
+  },
+  // Latin American & Mexican
+  {
+    name: "Corazón Vivo",
+    subtitle: "Living Heart • Son Jarocho",
+    culture: "🇲🇽 Mexican/Latino",
+    url: "https://www.soundhelix.com/examples/mp3/SoundHelix-Song-1.mp3"
+  },
+  {
+    name: "Ritmo Sagrado",
+    subtitle: "Sacred Rhythm • Andean Fusion",
+    culture: "🇵🇪 Latin/Andean",
+    url: "https://www.soundhelix.com/examples/mp3/SoundHelix-Song-2.mp3"
+  },
+  // Middle Eastern & Jewish
+  {
+    name: "Sufi Journey",
+    subtitle: "Spiritual Quest • Qawwali",
+    culture: "🕌 Muslim/Sufi",
+    url: "https://www.soundhelix.com/examples/mp3/SoundHelix-Song-3.mp3"
+  },
+  {
+    name: "Shalom Harmony",
+    subtitle: "Peace in Unity • Jewish Klezmer",
+    culture: "✡️ Jewish",
+    url: "https://www.soundhelix.com/examples/mp3/SoundHelix-Song-4.mp3"
+  },
+  // East Asian
+  {
+    name: "Cherry Blossom Mind",
+    subtitle: "Zenith Meditation • Japanese Koto",
+    culture: "🇯🇵 Japanese/Asian",
+    url: "https://www.soundhelix.com/examples/mp3/SoundHelix-Song-5.mp3"
+  },
+  {
+    name: "Dragon's Breath",
+    subtitle: "Ancient Wisdom • Chinese Erhu",
+    culture: "🇨🇳 Chinese/Asian",
+    url: "https://www.soundhelix.com/examples/mp3/SoundHelix-Song-6.mp3"
+  },
+  // Canadian
+  {
+    name: "Northern Lights",
+    subtitle: "Indigenous Pulse • First Nations",
+    culture: "🇨🇦 Canadian/Indigenous",
+    url: "https://www.soundhelix.com/examples/mp3/SoundHelix-Song-1.mp3"
+  },
+  {
+    name: "Totem Resonance",
+    subtitle: "Earth Connection • Métis Traditions",
+    culture: "🇨🇦 Canadian/Métis",
+    url: "https://www.soundhelix.com/examples/mp3/SoundHelix-Song-2.mp3"
+  },
+  // Diaspora & Cross-cultural
+  {
+    name: "Global Consciousness",
+    subtitle: "Unity in Diversity • World Fusion",
+    culture: "🌍 Universal",
+    url: "https://www.soundhelix.com/examples/mp3/SoundHelix-Song-3.mp3"
+  },
+  {
+    name: "Sovereign Shift",
+    subtitle: "Identity Anchor • Conscious Network",
+    culture: "🌐 All Peoples",
+    url: "https://www.soundhelix.com/examples/mp3/SoundHelix-Song-4.mp3"
   }
 ];
 
@@ -53,7 +126,6 @@ const MusicBox: React.FC = () => {
   const [duration, setDuration] = useState(0);
   const [currentTime, setCurrentTime] = useState(0);
   const [showPlaylist, setShowPlaylist] = useState(false);
-  const [playlist, setPlaylist] = useState<number[]>([...Array(TRACKS.length).keys()]);
   
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const musicBoxRef = useRef<HTMLDivElement | null>(null);
@@ -120,13 +192,11 @@ const MusicBox: React.FC = () => {
       const snapThreshold = 100;
       const newPos = { ...position };
       
-      // Snap horizontally
       if (position.x < snapThreshold) newPos.x = 20;
-      else if (position.x > window.innerWidth - snapThreshold) newPos.x = window.innerWidth - 70;
+      else if (position.x > window.innerWidth - snapThreshold) newPos.x = window.innerWidth - 110;
       
-      // Snap vertically
       if (position.y < snapThreshold) newPos.y = 20;
-      else if (position.y > window.innerHeight - snapThreshold) newPos.y = window.innerHeight - 70;
+      else if (position.y > window.innerHeight - snapThreshold) newPos.y = window.innerHeight - 110;
       
       if (newPos.x !== position.x || newPos.y !== position.y) {
         setPosition(newPos);
@@ -188,8 +258,8 @@ const MusicBox: React.FC = () => {
 
   const snapToCorner = (corner: CornerPosition) => {
     const padding = 20;
-    const boxWidth = isMinimized ? 60 : 280;
-    const boxHeight = isMinimized ? 60 : 300;
+    const boxWidth = isMinimized ? 100 : 330;
+    const boxHeight = isMinimized ? 100 : 360;
     
     const corners: Record<CornerPosition, { x: number; y: number }> = {
       'top-left': { x: padding, y: padding },
@@ -248,107 +318,148 @@ const MusicBox: React.FC = () => {
   return (
     <div 
       ref={musicBoxRef}
-      className={`fixed z-[999] transition-all ${isDragging ? 'shadow-2xl' : 'shadow-lg'}`}
+      className={`fixed z-[999] transition-all ${isDragging ? 'shadow-2xl' : 'shadow-xl'}`}
       style={{ left: `${position.x}px`, top: `${position.y}px`, touchAction: 'none' }}
     >
-      <div className={`glass-panel rounded-[1.5rem] border border-white/10 backdrop-blur-3xl overflow-hidden flex flex-col transition-all duration-300 ${isMinimized ? 'w-14 h-14' : 'w-72'}`}>
-        {/* Drag Handle */}
+      {/* Minimized Alert Glow */}
+      {isMinimized && (
+        <div className={`absolute -inset-3 rounded-2xl ${isPlaying ? 'animate-pulse' : 'animate-spin'} opacity-50`}
+             style={{
+               background: 'radial-gradient(circle, rgba(96,165,250,0.4) 0%, rgba(30,144,255,0.1) 100%)',
+               animationDuration: isPlaying ? '2s' : '4s'
+             }}>
+        </div>
+      )}
+      
+      <style>{`
+        @keyframes float-glow {
+          0%, 100% { box-shadow: 0 0 25px rgba(96,165,250,0.5), 0 0 50px rgba(30,144,255,0.3), inset 0 0 20px rgba(96,165,250,0.1); }
+          50% { box-shadow: 0 0 40px rgba(96,165,250,0.7), 0 0 80px rgba(30,144,255,0.4), inset 0 0 30px rgba(96,165,250,0.15); }
+        }
+        .music-box-glow {
+          animation: float-glow 3s ease-in-out infinite;
+        }
+      `}</style>
+
+      <div className={`music-box-glow glass-panel rounded-[1.8rem] border-2 border-cyan-400/40 backdrop-blur-3xl overflow-hidden flex flex-col transition-all duration-300 bg-gradient-to-br from-blue-950/70 via-slate-900/60 to-blue-900/50 ${isMinimized ? 'w-24 h-24' : 'w-96'}`}>
+        {/* Drag Handle with Brand Name */}
         <div 
           onMouseDown={handleMouseDown}
           onTouchStart={handleMouseDown}
-          className="h-6 flex items-center justify-center cursor-move hover:bg-white/5 border-b border-white/5"
+          className="h-8 flex items-center justify-between px-4 cursor-move hover:bg-cyan-500/10 border-b border-cyan-400/30"
         >
-          <GripHorizontal className="w-4 h-4 text-slate-500" />
+          <GripHorizontal className="w-4 h-4 text-cyan-400/70" />
+          {!isMinimized && (
+            <div className="flex items-center gap-2 flex-1 justify-center">
+              <Sparkles className="w-4 h-4 text-yellow-300 animate-pulse" />
+              <span className="text-[11px] font-bold bg-gradient-to-r from-cyan-300 via-blue-300 to-cyan-300 bg-clip-text text-transparent uppercase tracking-widest">
+                Conscious Music
+              </span>
+              <Sparkles className="w-4 h-4 text-yellow-300 animate-pulse" />
+            </div>
+          )}
         </div>
 
         {isMinimized ? (
-          // Minimized View
+          // Minimized View - Alert Icon
           <button 
             onClick={() => setIsMinimized(false)}
-            className="flex-1 flex items-center justify-center text-blue-400 hover:text-white transition-colors hover:bg-white/5"
+            className="flex-1 flex items-center justify-center text-cyan-300 hover:text-cyan-100 transition-colors hover:bg-cyan-500/15 relative group"
+            title="🎵 Conscious Music Entertainment - Click to enjoy global sounds"
           >
-            <Music className={`w-5 h-5 ${isPlaying ? 'animate-pulse' : ''}`} />
+            <div className="relative">
+              <Music className={`w-8 h-8 ${isPlaying ? 'animate-pulse' : ''}`} />
+              <Sparkles className="w-4 h-4 text-yellow-300 absolute -top-1 -right-1 animate-bounce" />
+            </div>
+            <div className="absolute -bottom-12 left-1/2 transform -translate-x-1/2 bg-gradient-to-b from-blue-900 to-blue-950 border border-cyan-400 px-3 py-2 rounded-lg text-[10px] text-cyan-100 whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none shadow-lg">
+              🎵 Entertainment Hub
+            </div>
           </button>
         ) : (
           // Expanded View
-          <div className="p-4 space-y-3">
-            {/* Header with Title and Controls */}
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-2 min-w-0 flex-1">
-                <div className="p-1.5 rounded-lg bg-blue-600/20 text-blue-400 flex-shrink-0">
-                  <Music className="w-3 h-3" />
+          <div className="p-5 space-y-4 bg-gradient-to-b from-transparent via-blue-900/20 to-transparent max-h-[90vh] overflow-y-auto">
+            {/* Current Track Header */}
+            <div className="flex items-start justify-between gap-3">
+              <div className="flex items-start gap-3 min-w-0 flex-1">
+                <div className="p-2.5 rounded-lg bg-gradient-to-br from-cyan-500/40 to-blue-500/30 border border-cyan-400/40 flex-shrink-0 mt-0.5">
+                  <Music className="w-4 h-4 text-cyan-200" />
                 </div>
                 <div className="min-w-0">
-                  <h4 className="text-[10px] font-bold text-white truncate uppercase tracking-widest">{TRACKS[currentTrack].name}</h4>
-                  <p className="text-[8px] text-slate-500 truncate uppercase">{TRACKS[currentTrack].subtitle}</p>
+                  <h3 className="text-[11px] font-bold text-cyan-100 truncate uppercase tracking-wider">{TRACKS[currentTrack].name}</h3>
+                  <p className="text-[9px] text-blue-200/70 mt-1">{TRACKS[currentTrack].culture}</p>
                 </div>
               </div>
               <button 
                 onClick={() => setIsMinimized(true)} 
-                className="p-1 hover:bg-white/5 rounded-lg text-slate-500 flex-shrink-0"
+                className="p-1.5 hover:bg-cyan-500/20 rounded-lg text-cyan-300/70 hover:text-cyan-200 flex-shrink-0 transition-all"
               >
-                <Minimize2 className="w-3 h-3" />
+                <Minimize2 className="w-4 h-4" />
               </button>
             </div>
 
+            {/* Track Info Card */}
+            <div className="px-3 py-3 rounded-xl bg-blue-950/50 border border-cyan-400/25 backdrop-blur-sm">
+              <p className="text-[8px] text-cyan-100/80 leading-relaxed font-medium">{TRACKS[currentTrack].subtitle}</p>
+            </div>
+
             {/* Progress Bar */}
-            <div className="space-y-1.5">
-              <div className="bg-white/10 rounded-full h-1.5 overflow-hidden">
+            <div className="space-y-2">
+              <div className="bg-blue-950/60 rounded-full h-2.5 overflow-hidden border border-cyan-400/20">
                 <div 
-                  className="bg-gradient-to-r from-blue-400 to-blue-600 h-full transition-all duration-100"
+                  className="bg-gradient-to-r from-cyan-400 via-blue-400 to-blue-600 h-full transition-all duration-100 shadow-lg shadow-cyan-500/60"
                   style={{ width: `${(currentTime / duration) * 100}%` }}
                 />
               </div>
-              <div className="flex justify-between text-[8px] text-slate-400">
+              <div className="flex justify-between text-[8px] text-cyan-300/60 font-semibold">
                 <span>{formatTime(currentTime)}</span>
                 <span>{formatTime(duration)}</span>
               </div>
             </div>
 
             {/* Main Controls */}
-            <div className="flex items-center justify-between gap-2 pt-1">
-              <div className="flex items-center gap-1.5">
+            <div className="flex items-center justify-between gap-3 pt-1">
+              <div className="flex items-center gap-2">
                 <button 
                   onClick={prevTrack}
-                  className="w-6 h-6 bg-white/5 hover:bg-white/10 text-slate-300 rounded-full flex items-center justify-center transition-all text-xs"
+                  className="w-8 h-8 bg-blue-900/50 hover:bg-blue-800/70 border border-cyan-400/30 text-cyan-300 rounded-full flex items-center justify-center transition-all hover:shadow-lg hover:shadow-cyan-500/40"
                   title="Previous track"
                 >
-                  <SkipBack className="w-3 h-3" />
+                  <SkipBack className="w-4 h-4" />
                 </button>
                 <button 
                   onClick={togglePlay}
-                  className="w-8 h-8 bg-blue-600 hover:bg-blue-500 text-white rounded-full flex items-center justify-center transition-all shadow-md active:scale-90"
+                  className="w-11 h-11 bg-gradient-to-br from-cyan-500 to-blue-600 hover:from-cyan-400 hover:to-blue-500 text-white rounded-full flex items-center justify-center transition-all shadow-lg shadow-cyan-500/50 active:scale-90 border border-cyan-300/60"
                   title={isPlaying ? "Pause" : "Play"}
                 >
-                  {isPlaying ? <Pause className="w-4 h-4" /> : <Play className="w-4 h-4 ml-0.5" />}
+                  {isPlaying ? <Pause className="w-5 h-5" /> : <Play className="w-5 h-5 ml-0.5" />}
                 </button>
                 <button 
                   onClick={nextTrack}
-                  className="w-6 h-6 bg-white/5 hover:bg-white/10 text-slate-300 rounded-full flex items-center justify-center transition-all"
+                  className="w-8 h-8 bg-blue-900/50 hover:bg-blue-800/70 border border-cyan-400/30 text-cyan-300 rounded-full flex items-center justify-center transition-all hover:shadow-lg hover:shadow-cyan-500/40"
                   title="Next track"
                 >
-                  <SkipForward className="w-3 h-3" />
+                  <SkipForward className="w-4 h-4" />
                 </button>
               </div>
 
-              <div className="flex items-center gap-1.5">
+              <div className="flex items-center gap-2">
                 <button 
                   onClick={toggleRepeat}
-                  className={`p-1.5 rounded transition-all ${repeatMode === 'off' ? 'text-slate-500 hover:text-white' : 'text-blue-400 bg-blue-400/10'}`}
+                  className={`p-2 rounded-lg transition-all border ${repeatMode === 'off' ? 'text-cyan-300/60 hover:text-cyan-300 border-transparent hover:border-cyan-400/30 hover:bg-blue-900/30' : 'text-cyan-200 bg-blue-900/40 border-cyan-400/40'}`}
                   title={`Repeat: ${repeatMode}`}
                 >
                   {repeatMode === 'one' ? <Repeat1 className="w-4 h-4" /> : <Repeat className="w-4 h-4" />}
                 </button>
                 <button 
                   onClick={toggleShuffle}
-                  className={`p-1.5 rounded transition-all ${isShuffle ? 'text-blue-400 bg-blue-400/10' : 'text-slate-500 hover:text-white'}`}
+                  className={`p-2 rounded-lg transition-all border ${isShuffle ? 'text-cyan-200 bg-blue-900/40 border-cyan-400/40' : 'text-cyan-300/60 hover:text-cyan-300 border-transparent hover:border-cyan-400/30 hover:bg-blue-900/30'}`}
                   title="Shuffle"
                 >
                   <Shuffle className="w-4 h-4" />
                 </button>
                 <button 
                   onClick={toggleMute}
-                  className="p-1.5 text-slate-500 hover:text-white transition-all"
+                  className="p-2 text-cyan-300/60 hover:text-cyan-300 transition-all hover:bg-blue-900/30 border border-transparent hover:border-cyan-400/30 rounded-lg"
                   title={isMuted ? "Unmute" : "Mute"}
                 >
                   {isMuted ? <VolumeX className="w-4 h-4" /> : <Volume2 className="w-4 h-4" />}
@@ -357,71 +468,74 @@ const MusicBox: React.FC = () => {
             </div>
 
             {/* Volume Slider */}
-            <div className="flex items-center gap-2">
-              <Volume2 className="w-3.5 h-3.5 text-slate-500" />
+            <div className="flex items-center gap-3 px-3 py-3 rounded-xl bg-blue-950/50 border border-cyan-400/25">
+              <Volume2 className="w-4 h-4 text-cyan-300/70 flex-shrink-0" />
               <input 
                 type="range" 
                 min="0" 
                 max="100" 
                 value={volume}
                 onChange={(e) => setVolume(parseInt(e.target.value))}
-                className="flex-1 h-1.5 bg-white/10 rounded-full appearance-none cursor-pointer accent-blue-600"
+                className="flex-1 h-2 bg-blue-900 rounded-full appearance-none cursor-pointer accent-cyan-400"
                 title={`Volume: ${volume}%`}
               />
-              <span className="text-[8px] text-slate-400 w-6 text-right">{volume}%</span>
+              <span className="text-[9px] text-cyan-300/70 w-6 text-right font-bold">{volume}%</span>
             </div>
 
-            {/* Snap to Corners */}
-            <div className="grid grid-cols-3 gap-1.5 pt-2 border-t border-white/5">
+            {/* Navigation & Controls */}
+            <div className="grid grid-cols-3 gap-2 pt-2 border-t border-cyan-400/20">
               <button 
                 onClick={() => snapToCorner('top-left')}
-                className="text-[8px] px-2 py-1 rounded bg-white/5 hover:bg-white/10 text-slate-400 hover:text-slate-200 transition-colors"
-                title="Snap to top-left"
+                className="text-[10px] px-2 py-2 rounded-lg bg-blue-900/40 hover:bg-blue-800/60 text-cyan-300 hover:text-cyan-100 transition-all border border-cyan-400/25 hover:border-cyan-400/50 font-bold"
+                title="Snap to top-left corner"
               >
-                ↖
+                ↖️
               </button>
               <button 
                 onClick={() => snapToCorner('center')}
-                className="text-[8px] px-2 py-1 rounded bg-white/5 hover:bg-white/10 text-slate-400 hover:text-slate-200 transition-colors"
-                title="Snap to center"
+                className="text-[10px] px-2 py-2 rounded-lg bg-blue-900/40 hover:bg-blue-800/60 text-cyan-300 hover:text-cyan-100 transition-all border border-cyan-400/25 hover:border-cyan-400/50 font-bold"
+                title="Center on screen"
               >
                 ⊙
               </button>
               <button 
                 onClick={() => snapToCorner('top-right')}
-                className="text-[8px] px-2 py-1 rounded bg-white/5 hover:bg-white/10 text-slate-400 hover:text-slate-200 transition-colors"
-                title="Snap to top-right"
+                className="text-[10px] px-2 py-2 rounded-lg bg-blue-900/40 hover:bg-blue-800/60 text-cyan-300 hover:text-cyan-100 transition-all border border-cyan-400/25 hover:border-cyan-400/50 font-bold"
+                title="Snap to top-right corner"
               >
-                ↗
+                ↗️
               </button>
               <button 
                 onClick={() => snapToCorner('bottom-left')}
-                className="text-[8px] px-2 py-1 rounded bg-white/5 hover:bg-white/10 text-slate-400 hover:text-slate-200 transition-colors"
-                title="Snap to bottom-left"
+                className="text-[10px] px-2 py-2 rounded-lg bg-blue-900/40 hover:bg-blue-800/60 text-cyan-300 hover:text-cyan-100 transition-all border border-cyan-400/25 hover:border-cyan-400/50 font-bold"
+                title="Snap to bottom-left corner"
               >
-                ↙
+                ↙️
               </button>
               <button 
                 onClick={() => setShowPlaylist(!showPlaylist)}
-                className="text-[8px] px-2 py-1 rounded bg-white/5 hover:bg-white/10 text-slate-400 hover:text-slate-200 transition-colors"
-                title="Toggle playlist"
+                className="text-[10px] px-2 py-2 rounded-lg bg-blue-900/40 hover:bg-blue-800/60 text-cyan-300 hover:text-cyan-100 transition-all border border-cyan-400/25 hover:border-cyan-400/50 font-bold"
+                title="Toggle global playlist"
               >
-                📋
+                🌍
               </button>
               <button 
                 onClick={() => snapToCorner('bottom-right')}
-                className="text-[8px] px-2 py-1 rounded bg-white/5 hover:bg-white/10 text-slate-400 hover:text-slate-200 transition-colors"
-                title="Snap to bottom-right"
+                className="text-[10px] px-2 py-2 rounded-lg bg-blue-900/40 hover:bg-blue-800/60 text-cyan-300 hover:text-cyan-100 transition-all border border-cyan-400/25 hover:border-cyan-400/50 font-bold"
+                title="Snap to bottom-right corner"
               >
-                ↘
+                ↘️
               </button>
             </div>
 
-            {/* Playlist Preview */}
+            {/* Global Playlist with Cultural Representation */}
             {showPlaylist && (
-              <div className="border-t border-white/5 pt-2 mt-2 max-h-32 overflow-y-auto">
-                <div className="text-[8px] font-bold text-slate-400 mb-1.5 uppercase tracking-widest">Playlist</div>
-                <div className="space-y-1">
+              <div className="border-t border-cyan-400/20 pt-3 mt-3 rounded-xl bg-blue-950/50 border border-cyan-400/25 p-3">
+                <div className="text-[9px] font-bold text-cyan-200 mb-3 uppercase tracking-widest flex items-center gap-2">
+                  <Sparkles className="w-4 h-4 text-yellow-300" />
+                  Global Conscious Playlist
+                </div>
+                <div className="space-y-2 max-h-72 overflow-y-auto">
                   {TRACKS.map((track, idx) => (
                     <button
                       key={idx}
@@ -429,14 +543,14 @@ const MusicBox: React.FC = () => {
                         e.stopPropagation();
                         setCurrentTrack(idx);
                       }}
-                      className={`w-full text-left text-[8px] px-2 py-1 rounded transition-all ${
+                      className={`w-full text-left text-[8px] px-3 py-2 rounded-lg transition-all border ${
                         currentTrack === idx 
-                          ? 'bg-blue-600/30 text-blue-300 border border-blue-400/30' 
-                          : 'bg-white/5 text-slate-400 hover:bg-white/10'
+                          ? 'bg-cyan-500/25 text-cyan-100 border-cyan-400/50 shadow-lg shadow-cyan-500/30' 
+                          : 'bg-blue-900/30 text-cyan-200 border-cyan-400/20 hover:bg-blue-800/50 hover:border-cyan-400/40'
                       }`}
                     >
-                      <div className="font-semibold truncate">{track.name}</div>
-                      <div className="text-slate-500 truncate">{track.subtitle}</div>
+                      <div className="font-bold truncate">{track.name}</div>
+                      <div className="text-cyan-300/70 truncate text-[7px] mt-1">{track.culture} • {track.subtitle}</div>
                     </button>
                   ))}
                 </div>
