@@ -11,6 +11,7 @@ import SocialLearningHub from './components/SocialLearningHub';
 import ConsciousMeetings from './components/ConsciousMeetings';
 import MusicBox from './components/MusicBox';
 import EthicalAIInsight from './components/EthicalAIInsight';
+import PaymentConfirmation from './components/PaymentConfirmation';
 import { ConsciousIdentity } from './components/community/CommunityLayout';
 import { AppView, UserProfile, Course } from './types';
 import { NAVIGATION_ITEMS } from './constants';
@@ -47,6 +48,10 @@ const App: React.FC = () => {
   const [isContactModalOpen, setContactModalOpen] = useState(false);
   const [contactName, setContactName] = useState('');
   const [contactEmail, setContactEmail] = useState('');
+  
+  // Membership and payment states
+  const [showPaymentConfirmation, setShowPaymentConfirmation] = useState(false);
+  const [isSelectingTier, setIsSelectingTier] = useState(false);
   const [contactMessage, setContactMessage] = useState('');
 
   const [isPolicyModalOpen, setIsPolicyModalOpen] = useState(false);
@@ -180,6 +185,44 @@ const App: React.FC = () => {
     localStorage.setItem('hcn_active_user', JSON.stringify(newUser));
     setUser(newUser);
     closeModals();
+    // Redirect to membership selection (tier selection flow)
+    setCurrentView(AppView.MEMBERSHIP_ACCESS);
+    setIsSelectingTier(true);
+  };
+
+  const handleMembershipTierSelect = async (tier: string) => {
+    if (!user) return;
+    
+    try {
+      // Call backend to select tier and create membership
+      const response = await fetch('http://localhost:3001/api/membership/select-tier', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ userId: user.id, tier })
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to select tier');
+      }
+
+      const data = await response.json();
+      
+      // Update user tier in local storage
+      const updatedUser = { ...user, tier };
+      setUser(updatedUser);
+      localStorage.setItem('hcn_active_user', JSON.stringify(updatedUser));
+      
+      // Show payment confirmation
+      setShowPaymentConfirmation(true);
+    } catch (err) {
+      setError('Failed to process tier selection. Please try again.');
+      console.error('Tier selection error:', err);
+    }
+  };
+
+  const handlePaymentSuccess = () => {
+    setShowPaymentConfirmation(false);
+    setIsSelectingTier(false);
     setCurrentView(AppView.DASHBOARD);
     if (window.innerWidth >= 1024) setSidebarOpen(true);
   };
@@ -353,6 +396,18 @@ const App: React.FC = () => {
       {currentView !== AppView.ENTRY && <ThreeScene />}
       <MusicBox />
 
+      {showPaymentConfirmation && user && (
+        <PaymentConfirmation
+          tier={selectedTier}
+          userId={user.id}
+          onSuccess={handlePaymentSuccess}
+          onCancel={() => {
+            setShowPaymentConfirmation(false);
+            setCurrentView(AppView.MEMBERSHIP_ACCESS);
+          }}
+        />
+      )}
+
       {currentView === AppView.ENTRY && (
         <>
           <video
@@ -493,8 +548,18 @@ const App: React.FC = () => {
                       </div>
                     </div>
                     <button 
-                      onClick={() => { setSelectedTier(tier.name); setSignupModalOpen(true); }}
+                      onClick={() => {
+                        if (isSelectingTier && user) {
+                          // User just created profile, process tier selection
+                          handleMembershipTierSelect(tier.name);
+                        } else {
+                          // User is exploring, show signup modal
+                          setSelectedTier(tier.name);
+                          setSignupModalOpen(true);
+                        }
+                      }}
                       className={`mt-10 w-full py-5 bg-white/5 hover:bg-${tier.color}-600 text-white rounded-2xl font-black text-xs uppercase tracking-[0.2em] transition-all shadow-xl border border-white/5 hover:border-${tier.color}-500/50`}
+                      disabled={showPaymentConfirmation}
                     >
                       Anchor as {tier.name.split(' ')[0]}
                     </button>

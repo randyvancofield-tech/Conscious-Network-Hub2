@@ -9,6 +9,7 @@ import {
   healthCheck,
 } from './middleware';
 import aiRoutes from './routes/ai';
+import membershipRoutes from './routes/membership';
 import { initializeVertexAI } from './services/vertexAiService';
 
 // Load environment variables
@@ -112,6 +113,7 @@ app.get('/health', healthCheck);
 
 // API routes
 app.use('/api/ai', aiRoutes);
+app.use('/api/membership', membershipRoutes);
 
 // Catch-all 404 handler
 app.use((req, res) => {
@@ -136,11 +138,15 @@ app.listen(PORT, () => {
 ║   Port: ${PORT.toString().padEnd(50)} ║
 ║   CORS Origins: ${corsOrigins.length.toString().padEnd(42)} ║
 ║                                                            ║
-║   Endpoints:                                              ║
-║   POST   /api/ai/chat          - Send chat message        ║
-║   POST   /api/ai/wisdom        - Get daily wisdom         ║
-║   POST   /api/ai/report-issue  - Report platform issue    ║
-║   GET    /api/ai/trending      - Get trending topics      ║
+║   Endpoints:
+║   POST   /api/ai/chat              - Send chat message        ║
+║   POST   /api/ai/wisdom            - Get daily wisdom         ║
+║   POST   /api/ai/report-issue      - Report platform issue    ║
+║   GET    /api/ai/trending          - Get trending topics      ║
+║   POST   /api/membership/select-tier    - Select membership tier ║
+║   GET    /api/membership/status/:id     - Check membership status ║
+║   POST   /api/membership/confirm-payment - Confirm fake payment ║
+║   GET    /api/membership/tiers         - Get available tiers ║
 ║   GET    /health               - Health check             ║
 ║                                                            ║
 ╚════════════════════════════════════════════════════════════╝

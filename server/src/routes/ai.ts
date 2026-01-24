@@ -176,8 +176,7 @@ router.post('/report-issue', validateChatInput, async (req: Request, res: Respon
         category,
         userEmail,
         priority,
-        analysis,
-        recipientEmail: reportEmail,
+        analysis
       });
       emailSent = emailResult?.success !== false;
       console.log('[API] ✅ Issue report email result:', emailResult);
