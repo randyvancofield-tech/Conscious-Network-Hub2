@@ -251,28 +251,19 @@ const TRACKS: Track[] = [
     license: "Public Domain"
   },
 
-  // ========== CONTEMPORARY WORLD FUSION ==========
-  {
-    name: "Global Consciousness",
-    subtitle: "Conscious Network • Unity Frequency",
-    culture: "🌍 Universal",
-    url: "https://www.soundhelix.com/examples/mp3/SoundHelix-Song-5.mp3",
-    source: "World Music Archive",
-    license: "Public Domain"
-  },
   {
     name: "Sovereign Shift",
     subtitle: "Identity Anchor • Collective Resonance",
     culture: "🌐 All Peoples",
-    url: "https://www.soundhelix.com/examples/mp3/SoundHelix-Song-6.mp3",
+    url: "https://www.soundhelix.com/examples/mp3/SoundHelix-Song-5.mp3",
     source: "World Music Archive",
     license: "Public Domain"
   }
-  {
-    name: "Kora Dreams",
-    subtitle: "West African Harmony • Senegal",
-    culture: "🇸🇳 West African",
-    url: "https://www.soundhelix.com/examples/mp3/SoundHelix-Song-1.mp3",
+];
+
+type CornerPosition = 'top-left' | 'top-right' | 'bottom-left' | 'bottom-right' | 'center';
+
+const MusicBox: React.FC = () => {
     source: "World Music Archive",
     license: "Public Domain"
   },
@@ -505,15 +496,6 @@ const TRACKS: Track[] = [
     license: "Public Domain"
   },
 
-  // ========== CONTEMPORARY WORLD FUSION ==========
-  {
-    name: "Global Consciousness",
-    subtitle: "Conscious Network • Unity Frequency",
-    culture: "🌍 Universal",
-    url: "https://www.soundhelix.com/examples/mp3/SoundHelix-Song-5.mp3",
-    source: "World Music Archive",
-    license: "Public Domain"
-  },
   {
     name: "Sovereign Shift",
     subtitle: "Identity Anchor • Collective Resonance",
