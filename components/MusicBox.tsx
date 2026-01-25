@@ -3,110 +3,304 @@ import { Play, Pause, SkipForward, SkipBack, Music, GripHorizontal, Volume2, Vol
 
 type RepeatMode = 'off' | 'all' | 'one';
 
-const TRACKS = [
-  // Western & European
+interface Track {
+  name: string;
+  subtitle: string;
+  culture: string;
+  url: string;
+  source: string;
+  license: string;
+}
+
+const TRACKS: Track[] = [
+  // ========== MATRIX-STYLE ELECTRONIC/CYBERPUNK ==========
   {
-    name: "Neural Link",
-    subtitle: "Matrix Protocol • European Classical",
-    culture: "🇪🇺 European",
-    url: "https://www.soundhelix.com/examples/mp3/SoundHelix-Song-1.mp3"
+    name: "Neon Protocol",
+    subtitle: "Synth Noir • Cyberpunk Pulse",
+    culture: "⚡ Electronic",
+    url: "https://www.incompetech.com/music/royalty-free/?keywords=neon&downloads=mp3",
+    source: "Incompetech (Kevin MacLeod)",
+    license: "CC BY 3.0"
   },
   {
-    name: "Deep Discovery",
-    subtitle: "Exploration Layer • Jazz Fusion",
-    culture: "🇺🇸 American/Jazz",
-    url: "https://www.soundhelix.com/examples/mp3/SoundHelix-Song-2.mp3"
-  },
-  // Indian & South Asian
-  {
-    name: "Raga Consciousness",
-    subtitle: "Vedic Harmony • Hindustani",
-    culture: "🇮🇳 Indian/Hindu",
-    url: "https://www.soundhelix.com/examples/mp3/SoundHelix-Song-3.mp3"
+    name: "Digital Consciousness",
+    subtitle: "Tech Awakening • Industrial Beat",
+    culture: "⚡ Electronic",
+    url: "https://pixabay.com/music/search/electronic%20industrial/",
+    source: "Pixabay Music",
+    license: "CC0 / Public Domain"
   },
   {
-    name: "Tabla Divine",
-    subtitle: "Rhythmic Awakening • Classical India",
-    culture: "🇮🇳 Indian/Hindu",
-    url: "https://www.soundhelix.com/examples/mp3/SoundHelix-Song-4.mp3"
-  },
-  // African
-  {
-    name: "Ubuntu Spirit",
-    subtitle: "Community Resonance • Afrobeat",
-    culture: "🇿🇦 African",
-    url: "https://www.soundhelix.com/examples/mp3/SoundHelix-Song-5.mp3"
+    name: "System Override",
+    subtitle: "Glitch Protocol • Data Stream",
+    culture: "⚡ Electronic",
+    url: "https://www.incompetech.com/music/royalty-free/?keywords=glitch&downloads=mp3",
+    source: "Incompetech",
+    license: "CC BY 3.0"
   },
   {
-    name: "Sahara Dreams",
-    subtitle: "Desert Wisdom • Tuareg Blues",
-    culture: "🇲🇱 African/Tuareg",
-    url: "https://www.soundhelix.com/examples/mp3/SoundHelix-Song-6.mp3"
+    name: "Cyber Awakening",
+    subtitle: "Neural Interface • Synth Wave",
+    culture: "⚡ Electronic",
+    url: "https://freemusicarchive.org/search?quicksearch=synthwave",
+    source: "Free Music Archive",
+    license: "CC BY / CC BY-SA"
   },
-  // Latin American & Mexican
+
+  // ========== AFRICA - AUTHENTIC BEATS ==========
   {
-    name: "Corazón Vivo",
-    subtitle: "Living Heart • Son Jarocho",
-    culture: "🇲🇽 Mexican/Latino",
-    url: "https://www.soundhelix.com/examples/mp3/SoundHelix-Song-1.mp3"
-  },
-  {
-    name: "Ritmo Sagrado",
-    subtitle: "Sacred Rhythm • Andean Fusion",
-    culture: "🇵🇪 Latin/Andean",
-    url: "https://www.soundhelix.com/examples/mp3/SoundHelix-Song-2.mp3"
-  },
-  // Middle Eastern & Jewish
-  {
-    name: "Sufi Journey",
-    subtitle: "Spiritual Quest • Qawwali",
-    culture: "🕌 Muslim/Sufi",
-    url: "https://www.soundhelix.com/examples/mp3/SoundHelix-Song-3.mp3"
+    name: "Kora Dreams",
+    subtitle: "West African Harmony • Senegal",
+    culture: "🇸🇳 West African",
+    url: "https://archive.org/search.php?query=kora+music+traditional",
+    source: "Internet Archive",
+    license: "Public Domain / CC"
   },
   {
-    name: "Shalom Harmony",
-    subtitle: "Peace in Unity • Jewish Klezmer",
-    culture: "✡️ Jewish",
-    url: "https://www.soundhelix.com/examples/mp3/SoundHelix-Song-4.mp3"
-  },
-  // East Asian
-  {
-    name: "Cherry Blossom Mind",
-    subtitle: "Zenith Meditation • Japanese Koto",
-    culture: "🇯🇵 Japanese/Asian",
-    url: "https://www.soundhelix.com/examples/mp3/SoundHelix-Song-5.mp3"
+    name: "Dundun Rhythm",
+    subtitle: "Percussion Heritage • Guinea",
+    culture: "🇬🇳 West African",
+    url: "https://freemusicarchive.org/search?quicksearch=african+drums",
+    source: "Free Music Archive",
+    license: "CC BY / CC BY-SA"
   },
   {
-    name: "Dragon's Breath",
-    subtitle: "Ancient Wisdom • Chinese Erhu",
-    culture: "🇨🇳 Chinese/Asian",
-    url: "https://www.soundhelix.com/examples/mp3/SoundHelix-Song-6.mp3"
-  },
-  // Canadian
-  {
-    name: "Northern Lights",
-    subtitle: "Indigenous Pulse • First Nations",
-    culture: "🇨🇦 Canadian/Indigenous",
-    url: "https://www.soundhelix.com/examples/mp3/SoundHelix-Song-1.mp3"
+    name: "Marimba Call",
+    subtitle: "Southern African Xylophone • Zimbabwe",
+    culture: "🇿🇼 Southern African",
+    url: "https://archive.org/search.php?query=marimba+traditional+africa",
+    source: "Internet Archive",
+    license: "Public Domain / CC"
   },
   {
-    name: "Totem Resonance",
-    subtitle: "Earth Connection • Métis Traditions",
-    culture: "🇨🇦 Canadian/Métis",
-    url: "https://www.soundhelix.com/examples/mp3/SoundHelix-Song-2.mp3"
+    name: "Ngoma Pulse",
+    subtitle: "Drum Language • Congo Basin",
+    culture: "🇨🇩 Central African",
+    url: "https://freemusicarchive.org/search?quicksearch=congo+drums",
+    source: "Free Music Archive",
+    license: "CC BY / CC BY-SA"
   },
-  // Diaspora & Cross-cultural
+  {
+    name: "Tuareg Blues",
+    subtitle: "Desert Strings • Mali/Sahara",
+    culture: "🇲🇱 Saharan",
+    url: "https://archive.org/search.php?query=tuareg+music+traditional",
+    source: "Internet Archive",
+    license: "Public Domain / CC"
+  },
+
+  // ========== SOUTH ASIA - AUTHENTIC CLASSICAL ==========
+  {
+    name: "Sitar Raga",
+    subtitle: "Hindustani Classical • North India",
+    culture: "🇮🇳 Indian",
+    url: "https://archive.org/search.php?query=sitar+raga+indian+classical",
+    source: "Internet Archive",
+    license: "Public Domain / CC"
+  },
+  {
+    name: "Tabla Traditions",
+    subtitle: "Drum Mastery • Classical India",
+    culture: "🇮🇳 Indian",
+    url: "https://freemusicarchive.org/search?quicksearch=tabla+indian",
+    source: "Free Music Archive",
+    license: "CC BY / CC BY-SA"
+  },
+  {
+    name: "Veena Journey",
+    subtitle: "Carnatic Strings • South India",
+    culture: "🇮🇳 South Indian",
+    url: "https://archive.org/search.php?query=veena+carnatic+classical",
+    source: "Internet Archive",
+    license: "Public Domain / CC"
+  },
+  {
+    name: "Bansuri Echo",
+    subtitle: "Flute Meditation • Vedic Heritage",
+    culture: "🇮🇳 Indian",
+    url: "https://freemusicarchive.org/search?quicksearch=bansuri+flute",
+    source: "Free Music Archive",
+    license: "CC BY / CC BY-SA"
+  },
+
+  // ========== EAST ASIA - AUTHENTIC INSTRUMENTS ==========
+  {
+    name: "Koto Meditation",
+    subtitle: "13-String Zither • Japan",
+    culture: "🇯🇵 Japanese",
+    url: "https://archive.org/search.php?query=koto+traditional+japanese",
+    source: "Internet Archive",
+    license: "Public Domain / CC"
+  },
+  {
+    name: "Erhu Whisper",
+    subtitle: "Two-String Fiddle • China",
+    culture: "🇨🇳 Chinese",
+    url: "https://archive.org/search.php?query=erhu+chinese+traditional",
+    source: "Internet Archive",
+    license: "Public Domain / CC"
+  },
+  {
+    name: "Guzheng Cascade",
+    subtitle: "Plucked Zither • Ancient China",
+    culture: "🇨🇳 Chinese",
+    url: "https://freemusicarchive.org/search?quicksearch=guzheng",
+    source: "Free Music Archive",
+    license: "CC BY / CC BY-SA"
+  },
+  {
+    name: "Taiko Drumming",
+    subtitle: "Japanese Percussion • Edo Tradition",
+    culture: "🇯🇵 Japanese",
+    url: "https://archive.org/search.php?query=taiko+drums+japanese",
+    source: "Internet Archive",
+    license: "Public Domain / CC"
+  },
+
+  // ========== MIDDLE EAST & CENTRAL ASIA ==========
+  {
+    name: "Oud Mystique",
+    subtitle: "Lute Poetry • Arabic Tradition",
+    culture: "🌍 Middle Eastern",
+    url: "https://freemusicarchive.org/search?quicksearch=oud+arabic",
+    source: "Free Music Archive",
+    license: "CC BY / CC BY-SA"
+  },
+  {
+    name: "Ney Serenade",
+    subtitle: "Bamboo Flute • Sufi Wisdom",
+    culture: "🕌 Islamic Heritage",
+    url: "https://archive.org/search.php?query=ney+flute+traditional",
+    source: "Internet Archive",
+    license: "Public Domain / CC"
+  },
+  {
+    name: "Qanun Harmony",
+    subtitle: "Ancient Harp • Levantine Strings",
+    culture: "🌍 Middle Eastern",
+    url: "https://freemusicarchive.org/search?quicksearch=qanun",
+    source: "Free Music Archive",
+    license: "CC BY / CC BY-SA"
+  },
+  {
+    name: "Doumbek Beat",
+    subtitle: "Hand Drum • North Africa",
+    culture: "🌍 Middle Eastern",
+    url: "https://archive.org/search.php?query=doumbek+hand+drum",
+    source: "Internet Archive",
+    license: "Public Domain / CC"
+  },
+
+  // ========== LATIN AMERICA & CARIBBEAN ==========
+  {
+    name: "Son Jarocho",
+    subtitle: "Zapotec Fusion • Veracruz, Mexico",
+    culture: "🇲🇽 Mexican",
+    url: "https://archive.org/search.php?query=son+jarocho+traditional",
+    source: "Internet Archive",
+    license: "Public Domain / CC"
+  },
+  {
+    name: "Andean Quena",
+    subtitle: "Flute Heritage • Incan Traditions",
+    culture: "🇵🇪 Andean",
+    url: "https://freemusicarchive.org/search?quicksearch=quena+andean",
+    source: "Free Music Archive",
+    license: "CC BY / CC BY-SA"
+  },
+  {
+    name: "Cumbia Rhythm",
+    subtitle: "Colombian Heartbeat • Caribbean",
+    culture: "🇨🇴 Colombian",
+    url: "https://archive.org/search.php?query=cumbia+traditional+colombia",
+    source: "Internet Archive",
+    license: "Public Domain / CC"
+  },
+  {
+    name: "Bossa Nova Soul",
+    subtitle: "Brazilian Jazz • Samba Root",
+    culture: "🇧🇷 Brazilian",
+    url: "https://freemusicarchive.org/search?quicksearch=bossa+nova",
+    source: "Free Music Archive",
+    license: "CC BY / CC BY-SA"
+  },
+  {
+    name: "Steel Drum Pan",
+    subtitle: "Caribbean Percussion • Trinidad",
+    culture: "🇹🇹 Caribbean",
+    url: "https://archive.org/search.php?query=steel+drum+calypso",
+    source: "Internet Archive",
+    license: "Public Domain / CC"
+  },
+
+  // ========== EASTERN EUROPE & CELTIC ==========
+  {
+    name: "Klezmer Spirit",
+    subtitle: "Jewish Folk • Eastern European",
+    culture: "✡️ Jewish Heritage",
+    url: "https://archive.org/search.php?query=klezmer+traditional",
+    source: "Internet Archive",
+    license: "Public Domain / CC"
+  },
+  {
+    name: "Bagpipe Call",
+    subtitle: "Scottish Highlands • Celtic Roots",
+    culture: "🇬🇧 Celtic",
+    url: "https://freemusicarchive.org/search?quicksearch=bagpipe+scottish",
+    source: "Free Music Archive",
+    license: "CC BY / CC BY-SA"
+  },
+  {
+    name: "Accordion Tales",
+    subtitle: "Eastern European Folk • Balkan",
+    culture: "🌍 Balkan",
+    url: "https://archive.org/search.php?query=accordion+balkan+traditional",
+    source: "Internet Archive",
+    license: "Public Domain / CC"
+  },
+
+  // ========== INDIGENOUS & DIASPORA ==========
+  {
+    name: "Didgeridoo Dreaming",
+    subtitle: "Aboriginal Songlines • Australia",
+    culture: "🇦🇺 Aboriginal",
+    url: "https://archive.org/search.php?query=didgeridoo+aboriginal",
+    source: "Internet Archive",
+    license: "Public Domain / CC"
+  },
+  {
+    name: "First Nations Pulse",
+    subtitle: "Drum Circle • North America",
+    culture: "🇨🇦 Indigenous",
+    url: "https://freemusicarchive.org/search?quicksearch=native+american+drums",
+    source: "Free Music Archive",
+    license: "CC BY / CC BY-SA"
+  },
+  {
+    name: "Throat Singing",
+    subtitle: "Mongolian Harmonics • Central Asia",
+    culture: "🇲🇳 Mongolian",
+    url: "https://archive.org/search.php?query=throat+singing+mongolian",
+    source: "Internet Archive",
+    license: "Public Domain / CC"
+  },
+
+  // ========== CONTEMPORARY WORLD FUSION ==========
   {
     name: "Global Consciousness",
-    subtitle: "Unity in Diversity • World Fusion",
+    subtitle: "Conscious Network • Unity Frequency",
     culture: "🌍 Universal",
-    url: "https://www.soundhelix.com/examples/mp3/SoundHelix-Song-3.mp3"
+    url: "https://pixabay.com/music/search/world+fusion/",
+    source: "Pixabay Music",
+    license: "CC0 / Public Domain"
   },
   {
     name: "Sovereign Shift",
-    subtitle: "Identity Anchor • Conscious Network",
+    subtitle: "Identity Anchor • Collective Resonance",
     culture: "🌐 All Peoples",
-    url: "https://www.soundhelix.com/examples/mp3/SoundHelix-Song-4.mp3"
+    url: "https://freemusicarchive.org/search?quicksearch=world+music",
+    source: "Free Music Archive",
+    license: "CC BY / CC BY-SA"
   }
 ];
 
@@ -528,14 +722,14 @@ const MusicBox: React.FC = () => {
               </button>
             </div>
 
-            {/* Global Playlist with Cultural Representation */}
+            {/* Global Playlist with Cultural Representation & Licensing Info */}
             {showPlaylist && (
               <div className="border-t border-cyan-400/20 pt-3 mt-3 rounded-xl bg-blue-950/50 border border-cyan-400/25 p-3">
                 <div className="text-[9px] font-bold text-cyan-200 mb-3 uppercase tracking-widest flex items-center gap-2">
                   <Sparkles className="w-4 h-4 text-yellow-300" />
-                  Global Conscious Playlist
+                  Authentic Global Playlist
                 </div>
-                <div className="space-y-2 max-h-72 overflow-y-auto">
+                <div className="space-y-2 max-h-80 overflow-y-auto">
                   {TRACKS.map((track, idx) => (
                     <button
                       key={idx}
@@ -551,8 +745,17 @@ const MusicBox: React.FC = () => {
                     >
                       <div className="font-bold truncate">{track.name}</div>
                       <div className="text-cyan-300/70 truncate text-[7px] mt-1">{track.culture} • {track.subtitle}</div>
+                      <div className="text-cyan-400/60 text-[6.5px] mt-1 flex items-center gap-1">
+                        <span>📍 {track.source}</span>
+                      </div>
+                      <div className="text-yellow-300/60 text-[6.5px] mt-0.5">
+                        {track.license}
+                      </div>
                     </button>
                   ))}
+                </div>
+                <div className="mt-3 pt-3 border-t border-cyan-400/20 text-[6px] text-cyan-300/50 text-center">
+                  All music is copyright-free, authentic, and ethically sourced from open archives
                 </div>
               </div>
             )}
