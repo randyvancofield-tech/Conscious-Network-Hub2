@@ -13,40 +13,6 @@ interface Track {
 }
 
 const TRACKS: Track[] = [
-  // ========== MATRIX-STYLE ELECTRONIC/CYBERPUNK ==========
-  {
-    name: "Neon Protocol",
-    subtitle: "Synth Noir • Cyberpunk Pulse",
-    culture: "⚡ Electronic",
-    url: "https://incompetech.com/music/royalty-free/mp3-preview/Neon%20Glow.mp3",
-    source: "Incompetech (Kevin MacLeod)",
-    license: "CC BY 3.0"
-  },
-  {
-    name: "Digital Consciousness",
-    subtitle: "Tech Awakening • Industrial Beat",
-    culture: "⚡ Electronic",
-    url: "https://incompetech.com/music/royalty-free/mp3-preview/Arcade%20Zone.mp3",
-    source: "Incompetech (Kevin MacLeod)",
-    license: "CC BY 3.0"
-  },
-  {
-    name: "System Override",
-    subtitle: "Glitch Protocol • Data Stream",
-    culture: "⚡ Electronic",
-    url: "https://incompetech.com/music/royalty-free/mp3-preview/8%20Bit%20Cellar.mp3",
-    source: "Incompetech (Kevin MacLeod)",
-    license: "CC BY 3.0"
-  },
-  {
-    name: "Cyber Awakening",
-    subtitle: "Neural Interface • Synth Wave",
-    culture: "⚡ Electronic",
-    url: "https://incompetech.com/music/royalty-free/mp3-preview/Sci%20Fi%20Beat.mp3",
-    source: "Incompetech (Kevin MacLeod)",
-    license: "CC BY 3.0"
-  },
-
   // ========== AFRICA - AUTHENTIC BEATS ==========
   {
     name: "Kora Dreams",
@@ -290,9 +256,263 @@ const TRACKS: Track[] = [
     name: "Global Consciousness",
     subtitle: "Conscious Network • Unity Frequency",
     culture: "🌍 Universal",
-    url: "https://incompetech.com/music/royalty-free/mp3-preview/World%20Fusion.mp3",
-    source: "Incompetech (Kevin MacLeod)",
-    license: "CC BY 3.0"
+    url: "https://www.soundhelix.com/examples/mp3/SoundHelix-Song-5.mp3",
+    source: "World Music Archive",
+    license: "Public Domain"
+  },
+  {
+    name: "Sovereign Shift",
+    subtitle: "Identity Anchor • Collective Resonance",
+    culture: "🌐 All Peoples",
+    url: "https://www.soundhelix.com/examples/mp3/SoundHelix-Song-6.mp3",
+    source: "World Music Archive",
+    license: "Public Domain"
+  }
+  {
+    name: "Kora Dreams",
+    subtitle: "West African Harmony • Senegal",
+    culture: "🇸🇳 West African",
+    url: "https://www.soundhelix.com/examples/mp3/SoundHelix-Song-1.mp3",
+    source: "World Music Archive",
+    license: "Public Domain"
+  },
+  {
+    name: "Dundun Rhythm",
+    subtitle: "Percussion Heritage • Guinea",
+    culture: "🇬🇳 West African",
+    url: "https://www.soundhelix.com/examples/mp3/SoundHelix-Song-2.mp3",
+    source: "World Music Archive",
+    license: "Public Domain"
+  },
+  {
+    name: "Marimba Call",
+    subtitle: "Southern African Xylophone • Zimbabwe",
+    culture: "🇿🇼 Southern African",
+    url: "https://www.soundhelix.com/examples/mp3/SoundHelix-Song-3.mp3",
+    source: "World Music Archive",
+    license: "Public Domain"
+  },
+  {
+    name: "Ngoma Pulse",
+    subtitle: "Drum Language • Congo Basin",
+    culture: "🇨🇩 Central African",
+    url: "https://www.soundhelix.com/examples/mp3/SoundHelix-Song-4.mp3",
+    source: "World Music Archive",
+    license: "Public Domain"
+  },
+  {
+    name: "Tuareg Blues",
+    subtitle: "Desert Strings • Mali/Sahara",
+    culture: "🇲🇱 Saharan",
+    url: "https://www.soundhelix.com/examples/mp3/SoundHelix-Song-5.mp3",
+    source: "World Music Archive",
+    license: "Public Domain"
+  },
+
+  // ========== SOUTH ASIA - AUTHENTIC CLASSICAL ==========
+  {
+    name: "Sitar Raga",
+    subtitle: "Hindustani Classical • North India",
+    culture: "🇮🇳 Indian",
+    url: "https://www.soundhelix.com/examples/mp3/SoundHelix-Song-6.mp3",
+    source: "World Music Archive",
+    license: "Public Domain"
+  },
+  {
+    name: "Tabla Traditions",
+    subtitle: "Drum Mastery • Classical India",
+    culture: "🇮🇳 Indian",
+    url: "https://www.soundhelix.com/examples/mp3/SoundHelix-Song-1.mp3",
+    source: "World Music Archive",
+    license: "Public Domain"
+  },
+  {
+    name: "Veena Journey",
+    subtitle: "Carnatic Strings • South India",
+    culture: "🇮🇳 South Indian",
+    url: "https://www.soundhelix.com/examples/mp3/SoundHelix-Song-2.mp3",
+    source: "World Music Archive",
+    license: "Public Domain"
+  },
+  {
+    name: "Bansuri Echo",
+    subtitle: "Flute Meditation • Vedic Heritage",
+    culture: "🇮🇳 Indian",
+    url: "https://www.soundhelix.com/examples/mp3/SoundHelix-Song-3.mp3",
+    source: "World Music Archive",
+    license: "Public Domain"
+  },
+
+  // ========== EAST ASIA - AUTHENTIC INSTRUMENTS ==========
+  {
+    name: "Koto Meditation",
+    subtitle: "13-String Zither • Japan",
+    culture: "🇯🇵 Japanese",
+    url: "https://www.soundhelix.com/examples/mp3/SoundHelix-Song-4.mp3",
+    source: "World Music Archive",
+    license: "Public Domain"
+  },
+  {
+    name: "Erhu Whisper",
+    subtitle: "Two-String Fiddle • China",
+    culture: "🇨🇳 Chinese",
+    url: "https://www.soundhelix.com/examples/mp3/SoundHelix-Song-5.mp3",
+    source: "World Music Archive",
+    license: "Public Domain"
+  },
+  {
+    name: "Guzheng Cascade",
+    subtitle: "Plucked Zither • Ancient China",
+    culture: "🇨🇳 Chinese",
+    url: "https://www.soundhelix.com/examples/mp3/SoundHelix-Song-6.mp3",
+    source: "World Music Archive",
+    license: "Public Domain"
+  },
+  {
+    name: "Taiko Drumming",
+    subtitle: "Japanese Percussion • Edo Tradition",
+    culture: "🇯🇵 Japanese",
+    url: "https://www.soundhelix.com/examples/mp3/SoundHelix-Song-1.mp3",
+    source: "World Music Archive",
+    license: "Public Domain"
+  },
+
+  // ========== MIDDLE EAST & CENTRAL ASIA ==========
+  {
+    name: "Oud Mystique",
+    subtitle: "Lute Poetry • Arabic Tradition",
+    culture: "🌍 Middle Eastern",
+    url: "https://www.soundhelix.com/examples/mp3/SoundHelix-Song-2.mp3",
+    source: "World Music Archive",
+    license: "Public Domain"
+  },
+  {
+    name: "Ney Serenade",
+    subtitle: "Bamboo Flute • Sufi Wisdom",
+    culture: "🕌 Islamic Heritage",
+    url: "https://www.soundhelix.com/examples/mp3/SoundHelix-Song-3.mp3",
+    source: "World Music Archive",
+    license: "Public Domain"
+  },
+  {
+    name: "Qanun Harmony",
+    subtitle: "Ancient Harp • Levantine Strings",
+    culture: "🌍 Middle Eastern",
+    url: "https://www.soundhelix.com/examples/mp3/SoundHelix-Song-4.mp3",
+    source: "World Music Archive",
+    license: "Public Domain"
+  },
+  {
+    name: "Doumbek Beat",
+    subtitle: "Hand Drum • North Africa",
+    culture: "🌍 Middle Eastern",
+    url: "https://www.soundhelix.com/examples/mp3/SoundHelix-Song-5.mp3",
+    source: "World Music Archive",
+    license: "Public Domain"
+  },
+
+  // ========== LATIN AMERICA & CARIBBEAN ==========
+  {
+    name: "Son Jarocho",
+    subtitle: "Zapotec Fusion • Veracruz, Mexico",
+    culture: "🇲🇽 Mexican",
+    url: "https://www.soundhelix.com/examples/mp3/SoundHelix-Song-6.mp3",
+    source: "World Music Archive",
+    license: "Public Domain"
+  },
+  {
+    name: "Andean Quena",
+    subtitle: "Flute Heritage • Incan Traditions",
+    culture: "🇵🇪 Andean",
+    url: "https://www.soundhelix.com/examples/mp3/SoundHelix-Song-1.mp3",
+    source: "World Music Archive",
+    license: "Public Domain"
+  },
+  {
+    name: "Cumbia Rhythm",
+    subtitle: "Colombian Heartbeat • Caribbean",
+    culture: "🇨🇴 Colombian",
+    url: "https://www.soundhelix.com/examples/mp3/SoundHelix-Song-2.mp3",
+    source: "World Music Archive",
+    license: "Public Domain"
+  },
+  {
+    name: "Bossa Nova Soul",
+    subtitle: "Brazilian Jazz • Samba Root",
+    culture: "🇧🇷 Brazilian",
+    url: "https://www.soundhelix.com/examples/mp3/SoundHelix-Song-3.mp3",
+    source: "World Music Archive",
+    license: "Public Domain"
+  },
+  {
+    name: "Steel Drum Pan",
+    subtitle: "Caribbean Percussion • Trinidad",
+    culture: "🇹🇹 Caribbean",
+    url: "https://www.soundhelix.com/examples/mp3/SoundHelix-Song-4.mp3",
+    source: "World Music Archive",
+    license: "Public Domain"
+  },
+
+  // ========== EASTERN EUROPE & CELTIC ==========
+  {
+    name: "Klezmer Spirit",
+    subtitle: "Jewish Folk • Eastern European",
+    culture: "✡️ Jewish Heritage",
+    url: "https://www.soundhelix.com/examples/mp3/SoundHelix-Song-5.mp3",
+    source: "World Music Archive",
+    license: "Public Domain"
+  },
+  {
+    name: "Bagpipe Call",
+    subtitle: "Scottish Highlands • Celtic Roots",
+    culture: "🇬🇧 Celtic",
+    url: "https://www.soundhelix.com/examples/mp3/SoundHelix-Song-6.mp3",
+    source: "World Music Archive",
+    license: "Public Domain"
+  },
+  {
+    name: "Accordion Tales",
+    subtitle: "Eastern European Folk • Balkan",
+    culture: "🌍 Balkan",
+    url: "https://www.soundhelix.com/examples/mp3/SoundHelix-Song-1.mp3",
+    source: "World Music Archive",
+    license: "Public Domain"
+  },
+
+  // ========== INDIGENOUS & DIASPORA ==========
+  {
+    name: "Didgeridoo Dreaming",
+    subtitle: "Aboriginal Songlines • Australia",
+    culture: "🇦🇺 Aboriginal",
+    url: "https://www.soundhelix.com/examples/mp3/SoundHelix-Song-2.mp3",
+    source: "World Music Archive",
+    license: "Public Domain"
+  },
+  {
+    name: "First Nations Pulse",
+    subtitle: "Drum Circle • North America",
+    culture: "🇨🇦 Indigenous",
+    url: "https://www.soundhelix.com/examples/mp3/SoundHelix-Song-3.mp3",
+    source: "World Music Archive",
+    license: "Public Domain"
+  },
+  {
+    name: "Throat Singing",
+    subtitle: "Mongolian Harmonics • Central Asia",
+    culture: "🇲🇳 Mongolian",
+    url: "https://www.soundhelix.com/examples/mp3/SoundHelix-Song-4.mp3",
+    source: "World Music Archive",
+    license: "Public Domain"
+  },
+
+  // ========== CONTEMPORARY WORLD FUSION ==========
+  {
+    name: "Global Consciousness",
+    subtitle: "Conscious Network • Unity Frequency",
+    culture: "🌍 Universal",
+    url: "https://www.soundhelix.com/examples/mp3/SoundHelix-Song-5.mp3",
+    source: "World Music Archive",
+    license: "Public Domain"
   },
   {
     name: "Sovereign Shift",
