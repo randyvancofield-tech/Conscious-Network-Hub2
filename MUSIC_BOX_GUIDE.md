@@ -5,11 +5,7 @@ The Music Box component now features **40+ authentic, copyright-free music track
 
 ## Track Categories
 
-### ⚡ Matrix-Style Electronic (4 tracks)
-- **Neon Protocol** - Synth Noir / Cyberpunk
-- **Digital Consciousness** - Tech Awakening / Industrial
-- **System Override** - Glitch Protocol / Data Stream
-- **Cyber Awakening** - Neural Interface / Synth Wave
+
 
 ### 🌍 Authentic Global Beats by Region
 
