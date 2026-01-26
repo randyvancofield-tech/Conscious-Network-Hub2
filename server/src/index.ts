@@ -112,8 +112,10 @@ app.use(requestLogger);
 app.get('/health', healthCheck);
 
 // API routes
+import userRoutes from './routes/user';
 app.use('/api/ai', aiRoutes);
 app.use('/api/membership', membershipRoutes);
+app.use('/api/user', userRoutes);
 
 // Catch-all 404 handler
 app.use((req, res) => {
