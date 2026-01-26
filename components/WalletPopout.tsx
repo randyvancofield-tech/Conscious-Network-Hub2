@@ -1,7 +1,22 @@
 
-import React, { useMemo } from 'react';
-// Added AlertTriangle and Info to the lucide-react imports for security notes
-import { X, Wallet, ShieldCheck, Activity, Copy, ArrowUpRight, ArrowDownLeft, Zap, Coins, History, ExternalLink, ChevronRight, AlertTriangle, Info, Lock } from 'lucide-react';
+import React, { useEffect, useMemo, useState } from 'react';
+import {
+  X,
+  Wallet,
+  ShieldCheck,
+  Activity,
+  Copy,
+  ArrowUpRight,
+  ArrowDownLeft,
+  Zap,
+  Coins,
+  History,
+  ExternalLink,
+  ChevronRight,
+  AlertTriangle,
+  Info,
+  Lock
+} from 'lucide-react';
 import { UserProfile } from '../types';
 
 interface WalletPopoutProps {
@@ -10,20 +25,240 @@ interface WalletPopoutProps {
   user: UserProfile | null;
 }
 
+type VerifyStatus = 'unverified' | 'connected' | 'verified' | 'error';
+
+declare global {
+  interface Window {
+    ethereum?: any;
+  }
+}
+
+const LS_KEY = 'hcn_wallet_session_v1';
+
+function toDidPkh(chainId: number, address: string) {
+  return `did:pkh:eip155:${chainId}:${address.toLowerCase()}`;
+}
+
+function safeParseJSON<T>(value: string | null): T | null {
+  if (!value) return null;
+  try {
+    return JSON.parse(value) as T;
+  } catch {
+    return null;
+  }
+}
+
 const WalletPopout: React.FC<WalletPopoutProps> = ({ isOpen, onClose, user }) => {
-  // Generate a mock decentralized address for the user
-  const walletAddress = useMemo(() => {
-    if (!user) return '0x000...0000';
+  const VERIFY_ENDPOINT =
+    (import.meta as any)?.env?.VITE_WALLET_VERIFY_URL ||
+    (process as any)?.env?.REACT_APP_WALLET_VERIFY_URL ||
+    '';
+
+  const persisted = useMemo(() => {
+    return safeParseJSON<{
+      address?: string;
+      chainId?: number;
+      did?: string;
+      verifyStatus?: VerifyStatus;
+      verifiedAt?: string;
+    }>(localStorage.getItem(LS_KEY));
+  }, []);
+
+  const [connectedAddress, setConnectedAddress] = useState<string>(persisted?.address || '');
+  const [chainId, setChainId] = useState<number>(persisted?.chainId || 0);
+  const [did, setDid] = useState<string>(persisted?.did || '');
+  const [verifyStatus, setVerifyStatus] = useState<VerifyStatus>(persisted?.verifyStatus || 'unverified');
+  const [verifiedAt, setVerifiedAt] = useState<string>(persisted?.verifiedAt || '');
+  const [busy, setBusy] = useState(false);
+  const [toast, setToast] = useState<string>('');
+
+  const fallbackDid = useMemo(() => {
+    if (!user) return 'did:hcn:node_guest';
     const base = user.email || 'guest';
     const hash = btoa(base).substring(0, 12).toLowerCase();
     return `did:hcn:node_${hash}`;
   }, [user]);
 
+  const walletDID = did || fallbackDid;
+
   const transactions = [
     { id: 1, type: 'reward', amount: '+12 HCN', detail: 'Knowledge Contribution', date: '2h ago' },
     { id: 2, type: 'stake', amount: '-5 HCN', detail: 'Node Reputation Stake', date: '1d ago' },
-    { id: 3, type: 'reward', amount: '+2.5 HCN', detail: 'Peer Support Bonus', date: '2d ago' },
+    { id: 3, type: 'reward', amount: '+2.5 HCN', detail: 'Peer Support Bonus', date: '2d ago' }
   ];
+
+  useEffect(() => {
+    const payload = { address: connectedAddress, chainId, did, verifyStatus, verifiedAt };
+    localStorage.setItem(LS_KEY, JSON.stringify(payload));
+  }, [connectedAddress, chainId, did, verifyStatus, verifiedAt]);
+
+  useEffect(() => {
+    if (!toast) return;
+    const t = setTimeout(() => setToast(''), 2500);
+    return () => clearTimeout(t);
+  }, [toast]);
+
+  useEffect(() => {
+    if (!window.ethereum) return;
+
+    const handleAccountsChanged = (accounts: string[]) => {
+      const addr = accounts?.[0] || '';
+      if (!addr) {
+        setConnectedAddress('');
+        setChainId(0);
+        setDid('');
+        setVerifyStatus('unverified');
+        setVerifiedAt('');
+        return;
+      }
+      setConnectedAddress(addr);
+      setVerifyStatus((prev) => (prev === 'verified' ? 'verified' : 'connected'));
+    };
+
+    const handleChainChanged = (hexChainId: string) => {
+      const cid = parseInt(hexChainId, 16);
+      setChainId(cid || 0);
+      if (connectedAddress) {
+        setDid(toDidPkh(cid || 1, connectedAddress));
+        setVerifyStatus((prev) => (prev === 'verified' ? 'verified' : 'connected'));
+      }
+    };
+
+    window.ethereum.on?.('accountsChanged', handleAccountsChanged);
+    window.ethereum.on?.('chainChanged', handleChainChanged);
+
+    return () => {
+      window.ethereum.removeListener?.('accountsChanged', handleAccountsChanged);
+      window.ethereum.removeListener?.('chainChanged', handleChainChanged);
+    };
+  }, [connectedAddress]);
+
+  const copyText = async (value: string) => {
+    try {
+      await navigator.clipboard.writeText(value);
+      setToast('Copied ✅');
+    } catch {
+      setToast('Copy failed ❌');
+    }
+  };
+
+  const requireEthereum = () => {
+    if (!window.ethereum) {
+      setToast('No wallet detected. Install MetaMask or use a wallet-enabled browser.');
+      return false;
+    }
+    return true;
+  };
+
+  const connectWallet = async () => {
+    if (!requireEthereum()) return;
+    setBusy(true);
+    setToast('');
+
+    try {
+      const accounts: string[] = await window.ethereum.request({ method: 'eth_requestAccounts' });
+      const addr = accounts?.[0] || '';
+      if (!addr) throw new Error('No account returned by wallet');
+
+      const hexChainId: string = await window.ethereum.request({ method: 'eth_chainId' });
+      const cid = parseInt(hexChainId, 16) || 1;
+
+      setConnectedAddress(addr);
+      setChainId(cid);
+      setDid(toDidPkh(cid, addr));
+      setVerifyStatus('connected');
+      setVerifiedAt('');
+
+      setToast('Wallet connected ✅');
+    } catch (e: any) {
+      setVerifyStatus('error');
+      setToast(e?.message || 'Wallet connect failed');
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const disconnectLocal = () => {
+    setConnectedAddress('');
+    setChainId(0);
+    setDid('');
+    setVerifyStatus('unverified');
+    setVerifiedAt('');
+    setToast('Disconnected (app session) ✅');
+  };
+
+  const verifyWallet = async () => {
+    if (!requireEthereum()) return;
+    if (!connectedAddress) {
+      await connectWallet();
+      return;
+    }
+
+    setBusy(true);
+    setToast('');
+
+    try {
+      const domain = window.location.host;
+      const nowIso = new Date().toISOString();
+      const message =
+        `HCN Sovereign Vault Verification\n` +
+        `Domain: ${domain}\n` +
+        `Address: ${connectedAddress}\n` +
+        `ChainId: ${chainId || 1}\n` +
+        `Time: ${nowIso}\n\n` +
+        `By signing, I prove I control this wallet for Higher Conscious Network (HCN).`;
+
+      const signature: string = await window.ethereum.request({
+        method: 'personal_sign',
+        params: [message, connectedAddress]
+      });
+
+      if (!VERIFY_ENDPOINT) {
+        setVerifyStatus('connected');
+        setVerifiedAt('');
+        setToast('Signed ✅ (Backend verify not configured yet)');
+        return;
+      }
+
+      const resp = await fetch(VERIFY_ENDPOINT, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          message,
+          signature,
+          address: connectedAddress,
+          chainId: chainId || 1,
+          did: did || toDidPkh(chainId || 1, connectedAddress)
+        })
+      });
+
+      const data = await resp.json().catch(() => ({}));
+      if (!resp.ok) throw new Error(data?.error || 'Verification failed');
+
+      setVerifyStatus('verified');
+      setVerifiedAt(new Date().toLocaleString());
+      setToast('Verified ✅');
+    } catch (e: any) {
+      setVerifyStatus('error');
+      setToast(e?.message || 'Verification failed');
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const statusLabel = useMemo(() => {
+    if (verifyStatus === 'verified') return 'Verified';
+    if (verifyStatus === 'connected') return 'Connected';
+    if (verifyStatus === 'error') return 'Error';
+    return 'Unverified';
+  }, [verifyStatus]);
+
+  const statusColor = useMemo(() => {
+    if (verifyStatus === 'verified') return 'text-green-400';
+    if (verifyStatus === 'connected') return 'text-cyan-300';
+    if (verifyStatus === 'error') return 'text-red-400';
+    return 'text-slate-400';
+  }, [verifyStatus]);
 
   if (!isOpen) return null;
 
@@ -46,13 +281,20 @@ const WalletPopout: React.FC<WalletPopoutProps> = ({ isOpen, onClose, user }) =>
           </button>
         </div>
 
+        {/* Toast */}
+        {toast && (
+          <div className="mb-6 px-4 py-3 rounded-2xl bg-white/5 border border-white/10 text-[10px] text-slate-200 uppercase tracking-wider">
+            {toast}
+          </div>
+        )}
+
         {/* Security Alert - MVP Notice */}
         <div className="mb-8 p-4 bg-amber-500/10 border border-amber-500/20 rounded-2xl flex gap-4">
           <AlertTriangle className="w-10 h-10 text-amber-500 shrink-0" />
           <div>
             <p className="text-xs font-bold text-amber-400 uppercase tracking-widest mb-1">MVP Security Protocol</p>
             <p className="text-[10px] text-slate-400 leading-relaxed uppercase">
-              This is a temporary alpha implementation. All keys and identities are stored within your browser's local storage. Do not clear your browser cache if you wish to retain this specific node identity.
+              This is an alpha implementation. Wallet address + DID are stored locally. Clearing site storage will reset this identity.
             </p>
           </div>
         </div>
@@ -63,16 +305,60 @@ const WalletPopout: React.FC<WalletPopoutProps> = ({ isOpen, onClose, user }) =>
             <div className="absolute top-0 right-0 p-4 opacity-5 group-hover:opacity-10 transition-opacity">
               <ShieldCheck className="w-24 h-24 text-blue-400" />
             </div>
-            <label className="text-[10px] font-bold text-blue-400 uppercase tracking-widest mb-2 block">Identity Identifier (DID)</label>
+
+            <div className="flex items-center justify-between">
+              <label className="text-[10px] font-bold text-blue-400 uppercase tracking-widest mb-2 block">Identity Identifier (DID)</label>
+              <span className={`text-[10px] font-bold uppercase tracking-widest ${statusColor}`}>{statusLabel}</span>
+            </div>
+
             <div className="flex items-center justify-between bg-black/40 p-3 rounded-xl border border-white/5 group/did">
-              <span className="font-mono text-xs text-slate-300 truncate mr-2">{walletAddress}</span>
-              <button className="text-slate-500 hover:text-blue-400 transition-colors">
+              <span className="font-mono text-xs text-slate-300 truncate mr-2">{walletDID}</span>
+              <button className="text-slate-500 hover:text-blue-400 transition-colors" onClick={() => copyText(walletDID)}>
                 <Copy className="w-4 h-4" />
               </button>
             </div>
+
+            <div className="mt-3 flex items-center justify-between bg-black/20 p-3 rounded-xl border border-white/5">
+              <div className="min-w-0">
+                <div className="text-[10px] text-slate-500 uppercase tracking-widest font-bold">Wallet Address</div>
+                <div className="font-mono text-xs text-slate-300 truncate">
+                  {connectedAddress ? connectedAddress : 'Not connected'}
+                </div>
+                <div className="text-[10px] text-slate-500 mt-1">
+                  Chain ID: <span className="text-slate-300 font-mono">{chainId || '—'}</span>
+                  {verifiedAt ? <span className="ml-2">• Verified: <span className="text-slate-300">{verifiedAt}</span></span> : null}
+                </div>
+              </div>
+              <button
+                className="text-slate-500 hover:text-blue-400 transition-colors ml-3"
+                onClick={() => connectedAddress && copyText(connectedAddress)}
+                disabled={!connectedAddress}
+              >
+                <Copy className="w-4 h-4" />
+              </button>
+            </div>
+
             <div className="mt-4 flex items-center gap-2">
               <Lock className="w-3 h-3 text-teal-400" />
-              <span className="text-[10px] font-bold text-teal-400 uppercase tracking-widest">AES-256 Local Encryption Active</span>
+              <span className="text-[10px] font-bold text-teal-400 uppercase tracking-widest">Local Session Context Active</span>
+            </div>
+
+            <div className="mt-4 grid grid-cols-2 gap-2">
+              <button
+                onClick={connectedAddress ? disconnectLocal : connectWallet}
+                disabled={busy}
+                className="w-full py-3 bg-white/5 hover:bg-white/10 border border-white/10 rounded-2xl font-bold text-[11px] transition-all uppercase tracking-widest"
+              >
+                {connectedAddress ? 'Disconnect' : (busy ? 'Connecting…' : 'Connect')}
+              </button>
+
+              <button
+                onClick={verifyWallet}
+                disabled={busy || !connectedAddress}
+                className="w-full py-3 bg-white/5 hover:bg-white/10 border border-white/10 rounded-2xl font-bold text-[11px] transition-all uppercase tracking-widest"
+              >
+                {busy ? 'Processing…' : 'Verify'}
+              </button>
             </div>
           </div>
         </section>
@@ -98,8 +384,13 @@ const WalletPopout: React.FC<WalletPopoutProps> = ({ isOpen, onClose, user }) =>
             <span className="text-[10px] font-bold text-blue-400 uppercase tracking-widest">Data Autonomy Note</span>
           </div>
           <p className="text-[10px] text-slate-500 leading-relaxed italic">
-            Your data never touches our servers in this phase. The portal communicates with the blockchain via a decentralized relay, but your private credentials reside solely in this browser's secure context.
+            Wallet connection happens between your browser and your wallet provider. Private keys never leave your wallet. Verification is optional and will call your backend only when configured.
           </p>
+          {!VERIFY_ENDPOINT && (
+            <p className="text-[10px] text-amber-400/80 leading-relaxed mt-2 uppercase tracking-wider">
+              Backend verification not configured yet (set VITE_WALLET_VERIFY_URL when ready).
+            </p>
+          )}
         </div>
 
         {/* Blockchain Features */}
@@ -152,7 +443,11 @@ const WalletPopout: React.FC<WalletPopoutProps> = ({ isOpen, onClose, user }) =>
 
         {/* Footer Actions */}
         <div className="mt-10 pt-6 border-t border-white/10 shrink-0">
-          <button className="w-full py-5 bg-gradient-to-r from-blue-600 to-teal-600 hover:from-blue-500 hover:to-teal-500 rounded-2xl font-bold text-lg transition-all shadow-xl shadow-blue-900/20 flex items-center justify-center gap-2">
+          <button
+            className="w-full py-5 bg-gradient-to-r from-blue-600 to-teal-600 hover:from-blue-500 hover:to-teal-500 rounded-2xl font-bold text-lg transition-all shadow-xl shadow-blue-900/20 flex items-center justify-center gap-2 disabled:opacity-60"
+            onClick={connectedAddress ? verifyWallet : connectWallet}
+            disabled={busy}
+          >
             Bridge External Wallet
           </button>
           <p className="text-[10px] text-center text-slate-500 mt-4 italic uppercase tracking-tighter">
