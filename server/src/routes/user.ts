@@ -1,3 +1,30 @@
+/**
+ * PUT /api/user/:id
+ * Edit user profile (including background video)
+ */
+router.put('/:id', async (req: Request, res: Response): Promise<any> => {
+  try {
+    const { id } = req.params;
+    const prisma = getPrismaClient();
+    const updateData = req.body;
+
+    // Only allow certain fields to be updated
+    const allowedFields = ['name', 'bio', 'avatarUrl', 'bannerUrl', 'profileBackgroundVideo', 'interests', 'twitterUrl', 'githubUrl', 'websiteUrl', 'privacySettings'];
+    const data: any = {};
+    for (const key of allowedFields) {
+      if (updateData[key] !== undefined) data[key] = updateData[key];
+    }
+
+    const user = await prisma.user.update({
+      where: { id },
+      data
+    });
+    res.json({ success: true, user });
+  } catch (error) {
+    console.error('Error updating user profile:', error);
+    res.status(500).json({ error: 'Failed to update user profile' });
+  }
+});
 import { Router, Request, Response } from 'express';
 import { PrismaClient } from '@prisma/client';
 

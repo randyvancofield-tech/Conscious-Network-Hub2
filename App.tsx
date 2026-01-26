@@ -1,6 +1,7 @@
 
 import React, { useState, useEffect, useMemo } from 'react';
 import ThreeScene from './components/ThreeScene';
+import Profile from './components/Profile';
 import Dashboard from './components/Dashboard';
 import WalletPopout from './components/WalletPopout';
 import MyCourses from './components/MyCourses';
@@ -302,6 +303,8 @@ const App: React.FC = () => {
         return <SocialLearningHub user={user} />;
       case AppView.CONSCIOUS_MEETINGS:
         return <ConsciousMeetings user={user} onUpdateUser={updateActiveUser} />;
+      case AppView.PROFILE:
+        return user ? <Profile user={user} onUserUpdate={updateActiveUser} /> : null;
       case AppView.MY_CONSCIOUS_IDENTITY: 
         return (
           <ConsciousIdentity 
@@ -649,7 +652,7 @@ const App: React.FC = () => {
                       'meetings': AppView.CONSCIOUS_MEETINGS,
                       'my-courses': AppView.MY_COURSES,
                       'providers': AppView.PROVIDERS,
-                      'profile': AppView.MY_CONSCIOUS_IDENTITY,
+                      'profile': AppView.PROFILE,
                       'membership': AppView.MEMBERSHIP,
                     };
                     const isActive = currentView === viewMap[item.id];

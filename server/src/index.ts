@@ -113,9 +113,14 @@ app.get('/health', healthCheck);
 
 // API routes
 import userRoutes from './routes/user';
+import uploadRoutes from './routes/upload';
+import reflectionRoutes from './routes/reflection';
 app.use('/api/ai', aiRoutes);
 app.use('/api/membership', membershipRoutes);
 app.use('/api/user', userRoutes);
+app.use('/api/upload', uploadRoutes);
+app.use('/api/reflection', reflectionRoutes);
+app.use('/uploads', express.static('public/uploads'));
 
 // Catch-all 404 handler
 app.use((req, res) => {
