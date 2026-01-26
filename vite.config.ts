@@ -16,14 +16,13 @@ export default defineConfig(({ mode }) => {
 
     base: '/',
 
-    // 🔑 CRITICAL FIX:
-    // Neutralizes Node-only `process` usage in browser builds
     define: {
+      // 🔒 HARD FIX — required for wallet SDKs
+      'process': {},
       'process.env': {},
 
-      // Explicit Gemini env injection (kept intact)
-      'process.env.API_KEY': JSON.stringify(env.GEMINI_API_KEY),
-      'process.env.GEMINI_API_KEY': JSON.stringify(env.GEMINI_API_KEY),
+      // Gemini key injection (safe)
+      'import.meta.env.VITE_GEMINI_API_KEY': JSON.stringify(env.GEMINI_API_KEY),
     },
 
     resolve: {
