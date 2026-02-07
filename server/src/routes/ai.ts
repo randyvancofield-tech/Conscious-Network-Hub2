@@ -61,8 +61,80 @@ const mergeSources = (
  */
 router.post('/chat', validateChatInput, async (req: Request, res: Response): Promise<void> => {
   console.log('AI CHAT HIT');
-  res.status(200).json({ ok: true, test: 'backend reached' });
-  return;
+  const requestStart = Date.now();
+
+  try {
+    const { message, conversationId, context, conversationHistory } =
+      req.body as ChatRequest;
+    const trimmedHistory = conversationHistory ? conversationHistory.slice(-40) : undefined;
+
+    let response:
+      | Awaited<ReturnType<ReturnType<typeof getVertexAIService>['chat']>>
+      | null = null;
+    let knowledge: Awaited<ReturnType<typeof getKnowledgeContext>> | null = null;
+
+    try {
+      console.log('[AI] /chat provider invocation starting');
+      const vertexAI = getVertexAIService();
+      knowledge = await getKnowledgeContext(message, {
+        includeTrusted: true,
+        includeProfile: true,
+        limit: 4,
+      });
+
+      const enrichedContext = {
+        ...(context || {}),
+        knowledgeContext: knowledge.contextText,
+        sources: knowledge.sources,
+        hcnProfile: knowledge.hcnProfile,
+      };
+
+      response = await vertexAI.chat(message, trimmedHistory, enrichedContext);
+      console.log('[AI] /chat provider invocation completed');
+
+      const citations = mergeSources(response.citations || [], knowledge.sources || []);
+
+      res.status(200).json({
+        reply: response.reply,
+        citations,
+        usage: response.usage || {},
+        confidenceScore: response.confidenceScore ?? 60,
+        processingTimeMs: response.processingTimeMs ?? 0,
+        conversationId: conversationId || `conv_${Date.now()}`,
+      });
+      return;
+    } catch (innerError: any) {
+      console.warn(
+        '[AI] /chat provider failed - returning JSON fallback:',
+        innerError?.message || innerError
+      );
+
+      res.status(200).json({
+        reply: `Local fallback: Unable to reach AI provider right now. Message received: "${message.substring(0, 200)}".`,
+        citations: [],
+        usage: {},
+        confidenceScore: 60,
+        processingTimeMs: 0,
+        conversationId: conversationId || `conv_${Date.now()}`,
+        fallback: true,
+      });
+      return;
+    }
+  } catch (error: any) {
+    console.error('[AI] /chat handler error:', error?.message || error);
+
+    res.status(200).json({
+      reply: 'Local fallback: Chat request failed before provider call.',
+      citations: [],
+      usage: {},
+      confidenceScore: 50,
+      processingTimeMs: Date.now() - requestStart,
+      conversationId: `conv_${Date.now()}`,
+      fallback: true,
+      error: error instanceof Error ? error.message : 'Unknown error',
+    });
+    return;
+  }
 });
 
 /**
