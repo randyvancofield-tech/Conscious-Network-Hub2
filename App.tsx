@@ -233,7 +233,7 @@ const App: React.FC = () => {
     
     try {
       // Call backend to select tier and create membership
-      const response = await fetch('http://localhost:3001/api/membership/select-tier', {
+      const response = await fetch(`${resolveBackendUrl()}/api/membership/select-tier`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ userId: user.id, tier })

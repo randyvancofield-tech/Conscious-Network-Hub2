@@ -16,12 +16,13 @@ const PaymentConfirmation: React.FC<PaymentConfirmationProps> = ({
 }) => {
   const [status, setStatus] = useState<'processing' | 'success' | 'error'>('processing');
   const [error, setError] = useState('');
+  const backendBaseUrl = import.meta.env.VITE_BACKEND_URL || '';
 
   React.useEffect(() => {
     const processPayment = async () => {
       try {
         // Call membership confirmation endpoint
-        const response = await fetch('http://localhost:3001/api/membership/confirm-payment', {
+        const response = await fetch(`${backendBaseUrl}/api/membership/confirm-payment`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ userId, tier })
@@ -35,7 +36,7 @@ const PaymentConfirmation: React.FC<PaymentConfirmationProps> = ({
         
         // Fetch updated membership status
         const statusResponse = await fetch(
-          `http://localhost:3001/api/membership/status/${userId}`
+          `${backendBaseUrl}/api/membership/status/${userId}`
         );
         const membershipData = await statusResponse.json();
 
@@ -124,7 +125,7 @@ const PaymentConfirmation: React.FC<PaymentConfirmationProps> = ({
                   // Retry payment
                   const processPayment = async () => {
                     try {
-                      const response = await fetch('http://localhost:3001/api/membership/confirm-payment', {
+                      const response = await fetch(`${backendBaseUrl}/api/membership/confirm-payment`, {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' },
                         body: JSON.stringify({ userId, tier })
@@ -134,7 +135,7 @@ const PaymentConfirmation: React.FC<PaymentConfirmationProps> = ({
 
                       const data = await response.json();
                       const statusResponse = await fetch(
-                        `http://localhost:3001/api/membership/status/${userId}`
+                        `${backendBaseUrl}/api/membership/status/${userId}`
                       );
                       const membershipData = await statusResponse.json();
 
