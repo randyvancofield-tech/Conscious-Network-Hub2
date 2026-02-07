@@ -1,5 +1,5 @@
 
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import ThreeScene from './components/ThreeScene';
 import Profile from './components/Profile';
 import Dashboard from './components/Dashboard';
@@ -58,6 +58,10 @@ const App: React.FC = () => {
   const [isPolicyModalOpen, setIsPolicyModalOpen] = useState(false);
   const [selectedPolicy, setSelectedPolicy] = useState<string | null>(null);
 
+  const insightRef = useRef<HTMLDivElement>(null);
+  const [pendingScrollWisdom, setPendingScrollWisdom] = useState(false);
+  const [healthStatus, setHealthStatus] = useState<'checking' | 'online' | 'offline'>('checking');
+
   const TIERS = [
     {
       name: "Free / Community Tier",
@@ -115,6 +119,39 @@ const App: React.FC = () => {
       setDropdownPos({ top: rect.bottom, left: rect.left });
     }
   }, [isConnectDropdownOpen]);
+
+  const resolveBackendUrl = () => {
+    if (import.meta.env.VITE_BACKEND_URL) return import.meta.env.VITE_BACKEND_URL;
+    if (typeof window !== 'undefined') {
+      const { protocol, hostname } = window.location;
+      if (hostname === 'localhost' || hostname === '127.0.0.1') {
+        return `${protocol}//${hostname}:3001`;
+      }
+      return window.location.origin;
+    }
+    return 'http://localhost:3001';
+  };
+
+  useEffect(() => {
+    const controller = new AbortController();
+    const ping = async () => {
+      try {
+        const res = await fetch(`${resolveBackendUrl()}/health`, { signal: controller.signal });
+        setHealthStatus(res.ok ? 'online' : 'offline');
+      } catch {
+        setHealthStatus('offline');
+      }
+    };
+    ping();
+    return () => controller.abort();
+  }, []);
+
+  useEffect(() => {
+    if (pendingScrollWisdom && currentView === AppView.DASHBOARD) {
+      insightRef.current?.scrollIntoView({ behavior: 'smooth' });
+      setPendingScrollWisdom(false);
+    }
+  }, [pendingScrollWisdom, currentView]);
 
   const handleOpenSelectKey = async () => {
     // @ts-ignore
@@ -298,7 +335,7 @@ const App: React.FC = () => {
   const renderActiveView = () => {
     switch (currentView) {
       case AppView.DASHBOARD: 
-        return <Dashboard user={user} onEnroll={enrollCourse} />;
+        return <Dashboard user={user} onEnroll={enrollCourse} insightRef={insightRef} />;
       case AppView.CONSCIOUS_SOCIAL_LEARNING:
         return <SocialLearningHub user={user} />;
       case AppView.CONSCIOUS_MEETINGS:
@@ -705,9 +742,38 @@ const App: React.FC = () => {
                     <Search className="absolute left-4 sm:left-5 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-600 group-focus-within:text-blue-400 transition-colors" />
                     <input type="text" placeholder="Search..." className="pl-12 sm:pl-14 pr-6 sm:pr-8 py-3 sm:py-3.5 bg-white/5 border border-white/10 rounded-lg sm:rounded-xl text-xs outline-none focus:ring-2 focus:ring-blue-500/30 w-56 sm:w-72 md:w-80 transition-all font-medium placeholder:tracking-wider uppercase" />
                   </div>
+                  <button
+                    onClick={() => {
+                      if (currentView !== AppView.DASHBOARD) {
+                        setPendingScrollWisdom(true);
+                        setCurrentView(AppView.DASHBOARD);
+                      } else {
+                        insightRef.current?.scrollIntoView({ behavior: 'smooth' });
+                      }
+                    }}
+                    className="hidden md:inline-flex items-center gap-2 px-3 py-2 bg-blue-600/15 hover:bg-blue-600/25 rounded-xl text-[10px] font-black uppercase tracking-[0.2em] border border-blue-500/30 transition-all"
+                  >
+                    <Sparkles className="w-4 h-4 text-blue-300" /> Latest Wisdom
+                  </button>
                 </div>
                 
                 <div className="flex items-center gap-3 sm:gap-4 md:gap-6">
+                  <div className={`flex items-center gap-2 px-3 py-2 rounded-xl text-[10px] font-black uppercase tracking-[0.2em] border ${
+                    healthStatus === 'online'
+                      ? 'border-emerald-500/40 text-emerald-300 bg-emerald-500/10'
+                      : healthStatus === 'checking'
+                      ? 'border-slate-600 text-slate-400 bg-white/5'
+                      : 'border-red-500/40 text-red-300 bg-red-500/10'
+                  }`}>
+                    <div className={`w-2 h-2 rounded-full ${
+                      healthStatus === 'online'
+                        ? 'bg-emerald-400'
+                        : healthStatus === 'checking'
+                        ? 'bg-slate-400 animate-pulse'
+                        : 'bg-red-400'
+                    }`} />
+                    <span>{healthStatus === 'online' ? 'AI Live' : healthStatus === 'checking' ? 'Checking' : 'Offline'}</span>
+                  </div>
                   <button className="p-3 hover:bg-white/5 rounded-xl text-slate-500 relative transition-colors">
                     <Bell className="w-5 h-5" />
                     <div className="absolute top-3 right-3 w-2 h-2 bg-blue-500 rounded-full ring-2 ring-black"></div>

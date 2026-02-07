@@ -1,5 +1,5 @@
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, RefObject } from 'react';
 import { Search, Bell, ShieldCheck, TrendingUp, Users, ExternalLink, PlayCircle, BookOpen, Layers, Globe, Plus, Target, Rocket, BarChart3, HeartHandshake } from 'lucide-react';
 import { CORE_COMPONENTS } from '../constants';
 import EthicalAIInsight from './EthicalAIInsight';
@@ -9,14 +9,15 @@ import { UserProfile, Course } from '../types';
 interface DashboardProps {
   user?: UserProfile | null;
   onEnroll?: (course: Course) => void;
+  insightRef?: RefObject<HTMLDivElement>;
 }
 
-const Dashboard: React.FC<DashboardProps> = ({ user, onEnroll }) => {
+const Dashboard: React.FC<DashboardProps> = ({ user, onEnroll, insightRef }) => {
   return (
     <div className="space-y-12 animate-in fade-in duration-700 pb-20">
       {/* Welcome Hero - Ethical AI Insight */}
       <section className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-        <div className="lg:col-span-2">
+        <div className="lg:col-span-2" id="latest-wisdom" ref={insightRef}>
           <EthicalAIInsight userEmail={user?.email} userId={user?.id || user?.email} />
         </div>
 
