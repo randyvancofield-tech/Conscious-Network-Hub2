@@ -1,4 +1,5 @@
 import { VertexAI, HarmCategory, HarmBlockThreshold } from '@google-cloud/vertexai';
+import type { KnowledgeSource } from './knowledgeService';
 
 interface VertexAIConfig {
   projectId: string;
@@ -20,6 +21,14 @@ interface ChatResponse {
   };
   confidenceScore?: number;
   processingTimeMs?: number;
+}
+
+interface AIContext {
+  category?: string;
+  userId?: string;
+  knowledgeContext?: string;
+  sources?: KnowledgeSource[];
+  hcnProfile?: string;
 }
 
 export class VertexAIService {
@@ -48,7 +57,7 @@ export class VertexAIService {
   async chat(
     message: string,
     conversationHistory?: Array<{ role: string; content: string }>,
-    context?: object
+    context?: AIContext
   ): Promise<ChatResponse> {
     const startTime = Date.now();
 
@@ -193,18 +202,34 @@ List them briefly with 1-2 sentence explanations for each.
     };
   }
 
-  private getSystemPrompt(context?: object): string {
-    const basePrompt = `You are an ethical AI assistant for Conscious Network Hub, focused on:
+  private getSystemPrompt(context?: AIContext): string {
+    let basePrompt = `You are an ethical AI assistant for Conscious Network Hub, focused on:
 - Restoring autonomy and protecting identity
 - Community-centered decentralized learning
 - Transparent AI practices
 - Privacy-first architecture
 
-Be helpful, honest, and clear in your responses.`;
+Be helpful, honest, and clear in your responses.
 
-    if (context && typeof context === 'object') {
-      const contextStr = JSON.stringify(context, null, 2);
-      return `${basePrompt}\n\nAdditional Context:\n${contextStr}`;
+You must cite sources whenever possible and avoid fabricating sources.`;
+
+    if (context?.hcnProfile) {
+      basePrompt += `\n\nHCN Official Profile:\n${context.hcnProfile}`;
+    }
+
+    if (context?.knowledgeContext) {
+      basePrompt += `\n\nRelevant Knowledge:\n${context.knowledgeContext}`;
+    }
+
+    if (context?.sources && context.sources.length > 0) {
+      const sourcesList = context.sources
+        .map(source => `- ${source.title}${source.url ? ` (${source.url})` : ''}`)
+        .join('\n');
+      basePrompt += `\n\nGrounding Sources (use when relevant):\n${sourcesList}`;
+    }
+
+    if (context?.category) {
+      basePrompt += `\n\nCategory: ${context.category}`;
     }
 
     return basePrompt;

@@ -1,6 +1,7 @@
 import { Router, Request, Response } from 'express';
 import { validateChatInput } from '../middleware';
 import { getVertexAIService } from '../services/vertexAiService';
+import { getKnowledgeContext, KnowledgeSource } from '../services/knowledgeService';
 import emailService from '../services/emailService';
 
 const router = Router();
@@ -12,6 +13,48 @@ interface ChatRequest {
   conversationHistory?: Array<{ role: string; content: string }>;
 }
 
+interface GroundingChunk {
+  text?: string;
+  web?: {
+    uri: string;
+    title: string;
+  };
+}
+
+const mergeSources = (
+  modelSources: Array<{ title?: string; url?: string; relevance?: number }> = [],
+  knowledgeSources: KnowledgeSource[] = []
+): GroundingChunk[] => {
+  const normalized: GroundingChunk[] = [];
+  const seen = new Set<string>();
+
+  const pushChunk = (title?: string, url?: string, snippet?: string) => {
+    if (!title) return;
+    const key = `${title}|${url || ''}`;
+    if (seen.has(key)) return;
+    seen.add(key);
+    if (url) {
+      normalized.push({
+        web: { uri: url, title }
+      });
+    } else if (snippet) {
+      normalized.push({
+        text: snippet
+      });
+    }
+  };
+
+  for (const source of modelSources) {
+    pushChunk(source.title, source.url);
+  }
+
+  for (const source of knowledgeSources) {
+    pushChunk(source.title, source.url, source.snippet);
+  }
+
+  return normalized.slice(0, 6);
+};
+
 /**
  * POST /api/ai/chat
  * Send a message to the AI and get a response
@@ -20,17 +63,30 @@ router.post('/chat', validateChatInput, async (req: Request, res: Response): Pro
   try {
     const { message, conversationId, context, conversationHistory } =
       req.body as ChatRequest;
+    const trimmedHistory = conversationHistory ? conversationHistory.slice(-40) : undefined;
 
     // Get Vertex AI service
     let response;
+    let knowledge: Awaited<ReturnType<typeof getKnowledgeContext>> | null = null;
     try {
       const vertexAI = getVertexAIService();
+      knowledge = await getKnowledgeContext(message, {
+        includeTrusted: true,
+        includeProfile: true,
+        limit: 4,
+      });
+      const enrichedContext = {
+        ...(context || {}),
+        knowledgeContext: knowledge.contextText,
+        sources: knowledge.sources,
+        hcnProfile: knowledge.hcnProfile,
+      };
 
       // Call Vertex AI
       response = await vertexAI.chat(
         message,
-        conversationHistory,
-        context
+        trimmedHistory,
+        enrichedContext
       );
     } catch (innerError: any) {
       console.warn('Vertex AI call failed, returning fallback response for dev:', innerError?.message || innerError);
@@ -46,10 +102,12 @@ router.post('/chat', validateChatInput, async (req: Request, res: Response): Pro
       return;
     }
 
+    const citations = mergeSources(response.citations || [], knowledge?.sources || []);
+
     // Send response
     res.json({
       reply: response.reply,
-      citations: response.citations || [],
+      citations,
       usage: response.usage || {},
       confidenceScore: response.confidenceScore,
       processingTimeMs: response.processingTimeMs,
@@ -74,22 +132,38 @@ router.post('/wisdom', async (req: Request, res: Response): Promise<void> => {
     let response;
     try {
       const vertexAI = getVertexAIService();
-      response = await vertexAI.generateWisdom();
+      const knowledge = await getKnowledgeContext(
+        `daily wisdom ${new Date().toISOString()} ethical AI consciousness decentralization`,
+        { includeTrusted: true, includeProfile: true, limit: 3 }
+      );
+      response = await vertexAI.chat(
+        `Provide a brief, inspiring piece of daily wisdom for ${new Date().toDateString()} focused on ethical AI, consciousness, decentralization, and community wellness. Include 1-2 sentences and keep it grounded in trusted sources.`,
+        [],
+        {
+          knowledgeContext: knowledge.contextText,
+          sources: knowledge.sources,
+          hcnProfile: knowledge.hcnProfile,
+          category: 'wisdom'
+        }
+      );
+      const citations = mergeSources(response.citations || [], knowledge.sources);
+      res.json({
+        wisdom: response.reply,
+        citations,
+        confidenceScore: response.confidenceScore,
+        processingTimeMs: response.processingTimeMs,
+      });
+      return;
     } catch (innerError: any) {
       console.warn('Vertex AI wisdom generation failed, returning fallback:', innerError?.message || innerError);
       res.json({
-        wisdom: 'Local fallback wisdom: Practice compassion and guard privacy as fundamental rights.',
+        wisdom: `Local fallback wisdom (${new Date().toDateString()}): Practice compassion and guard privacy as fundamental rights.`,
+        citations: [],
         confidenceScore: 75,
         processingTimeMs: 0,
       });
       return;
     }
-
-    res.json({
-      wisdom: response.reply,
-      confidenceScore: response.confidenceScore,
-      processingTimeMs: response.processingTimeMs,
-    });
   } catch (error) {
     console.error('Wisdom Error:', error);
 
@@ -217,20 +291,41 @@ router.get('/trending', async (req: Request, res: Response): Promise<void> => {
     let response;
     try {
       const vertexAI = getVertexAIService();
-      response = await vertexAI.getTrendingTopics();
+      const knowledge = await getKnowledgeContext(
+        'trending ethical AI governance blockchain web3 wellness consciousness',
+        { includeTrusted: true, includeProfile: false, limit: 4 }
+      );
+      response = await vertexAI.chat(
+        `List 5 current trending topics across ethical AI/governance, blockchain/Web3, and wellness/consciousness. For each, include a short explanation.`,
+        [],
+        {
+          knowledgeContext: knowledge.contextText,
+          sources: knowledge.sources,
+          category: 'trending'
+        }
+      );
+
+      const topics = response.reply
+        .split('\n')
+        .map(line => line.replace(/^[-*\d.\s]+/, '').trim())
+        .filter(line => line.length > 3)
+        .slice(0, 10);
+
+      res.json({
+        topics: topics.length > 0 ? topics : [],
+        insights: response.reply,
+        citations: mergeSources(response.citations || [], knowledge.sources),
+      });
+      return;
     } catch (innerError: any) {
       console.warn('Vertex AI trending fetch failed, returning fallback:', innerError?.message || innerError);
       res.json({
         topics: ['AI Ethics', 'Privacy Protection', 'Decentralization'],
         insights: 'Local fallback: Unable to fetch live trending data.',
+        citations: [],
       });
       return;
     }
-
-    res.json({
-      topics: response.topics,
-      insights: response.insights,
-    });
   } catch (error) {
     console.error('Trending Error:', error);
 

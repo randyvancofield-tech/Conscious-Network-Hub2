@@ -35,6 +35,7 @@ export class CacheService {
   private readonly QA_TTL = 60 * 60 * 1000; // 1 hour
   private readonly TRENDING_TTL = 30 * 60 * 1000; // 30 minutes
   private readonly HISTORY_RETENTION = 30 * 24 * 60 * 60 * 1000; // 30 days
+  private readonly MAX_HISTORY_ENTRIES = 40; // 20 exchanges
 
   constructor() {
     this.initializeStorage();
@@ -168,6 +169,11 @@ export class CacheService {
 
     const history = this.conversationHistory.get(userId)!;
     history.push(fullEntry);
+
+    // Trim to max history entries
+    if (history.length > this.MAX_HISTORY_ENTRIES) {
+      this.conversationHistory.set(userId, history.slice(-this.MAX_HISTORY_ENTRIES));
+    }
 
     // Cleanup old entries
     this.cleanupOldHistory(userId);

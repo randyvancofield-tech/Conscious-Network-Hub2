@@ -1,0 +1,26 @@
+[
+  {
+    "title": "NIST AI Risk Management Framework (AI RMF 1.0)",
+    "url": "https://www.nist.gov/itl/ai-risk-management-framework",
+    "summary": "Establishes a risk management lifecycle for AI systems organized around the Govern, Map, Measure, and Manage functions, emphasizing trustworthy and accountable AI.",
+    "tags": ["risk", "governance", "trustworthy-ai", "policy"]
+  },
+  {
+    "title": "OECD AI Principles",
+    "url": "https://oecd.ai/en/ai-principles",
+    "summary": "Recommends AI systems respect human-centered values, transparency, robustness, security, and accountability, with responsible stewardship across the AI lifecycle.",
+    "tags": ["ethics", "governance", "policy"]
+  },
+  {
+    "title": "UNESCO Recommendation on the Ethics of AI",
+    "url": "https://www.unesco.org/en/artificial-intelligence/recommendation-ethics",
+    "summary": "Global framework emphasizing human rights, inclusiveness, fairness, safety, and sustainability in AI policy and implementation.",
+    "tags": ["ethics", "human-rights", "policy"]
+  },
+  {
+    "title": "IEEE Ethically Aligned Design",
+    "url": "https://ethicsinaction.ieee.org/",
+    "summary": "Guidance for human well-being, transparency, accountability, and privacy in the design and deployment of autonomous and intelligent systems.",
+    "tags": ["ethics", "engineering", "accountability"]
+  }
+]

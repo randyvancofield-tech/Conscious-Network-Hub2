@@ -54,7 +54,7 @@ class BackendAPIService {
   private baseUrl: string;
   private conversationHistory: Array<{ role: string; content: string }> = [];
   private activeHistoryKey: string;
-  private readonly maxHistoryEntries = 20;
+  private readonly maxHistoryEntries = 40;
 
   constructor() {
     this.baseUrl = BACKEND_URL;
@@ -142,9 +142,9 @@ class BackendAPIService {
 
       return {
         text: data.wisdom,
-        groundingChunks: [],
+        groundingChunks: data.citations || [],
         confidenceScore: data.confidenceScore || 80,
-        sourceCount: 0,
+        sourceCount: (data.citations || []).length,
         processingTimeMs: data.processingTimeMs || 0,
       };
     } catch (error) {
