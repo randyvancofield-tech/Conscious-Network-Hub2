@@ -10,6 +10,12 @@ export default defineConfig(({ mode }) => {
       port: 3000,
       strictPort: true,
       host: '0.0.0.0',
+      proxy: {
+        '/api': {
+          target: env.VITE_BACKEND_URL || 'http://localhost:3001',
+          changeOrigin: true,
+        },
+      },
     },
 
     plugins: [react()],

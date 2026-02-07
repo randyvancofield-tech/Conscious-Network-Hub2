@@ -31,7 +31,8 @@ export interface EnhancedResponse {
   trendingTopics?: string[];
 }
 
-// Get backend API URL from environment or derive from current host
+// Get backend API URL from environment or derive from current host.
+// If empty string is returned, fetch will use same-origin (works with Vite dev proxy).
 const resolveBackendUrl = (): string => {
   const envUrl = import.meta.env.VITE_BACKEND_URL;
   if (envUrl) return envUrl;
@@ -41,8 +42,8 @@ const resolveBackendUrl = (): string => {
     if (hostname === 'localhost' || hostname === '127.0.0.1') {
       return `${protocol}//${hostname}:3001`;
     }
-    // Default to same origin in production unless explicitly configured
-    return window.location.origin;
+    // Default to same origin; assume reverse proxy in prod
+    return '';
   }
 
   return 'http://localhost:3001';
