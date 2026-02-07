@@ -31,9 +31,24 @@ export interface EnhancedResponse {
   trendingTopics?: string[];
 }
 
-// Get backend API URL from environment or use default
-const BACKEND_URL =
-  import.meta.env.VITE_BACKEND_URL || 'http://localhost:3001';
+// Get backend API URL from environment or derive from current host
+const resolveBackendUrl = (): string => {
+  const envUrl = import.meta.env.VITE_BACKEND_URL;
+  if (envUrl) return envUrl;
+
+  if (typeof window !== 'undefined') {
+    const { protocol, hostname } = window.location;
+    if (hostname === 'localhost' || hostname === '127.0.0.1') {
+      return `${protocol}//${hostname}:3001`;
+    }
+    // Default to same origin in production unless explicitly configured
+    return window.location.origin;
+  }
+
+  return 'http://localhost:3001';
+};
+
+const BACKEND_URL = resolveBackendUrl();
 
 class BackendAPIService {
   private baseUrl: string;
@@ -99,6 +114,10 @@ class BackendAPIService {
       };
     } catch (error) {
       console.error('Backend API Error:', error);
+      const message = error instanceof Error ? error.message : String(error);
+      if (message.toLowerCase().includes('failed to fetch') || message.toLowerCase().includes('networkerror')) {
+        throw new Error(`AI backend unavailable at ${this.baseUrl}. Start the server or set VITE_BACKEND_URL.`);
+      }
       throw error;
     }
   }
@@ -130,6 +149,10 @@ class BackendAPIService {
       };
     } catch (error) {
       console.error('Wisdom Fetch Error:', error);
+      const message = error instanceof Error ? error.message : String(error);
+      if (message.toLowerCase().includes('failed to fetch') || message.toLowerCase().includes('networkerror')) {
+        throw new Error(`AI backend unavailable at ${this.baseUrl}. Start the server or set VITE_BACKEND_URL.`);
+      }
       throw error;
     }
   }
@@ -174,6 +197,10 @@ class BackendAPIService {
       };
     } catch (error) {
       console.error('Issue Report Error:', error);
+      const message = error instanceof Error ? error.message : String(error);
+      if (message.toLowerCase().includes('failed to fetch') || message.toLowerCase().includes('networkerror')) {
+        throw new Error(`AI backend unavailable at ${this.baseUrl}. Start the server or set VITE_BACKEND_URL.`);
+      }
       throw error;
     }
   }
@@ -221,6 +248,13 @@ class BackendAPIService {
       };
     } catch (error) {
       console.error('Trending Topics Error:', error);
+      const message = error instanceof Error ? error.message : String(error);
+      if (message.toLowerCase().includes('failed to fetch') || message.toLowerCase().includes('networkerror')) {
+        return {
+          topics: ['AI Ethics', 'Privacy Protection', 'Decentralization'],
+          insights: `AI backend unavailable at ${this.baseUrl}. Start the server or set VITE_BACKEND_URL.`,
+        };
+      }
       return {
         topics: ['AI Ethics', 'Privacy Protection', 'Decentralization'],
         insights: 'Unable to fetch live trending data',

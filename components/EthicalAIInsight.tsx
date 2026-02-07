@@ -69,7 +69,7 @@ const EthicalAIInsight: React.FC<EthicalAIInsightProps> = ({ userEmail, userId =
   }, [userId]);
 
   useEffect(() => {
-    loadDailyWisdom();
+    loadDailyWisdom(true);
     loadTrendingTopics();
   }, []);
 
@@ -84,14 +84,16 @@ const EthicalAIInsight: React.FC<EthicalAIInsightProps> = ({ userEmail, userId =
     }
   };
 
-  const loadDailyWisdom = async () => {
+  const loadDailyWisdom = async (forceRefresh: boolean = false) => {
     setWisdomLoading(true);
     try {
-      const cached = cacheService.getDailyWisdom();
-      if (cached) {
-        setDailyWisdom(cached);
-        setWisdomLoading(false);
-        return;
+      if (!forceRefresh) {
+        const cached = cacheService.getDailyWisdom();
+        if (cached) {
+          setDailyWisdom(cached);
+          setWisdomLoading(false);
+          return;
+        }
       }
 
       const wisdom = await getDailyWisdom();
@@ -99,6 +101,10 @@ const EthicalAIInsight: React.FC<EthicalAIInsightProps> = ({ userEmail, userId =
       cacheService.setDailyWisdom(wisdom);
     } catch (error) {
       console.error('Error loading wisdom:', error);
+      const cached = cacheService.getDailyWisdom();
+      if (cached) {
+        setDailyWisdom(cached);
+      }
     } finally {
       setWisdomLoading(false);
     }
@@ -177,10 +183,11 @@ const EthicalAIInsight: React.FC<EthicalAIInsightProps> = ({ userEmail, userId =
       analyticsService.trackQuestion(sanitized, selectedQACategory, responseTime);
     } catch (error) {
       console.error('Q&A Error:', error);
+      const errorMessage = error instanceof Error ? error.message : 'Sorry — I could not reach the AI service. Please try again.';
       setQaMessages(prev => [...prev, {
         id: `err_${Date.now()}`,
         role: 'ai',
-        content: 'Sorry — I could not reach the AI service. Please try again.',
+        content: errorMessage,
         timestamp: Date.now()
       }]);
     } finally {
@@ -455,7 +462,7 @@ const EthicalAIInsight: React.FC<EthicalAIInsightProps> = ({ userEmail, userId =
           )}
 
           <button
-            onClick={loadDailyWisdom}
+            onClick={() => loadDailyWisdom(true)}
             className="w-full px-4 py-2 bg-blue-600/10 hover:bg-blue-600/20 text-blue-400 rounded-xl text-[9px] font-bold uppercase tracking-widest transition-all flex items-center justify-center gap-2"
           >
             <RefreshCw className="w-3.5 h-3.5" /> Refresh
