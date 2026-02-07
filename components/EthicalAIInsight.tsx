@@ -5,7 +5,7 @@ import {
   ThumbsUp, ThumbsDown, Bookmark, RefreshCw, Settings, BarChart3,
   Eye, CheckCircle, Zap
 } from 'lucide-react';
-import {
+import backendAPI, {
   askEthicalAI, getDailyWisdom, processPlatformIssue, generateSuggestedQuestions,
   getTrendingInsights, EnhancedResponse, GroundingChunk
 } from '../services/backendApiService';
@@ -65,6 +65,8 @@ const EthicalAIInsight: React.FC<EthicalAIInsightProps> = ({ userEmail, userId =
 
   useEffect(() => {
     analyticsService.setUserId(userId);
+    cacheService.clearConversationHistory(userId);
+    backendAPI.clearHistory(userId);
     loadConversationHistory();
   }, [userId]);
 
@@ -372,6 +374,17 @@ const EthicalAIInsight: React.FC<EthicalAIInsightProps> = ({ userEmail, userId =
             className="w-full px-3 py-2 bg-purple-600/10 hover:bg-purple-600/20 text-purple-400 rounded-lg text-[10px] font-bold uppercase tracking-widest transition-all flex items-center gap-2"
           >
             <Download className="w-4 h-4" /> Export JSON
+          </button>
+          <button
+            onClick={() => {
+              cacheService.clearConversationHistory(userId);
+              backendAPI.clearHistory(userId);
+              setQaMessages([]);
+              setSuggestedQuestions([]);
+            }}
+            className="w-full px-3 py-2 bg-red-600/10 hover:bg-red-600/20 text-red-300 rounded-lg text-[10px] font-bold uppercase tracking-widest transition-all flex items-center gap-2"
+          >
+            <X className="w-4 h-4" /> Clear History
           </button>
         </div>
       )}

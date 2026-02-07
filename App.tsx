@@ -426,6 +426,58 @@ const App: React.FC = () => {
             </div>
           </div>
         );
+      case AppView.AI_SAFETY_GOVERNANCE:
+        return (
+          <div className="p-8 max-w-5xl mx-auto space-y-6">
+            <button onClick={() => setCurrentView(AppView.DASHBOARD)} className="mb-2 text-blue-400 hover:text-blue-300 transition-colors flex items-center gap-2">
+              <ChevronRight className="w-4 h-4 rotate-180" /> Back to Hub
+            </button>
+            <h1 className="text-3xl font-black text-white">AI Safety & Governance</h1>
+            <p className="text-slate-300">We align Conscious Network agents with NIST AI RMF, EU AI Act, and GDPR. Security shifts from the perimeter to the agent’s actions, identity, and data integrity.</p>
+            <div className="grid md:grid-cols-2 gap-6">
+              <div className="glass-panel p-6 rounded-2xl border border-white/5 space-y-3">
+                <h3 className="text-lg font-black text-white">1) Identity & Access</h3>
+                <ul className="text-slate-300 text-sm space-y-2">
+                  <li>Unique traceable identities (e.g., workload IDs) per agent.</li>
+                  <li>Least agency: minimal tools/data per task.</li>
+                  <li>Zero Trust: re-auth every tool call/data request.</li>
+                </ul>
+              </div>
+              <div className="glass-panel p-6 rounded-2xl border border-white/5 space-y-3">
+                <h3 className="text-lg font-black text-white">2) Operational Guardrails</h3>
+                <ul className="text-slate-300 text-sm space-y-2">
+                  <li>Prompt shields & I/O filters for injections and data leakage.</li>
+                  <li>Sandboxed tools + circuit breakers on policy deviation.</li>
+                  <li>Human-in-the-loop for high-stakes actions.</li>
+                </ul>
+              </div>
+              <div className="glass-panel p-6 rounded-2xl border border-white/5 space-y-3">
+                <h3 className="text-lg font-black text-white">3) Data Integrity & Privacy</h3>
+                <ul className="text-slate-300 text-sm space-y-2">
+                  <li>Memory sanitization and periodic resets to remove poisoning.</li>
+                  <li>Data lineage/provenance tracking across pipelines.</li>
+                  <li>PETs (masking, differential privacy) before model access.</li>
+                </ul>
+              </div>
+              <div className="glass-panel p-6 rounded-2xl border border-white/5 space-y-3">
+                <h3 className="text-lg font-black text-white">4) Governance & Monitoring</h3>
+                <ul className="text-slate-300 text-sm space-y-2">
+                  <li>Immutable audit logs of inputs/outputs/decisions.</li>
+                  <li>Real-time behavioral monitoring for anomalies.</li>
+                  <li>Continuous adversarial testing/red teaming.</li>
+                </ul>
+              </div>
+            </div>
+            <div className="glass-panel p-6 rounded-2xl border border-blue-500/20">
+              <h3 className="text-lg font-black text-white mb-3">Regulatory Mapping</h3>
+              <div className="text-slate-300 text-sm space-y-2">
+                <p><strong>NIST AI RMF:</strong> Govern, Map, Measure, Manage risks across the lifecycle.</p>
+                <p><strong>EU AI Act:</strong> Transparency, human oversight, adversarial testing, incident reporting for high-risk systems.</p>
+                <p><strong>GDPR:</strong> Data minimization, right to explanation, data subject rights protection.</p>
+              </div>
+            </div>
+          </div>
+        );
       default: 
         return <Dashboard user={user} />;
     }
@@ -801,6 +853,7 @@ const App: React.FC = () => {
                   <button onClick={() => setCurrentView(AppView.BLOCKCHAIN_DATA_POLICY)} className="text-slate-400 hover:text-white transition-colors">Blockchain Data Policy</button>
                   <button onClick={() => setCurrentView(AppView.VENDOR_API_GOVERNANCE_POLICY)} className="text-slate-400 hover:text-white transition-colors">Vendor API Governance Policy</button>
                   <button onClick={() => setCurrentView(AppView.NIST_MAPPING_SUMMARY)} className="text-slate-400 hover:text-white transition-colors">NIST Mapping Summary</button>
+                  <button onClick={() => setCurrentView(AppView.AI_SAFETY_GOVERNANCE)} className="text-slate-400 hover:text-white transition-colors">AI Safety & Governance</button>
                 </div>
               </footer>
             </div>

@@ -116,7 +116,13 @@ class BackendAPIService {
       console.error('Backend API Error:', error);
       const message = error instanceof Error ? error.message : String(error);
       if (message.toLowerCase().includes('failed to fetch') || message.toLowerCase().includes('networkerror')) {
-        throw new Error(`AI backend unavailable at ${this.baseUrl}. Start the server or set VITE_BACKEND_URL.`);
+        return {
+          text: `Local fallback: AI backend unreachable at ${this.baseUrl}. Please start the backend or set VITE_BACKEND_URL.`,
+          groundingChunks: [],
+          confidenceScore: 50,
+          sourceCount: 0,
+          processingTimeMs: 0,
+        };
       }
       throw error;
     }
@@ -151,7 +157,13 @@ class BackendAPIService {
       console.error('Wisdom Fetch Error:', error);
       const message = error instanceof Error ? error.message : String(error);
       if (message.toLowerCase().includes('failed to fetch') || message.toLowerCase().includes('networkerror')) {
-        throw new Error(`AI backend unavailable at ${this.baseUrl}. Start the server or set VITE_BACKEND_URL.`);
+        return {
+          text: `Local fallback wisdom: backend unreachable at ${this.baseUrl}.`,
+          groundingChunks: [],
+          confidenceScore: 60,
+          sourceCount: 0,
+          processingTimeMs: 0,
+        };
       }
       throw error;
     }
@@ -199,7 +211,15 @@ class BackendAPIService {
       console.error('Issue Report Error:', error);
       const message = error instanceof Error ? error.message : String(error);
       if (message.toLowerCase().includes('failed to fetch') || message.toLowerCase().includes('networkerror')) {
-        throw new Error(`AI backend unavailable at ${this.baseUrl}. Start the server or set VITE_BACKEND_URL.`);
+        return {
+          text: `Issue captured locally: backend unreachable at ${this.baseUrl}.`,
+          groundingChunks: [],
+          confidenceScore: 60,
+          sourceCount: 0,
+          processingTimeMs: 0,
+          priority: 'MEDIUM',
+          nextSteps: ['Retry when backend is online']
+        };
       }
       throw error;
     }
