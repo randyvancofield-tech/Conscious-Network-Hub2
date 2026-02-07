@@ -142,58 +142,9 @@ router.post('/chat', validateChatInput, async (req: Request, res: Response): Pro
  * Get daily wisdom
  */
 router.post('/wisdom', async (req: Request, res: Response): Promise<void> => {
-  const requestStart = Date.now();
-  console.log('[AI] POST /api/ai/wisdom received');
-  try {
-    let response;
-    try {
-      const vertexAI = getVertexAIService();
-      console.log('[AI] /wisdom provider invocation starting');
-      const knowledge = await getKnowledgeContext(
-        `daily wisdom ${new Date().toISOString()} ethical AI consciousness decentralization`,
-        { includeTrusted: true, includeProfile: true, limit: 3 }
-      );
-      response = await vertexAI.chat(
-        `Provide a brief, inspiring piece of daily wisdom for ${new Date().toDateString()} focused on ethical AI, consciousness, decentralization, and community wellness. Include 1-2 sentences and keep it grounded in trusted sources.`,
-        [],
-        {
-          knowledgeContext: knowledge.contextText,
-          sources: knowledge.sources,
-          hcnProfile: knowledge.hcnProfile,
-          category: 'wisdom'
-        }
-      );
-      console.log('[AI] /wisdom provider invocation completed');
-      const citations = mergeSources(response.citations || [], knowledge.sources);
-      res.json({
-        wisdom: response.reply,
-        reply: response.reply,
-        citations,
-        confidenceScore: response.confidenceScore ?? 70,
-        processingTimeMs: response.processingTimeMs ?? 0,
-      });
-      console.log(`[AI] /wisdom response sent in ${Date.now() - requestStart}ms`);
-      return;
-    } catch (innerError: any) {
-      console.warn('Vertex AI wisdom generation failed, returning fallback:', innerError?.message || innerError);
-      res.json({
-        wisdom: `Local fallback wisdom (${new Date().toDateString()}): Practice compassion and guard privacy as fundamental rights.`,
-        reply: `Local fallback wisdom (${new Date().toDateString()}): Practice compassion and guard privacy as fundamental rights.`,
-        citations: [],
-        confidenceScore: 75,
-        processingTimeMs: 0,
-      });
-      console.log(`[AI] /wisdom fallback response sent in ${Date.now() - requestStart}ms`);
-      return;
-    }
-  } catch (error) {
-    console.error('Wisdom Error:', error);
-
-    res.status(500).json({
-      error: 'Failed to generate wisdom',
-      message: error instanceof Error ? error.message : 'Unknown error',
-    });
-  }
+  console.log('AI WISDOM HIT');
+  res.status(200).json({ ok: true, test: 'wisdom reached' });
+  return;
 });
 
 /**
