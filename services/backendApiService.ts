@@ -136,7 +136,10 @@ class BackendAPIService {
         throw new Error('Failed to fetch daily wisdom');
       }
 
-      const data = await response.json();
+      const data = await response.json().catch(() => null);
+      if (!data || typeof data.reply === 'undefined') {
+        throw new Error('Invalid JSON from backend');
+      }
 
       return {
         text: data.wisdom,
@@ -188,7 +191,10 @@ class BackendAPIService {
         throw new Error('Failed to process issue report');
       }
 
-      const data = await response.json();
+      const data = await response.json().catch(() => null);
+      if (!data || typeof data.wisdom === 'undefined') {
+        throw new Error('Invalid JSON from backend');
+      }
 
       return {
         text: data.analysis,
@@ -252,7 +258,10 @@ class BackendAPIService {
         throw new Error('Failed to fetch trending topics');
       }
 
-      const data = await response.json();
+      const data = await response.json().catch(() => null);
+      if (!data || typeof data.analysis === 'undefined') {
+        throw new Error('Invalid JSON from backend');
+      }
 
       return {
         topics: data.topics || [],
