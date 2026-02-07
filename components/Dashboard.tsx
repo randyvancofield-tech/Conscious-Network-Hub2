@@ -17,7 +17,7 @@ const Dashboard: React.FC<DashboardProps> = ({ user, onEnroll }) => {
       {/* Welcome Hero - Ethical AI Insight */}
       <section className="grid grid-cols-1 lg:grid-cols-3 gap-8">
         <div className="lg:col-span-2">
-          <EthicalAIInsight userEmail={user?.email} />
+          <EthicalAIInsight userEmail={user?.email} userId={user?.id || user?.email} />
         </div>
 
         <div className="glass-panel p-10 rounded-[2.5rem] flex flex-col justify-between border-blue-500/10 shadow-2xl">

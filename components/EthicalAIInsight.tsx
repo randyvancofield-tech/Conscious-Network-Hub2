@@ -89,14 +89,14 @@ const EthicalAIInsight: React.FC<EthicalAIInsightProps> = ({ userEmail, userId =
     try {
       const cached = cacheService.getDailyWisdom();
       if (cached) {
-        setDailyWisdom(cached as any);
+        setDailyWisdom(cached);
         setWisdomLoading(false);
         return;
       }
 
       const wisdom = await getDailyWisdom();
       setDailyWisdom(wisdom);
-      cacheService.setDailyWisdom(wisdom.text, wisdom.groundingChunks);
+      cacheService.setDailyWisdom(wisdom);
     } catch (error) {
       console.error('Error loading wisdom:', error);
     } finally {
@@ -130,18 +130,26 @@ const EthicalAIInsight: React.FC<EthicalAIInsightProps> = ({ userEmail, userId =
       return;
     }
 
-    setQaInput('');
-    setQaMessages(prev => [...prev, {
+    const userMessage = {
       id: `msg_${Date.now()}`,
-      role: 'user',
+      role: 'user' as const,
       content: sanitized,
       timestamp: Date.now()
-    }]);
+    };
+
+    setQaInput('');
+    setQaMessages(prev => [...prev, userMessage]);
+    cacheService.addConversationEntry(userId, {
+      id: userMessage.id,
+      role: 'user',
+      content: userMessage.content,
+      sources: []
+    });
     setQaLoading(true);
 
     const startTime = Date.now();
     try {
-      const response = await askEthicalAI(sanitized, { category: selectedQACategory });
+      const response = await askEthicalAI(sanitized, { category: selectedQACategory, userId });
       const responseTime = Date.now() - startTime;
 
       const aiMessage: MessageWithMeta = {
@@ -157,6 +165,7 @@ const EthicalAIInsight: React.FC<EthicalAIInsightProps> = ({ userEmail, userId =
 
       setQaMessages(prev => [...prev, aiMessage]);
       cacheService.addConversationEntry(userId, {
+        id: aiMessage.id,
         role: 'ai',
         content: response.text,
         sources: response.groundingChunks
@@ -168,6 +177,12 @@ const EthicalAIInsight: React.FC<EthicalAIInsightProps> = ({ userEmail, userId =
       analyticsService.trackQuestion(sanitized, selectedQACategory, responseTime);
     } catch (error) {
       console.error('Q&A Error:', error);
+      setQaMessages(prev => [...prev, {
+        id: `err_${Date.now()}`,
+        role: 'ai',
+        content: 'Sorry — I could not reach the AI service. Please try again.',
+        timestamp: Date.now()
+      }]);
     } finally {
       setQaLoading(false);
     }
@@ -247,7 +262,10 @@ const EthicalAIInsight: React.FC<EthicalAIInsightProps> = ({ userEmail, userId =
         userEmail
       });
 
-      setReportResult(result);
+      setReportResult({
+        ...result,
+        analysis: (result as any).analysis ?? result.text
+      });
       analyticsService.trackIssueReport(reportCategory, result.priority);
 
       const auditLog = securityService.createAuditLog('issue_reported', userId, {
@@ -661,7 +679,7 @@ const EthicalAIInsight: React.FC<EthicalAIInsightProps> = ({ userEmail, userId =
                   <CheckCircle className="w-5 h-5 text-teal-400 flex-shrink-0 mt-0.5" />
                   <div>
                     <h4 className="text-sm font-bold text-teal-400 mb-2">Received</h4>
-                    <p className="text-[9px] text-slate-300 leading-relaxed">{reportResult.analysis}</p>
+                    <p className="text-[9px] text-slate-300 leading-relaxed">{reportResult.analysis || reportResult.text}</p>
                     {reportResult.priority && (
                       <div className="mt-3 text-[8px] font-bold uppercase tracking-widest">
                         <span className="inline-block px-2 py-1 bg-orange-500/20 text-orange-400 rounded">

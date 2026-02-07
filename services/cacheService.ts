@@ -16,6 +16,15 @@ export interface ConversationEntry {
   rating?: number;
 }
 
+export interface DailyWisdomCache {
+  text: string;
+  groundingChunks: any[];
+  confidenceScore: number;
+  sourceCount: number;
+  processingTimeMs: number;
+  trendingTopics?: string[];
+}
+
 export class CacheService {
   private cache: Map<string, CacheEntry<any>> = new Map();
   private conversationHistory: Map<string, ConversationEntry[]> = new Map();
@@ -113,14 +122,14 @@ export class CacheService {
   /**
    * Cache daily wisdom
    */
-  setDailyWisdom(wisdom: string, sources: any[]): void {
-    this.set(`wisdom_${new Date().toDateString()}`, { wisdom, sources }, this.WISDOM_TTL);
+  setDailyWisdom(wisdom: DailyWisdomCache): void {
+    this.set(`wisdom_${new Date().toDateString()}`, wisdom, this.WISDOM_TTL);
   }
 
   /**
    * Get cached daily wisdom
    */
-  getDailyWisdom(): { wisdom: string; sources: any[] } | null {
+  getDailyWisdom(): DailyWisdomCache | null {
     return this.get(`wisdom_${new Date().toDateString()}`);
   }
 
@@ -143,15 +152,18 @@ export class CacheService {
   /**
    * Add conversation entry
    */
-  addConversationEntry(userId: string, entry: Omit<ConversationEntry, 'id' | 'timestamp'>): ConversationEntry {
+  addConversationEntry(
+    userId: string,
+    entry: Omit<ConversationEntry, 'id' | 'timestamp'> & { id?: string; timestamp?: number }
+  ): ConversationEntry {
     if (!this.conversationHistory.has(userId)) {
       this.conversationHistory.set(userId, []);
     }
 
     const fullEntry: ConversationEntry = {
       ...entry,
-      id: this.generateId(),
-      timestamp: Date.now()
+      id: entry.id ?? this.generateId(),
+      timestamp: entry.timestamp ?? Date.now()
     };
 
     const history = this.conversationHistory.get(userId)!;
@@ -168,7 +180,12 @@ export class CacheService {
    * Get conversation history for user
    */
   getConversationHistory(userId: string): ConversationEntry[] {
-    return this.conversationHistory.get(userId) || [];
+    const history = this.conversationHistory.get(userId) || [];
+    const favoriteIds = new Set(this.favorites.get(userId) || []);
+    return history.map(entry => ({
+      ...entry,
+      favorite: favoriteIds.has(entry.id)
+    }));
   }
 
   /**

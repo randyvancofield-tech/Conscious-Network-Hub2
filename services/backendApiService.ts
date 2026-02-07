@@ -38,9 +38,12 @@ const BACKEND_URL =
 class BackendAPIService {
   private baseUrl: string;
   private conversationHistory: Array<{ role: string; content: string }> = [];
+  private activeHistoryKey: string;
+  private readonly maxHistoryEntries = 20;
 
   constructor() {
     this.baseUrl = BACKEND_URL;
+    this.activeHistoryKey = this.getHistoryKey();
     this.loadConversationHistory();
   }
 
@@ -53,6 +56,9 @@ class BackendAPIService {
     onStream?: (chunk: string) => void
   ): Promise<EnhancedResponse> {
     try {
+      // Ensure we load the correct user-scoped history
+      this.loadConversationHistory(context?.userId);
+
       const response = await fetch(`${this.baseUrl}/api/ai/chat`, {
         method: 'POST',
         headers: {
@@ -77,6 +83,11 @@ class BackendAPIService {
         { role: 'user', content: question },
         { role: 'assistant', content: data.reply }
       );
+
+      if (this.conversationHistory.length > this.maxHistoryEntries) {
+        this.conversationHistory = this.conversationHistory.slice(-this.maxHistoryEntries);
+      }
+
       this.saveConversationHistory();
 
       return {
@@ -142,6 +153,7 @@ class BackendAPIService {
           title: issue.title,
           message: issue.description,
           category: issue.category,
+          userEmail: issue.userEmail,
         }),
       });
 
@@ -219,15 +231,17 @@ class BackendAPIService {
   /**
    * Clear conversation history
    */
-  clearHistory(): void {
+  clearHistory(userId?: string): void {
+    this.loadConversationHistory(userId);
     this.conversationHistory = [];
-    localStorage.removeItem('conversation_history');
+    localStorage.removeItem(this.activeHistoryKey);
   }
 
   /**
    * Get current conversation history
    */
-  getHistory(): Array<{ role: string; content: string }> {
+  getHistory(userId?: string): Array<{ role: string; content: string }> {
+    this.loadConversationHistory(userId);
     return [...this.conversationHistory];
   }
 
@@ -237,7 +251,7 @@ class BackendAPIService {
   private saveConversationHistory(): void {
     try {
       localStorage.setItem(
-        'conversation_history',
+        this.activeHistoryKey,
         JSON.stringify(this.conversationHistory)
       );
     } catch (error) {
@@ -248,16 +262,23 @@ class BackendAPIService {
   /**
    * Load conversation history from localStorage
    */
-  private loadConversationHistory(): void {
+  private loadConversationHistory(userId?: string): void {
+    this.activeHistoryKey = this.getHistoryKey(userId);
     try {
-      const saved = localStorage.getItem('conversation_history');
+      const saved = localStorage.getItem(this.activeHistoryKey);
       if (saved) {
         this.conversationHistory = JSON.parse(saved);
+      } else {
+        this.conversationHistory = [];
       }
     } catch (error) {
       console.warn('Failed to load conversation history:', error);
       this.conversationHistory = [];
     }
+  }
+
+  private getHistoryKey(userId?: string): string {
+    return `conversation_history_${userId || 'default'}`;
   }
 
   /**
@@ -310,7 +331,7 @@ export default backendAPI;
 // Also export individual functions for compatibility with existing code
 export async function askEthicalAI(
   question: string,
-  context?: { category?: string },
+  context?: { category?: string; userId?: string },
   onStream?: (chunk: string) => void
 ): Promise<EnhancedResponse> {
   return backendAPI.askEthicalAI(question, context, onStream);
