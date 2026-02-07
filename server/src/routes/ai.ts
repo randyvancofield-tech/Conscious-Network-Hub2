@@ -109,8 +109,8 @@ router.post('/chat', validateChatInput, async (req: Request, res: Response): Pro
       reply: response.reply,
       citations,
       usage: response.usage || {},
-      confidenceScore: response.confidenceScore,
-      processingTimeMs: response.processingTimeMs,
+      confidenceScore: response.confidenceScore ?? 60,
+      processingTimeMs: response.processingTimeMs ?? 0,
       conversationId: conversationId || `conv_${Date.now()}`,
     });
   } catch (error) {
@@ -149,15 +149,17 @@ router.post('/wisdom', async (req: Request, res: Response): Promise<void> => {
       const citations = mergeSources(response.citations || [], knowledge.sources);
       res.json({
         wisdom: response.reply,
+        reply: response.reply,
         citations,
-        confidenceScore: response.confidenceScore,
-        processingTimeMs: response.processingTimeMs,
+        confidenceScore: response.confidenceScore ?? 70,
+        processingTimeMs: response.processingTimeMs ?? 0,
       });
       return;
     } catch (innerError: any) {
       console.warn('Vertex AI wisdom generation failed, returning fallback:', innerError?.message || innerError);
       res.json({
         wisdom: `Local fallback wisdom (${new Date().toDateString()}): Practice compassion and guard privacy as fundamental rights.`,
+        reply: `Local fallback wisdom (${new Date().toDateString()}): Practice compassion and guard privacy as fundamental rights.`,
         citations: [],
         confidenceScore: 75,
         processingTimeMs: 0,
@@ -266,6 +268,8 @@ router.post('/report-issue', validateChatInput, async (req: Request, res: Respon
       analysis: analysis || 'Issue report received and will be reviewed.',
       priority,
       suggestedActions: ['Issue has been forwarded to the team', 'You will receive updates via email'],
+      reply: analysis || 'Issue report received and will be reviewed.',
+      citations: [],
       confidenceScore: 80,
       processingTimeMs: 100,
       emailSent,
@@ -314,7 +318,10 @@ router.get('/trending', async (req: Request, res: Response): Promise<void> => {
       res.json({
         topics: topics.length > 0 ? topics : [],
         insights: response.reply,
+        reply: response.reply,
         citations: mergeSources(response.citations || [], knowledge.sources),
+        confidenceScore: response.confidenceScore ?? 65,
+        processingTimeMs: response.processingTimeMs ?? 0,
       });
       return;
     } catch (innerError: any) {
@@ -322,7 +329,10 @@ router.get('/trending', async (req: Request, res: Response): Promise<void> => {
       res.json({
         topics: ['AI Ethics', 'Privacy Protection', 'Decentralization'],
         insights: 'Local fallback: Unable to fetch live trending data.',
+        reply: 'Local fallback: Unable to fetch live trending data.',
         citations: [],
+        confidenceScore: 60,
+        processingTimeMs: 0,
       });
       return;
     }

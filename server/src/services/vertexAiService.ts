@@ -128,7 +128,14 @@ export class VertexAIService {
       };
     } catch (error) {
       console.error('Vertex AI Chat Error:', error);
-      throw new Error(`Failed to process chat message: ${error instanceof Error ? error.message : 'Unknown error'}`);
+      const processingTime = Date.now() - startTime;
+      return {
+        reply: `Fallback: unable to reach Vertex AI. (${error instanceof Error ? error.message : 'Unknown error'})`,
+        citations: [],
+        usage: {},
+        confidenceScore: 50,
+        processingTimeMs: processingTime,
+      };
     }
   }
 

@@ -15,6 +15,10 @@ export default defineConfig(({ mode }) => {
           target: env.VITE_BACKEND_URL || 'http://localhost:3001',
           changeOrigin: true,
         },
+        '/health': {
+          target: env.VITE_BACKEND_URL || 'http://localhost:3001',
+          changeOrigin: true,
+        },
       },
     },
 
