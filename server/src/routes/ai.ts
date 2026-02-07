@@ -60,9 +60,12 @@ const mergeSources = (
  * Send a message to the AI and get a response
  */
 router.post('/chat', validateChatInput, async (req: Request, res: Response): Promise<void> => {
+  const requestStart = Date.now();
+  console.log('[AI] POST /api/ai/chat received');
   try {
     const { message, conversationId, context, conversationHistory } =
       req.body as ChatRequest;
+    console.log('[AI] /chat provider invocation starting');
     const trimmedHistory = conversationHistory ? conversationHistory.slice(-40) : undefined;
 
     // Get Vertex AI service
@@ -88,6 +91,7 @@ router.post('/chat', validateChatInput, async (req: Request, res: Response): Pro
         trimmedHistory,
         enrichedContext
       );
+      console.log('[AI] /chat provider invocation completed');
     } catch (innerError: any) {
       console.warn('Vertex AI call failed, returning fallback response for dev:', innerError?.message || innerError);
       // Minimal fallback to allow frontend development without Vertex AI access
@@ -99,6 +103,7 @@ router.post('/chat', validateChatInput, async (req: Request, res: Response): Pro
         processingTimeMs: 0,
         conversationId: conversationId || `conv_${Date.now()}`,
       });
+      console.log(`[AI] /chat fallback response sent in ${Date.now() - requestStart}ms`);
       return;
     }
 
@@ -113,6 +118,7 @@ router.post('/chat', validateChatInput, async (req: Request, res: Response): Pro
       processingTimeMs: response.processingTimeMs ?? 0,
       conversationId: conversationId || `conv_${Date.now()}`,
     });
+    console.log(`[AI] /chat response sent in ${Date.now() - requestStart}ms`);
   } catch (error) {
     console.error('Chat Error:', error);
 
@@ -128,10 +134,13 @@ router.post('/chat', validateChatInput, async (req: Request, res: Response): Pro
  * Get daily wisdom
  */
 router.post('/wisdom', async (req: Request, res: Response): Promise<void> => {
+  const requestStart = Date.now();
+  console.log('[AI] POST /api/ai/wisdom received');
   try {
     let response;
     try {
       const vertexAI = getVertexAIService();
+      console.log('[AI] /wisdom provider invocation starting');
       const knowledge = await getKnowledgeContext(
         `daily wisdom ${new Date().toISOString()} ethical AI consciousness decentralization`,
         { includeTrusted: true, includeProfile: true, limit: 3 }
@@ -146,6 +155,7 @@ router.post('/wisdom', async (req: Request, res: Response): Promise<void> => {
           category: 'wisdom'
         }
       );
+      console.log('[AI] /wisdom provider invocation completed');
       const citations = mergeSources(response.citations || [], knowledge.sources);
       res.json({
         wisdom: response.reply,
@@ -154,6 +164,7 @@ router.post('/wisdom', async (req: Request, res: Response): Promise<void> => {
         confidenceScore: response.confidenceScore ?? 70,
         processingTimeMs: response.processingTimeMs ?? 0,
       });
+      console.log(`[AI] /wisdom response sent in ${Date.now() - requestStart}ms`);
       return;
     } catch (innerError: any) {
       console.warn('Vertex AI wisdom generation failed, returning fallback:', innerError?.message || innerError);
@@ -164,6 +175,7 @@ router.post('/wisdom', async (req: Request, res: Response): Promise<void> => {
         confidenceScore: 75,
         processingTimeMs: 0,
       });
+      console.log(`[AI] /wisdom fallback response sent in ${Date.now() - requestStart}ms`);
       return;
     }
   } catch (error) {
@@ -291,10 +303,13 @@ router.post('/report-issue', validateChatInput, async (req: Request, res: Respon
  * Get trending topics
  */
 router.get('/trending', async (req: Request, res: Response): Promise<void> => {
+  const requestStart = Date.now();
+  console.log('[AI] GET /api/ai/trending received');
   try {
     let response;
     try {
       const vertexAI = getVertexAIService();
+      console.log('[AI] /trending provider invocation starting');
       const knowledge = await getKnowledgeContext(
         'trending ethical AI governance blockchain web3 wellness consciousness',
         { includeTrusted: true, includeProfile: false, limit: 4 }
@@ -308,6 +323,7 @@ router.get('/trending', async (req: Request, res: Response): Promise<void> => {
           category: 'trending'
         }
       );
+      console.log('[AI] /trending provider invocation completed');
 
       const topics = response.reply
         .split('\n')
@@ -323,6 +339,7 @@ router.get('/trending', async (req: Request, res: Response): Promise<void> => {
         confidenceScore: response.confidenceScore ?? 65,
         processingTimeMs: response.processingTimeMs ?? 0,
       });
+      console.log(`[AI] /trending response sent in ${Date.now() - requestStart}ms`);
       return;
     } catch (innerError: any) {
       console.warn('Vertex AI trending fetch failed, returning fallback:', innerError?.message || innerError);
@@ -334,6 +351,7 @@ router.get('/trending', async (req: Request, res: Response): Promise<void> => {
         confidenceScore: 60,
         processingTimeMs: 0,
       });
+      console.log(`[AI] /trending fallback response sent in ${Date.now() - requestStart}ms`);
       return;
     }
   } catch (error) {

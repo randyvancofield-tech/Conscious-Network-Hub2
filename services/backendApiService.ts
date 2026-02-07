@@ -192,7 +192,7 @@ class BackendAPIService {
       }
 
       const data = await response.json().catch(() => null);
-      if (!data || typeof data.wisdom === 'undefined') {
+      if (!data || typeof data.analysis === 'undefined') {
         throw new Error('Invalid JSON from backend');
       }
 
@@ -259,7 +259,7 @@ class BackendAPIService {
       }
 
       const data = await response.json().catch(() => null);
-      if (!data || typeof data.analysis === 'undefined') {
+      if (!data || typeof data.insights === 'undefined') {
         throw new Error('Invalid JSON from backend');
       }
 

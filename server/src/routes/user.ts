@@ -1,3 +1,16 @@
+import { Router, Request, Response } from 'express';
+import { PrismaClient } from '@prisma/client';
+
+const router = Router();
+let prismaInstance: PrismaClient | null = null;
+
+function getPrismaClient() {
+  if (!prismaInstance) {
+    prismaInstance = new PrismaClient();
+  }
+  return prismaInstance;
+}
+
 /**
  * PUT /api/user/:id
  * Edit user profile (including background video)
@@ -25,18 +38,6 @@ router.put('/:id', async (req: Request, res: Response): Promise<any> => {
     res.status(500).json({ error: 'Failed to update user profile' });
   }
 });
-import { Router, Request, Response } from 'express';
-import { PrismaClient } from '@prisma/client';
-
-const router = Router();
-let prismaInstance: PrismaClient | null = null;
-
-function getPrismaClient() {
-  if (!prismaInstance) {
-    prismaInstance = new PrismaClient();
-  }
-  return prismaInstance;
-}
 
 /**
  * POST /api/user/create
