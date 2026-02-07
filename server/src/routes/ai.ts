@@ -60,73 +60,9 @@ const mergeSources = (
  * Send a message to the AI and get a response
  */
 router.post('/chat', validateChatInput, async (req: Request, res: Response): Promise<void> => {
-  const requestStart = Date.now();
-  console.log('[AI] POST /api/ai/chat received');
-  try {
-    const { message, conversationId, context, conversationHistory } =
-      req.body as ChatRequest;
-    console.log('[AI] /chat provider invocation starting');
-    const trimmedHistory = conversationHistory ? conversationHistory.slice(-40) : undefined;
-
-    // Get Vertex AI service
-    let response;
-    let knowledge: Awaited<ReturnType<typeof getKnowledgeContext>> | null = null;
-    try {
-      const vertexAI = getVertexAIService();
-      knowledge = await getKnowledgeContext(message, {
-        includeTrusted: true,
-        includeProfile: true,
-        limit: 4,
-      });
-      const enrichedContext = {
-        ...(context || {}),
-        knowledgeContext: knowledge.contextText,
-        sources: knowledge.sources,
-        hcnProfile: knowledge.hcnProfile,
-      };
-
-      // Call Vertex AI
-      response = await vertexAI.chat(
-        message,
-        trimmedHistory,
-        enrichedContext
-      );
-      console.log('[AI] /chat provider invocation completed');
-    } catch (innerError: any) {
-      console.warn('Vertex AI call failed, returning fallback response for dev:', innerError?.message || innerError);
-      // Minimal fallback to allow frontend development without Vertex AI access
-      res.json({
-        reply: `Local fallback: Unable to reach Vertex AI model. Here's a sample reply to your question: "${message.substring(0, 200)}".`,
-        citations: [],
-        usage: {},
-        confidenceScore: 60,
-        processingTimeMs: 0,
-        conversationId: conversationId || `conv_${Date.now()}`,
-      });
-      console.log(`[AI] /chat fallback response sent in ${Date.now() - requestStart}ms`);
-      return;
-    }
-
-    const citations = mergeSources(response.citations || [], knowledge?.sources || []);
-
-    // Send response
-    res.json({
-      reply: response.reply,
-      citations,
-      usage: response.usage || {},
-      confidenceScore: response.confidenceScore ?? 60,
-      processingTimeMs: response.processingTimeMs ?? 0,
-      conversationId: conversationId || `conv_${Date.now()}`,
-    });
-    console.log(`[AI] /chat response sent in ${Date.now() - requestStart}ms`);
-  } catch (error) {
-    console.error('Chat Error:', error);
-
-    res.status(500).json({
-      error: 'Failed to process chat message',
-      message: error instanceof Error ? error.message : 'Unknown error',
-    });
-  }
+  console.log('AI CHAT HIT');
+  res.status(200).json({ ok: true, test: 'backend reached' });
+  return;
 });
 
 /**

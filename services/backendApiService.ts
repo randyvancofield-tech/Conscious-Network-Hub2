@@ -83,12 +83,24 @@ class BackendAPIService {
         throw new Error(error.message || 'Failed to get response from backend');
       }
 
-      const data = await response.json();
+      const raw = await response.text();
+      let data: any = null;
+      try {
+        data = raw ? JSON.parse(raw) : null;
+      } catch (parseError) {
+        console.error('Non-JSON response from /api/ai/chat:', raw);
+        throw new Error('Backend returned non-JSON response for /api/ai/chat');
+      }
+
+      if (!data) {
+        console.error('Empty response body from /api/ai/chat');
+        throw new Error('Backend returned empty response for /api/ai/chat');
+      }
 
       // Add to conversation history
       this.conversationHistory.push(
         { role: 'user', content: question },
-        { role: 'assistant', content: data.reply }
+        { role: 'assistant', content: data.reply || data.test || 'No reply returned by backend.' }
       );
 
       if (this.conversationHistory.length > this.maxHistoryEntries) {
@@ -98,7 +110,7 @@ class BackendAPIService {
       this.saveConversationHistory();
 
       return {
-        text: data.reply,
+        text: data.reply || data.test || 'No reply returned by backend.',
         groundingChunks: data.citations || [],
         confidenceScore: data.confidenceScore || 75,
         sourceCount: (data.citations || []).length,
@@ -136,8 +148,17 @@ class BackendAPIService {
         throw new Error('Failed to fetch daily wisdom');
       }
 
-      const data = await response.json().catch(() => null);
+      const raw = await response.text();
+      let data: any = null;
+      try {
+        data = raw ? JSON.parse(raw) : null;
+      } catch {
+        console.error('Non-JSON response from /api/ai/wisdom:', raw);
+        throw new Error('Backend returned non-JSON response for /api/ai/wisdom');
+      }
+
       if (!data || typeof data.reply === 'undefined') {
+        console.error('Invalid or empty JSON from /api/ai/wisdom:', data);
         throw new Error('Invalid JSON from backend');
       }
 
