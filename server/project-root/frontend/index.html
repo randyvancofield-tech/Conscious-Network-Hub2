@@ -1,0 +1,24 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Cloudflare Pages Scaffold</title>
+  </head>
+  <body>
+    <h1>Cloudflare Pages + Functions Scaffold</h1>
+    <p>Open DevTools console to see /health response.</p>
+
+    <script>
+      // Call the Pages Function endpoint and log the JSON result.
+      fetch('/health')
+        .then((res) => res.json())
+        .then((data) => {
+          console.log('Health endpoint response:', data);
+        })
+        .catch((err) => {
+          console.error('Failed to call /health:', err);
+        });
+    </script>
+  </body>
+</html>
