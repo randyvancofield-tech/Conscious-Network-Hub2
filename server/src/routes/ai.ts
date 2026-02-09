@@ -3,6 +3,7 @@ import { validateChatInput } from '../middleware';
 import { getVertexAIService } from '../services/vertexAiService';
 import { getKnowledgeContext, KnowledgeSource } from '../services/knowledgeService';
 import emailService from '../services/emailService';
+import { chatWithOpenAI } from "../services/openAiService";
 
 const router = Router();
 
@@ -60,80 +61,25 @@ const mergeSources = (
  * Send a message to the AI and get a response
  */
 router.post('/chat', validateChatInput, async (req: Request, res: Response): Promise<void> => {
-  console.log('AI CHAT HIT');
-  const requestStart = Date.now();
-
   try {
-    const { message, conversationId, context, conversationHistory } =
-      req.body as ChatRequest;
-    const trimmedHistory = conversationHistory ? conversationHistory.slice(-40) : undefined;
+    const { message } = req.body;
 
-    let response:
-      | Awaited<ReturnType<ReturnType<typeof getVertexAIService>['chat']>>
-      | null = null;
-    let knowledge: Awaited<ReturnType<typeof getKnowledgeContext>> | null = null;
-
-    try {
-      console.log('[AI] /chat provider invocation starting');
-      const vertexAI = getVertexAIService();
-      knowledge = await getKnowledgeContext(message, {
-        includeTrusted: true,
-        includeProfile: true,
-        limit: 4,
-      });
-
-      const enrichedContext = {
-        ...(context || {}),
-        knowledgeContext: knowledge.contextText,
-        sources: knowledge.sources,
-        hcnProfile: knowledge.hcnProfile,
-      };
-
-      response = await vertexAI.chat(message, trimmedHistory, enrichedContext);
-      console.log('[AI] /chat provider invocation completed');
-
-      const citations = mergeSources(response.citations || [], knowledge.sources || []);
-
-      res.status(200).json({
-        reply: response.reply,
-        citations,
-        usage: response.usage || {},
-        confidenceScore: response.confidenceScore ?? 60,
-        processingTimeMs: response.processingTimeMs ?? 0,
-        conversationId: conversationId || `conv_${Date.now()}`,
-      });
-      return;
-    } catch (innerError: any) {
-      console.warn(
-        '[AI] /chat provider failed - returning JSON fallback:',
-        innerError?.message || innerError
-      );
-
-      res.status(200).json({
-        reply: `Local fallback: Unable to reach AI provider right now. Message received: "${message.substring(0, 200)}".`,
-        citations: [],
-        usage: {},
-        confidenceScore: 60,
-        processingTimeMs: 0,
-        conversationId: conversationId || `conv_${Date.now()}`,
-        fallback: true,
-      });
+    if (!message) {
+      res.status(400).json({ error: "Message is required" });
       return;
     }
-  } catch (error: any) {
-    console.error('[AI] /chat handler error:', error?.message || error);
 
-    res.status(200).json({
-      reply: 'Local fallback: Chat request failed before provider call.',
-      citations: [],
-      usage: {},
-      confidenceScore: 50,
-      processingTimeMs: Date.now() - requestStart,
-      conversationId: `conv_${Date.now()}`,
-      fallback: true,
-      error: error instanceof Error ? error.message : 'Unknown error',
+    const reply = await chatWithOpenAI(message);
+
+    res.json({
+      provider: "openai",
+      reply,
     });
-    return;
+  } catch (error: any) {
+    console.error("AI chat error:", error);
+    res.status(500).json({
+      error: "AI service unavailable",
+    });
   }
 });
 
@@ -142,9 +88,22 @@ router.post('/chat', validateChatInput, async (req: Request, res: Response): Pro
  * Get daily wisdom
  */
 router.post('/wisdom', async (req: Request, res: Response): Promise<void> => {
-  console.log('AI WISDOM HIT');
-  res.status(200).json({ ok: true, test: 'wisdom reached' });
-  return;
+  try {
+    const prompt =
+      "Generate a short, professional, academically grounded daily insight focused on Ethical AI, cybersecurity, decentralized platforms, or blockchain-based social networks. Keep it concise and factual.";
+
+    const reply = await chatWithOpenAI(prompt);
+
+    res.json({
+      provider: "openai",
+      reply,
+    });
+  } catch (error) {
+    console.error("AI wisdom error:", error);
+    res.status(500).json({
+      error: "Daily wisdom unavailable",
+    });
+  }
 });
 
 /**
@@ -324,3 +283,6 @@ router.get('/trending', async (req: Request, res: Response): Promise<void> => {
 });
 
 export default router;
+
+
+
