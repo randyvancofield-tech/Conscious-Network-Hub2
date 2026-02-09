@@ -96,6 +96,7 @@ router.post('/wisdom', async (req: Request, res: Response): Promise<void> => {
 
     res.json({
       provider: "openai",
+      wisdom: reply,
       reply,
     });
   } catch (error) {

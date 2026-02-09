@@ -157,13 +157,13 @@ class BackendAPIService {
         throw new Error('Backend returned non-JSON response for /api/ai/wisdom');
       }
 
-      if (!data || typeof data.reply === 'undefined') {
+      if (!data || (typeof data.reply === 'undefined' && typeof data.wisdom === 'undefined')) {
         console.error('Invalid or empty JSON from /api/ai/wisdom:', data);
         throw new Error('Invalid JSON from backend');
       }
 
       return {
-        text: data.wisdom,
+        text: data.reply || data.wisdom,
         groundingChunks: data.citations || [],
         confidenceScore: data.confidenceScore || 80,
         sourceCount: (data.citations || []).length,
