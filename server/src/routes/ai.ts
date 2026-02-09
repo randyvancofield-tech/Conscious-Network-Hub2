@@ -225,60 +225,32 @@ router.get('/trending', async (req: Request, res: Response): Promise<void> => {
   const requestStart = Date.now();
   console.log('[AI] GET /api/ai/trending received');
   try {
-    let response;
-    try {
-      const vertexAI = getVertexAIService();
-      console.log('[AI] /trending provider invocation starting');
-      const knowledge = await getKnowledgeContext(
-        'trending ethical AI governance blockchain web3 wellness consciousness',
-        { includeTrusted: true, includeProfile: false, limit: 4 }
-      );
-      response = await vertexAI.chat(
-        `List 5 current trending topics across ethical AI/governance, blockchain/Web3, and wellness/consciousness. For each, include a short explanation.`,
-        [],
-        {
-          knowledgeContext: knowledge.contextText,
-          sources: knowledge.sources,
-          category: 'trending'
-        }
-      );
-      console.log('[AI] /trending provider invocation completed');
+    const prompt =
+      "List 5 current trending topics across ethical AI/governance, blockchain/Web3, and wellness/consciousness. For each, include a short explanation on a new line.";
 
-      const topics = response.reply
-        .split('\n')
-        .map(line => line.replace(/^[-*\d.\s]+/, '').trim())
-        .filter(line => line.length > 3)
-        .slice(0, 10);
+    const reply = await chatWithOpenAI(prompt);
 
-      res.json({
-        topics: topics.length > 0 ? topics : [],
-        insights: response.reply,
-        reply: response.reply,
-        citations: mergeSources(response.citations || [], knowledge.sources),
-        confidenceScore: response.confidenceScore ?? 65,
-        processingTimeMs: response.processingTimeMs ?? 0,
-      });
-      console.log(`[AI] /trending response sent in ${Date.now() - requestStart}ms`);
-      return;
-    } catch (innerError: any) {
-      console.warn('Vertex AI trending fetch failed, returning fallback:', innerError?.message || innerError);
-      res.json({
-        topics: ['AI Ethics', 'Privacy Protection', 'Decentralization'],
-        insights: 'Local fallback: Unable to fetch live trending data.',
-        reply: 'Local fallback: Unable to fetch live trending data.',
-        citations: [],
-        confidenceScore: 60,
-        processingTimeMs: 0,
-      });
-      console.log(`[AI] /trending fallback response sent in ${Date.now() - requestStart}ms`);
-      return;
-    }
+    const topics = reply
+      .split('\n')
+      .map(line => line.replace(/^[-*\d.\s]+/, '').trim())
+      .filter(line => line.length > 3)
+      .slice(0, 10);
+
+    res.json({
+      provider: "openai",
+      topics: topics.length > 0 ? topics : [],
+      insights: reply,
+      reply,
+      citations: [],
+      confidenceScore: 75,
+      processingTimeMs: Date.now() - requestStart,
+    });
+    console.log(`[AI] /trending response sent in ${Date.now() - requestStart}ms`);
+    return;
   } catch (error) {
-    console.error('Trending Error:', error);
-
+    console.error("Trending error:", error);
     res.status(500).json({
-      error: 'Failed to fetch trending topics',
-      message: error instanceof Error ? error.message : 'Unknown error',
+      error: "Failed to fetch trending topics",
     });
   }
 });
