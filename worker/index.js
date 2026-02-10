@@ -15,7 +15,7 @@ export default {
       return authHandler({ request, env });
     }
 
-    if (pathname === "/api") {
+    if (pathname === "/api" || pathname.startsWith("/api/")) {
       return apiHandler({ request, env });
     }
 
