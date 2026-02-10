@@ -25,6 +25,46 @@ async function parseJson(request) {
   }
 }
 
+function normalizeBaseUrl(value) {
+  if (!value || typeof value !== "string") return "";
+  return value.endsWith("/") ? value : `${value}/`;
+}
+
+async function proxyAiRequest({ pathname, request, env }) {
+  const baseUrl = normalizeBaseUrl(
+    env?.AI_BACKEND_URL || env?.BACKEND_API_URL || env?.VITE_BACKEND_URL || ""
+  );
+
+  if (!baseUrl) {
+    return null;
+  }
+
+  const targetUrl = new URL(pathname.replace(/^\//, ""), baseUrl);
+  const headers = new Headers(request.headers);
+  headers.set("x-forwarded-proto", "https");
+  headers.set("x-forwarded-host", new URL(request.url).host);
+
+  const init = {
+    method: request.method,
+    headers
+  };
+
+  if (request.method !== "GET" && request.method !== "HEAD") {
+    init.body = request.body;
+  }
+
+  const upstream = await fetch(targetUrl.toString(), init);
+  const responseHeaders = new Headers(upstream.headers);
+  if (!responseHeaders.get("content-type")) {
+    responseHeaders.set("content-type", "application/json; charset=utf-8");
+  }
+
+  return new Response(upstream.body, {
+    status: upstream.status,
+    headers: responseHeaders
+  });
+}
+
 async function generateReply(prompt, env, options = {}) {
   const openAiKey = env?.OPENAI_API_KEY;
   const geminiKey = env?.GEMINI_API_KEY;
@@ -99,6 +139,11 @@ function extractTopics(text) {
 }
 
 async function handleAiRoute({ pathname, method, request, env }) {
+  const proxied = await proxyAiRequest({ pathname, request, env });
+  if (proxied) {
+    return proxied;
+  }
+
   const start = Date.now();
 
   if (pathname === "/api/ai/chat" && method === "POST") {
