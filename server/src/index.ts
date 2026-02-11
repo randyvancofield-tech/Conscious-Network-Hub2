@@ -41,7 +41,7 @@ if (NODE_ENV === 'production') {
 
 // Initialize Express app
 const app: Express = express();
-const PORT = process.env.PORT || 3001;
+const PORT = Number(process.env.PORT) || 3001;
 
 // Initialize Vertex AI if possible; in dev we'll attempt init but allow failures
 try {
@@ -135,29 +135,8 @@ app.use((req, res) => {
 app.use(errorHandler);
 
 // Start server
-app.listen(PORT, () => {
-  console.log(`
-╔════════════════════════════════════════════════════════════╗
-║                                                            ║
-║   🚀 Conscious Network Hub Backend Started                ║
-║                                                            ║
-║   Environment: ${NODE_ENV.padEnd(41)} ║
-║   Port: ${PORT.toString().padEnd(50)} ║
-║   CORS Origins: ${corsOrigins.length.toString().padEnd(42)} ║
-║                                                            ║
-║   Endpoints:
-║   POST   /api/ai/chat              - Send chat message        ║
-║   POST   /api/ai/wisdom            - Get daily wisdom         ║
-║   POST   /api/ai/report-issue      - Report platform issue    ║
-║   GET    /api/ai/trending          - Get trending topics      ║
-║   POST   /api/membership/select-tier    - Select membership tier ║
-║   GET    /api/membership/status/:id     - Check membership status ║
-║   POST   /api/membership/confirm-payment - Confirm fake payment ║
-║   GET    /api/membership/tiers         - Get available tiers ║
-║   GET    /health               - Health check             ║
-║                                                            ║
-╚════════════════════════════════════════════════════════════╝
-  `);
+app.listen(PORT, '0.0.0.0', () => {
+  console.log(`Backend listening on port ${PORT}`);
 });
 
 export default app;
