@@ -1,4 +1,4 @@
-# Build stage
+﻿# Build stage
 FROM node:18-alpine AS builder
 
 WORKDIR /app
@@ -7,7 +7,7 @@ WORKDIR /app
 COPY package.json package-lock.json ./
 
 # Install dependencies
-RUN npm ci --omit=dev
+RUN npm ci
 
 # Copy source code
 COPY tsconfig.json ./
@@ -42,3 +42,4 @@ HEALTHCHECK --interval=30s --timeout=3s --start-period=40s --retries=3 \
 
 # Start application
 CMD ["node", "dist/index.js"]
+
