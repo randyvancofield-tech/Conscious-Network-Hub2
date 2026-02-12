@@ -1,4 +1,4 @@
-{
+﻿{
     "name": "conscious-network-hub-backend",
     "version": "1.0.0",
     "description": "Backend API for Conscious Network Hub - Vertex AI/Gemini integration",
@@ -7,7 +7,7 @@
     "scripts": {
         "dev": "nodemon --exec ts-node src/index.ts",
         "build": "tsc",
-        "start": "node dist/index.js",
+        "start": "npm run build && node dist/index.js",
         "test": "jest",
         "test:curl": "bash scripts/test.sh"
     },
@@ -38,3 +38,4 @@
         "typescript": "^5.3.3"
     }
 }
+
