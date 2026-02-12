@@ -123,13 +123,9 @@ const App: React.FC = () => {
   const resolveBackendUrl = () => {
     if (import.meta.env.VITE_BACKEND_URL) return import.meta.env.VITE_BACKEND_URL;
     if (typeof window !== 'undefined') {
-      const { protocol, hostname } = window.location;
-      if (hostname === 'localhost' || hostname === '127.0.0.1') {
-        return `${protocol}//${hostname}:3001`;
-      }
       return window.location.origin;
     }
-    return 'http://localhost:3001';
+    return 'https://api.conscious-network.org';
   };
 
   useEffect(() => {

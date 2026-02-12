@@ -12,11 +12,11 @@ export default defineConfig(({ mode }) => {
       host: '0.0.0.0',
       proxy: {
         '/api': {
-          target: env.VITE_BACKEND_URL || 'http://localhost:3001',
+          target: env.VITE_BACKEND_URL || 'https://api.conscious-network.org',
           changeOrigin: true,
         },
         '/health': {
-          target: env.VITE_BACKEND_URL || 'http://localhost:3001',
+          target: env.VITE_BACKEND_URL || 'https://api.conscious-network.org',
           changeOrigin: true,
         },
       },
