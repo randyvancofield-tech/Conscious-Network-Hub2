@@ -1,4 +1,4 @@
-<div align="center">
+﻿<div align="center">
 <img width="1200" height="475" alt="GHBanner" src="https://github.com/user-attachments/assets/0aa67016-6eaf-458a-adb2-6e31a0763ed6" />
 </div>
 
@@ -6,9 +6,9 @@
 
 A community-centered decentralized social learning infrastructure powered by ethical AI.
 
-**⚡ Now with Secure Backend API for Google Cloud Vertex AI Integration!**
+**âš¡ Now with Secure Backend API for Google Cloud Vertex AI Integration!**
 
-## 🚀 Quick Start
+## ðŸš€ Quick Start
 
 ### Prerequisites
 - Node.js 18+
@@ -46,7 +46,7 @@ npm run dev
 - Backend API: http://localhost:3001
 - Health Check: http://localhost:3001/health
 
-## 📚 Documentation
+## ðŸ“š Documentation
 
 - **[Full Setup Guide](./SETUP_GUIDE.md)** - Complete setup instructions for local development
 - **[Backend README](./server/README.md)** - Backend API documentation and architecture
@@ -54,32 +54,32 @@ npm run dev
 - **[Enhancement Proposal](./ETHICAL_AI_ENHANCEMENT_PROPOSAL.md)** - Feature roadmap
 - **[Implementation Details](./ETHICAL_AI_IMPLEMENTATION_COMPLETE.md)** - Technical implementation
 
-## 🏗️ Architecture
+## ðŸ—ï¸ Architecture
 
 ```
 Frontend (React/TypeScript)
-  ↓ HTTPS (secure, no API keys)
+  â†“ HTTPS (secure, no API keys)
 Backend API (Express/Node)
-  ↓ (API keys stay on backend)
+  â†“ (API keys stay on backend)
 Google Cloud Vertex AI / Gemini
 ```
 
 ### Key Features
 
 **Frontend:**
-- ✅ EthicalAIInsight Component (4-view system)
-- ✅ Voice input support
-- ✅ Message reactions, favorites, ratings
-- ✅ Conversation history & search
-- ✅ Export conversations (MD/JSON)
+- âœ… EthicalAIInsight Component (4-view system)
+- âœ… Voice input support
+- âœ… Message reactions, favorites, ratings
+- âœ… Conversation history & search
+- âœ… Export conversations (MD/JSON)
 
 **Backend:**
-- ✅ Secure Vertex AI integration
-- ✅ Rate limiting (100 req/15min)
-- ✅ Input validation & sanitization
-- ✅ CORS protection
-- ✅ Error handling & logging
-- ✅ Health checks
+- âœ… Secure Vertex AI integration
+- âœ… Rate limiting (100 req/15min)
+- âœ… Input validation & sanitization
+- âœ… CORS protection
+- âœ… Error handling & logging
+- âœ… Health checks
 
 **API Endpoints:**
 - `POST /api/ai/chat` - Send chat message
@@ -88,18 +88,18 @@ Google Cloud Vertex AI / Gemini
 - `GET /api/ai/trending` - Get trending topics
 - `GET /health` - Health check
 
-## 🔐 Security
+## ðŸ” Security
 
-- ✅ **No API keys in frontend** - All auth server-side
-- ✅ **Application Default Credentials** - For development
-- ✅ **Service Accounts** - For production deployment
-- ✅ **CORS restricted** - Whitelist your origins
-- ✅ **Rate limiting** - Prevent abuse
-- ✅ **Input validation** - XSS/injection prevention
-- ✅ **Helmet headers** - Security headers enabled
-- ✅ **HTTPS-ready** - Deploy to Cloud Run
+- âœ… **No API keys in frontend** - All auth server-side
+- âœ… **Application Default Credentials** - For development
+- âœ… **Service Accounts** - For production deployment
+- âœ… **CORS restricted** - Whitelist your origins
+- âœ… **Rate limiting** - Prevent abuse
+- âœ… **Input validation** - XSS/injection prevention
+- âœ… **Helmet headers** - Security headers enabled
+- âœ… **HTTPS-ready** - Deploy to Cloud Run
 
-## 🧪 Testing
+## ðŸ§ª Testing
 
 ```bash
 # Test backend with curl
@@ -114,7 +114,7 @@ curl -X POST http://localhost:3001/api/ai/chat \
 
 See [TESTING.md](./server/TESTING.md) for more examples.
 
-## 🌐 Deployment
+## ðŸŒ Deployment
 
 ### Google Cloud Run (Recommended)
 ```bash
@@ -132,30 +132,30 @@ gcloud run deploy cnh-backend \
 VITE_BACKEND_URL=https://cnh-backend-xxxxx.run.app
 ```
 
-## 📁 Project Structure
+## ðŸ“ Project Structure
 
 ```
 Conscious-Network-Hub2/
-├── components/
-│   └── EthicalAIInsight.tsx    # Main UI component
-├── services/
-│   ├── backendApiService.ts    # Backend API client
-│   ├── securityService.ts      # Input validation
-│   ├── cacheService.ts         # Persistence
-│   └── analyticsService.ts     # Event tracking
-├── server/                     # Backend API
-│   ├── src/
-│   │   ├── index.ts            # Express app
-│   │   ├── services/vertexAiService.ts
-│   │   └── routes/ai.ts        # API endpoints
-│   ├── .env.example
-│   ├── README.md
-│   └── TESTING.md
-├── SETUP_GUIDE.md              # Complete setup guide
-└── README.md                   # This file
+â”œâ”€â”€ components/
+â”‚   â””â”€â”€ EthicalAIInsight.tsx    # Main UI component
+â”œâ”€â”€ services/
+â”‚   â”œâ”€â”€ backendApiService.ts    # Backend API client
+â”‚   â”œâ”€â”€ securityService.ts      # Input validation
+â”‚   â”œâ”€â”€ cacheService.ts         # Persistence
+â”‚   â””â”€â”€ analyticsService.ts     # Event tracking
+â”œâ”€â”€ server/                     # Backend API
+â”‚   â”œâ”€â”€ src/
+â”‚   â”‚   â”œâ”€â”€ index.ts            # Express app
+â”‚   â”‚   â”œâ”€â”€ services/vertexAiService.ts
+â”‚   â”‚   â””â”€â”€ routes/ai.ts        # API endpoints
+â”‚   â”œâ”€â”€ .env.example
+â”‚   â”œâ”€â”€ README.md
+â”‚   â””â”€â”€ TESTING.md
+â”œâ”€â”€ SETUP_GUIDE.md              # Complete setup guide
+â””â”€â”€ README.md                   # This file
 ```
 
-## 📦 Key Technologies
+## ðŸ“¦ Key Technologies
 
 **Frontend:**
 - React 17+
@@ -169,14 +169,14 @@ Conscious-Network-Hub2/
 - Google Cloud Vertex AI
 - Application Default Credentials
 
-## 🎯 Next Steps
+## ðŸŽ¯ Next Steps
 
 1. Follow [SETUP_GUIDE.md](./SETUP_GUIDE.md) for complete local setup
 2. Test endpoints using [TESTING.md](./server/TESTING.md)
 3. Deploy to Google Cloud Run
 4. Update frontend with production URL
 
-## 🐛 Troubleshooting
+## ðŸ› Troubleshooting
 
 **"Cannot connect to backend"**
 - Ensure backend is running: `curl http://localhost:3001/health`
@@ -190,19 +190,25 @@ Conscious-Network-Hub2/
 
 See [SETUP_GUIDE.md](./SETUP_GUIDE.md) for more troubleshooting.
 
-## 📞 Support
+## ðŸ“ž Support
 
 - Backend docs: [server/README.md](./server/README.md)
 - Testing guide: [server/TESTING.md](./server/TESTING.md)
 - Setup guide: [SETUP_GUIDE.md](./SETUP_GUIDE.md)
 
-## 📄 License
+## ðŸ“„ License
 
 Part of Conscious Network Hub project.
 
 ---
 
-**Status**: ✅ Production Ready  
-**Backend**: ✅ Vertex AI Integrated  
-**Frontend**: ✅ Backend API Client  
+**Status**: âœ… Production Ready  
+**Backend**: âœ… Vertex AI Integrated  
+**Frontend**: âœ… Backend API Client  
 **Last Updated**: January 20, 2024
+## Environment Setup
+
+- See **[Environment Matrix](./docs/ENVIRONMENT_MATRIX.md)** for the final frontend/backend environment values and safe defaults.
+- Keep secrets only in server/.env.local.
+- Never place provider keys in frontend env files.
+

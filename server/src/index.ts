@@ -2,6 +2,7 @@ import express, { Express } from 'express';
 import cors from 'cors';
 import helmet from 'helmet';
 import rateLimit from 'express-rate-limit';
+import path from 'path';
 import dotenv from 'dotenv';
 import {
   requestLogger,
@@ -12,8 +13,9 @@ import aiRoutes from './routes/ai';
 import membershipRoutes from './routes/membership';
 import { initializeVertexAI } from './services/vertexAiService';
 
-// Load environment variables
-dotenv.config();
+// Load environment variables with local override first.
+dotenv.config({ path: path.resolve(__dirname, '../.env.local') });
+dotenv.config({ path: path.resolve(__dirname, '../.env') });
 
 // Validate required environment variables (only enforce in production)
 const requiredEnvVars = [
@@ -26,7 +28,7 @@ const NODE_ENV = process.env.NODE_ENV || 'development';
 if (NODE_ENV === 'production') {
   for (const envVar of requiredEnvVars) {
     if (!process.env[envVar]) {
-      console.error(`❌ Missing required environment variable: ${envVar}`);
+      console.error(`Missing required environment variable: ${envVar}`);
       process.exit(1);
     }
   }
@@ -34,7 +36,7 @@ if (NODE_ENV === 'production') {
   // In development, warn but don't exit so local debugging is possible
   for (const envVar of requiredEnvVars) {
     if (!process.env[envVar]) {
-      console.warn(`⚠️ Dev: Environment variable not set: ${envVar} (continuing in dev mode)`);
+      console.warn(`Dev: Environment variable not set: ${envVar} (continuing in dev mode)`);
     }
   }
 }
@@ -51,12 +53,12 @@ try {
       region: process.env.GOOGLE_CLOUD_REGION!,
       model: process.env.VERTEX_AI_MODEL || 'gemini-1.5-flash-001',
     });
-    console.log('✅ Vertex AI initialized');
+    console.log('Vertex AI initialized');
   } else {
-    console.warn('⚠️ Vertex AI not initialized - missing project/region; running in mock/dev mode');
+    console.warn('Vertex AI not initialized - missing project/region; running in dev mode');
   }
 } catch (error) {
-  console.error('❌ Failed to initialize Vertex AI:', error);
+  console.error('Failed to initialize Vertex AI:', error);
   if (NODE_ENV === 'production') process.exit(1);
 }
 
@@ -67,14 +69,18 @@ app.use(helmet());
 app.set('trust proxy', 1);
 
 // CORS configuration
-const corsOrigins = (process.env.CORS_ORIGINS || 'http://localhost:5173,http://localhost:3000').split(',');
+const corsOrigins = (process.env.CORS_ORIGINS || 'http://localhost:3000')
+  .split(',')
+  .map((origin) => origin.trim())
+  .filter(Boolean);
+
 app.use(
   cors({
     origin: (origin, callback) => {
-      // Allow requests with no origin (like mobile apps or curl requests)
+      // Allow requests with no origin (like curl or server-side scripts)
       if (!origin) return callback(null, true);
 
-      if (corsOrigins.includes(origin) || NODE_ENV === 'development') {
+      if (corsOrigins.includes(origin)) {
         callback(null, true);
       } else {
         callback(new Error('Not allowed by CORS'));
