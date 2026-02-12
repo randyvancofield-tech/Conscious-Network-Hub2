@@ -14,8 +14,9 @@ import membershipRoutes from './routes/membership';
 import { initializeVertexAI } from './services/vertexAiService';
 
 // Load environment variables with local override first.
-dotenv.config({ path: path.resolve(__dirname, '../.env.local') });
-dotenv.config({ path: path.resolve(__dirname, '../.env') });
+dotenv.config({ path: '.env.local' });
+dotenv.config({ path: '.env' });
+
 
 // Validate required environment variables (only enforce in production)
 const requiredEnvVars = [

@@ -1,16 +1,22 @@
-import "dotenv/config";
-import OpenAI from "openai";
+﻿import OpenAI from "openai";
 
-const client = new OpenAI({
-  apiKey: process.env.OPENAI_API_KEY,
-});
+let client: OpenAI | null = null;
 
-export async function chatWithOpenAI(message: string) {
-  if (!process.env.OPENAI_API_KEY) {
+function getClient(): OpenAI {
+  const apiKey = process.env.OPENAI_API_KEY;
+  if (!apiKey) {
     throw new Error("OPENAI_API_KEY is not set");
   }
 
-  const response = await client.chat.completions.create({
+  if (!client) {
+    client = new OpenAI({ apiKey });
+  }
+
+  return client;
+}
+
+export async function chatWithOpenAI(message: string) {
+  const response = await getClient().chat.completions.create({
     model: "gpt-4o-mini",
     messages: [
       {
