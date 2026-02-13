@@ -5,6 +5,17 @@ import fs from 'fs';
 
 const router = Router();
 
+function getPublicBaseUrl(req: Request): string {
+  const configured = process.env.PUBLIC_BASE_URL?.trim();
+  if (configured) {
+    return configured.replace(/\/+$/, '');
+  }
+  const forwardedProto = (req.headers['x-forwarded-proto'] as string | undefined)?.split(',')[0]?.trim();
+  const proto = forwardedProto || req.protocol || 'https';
+  const host = req.get('host');
+  return `${proto}://${host}`;
+}
+
 // Set up storage for uploaded files
 const storage = multer.diskStorage({
   destination: (_req, _file, cb) => {
@@ -31,7 +42,7 @@ router.post('/profile-background', upload.single('video'), (req: Request, res: R
     res.status(400).json({ error: 'No file uploaded' });
     return;
   }
-  const fileUrl = `/uploads/${mReq.file.filename}`;
+  const fileUrl = `${getPublicBaseUrl(req)}/uploads/${mReq.file.filename}`;
   res.json({ success: true, fileUrl });
 });
 
@@ -42,7 +53,7 @@ router.post('/reflection', upload.single('file'), (req: Request, res: Response):
     res.status(400).json({ error: 'No file uploaded' });
     return;
   }
-  const fileUrl = `/uploads/${mReq.file.filename}`;
+  const fileUrl = `${getPublicBaseUrl(req)}/uploads/${mReq.file.filename}`;
   res.json({ success: true, fileUrl });
 });
 

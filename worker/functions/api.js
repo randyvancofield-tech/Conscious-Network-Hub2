@@ -30,6 +30,47 @@ function normalizeBaseUrl(value) {
   return value.endsWith("/") ? value : `${value}/`;
 }
 
+function resolveBackendBaseUrl(env) {
+  return normalizeBaseUrl(
+    env?.AI_BACKEND_URL || env?.BACKEND_API_URL || env?.VITE_BACKEND_URL || ""
+  );
+}
+
+async function proxyApiRequest({ pathname, request, env }) {
+  const baseUrl = resolveBackendBaseUrl(env);
+  if (!baseUrl) return null;
+
+  const incomingUrl = new URL(request.url);
+  const targetUrl = new URL(pathname.replace(/^\//, ""), baseUrl);
+  if (incomingUrl.host === targetUrl.host) {
+    return null;
+  }
+
+  const headers = new Headers(request.headers);
+  headers.set("x-forwarded-proto", incomingUrl.protocol.replace(":", ""));
+  headers.set("x-forwarded-host", incomingUrl.host);
+
+  const init = {
+    method: request.method,
+    headers
+  };
+
+  if (request.method !== "GET" && request.method !== "HEAD") {
+    init.body = request.body;
+  }
+
+  const upstream = await fetch(targetUrl.toString(), init);
+  const responseHeaders = new Headers(upstream.headers);
+  if (!responseHeaders.get("content-type")) {
+    responseHeaders.set("content-type", "application/json; charset=utf-8");
+  }
+
+  return new Response(upstream.body, {
+    status: upstream.status,
+    headers: responseHeaders
+  });
+}
+
 async function proxyAiRequest({ pathname, request, env }) {
   const baseUrl = normalizeBaseUrl(
     env?.AI_BACKEND_URL || env?.BACKEND_API_URL || env?.VITE_BACKEND_URL || ""
@@ -352,6 +393,13 @@ async function handleMembershipRoute({ pathname, method, request }) {
 export const onRequest = withHandler(async ({ request, env }) => {
   const { pathname } = new URL(request.url);
   const method = request.method.toUpperCase();
+
+  if (pathname.startsWith("/api/")) {
+    const proxied = await proxyApiRequest({ pathname, request, env });
+    if (proxied) {
+      return proxied;
+    }
+  }
 
   if (method === "GET" && pathname === "/api/ping") {
     return json({ ok: true, source: "cloudflare-worker", version: "ping-001" });

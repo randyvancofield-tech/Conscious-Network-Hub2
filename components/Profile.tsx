@@ -16,9 +16,17 @@ interface ProfileProps {
 }
 
 const Profile: React.FC<ProfileProps> = ({ user, onUserUpdate }) => {
+  const backendBaseUrl = (import.meta.env.VITE_BACKEND_URL || '').replace(/\/+$/, '');
+  const toApiUrl = (path: string) => `${backendBaseUrl}${path}`;
+  const toAssetUrl = (url?: string) => {
+    if (!url) return undefined;
+    if (/^https?:\/\//i.test(url)) return url;
+    return `${backendBaseUrl}${url.startsWith('/') ? url : `/${url}`}`;
+  };
+
   const [editData, setEditData] = useState<Partial<UserProfile>>({ ...user });
   const [bgVideo, setBgVideo] = useState<File | null>(null);
-  const [bgVideoUrl, setBgVideoUrl] = useState<string | undefined>(user.profileBackgroundVideo);
+  const [bgVideoUrl, setBgVideoUrl] = useState<string | undefined>(toAssetUrl(user.profileBackgroundVideo));
   const [reflections, setReflections] = useState<Reflection[]>([]);
   const [reflectionFile, setReflectionFile] = useState<File | null>(null);
   const [reflectionContent, setReflectionContent] = useState('');
@@ -31,8 +39,13 @@ const Profile: React.FC<ProfileProps> = ({ user, onUserUpdate }) => {
 
   const fetchReflections = async () => {
     try {
-      const res = await axios.get(`/api/reflection/${user.id}`);
-      setReflections(res.data.reflections || []);
+      const res = await axios.get(toApiUrl(`/api/reflection/${user.id}`));
+      setReflections(
+        (res.data.reflections || []).map((reflection: Reflection) => ({
+          ...reflection,
+          fileUrl: toAssetUrl(reflection.fileUrl),
+        }))
+      );
     } catch (e) {
       setError('Failed to load reflections');
     }
@@ -56,11 +69,11 @@ const Profile: React.FC<ProfileProps> = ({ user, onUserUpdate }) => {
       if (bgVideo) {
         const formData = new FormData();
         formData.append('video', bgVideo);
-        const uploadRes = await axios.post('/api/upload/profile-background', formData, { headers: { 'Content-Type': 'multipart/form-data' } });
+        const uploadRes = await axios.post(toApiUrl('/api/upload/profile-background'), formData, { headers: { 'Content-Type': 'multipart/form-data' } });
         videoUrl = uploadRes.data.fileUrl;
         setBgVideoUrl(videoUrl);
       }
-      const res = await axios.put(`/api/user/${user.id}`, { ...editData, profileBackgroundVideo: videoUrl });
+      const res = await axios.put(toApiUrl(`/api/user/${user.id}`), { ...editData, profileBackgroundVideo: videoUrl });
       onUserUpdate(res.data.user);
     } catch (e) {
       setError('Failed to update profile');
@@ -81,10 +94,10 @@ const Profile: React.FC<ProfileProps> = ({ user, onUserUpdate }) => {
     try {
       const formData = new FormData();
       formData.append('file', reflectionFile);
-      const uploadRes = await axios.post('/api/upload/reflection', formData, { headers: { 'Content-Type': 'multipart/form-data' } });
+      const uploadRes = await axios.post(toApiUrl('/api/upload/reflection'), formData, { headers: { 'Content-Type': 'multipart/form-data' } });
       const fileUrl = uploadRes.data.fileUrl;
       const fileType = reflectionFile.type.startsWith('video') ? 'video' : 'document';
-      await axios.post('/api/reflection', { userId: user.id, content: reflectionContent, fileUrl, fileType });
+      await axios.post(toApiUrl('/api/reflection'), { userId: user.id, content: reflectionContent, fileUrl, fileType });
       setReflectionFile(null);
       setReflectionContent('');
       fetchReflections();

@@ -56,7 +56,7 @@ app.set('trust proxy', 1);
 
 // CORS configuration
 const configuredCorsOrigins = (process.env.CORS_ORIGINS || 'http://localhost:3000')
-  .split(',')
+  .split(/[,\n\r\t ]+/)
   .map((origin) => origin.trim())
   .filter(Boolean);
 
@@ -109,7 +109,8 @@ app.use(
         callback(new Error('Not allowed by CORS'));
       }
     },
-    methods: ['GET', 'POST', 'OPTIONS'],
+    methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
+    allowedHeaders: ['Content-Type', 'Authorization'],
     credentials: true,
     maxAge: 86400, // 24 hours
   })
