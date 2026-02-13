@@ -145,7 +145,10 @@ class BackendAPIService {
       });
 
       if (!response.ok) {
-        throw new Error('Failed to fetch daily wisdom');
+        const errorBody = await response.text().catch(() => '');
+        throw new Error(
+          `Backend error ${response.status} on /api/ai/wisdom${errorBody ? `: ${errorBody}` : ''}`
+        );
       }
 
       const raw = await response.text();
@@ -172,7 +175,11 @@ class BackendAPIService {
     } catch (error) {
       console.error('Wisdom Fetch Error:', error);
       const message = error instanceof Error ? error.message : String(error);
-      if (message.toLowerCase().includes('failed to fetch') || message.toLowerCase().includes('networkerror')) {
+      const lowered = message.toLowerCase();
+      const isNetworkError =
+        (error instanceof TypeError && lowered.includes('failed to fetch')) ||
+        lowered.includes('networkerror');
+      if (isNetworkError) {
         return {
           text: `Local fallback wisdom: backend unreachable at ${this.baseUrl}.`,
           groundingChunks: [],

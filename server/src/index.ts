@@ -55,10 +55,46 @@ app.use(helmet());
 app.set('trust proxy', 1);
 
 // CORS configuration
-const corsOrigins = (process.env.CORS_ORIGINS || 'http://localhost:3000')
+const configuredCorsOrigins = (process.env.CORS_ORIGINS || 'http://localhost:3000')
   .split(',')
   .map((origin) => origin.trim())
   .filter(Boolean);
+
+const normalizeOrigin = (origin: string): string => {
+  try {
+    return new URL(origin).origin;
+  } catch {
+    return origin.replace(/\/+$/, '');
+  }
+};
+
+const isLocalHost = (hostname: string): boolean =>
+  hostname === 'localhost' ||
+  hostname === '127.0.0.1' ||
+  hostname === '::1' ||
+  hostname.endsWith('.localhost');
+
+const corsOrigins = new Set<string>();
+for (const rawOrigin of configuredCorsOrigins) {
+  const normalized = normalizeOrigin(rawOrigin);
+  corsOrigins.add(normalized);
+
+  // If a root domain is configured, allow the "www" variant as well (and vice versa).
+  try {
+    const parsed = new URL(normalized);
+    const host = parsed.hostname;
+    if (!isLocalHost(host) && !/^\d+\.\d+\.\d+\.\d+$/.test(host)) {
+      if (host.startsWith('www.')) {
+        const bare = host.slice(4);
+        corsOrigins.add(`${parsed.protocol}//${bare}${parsed.port ? `:${parsed.port}` : ''}`);
+      } else {
+        corsOrigins.add(`${parsed.protocol}//www.${host}${parsed.port ? `:${parsed.port}` : ''}`);
+      }
+    }
+  } catch {
+    // Ignore invalid entries; exact string check above still applies.
+  }
+}
 
 app.use(
   cors({
@@ -66,7 +102,8 @@ app.use(
       // Allow requests with no origin (like curl or server-side scripts)
       if (!origin) return callback(null, true);
 
-      if (corsOrigins.includes(origin)) {
+      const normalizedOrigin = normalizeOrigin(origin);
+      if (corsOrigins.has(normalizedOrigin)) {
         callback(null, true);
       } else {
         callback(new Error('Not allowed by CORS'));
