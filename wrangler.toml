@@ -1,6 +1,0 @@
-name = "conscious-network-hub-api"
-main = "worker/index.js"
-compatibility_date = "2026-02-09"
-
-[vars]
-BACKEND_API_URL = "https://conscious-network-backend-181936518282.us-central1.run.app"

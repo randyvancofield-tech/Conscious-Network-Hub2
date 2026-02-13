@@ -22,6 +22,76 @@ interface GroundingChunk {
   };
 }
 
+interface MeetingActionItem {
+  owner: string;
+  task: string;
+  dueDate: string;
+}
+
+interface MeetingSummary {
+  summary: string;
+  decisions: string[];
+  actionItems: MeetingActionItem[];
+}
+
+const sanitizeMeetingSummary = (
+  raw: any,
+  fallbackSummary: string
+): MeetingSummary => {
+  const summary =
+    typeof raw?.summary === 'string' && raw.summary.trim().length > 0
+      ? raw.summary.trim()
+      : fallbackSummary;
+
+  const decisions = Array.isArray(raw?.decisions)
+    ? raw.decisions
+        .filter((decision: unknown): decision is string => typeof decision === 'string')
+        .map((decision: string) => decision.trim())
+        .filter((decision: string) => decision.length > 0)
+    : [];
+
+  const actionItems = Array.isArray(raw?.actionItems)
+    ? raw.actionItems
+        .map((item: any) => ({
+          owner: typeof item?.owner === 'string' ? item.owner.trim() : '',
+          task: typeof item?.task === 'string' ? item.task.trim() : '',
+          dueDate: typeof item?.dueDate === 'string' ? item.dueDate.trim() : '',
+        }))
+        .filter((item: MeetingActionItem) => item.owner || item.task || item.dueDate)
+    : [];
+
+  return {
+    summary,
+    decisions,
+    actionItems,
+  };
+};
+
+const parseMeetingSummary = (reply: string): MeetingSummary => {
+  const fallbackSummary = reply?.trim() || 'Meeting summary unavailable.';
+
+  try {
+    return sanitizeMeetingSummary(JSON.parse(reply), fallbackSummary);
+  } catch {
+    const jsonStart = reply.indexOf('{');
+    const jsonEnd = reply.lastIndexOf('}');
+    if (jsonStart >= 0 && jsonEnd > jsonStart) {
+      const candidate = reply.slice(jsonStart, jsonEnd + 1);
+      try {
+        return sanitizeMeetingSummary(JSON.parse(candidate), fallbackSummary);
+      } catch {
+        // Fall through to plain-text fallback.
+      }
+    }
+  }
+
+  return {
+    summary: fallbackSummary,
+    decisions: [],
+    actionItems: [],
+  };
+};
+
 const mergeSources = (
   modelSources: Array<{ title?: string; url?: string; relevance?: number }> = [],
   knowledgeSources: KnowledgeSource[] = []
@@ -103,6 +173,54 @@ router.post('/wisdom', async (req: Request, res: Response): Promise<void> => {
     console.error("AI wisdom error:", error);
     res.status(500).json({
       error: "Daily wisdom unavailable",
+    });
+  }
+});
+
+/**
+ * POST /api/ai/summarize-meeting
+ * Summarize a meeting transcript and extract decisions/action items.
+ */
+router.post('/summarize-meeting', async (req: Request, res: Response): Promise<void> => {
+  try {
+    const { transcript } = req.body as { transcript?: unknown };
+
+    if (!Array.isArray(transcript)) {
+      res.status(400).json({ error: 'Transcript must be an array of strings' });
+      return;
+    }
+
+    const normalizedTranscript = transcript
+      .filter((line): line is string => typeof line === 'string')
+      .map((line) => line.trim())
+      .filter((line) => line.length > 0);
+
+    if (normalizedTranscript.length === 0) {
+      res.status(400).json({ error: 'Transcript must include at least one non-empty line' });
+      return;
+    }
+
+    const prompt = [
+      'Summarize this meeting transcript and extract decisions and action items.',
+      'Return only valid JSON with this exact shape:',
+      '{"summary":"string","decisions":["string"],"actionItems":[{"owner":"string","task":"string","dueDate":"string"}]}',
+      'Use empty strings or empty arrays when details are missing.',
+      'Transcript:',
+      normalizedTranscript.join('\n'),
+    ].join('\n\n');
+
+    const reply = await chatWithOpenAI(prompt);
+    const parsed = parseMeetingSummary(reply);
+
+    res.json({
+      provider: 'openai',
+      ...parsed,
+      reply,
+    });
+  } catch (error) {
+    console.error('Meeting summary error:', error);
+    res.status(500).json({
+      error: 'Meeting summarization unavailable',
     });
   }
 });

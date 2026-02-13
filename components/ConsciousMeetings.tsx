@@ -8,7 +8,7 @@ import {
   ChevronRight, Pause, Square, Image, Film, Upload
 } from 'lucide-react';
 import { UserProfile, Provider, Meeting } from '../types';
-import { summarizeMeeting } from '../services/geminiService';
+import { summarizeMeeting } from '../services/backendApiService';
 import { SelfieSegmentation } from '@mediapipe/selfie_segmentation';
 
 interface ConsciousMeetingsProps {

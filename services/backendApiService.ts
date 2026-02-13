@@ -31,6 +31,16 @@ export interface EnhancedResponse {
   trendingTopics?: string[];
 }
 
+export interface MeetingSummary {
+  summary: string;
+  decisions: string[];
+  actionItems: Array<{
+    owner: string;
+    task: string;
+    dueDate: string;
+  }>;
+}
+
 // Resolve backend URL:
 // - Use VITE_BACKEND_URL if set.
 // - Otherwise use same-origin (empty string), letting dev proxy or reverse proxy handle routing.
@@ -189,6 +199,61 @@ class BackendAPIService {
         };
       }
       throw error;
+    }
+  }
+
+  /**
+   * Summarize a meeting transcript
+   */
+  async summarizeMeeting(transcript: string[]): Promise<MeetingSummary | null> {
+    try {
+      const response = await fetch(`${this.baseUrl}/api/ai/summarize-meeting`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ transcript }),
+      });
+
+      if (!response.ok) {
+        const errorBody = await response.text().catch(() => '');
+        throw new Error(
+          `Backend error ${response.status} on /api/ai/summarize-meeting${errorBody ? `: ${errorBody}` : ''}`
+        );
+      }
+
+      const data = await response.json().catch(() => null);
+      if (!data || typeof data.summary !== 'string') {
+        throw new Error('Invalid JSON from backend');
+      }
+
+      const decisions = Array.isArray(data.decisions)
+        ? data.decisions
+            .filter((decision: unknown): decision is string => typeof decision === 'string')
+            .map((decision: string) => decision.trim())
+            .filter((decision: string) => decision.length > 0)
+        : [];
+
+      const actionItems = Array.isArray(data.actionItems)
+        ? data.actionItems
+            .map((item: any) => ({
+              owner: typeof item?.owner === 'string' ? item.owner.trim() : '',
+              task: typeof item?.task === 'string' ? item.task.trim() : '',
+              dueDate: typeof item?.dueDate === 'string' ? item.dueDate.trim() : '',
+            }))
+            .filter((item: { owner: string; task: string; dueDate: string }) => (
+              item.owner.length > 0 || item.task.length > 0 || item.dueDate.length > 0
+            ))
+        : [];
+
+      return {
+        summary: data.summary.trim(),
+        decisions,
+        actionItems,
+      };
+    } catch (error) {
+      console.error('Meeting Summary Error:', error);
+      return null;
     }
   }
 
@@ -422,6 +487,10 @@ export async function askEthicalAI(
 
 export async function getDailyWisdom(): Promise<EnhancedResponse> {
   return backendAPI.getDailyWisdom();
+}
+
+export async function summarizeMeeting(transcript: string[]): Promise<MeetingSummary | null> {
+  return backendAPI.summarizeMeeting(transcript);
 }
 
 export async function processPlatformIssue(issue: {

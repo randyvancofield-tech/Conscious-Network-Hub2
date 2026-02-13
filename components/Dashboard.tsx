@@ -3,7 +3,6 @@ import React, { useState, useEffect, RefObject } from 'react';
 import { Search, Bell, ShieldCheck, TrendingUp, Users, ExternalLink, PlayCircle, BookOpen, Layers, Globe, Plus, Target, Rocket, BarChart3, HeartHandshake } from 'lucide-react';
 import { CORE_COMPONENTS } from '../constants';
 import EthicalAIInsight from './EthicalAIInsight';
-import { GroundingChunk } from '../services/geminiService';
 import { UserProfile, Course } from '../types';
 
 interface DashboardProps {
