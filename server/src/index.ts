@@ -18,49 +18,34 @@ dotenv.config({ path: '.env.local' });
 dotenv.config({ path: '.env' });
 
 
-// Validate required environment variables (only enforce in production)
-const requiredEnvVars = [
-  'GOOGLE_CLOUD_PROJECT',
-  'GOOGLE_CLOUD_REGION',
-];
-
 const NODE_ENV = process.env.NODE_ENV || 'development';
-
-if (NODE_ENV === 'production') {
-  for (const envVar of requiredEnvVars) {
-    if (!process.env[envVar]) {
-      console.error(`Missing required environment variable: ${envVar}`);
-      process.exit(1);
-    }
-  }
-} else {
-  // In development, warn but don't exit so local debugging is possible
-  for (const envVar of requiredEnvVars) {
-    if (!process.env[envVar]) {
-      console.warn(`Dev: Environment variable not set: ${envVar} (continuing in dev mode)`);
-    }
-  }
-}
+const GOOGLE_CLOUD_PROJECT =
+  process.env.GOOGLE_CLOUD_PROJECT ||
+  process.env.GCLOUD_PROJECT ||
+  process.env.GCP_PROJECT;
+const GOOGLE_CLOUD_REGION = process.env.GOOGLE_CLOUD_REGION;
 
 // Initialize Express app
 const app: Express = express();
-const PORT = Number(process.env.PORT) || 3001;
+const parsedPort = Number(process.env.PORT);
+const PORT = Number.isFinite(parsedPort) && parsedPort > 0 ? parsedPort : 3001;
 
 // Initialize Vertex AI if possible; in dev we'll attempt init but allow failures
 try {
-  if (process.env.GOOGLE_CLOUD_PROJECT && process.env.GOOGLE_CLOUD_REGION) {
+  if (GOOGLE_CLOUD_PROJECT && GOOGLE_CLOUD_REGION) {
     initializeVertexAI({
-      projectId: process.env.GOOGLE_CLOUD_PROJECT!,
-      region: process.env.GOOGLE_CLOUD_REGION!,
+      projectId: GOOGLE_CLOUD_PROJECT,
+      region: GOOGLE_CLOUD_REGION,
       model: process.env.VERTEX_AI_MODEL || 'gemini-1.5-flash-001',
     });
     console.log('Vertex AI initialized');
   } else {
-    console.warn('Vertex AI not initialized - missing project/region; running in dev mode');
+    console.warn(
+      'Vertex AI not initialized - missing GOOGLE_CLOUD_PROJECT/GOOGLE_CLOUD_REGION; server will continue without Vertex AI'
+    );
   }
 } catch (error) {
   console.error('Failed to initialize Vertex AI:', error);
-  if (NODE_ENV === 'production') process.exit(1);
 }
 
 // Security middleware
