@@ -59,6 +59,7 @@ const App: React.FC = () => {
 
   const [isPolicyModalOpen, setIsPolicyModalOpen] = useState(false);
   const [selectedPolicy, setSelectedPolicy] = useState<string | null>(null);
+  const [isIdentityGuestPromptOpen, setIdentityGuestPromptOpen] = useState(false);
 
   const insightRef = useRef<HTMLDivElement>(null);
   const [pendingScrollWisdom, setPendingScrollWisdom] = useState(false);
@@ -220,6 +221,17 @@ const App: React.FC = () => {
     setUser(null);
     setCurrentView(AppView.DASHBOARD);
     if (window.innerWidth >= 1024) setSidebarOpen(true);
+  };
+
+  const handleOpenIdentityFromSidebar = () => {
+    if (user) {
+      setCurrentView(AppView.MY_CONSCIOUS_IDENTITY);
+      closeSidebarOnMobile();
+      return;
+    }
+
+    setIdentityGuestPromptOpen(true);
+    closeSidebarOnMobile();
   };
 
   const toggleSidebar = () => setSidebarOpen(!isSidebarOpen);
@@ -456,7 +468,7 @@ const App: React.FC = () => {
     meetings: AppView.CONSCIOUS_MEETINGS,
     'my-courses': AppView.MY_COURSES,
     providers: AppView.PROVIDERS,
-    profile: AppView.PROFILE,
+    profile: AppView.MY_CONSCIOUS_IDENTITY,
     membership: AppView.MEMBERSHIP,
   };
 
@@ -878,6 +890,10 @@ const App: React.FC = () => {
                       <button
                         key={item.id}
                         onClick={() => {
+                          if (item.id === 'profile') {
+                            handleOpenIdentityFromSidebar();
+                            return;
+                          }
                           if (view) {
                             setCurrentView(view);
                             closeSidebarOnMobile();
@@ -970,8 +986,16 @@ const App: React.FC = () => {
                   </button>
                   <div className="h-8 w-px bg-white/10 mx-2 hidden md:block"></div>
                   <button onClick={() => { setCurrentView(AppView.MY_CONSCIOUS_IDENTITY); closeSidebarOnMobile(); }} className="flex items-center gap-4 pl-3 pr-6 py-2 hover:bg-white/5 rounded-2xl transition-all border border-transparent hover:border-white/5">
-                    <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-blue-600 to-teal-400 flex items-center justify-center font-black text-sm text-white shadow-xl">
-                      {user ? user.name.charAt(0).toUpperCase() : 'G'}
+                    <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-blue-600 to-teal-400 flex items-center justify-center font-black text-sm text-white shadow-xl overflow-hidden">
+                      {user?.avatarUrl ? (
+                        <img
+                          src={user.avatarUrl}
+                          alt={user.name}
+                          className="w-full h-full object-cover"
+                        />
+                      ) : (
+                        user ? user.name.charAt(0).toUpperCase() : 'G'
+                      )}
                     </div>
                     <div className="text-left hidden md:block">
                       <p className="text-xs font-black text-white leading-none uppercase tracking-tighter">{user?.name || 'Guest Node'}</p>
@@ -999,6 +1023,52 @@ const App: React.FC = () => {
         )}
 
         <WalletPopout isOpen={isWalletOpen} onClose={() => setWalletOpen(false)} user={user} />
+
+        {isIdentityGuestPromptOpen && !user && (
+          <div className="fixed inset-0 z-[210] flex items-center justify-center p-4 bg-black/95 backdrop-blur-3xl animate-in fade-in duration-300">
+            <div className="glass-panel w-full max-w-lg p-8 sm:p-10 rounded-[2rem] sm:rounded-[2.5rem] relative animate-in zoom-in duration-300 border-blue-500/20">
+              <button
+                onClick={() => setIdentityGuestPromptOpen(false)}
+                className="absolute top-4 right-4 p-2.5 hover:bg-white/5 rounded-full transition-colors"
+              >
+                <X className="w-5 h-5 text-slate-500" />
+              </button>
+              <div className="space-y-4 sm:space-y-5 mb-8 sm:mb-10">
+                <h3 className="text-2xl sm:text-3xl font-black text-white uppercase tracking-tighter">My Conscious Identity</h3>
+                <p className="text-slate-400 text-sm sm:text-base leading-relaxed">
+                  Sign in to access your identity profile. New users can create a profile from Membership Access.
+                </p>
+              </div>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
+                <button
+                  onClick={() => {
+                    setIdentityGuestPromptOpen(false);
+                    setSignupModalOpen(false);
+                    setSigninModalOpen(true);
+                    setError('');
+                  }}
+                  className="w-full py-4 bg-blue-600 hover:bg-blue-500 text-white rounded-xl font-black text-xs sm:text-sm uppercase tracking-widest transition-all shadow-xl"
+                >
+                  Sign In
+                </button>
+                <button
+                  onClick={() => {
+                    setIdentityGuestPromptOpen(false);
+                    setCurrentView(AppView.MEMBERSHIP_ACCESS);
+                    setSelectedTier('Free / Community Tier');
+                    setIsSelectingTier(false);
+                    setSigninModalOpen(false);
+                    setSignupModalOpen(true);
+                    setError('');
+                  }}
+                  className="w-full py-4 bg-white/5 hover:bg-white/10 text-white rounded-xl font-black text-xs sm:text-sm uppercase tracking-widest transition-all border border-white/10"
+                >
+                  Sign Up
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
 
         {(isSignupModalOpen || isSigninModalOpen) && (
           <div className="fixed inset-0 z-[200] flex items-start sm:items-center justify-center p-3 sm:p-4 overflow-y-auto bg-black/95 backdrop-blur-3xl animate-in fade-in duration-300">
