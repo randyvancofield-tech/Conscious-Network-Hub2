@@ -287,10 +287,15 @@ const SocialLearningHub: React.FC<SocialLearningHubProps> = ({ user }) => {
                     </button>
                     {selectedFile.type === 'image' && <img src={selectedFile.data} className="max-h-full max-w-full object-contain rounded-lg shadow-2xl" />}
                     {selectedFile.type === 'video' && (
-                      <div className="flex flex-col items-center gap-3">
-                        <div className="w-16 h-16 bg-blue-500/20 rounded-full flex items-center justify-center border border-blue-500/40">
-                          <FileVideo className="w-8 h-8 text-blue-400" />
-                        </div>
+                      <div className="w-full h-full flex flex-col items-center gap-3">
+                        <video
+                          src={selectedFile.data}
+                          className="max-h-full max-w-full object-contain rounded-lg shadow-2xl"
+                          controls
+                          autoPlay
+                          muted
+                          playsInline
+                        />
                         <span className="text-[10px] text-blue-300 font-black uppercase tracking-widest">Temporal Stream Ready</span>
                       </div>
                     )}
@@ -472,12 +477,13 @@ const SocialLearningHub: React.FC<SocialLearningHubProps> = ({ user }) => {
                               <img src={node.content} className="w-full h-auto object-cover" alt={node.title} />
                             </div>
                           ) : node.type === 'video' ? (
-                            <div className="rounded-[2rem] sm:rounded-[2.5rem] overflow-hidden border border-white/10 shadow-2xl aspect-video bg-black relative flex items-center justify-center group/vid overflow-hidden">
-                               <div className="absolute inset-0 bg-gradient-to-br from-blue-600/20 via-transparent to-teal-400/20 opacity-40" />
-                               <div className="p-4 sm:p-6 bg-blue-600 rounded-full shadow-[0_0_50px_rgba(37,99,235,0.6)] lg:group-hover/vid:scale-110 transition-transform relative z-10">
-                                 <Play className="w-8 h-8 sm:w-10 sm:h-10 text-white fill-white" />
-                               </div>
-                               <p className="absolute bottom-6 sm:bottom-8 text-[9px] sm:text-[11px] text-blue-400 font-black uppercase tracking-[0.4em] z-10">Temporal Node Layer</p>
+                            <div className="rounded-[2rem] sm:rounded-[2.5rem] overflow-hidden border border-white/10 shadow-2xl aspect-video bg-black relative">
+                              <video
+                                src={node.content}
+                                className="w-full h-full object-cover"
+                                controls
+                                playsInline
+                              />
                             </div>
                           ) : (
                             <div className="space-y-4">
