@@ -1,4 +1,11 @@
 import { Request, Response, NextFunction } from 'express';
+import { verifySessionToken } from './auth';
+import { hasTierAccess, TierValue } from './tierPolicy';
+
+export interface AuthenticatedRequest extends Request {
+  authUserId?: string;
+  authTier?: string;
+}
 
 /**
  * Input validation middleware
@@ -47,6 +54,96 @@ export function validateChatInput(
 
   next();
 }
+
+function getRequestIp(req: Request): string {
+  const forwardedFor = req.headers['x-forwarded-for'];
+  if (typeof forwardedFor === 'string' && forwardedFor.trim()) {
+    return forwardedFor.split(',')[0].trim();
+  }
+  return req.ip || req.socket.remoteAddress || 'unknown';
+}
+
+export function logIdentityValidationFailure(
+  req: Request,
+  reason: string,
+  metadata?: Record<string, unknown>
+): void {
+  console.warn('[AUTH][DENY]', JSON.stringify({
+    timestamp: new Date().toISOString(),
+    reason,
+    method: req.method,
+    path: req.path,
+    ip: getRequestIp(req),
+    origin: req.headers.origin || null,
+    userAgent: req.headers['user-agent'] || null,
+    ...metadata,
+  }));
+}
+
+export function requireCanonicalIdentity(
+  req: Request,
+  res: Response,
+  next: NextFunction
+): void {
+  const authHeader = req.headers.authorization;
+  if (!authHeader || !authHeader.startsWith('Bearer ')) {
+    logIdentityValidationFailure(req, 'missing_or_invalid_authorization_header');
+    res.status(401).json({ error: 'Authentication required' });
+    return;
+  }
+
+  const token = authHeader.slice('Bearer '.length).trim();
+  const payload = verifySessionToken(token);
+  if (!payload) {
+    logIdentityValidationFailure(req, 'invalid_or_expired_session_token');
+    res.status(401).json({ error: 'Invalid or expired session' });
+    return;
+  }
+
+  (req as AuthenticatedRequest).authUserId = payload.userId;
+  next();
+}
+
+export const getAuthenticatedUserId = (req: Request): string | null => {
+  const authReq = req as AuthenticatedRequest;
+  return authReq.authUserId || null;
+};
+
+export const enforceAuthenticatedUserMatch = (
+  req: Request,
+  res: Response,
+  userIdToMatch: string | null | undefined,
+  sourceLabel: string
+): boolean => {
+  const authUserId = getAuthenticatedUserId(req);
+  if (!authUserId || !userIdToMatch || authUserId !== userIdToMatch) {
+    logIdentityValidationFailure(req, 'canonical_user_mismatch', {
+      authUserId,
+      userIdToMatch,
+      sourceLabel,
+    });
+    res.status(403).json({ error: 'Forbidden: canonical user mismatch' });
+    return false;
+  }
+  return true;
+};
+
+export const enforceTierAccess = (
+  req: Request,
+  res: Response,
+  minimumTier: TierValue
+): boolean => {
+  const authReq = req as AuthenticatedRequest;
+  if (!hasTierAccess(authReq.authTier, minimumTier)) {
+    logIdentityValidationFailure(req, 'tier_access_denied', {
+      authTier: authReq.authTier || null,
+      minimumTier,
+    });
+    res.status(403).json({ error: `Tier access denied. Requires ${minimumTier}` });
+    return false;
+  }
+  return true;
+};
 
 /**
  * Basic input sanitization to prevent XSS

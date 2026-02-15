@@ -1,12 +1,13 @@
 
 import React, { useState, useEffect, useRef } from 'react';
-import { 
-  Users, MessageSquare, Search, ShieldCheck, 
+import {
+  Users, MessageSquare, Search, ShieldCheck,
   Send, X, Sparkles, Globe, ArrowLeft,
   ChevronRight, MoreHorizontal, Smile, Paperclip,
   CheckCircle2, Lock, UserCheck, Smartphone, Info
 } from 'lucide-react';
 import { UserProfile } from '../types';
+import { buildAuthHeaders, getAuthToken } from '../services/sessionService';
 
 interface Member {
   id: string;
@@ -30,6 +31,7 @@ const STATIC_MEMBERS: Member[] = [
 ];
 
 const CommunityMembers: React.FC = () => {
+  const backendBaseUrl = (import.meta.env.VITE_BACKEND_URL || '').replace(/\/+$/, '');
   const [search, setSearch] = useState('');
   const [selectedMember, setSelectedMember] = useState<Member | null>(null);
   const [messages, setMessages] = useState<{[key: string]: {text: string, sender: 'me' | 'them', time: string}[]}>({});
@@ -38,36 +40,56 @@ const CommunityMembers: React.FC = () => {
   const chatEndRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    const loadDynamicMembers = () => {
-      const storedProfiles: UserProfile[] = JSON.parse(localStorage.getItem('hcn_profiles') || '[]');
-      const activeUser: UserProfile | null = JSON.parse(localStorage.getItem('hcn_active_user') || 'null');
+    const loadDynamicMembers = async () => {
+      const token = getAuthToken();
+      if (!token) {
+        setAllMembers(STATIC_MEMBERS);
+        return;
+      }
 
-      const dynamicMembers: Member[] = storedProfiles.map(profile => ({
-        id: profile.id,
-        name: profile.name,
-        role: `${profile.tier} Node`,
-        age: 0,
-        location: 'Decentralized Hub',
-        bio: profile.bio || 'Mission statement established.',
-        image: profile.avatarUrl || `https://api.dicebear.com/7.x/avataaars/svg?seed=${profile.id}`,
-        status: activeUser?.id === profile.id ? 'online' : 'offline',
-        verified: profile.identityVerified
-      }));
-
-      const combined = [...STATIC_MEMBERS];
-      dynamicMembers.forEach(dm => {
-        if (!combined.find(sm => sm.id === dm.id)) {
-          combined.push(dm);
+      try {
+        const activeUser: UserProfile | null = JSON.parse(localStorage.getItem('hcn_active_user') || 'null');
+        const response = await fetch(`${backendBaseUrl}/api/user/directory`, {
+          headers: buildAuthHeaders(),
+        });
+        if (!response.ok) {
+          setAllMembers(STATIC_MEMBERS);
+          return;
         }
-      });
-      setAllMembers(combined);
+
+        const payload = await response.json();
+        const directoryUsers = Array.isArray(payload?.users) ? payload.users : [];
+        const dynamicMembers: Member[] = directoryUsers.map((profile: any) => ({
+          id: profile.id,
+          name: profile.name || 'Node',
+          role: `${profile.tier || 'Free / Community Tier'} Node`,
+          age: 0,
+          location: 'Decentralized Hub',
+          bio: 'Mission statement established.',
+          image: `https://api.dicebear.com/7.x/avataaars/svg?seed=${profile.id}`,
+          status: activeUser?.id === profile.id ? 'online' : 'offline',
+          verified: true,
+        }));
+
+        const combined = [...STATIC_MEMBERS];
+        dynamicMembers.forEach(dm => {
+          if (!combined.find(sm => sm.id === dm.id)) {
+            combined.push(dm);
+          }
+        });
+        setAllMembers(combined);
+      } catch {
+        setAllMembers(STATIC_MEMBERS);
+      }
     };
 
-    loadDynamicMembers();
-    // Listen for storage changes in case of signup/signin in other contexts
-    window.addEventListener('storage', loadDynamicMembers);
-    return () => window.removeEventListener('storage', loadDynamicMembers);
-  }, []);
+    void loadDynamicMembers();
+    const handleStorage = () => {
+      void loadDynamicMembers();
+    };
+    window.addEventListener('storage', handleStorage);
+    return () => window.removeEventListener('storage', handleStorage);
+  }, [backendBaseUrl]);
 
   const filteredMembers = allMembers.filter(m => 
     m.name.toLowerCase().includes(search.toLowerCase()) || 

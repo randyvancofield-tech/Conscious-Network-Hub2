@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { Loader, CheckCircle, AlertCircle } from 'lucide-react';
+import { buildAuthHeaders } from '../services/sessionService';
 
 interface PaymentConfirmationProps {
   tier: string;
@@ -16,7 +17,7 @@ const PaymentConfirmation: React.FC<PaymentConfirmationProps> = ({
 }) => {
   const [status, setStatus] = useState<'processing' | 'success' | 'error'>('processing');
   const [error, setError] = useState('');
-  const backendBaseUrl = import.meta.env.VITE_BACKEND_URL || '';
+  const backendBaseUrl = (import.meta.env.VITE_BACKEND_URL || '').replace(/\/+$/, '');
 
   React.useEffect(() => {
     const processPayment = async () => {
@@ -24,7 +25,7 @@ const PaymentConfirmation: React.FC<PaymentConfirmationProps> = ({
         // Call membership confirmation endpoint
         const response = await fetch(`${backendBaseUrl}/api/membership/confirm-payment`, {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
+          headers: buildAuthHeaders({ 'Content-Type': 'application/json' }),
           body: JSON.stringify({ userId, tier })
         });
 
@@ -36,7 +37,8 @@ const PaymentConfirmation: React.FC<PaymentConfirmationProps> = ({
         
         // Fetch updated membership status
         const statusResponse = await fetch(
-          `${backendBaseUrl}/api/membership/status/${userId}`
+          `${backendBaseUrl}/api/membership/status/${userId}`,
+          { headers: buildAuthHeaders() }
         );
         const membershipData = await statusResponse.json();
 
@@ -127,7 +129,7 @@ const PaymentConfirmation: React.FC<PaymentConfirmationProps> = ({
                     try {
                       const response = await fetch(`${backendBaseUrl}/api/membership/confirm-payment`, {
                         method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
+                        headers: buildAuthHeaders({ 'Content-Type': 'application/json' }),
                         body: JSON.stringify({ userId, tier })
                       });
 
@@ -135,7 +137,8 @@ const PaymentConfirmation: React.FC<PaymentConfirmationProps> = ({
 
                       const data = await response.json();
                       const statusResponse = await fetch(
-                        `${backendBaseUrl}/api/membership/status/${userId}`
+                        `${backendBaseUrl}/api/membership/status/${userId}`,
+                        { headers: buildAuthHeaders() }
                       );
                       const membershipData = await statusResponse.json();
 

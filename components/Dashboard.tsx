@@ -17,7 +17,17 @@ const Dashboard: React.FC<DashboardProps> = ({ user, onEnroll, insightRef }) => 
       {/* Welcome Hero - Ethical AI Insight */}
       <section className="grid grid-cols-1 lg:grid-cols-3 gap-8">
         <div className="lg:col-span-2" id="latest-wisdom" ref={insightRef}>
-          <EthicalAIInsight userEmail={user?.email} userId={user?.id || user?.email} />
+          {user ? (
+            <EthicalAIInsight userEmail={user.email} userId={user.id} />
+          ) : (
+            <div className="glass-panel p-10 rounded-[2.5rem] border border-white/10 h-full flex flex-col justify-center items-center text-center space-y-4">
+              <ShieldCheck className="w-10 h-10 text-blue-400" />
+              <h3 className="text-lg font-black text-white uppercase tracking-widest">AI Insight Locked</h3>
+              <p className="text-slate-400 text-sm max-w-md">
+                Sign in with a canonical hub identity to access AI Insight.
+              </p>
+            </div>
+          )}
         </div>
 
         <div className="glass-panel p-10 rounded-[2.5rem] flex flex-col justify-between border-blue-500/10 shadow-2xl">

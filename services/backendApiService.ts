@@ -5,6 +5,7 @@
  * Google Cloud Vertex AI directly. This ensures API keys are never exposed
  * to the frontend.
  */
+import { buildAuthHeaders } from './sessionService';
 
 interface ImportMetaEnv {
   readonly VITE_BACKEND_URL?: string;
@@ -78,9 +79,9 @@ class BackendAPIService {
 
       const response = await fetch(`${this.baseUrl}/api/ai/chat`, {
         method: 'POST',
-        headers: {
+        headers: buildAuthHeaders({
           'Content-Type': 'application/json',
-        },
+        }),
         body: JSON.stringify({
           message: question,
           context,
@@ -149,9 +150,9 @@ class BackendAPIService {
     try {
       const response = await fetch(`${this.baseUrl}/api/ai/wisdom`, {
         method: 'POST',
-        headers: {
+        headers: buildAuthHeaders({
           'Content-Type': 'application/json',
-        },
+        }),
       });
 
       if (!response.ok) {
@@ -209,9 +210,9 @@ class BackendAPIService {
     try {
       const response = await fetch(`${this.baseUrl}/api/ai/summarize-meeting`, {
         method: 'POST',
-        headers: {
+        headers: buildAuthHeaders({
           'Content-Type': 'application/json',
-        },
+        }),
         body: JSON.stringify({ transcript }),
       });
 
@@ -269,9 +270,9 @@ class BackendAPIService {
     try {
       const response = await fetch(`${this.baseUrl}/api/ai/report-issue`, {
         method: 'POST',
-        headers: {
+        headers: buildAuthHeaders({
           'Content-Type': 'application/json',
-        },
+        }),
         body: JSON.stringify({
           title: issue.title,
           message: issue.description,
@@ -345,6 +346,7 @@ class BackendAPIService {
     try {
       const response = await fetch(`${this.baseUrl}/api/ai/trending`, {
         method: 'GET',
+        headers: buildAuthHeaders(),
       });
 
       if (!response.ok) {

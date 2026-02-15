@@ -1,11 +1,35 @@
 import { Router, Request, Response } from 'express';
-import { validateChatInput } from '../middleware';
+import {
+  enforceAuthenticatedUserMatch,
+  getAuthenticatedUserId,
+  validateChatInput,
+  requireCanonicalIdentity,
+} from '../middleware';
 import { getVertexAIService } from '../services/vertexAiService';
 import { getKnowledgeContext, KnowledgeSource } from '../services/knowledgeService';
 import emailService from '../services/emailService';
 import { chatWithOpenAI } from "../services/openAiService";
 
 const router = Router();
+router.use(requireCanonicalIdentity);
+
+const enforceCanonicalBodyUser = (req: Request, res: Response): boolean => {
+  const authUserId = getAuthenticatedUserId(req);
+  if (!authUserId) {
+    res.status(401).json({ error: 'Authentication required' });
+    return false;
+  }
+
+  const bodyUserId =
+    (typeof req.body?.userId === 'string' ? req.body.userId : undefined) ||
+    (typeof req.body?.context?.userId === 'string' ? req.body.context.userId : undefined);
+
+  if (bodyUserId && !enforceAuthenticatedUserMatch(req, res, bodyUserId, 'body.userId/context.userId')) {
+    return false;
+  }
+
+  return true;
+};
 
 interface ChatRequest {
   message: string;
@@ -132,6 +156,9 @@ const mergeSources = (
  */
 router.post('/chat', validateChatInput, async (req: Request, res: Response): Promise<void> => {
   try {
+    if (!enforceCanonicalBodyUser(req, res)) {
+      return;
+    }
     const { message } = req.body;
 
     if (!message) {
@@ -159,6 +186,9 @@ router.post('/chat', validateChatInput, async (req: Request, res: Response): Pro
  */
 router.post('/wisdom', async (req: Request, res: Response): Promise<void> => {
   try {
+    if (!enforceCanonicalBodyUser(req, res)) {
+      return;
+    }
     const prompt =
       "Generate a short, professional, academically grounded daily insight focused on Ethical AI, cybersecurity, decentralized platforms, or blockchain-based social networks. Keep it concise and factual.";
 
@@ -183,6 +213,9 @@ router.post('/wisdom', async (req: Request, res: Response): Promise<void> => {
  */
 router.post('/summarize-meeting', async (req: Request, res: Response): Promise<void> => {
   try {
+    if (!enforceCanonicalBodyUser(req, res)) {
+      return;
+    }
     const { transcript } = req.body as { transcript?: unknown };
 
     if (!Array.isArray(transcript)) {
@@ -233,6 +266,9 @@ router.post('/report-issue', validateChatInput, async (req: Request, res: Respon
   console.log('[API] POST /api/ai/report-issue - Issue report received');
   
   try {
+    if (!enforceCanonicalBodyUser(req, res)) {
+      return;
+    }
     const { message, category = 'other', context, title: titleParam, userEmail } = req.body as any;
 
     const title = titleParam || 'Issue Report';

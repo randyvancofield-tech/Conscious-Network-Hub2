@@ -1,5 +1,11 @@
 import { Router, Request, Response } from 'express';
 import { PrismaClient } from '@prisma/client';
+import {
+  enforceAuthenticatedUserMatch,
+  getAuthenticatedUserId,
+  requireCanonicalIdentity,
+} from '../middleware';
+import { normalizeTier } from '../tierPolicy';
 
 const router = Router();
 let prismaInstance: PrismaClient | null = null;
@@ -24,13 +30,18 @@ const TIER_PRICING: Record<string, { name: string; price: number }> = {
  * POST /api/membership/select-tier
  * User selects a tier and initiates membership process
  */
-router.post('/select-tier', async (req: Request, res: Response): Promise<any> => {
+router.post('/select-tier', requireCanonicalIdentity, async (req: Request, res: Response): Promise<any> => {
   try {
+    const authUserId = getAuthenticatedUserId(req);
     const { userId, tier } = req.body;
     const prisma = getPrismaClient();
 
-    if (!userId || !tier) {
+    if (!authUserId || !userId || !tier) {
       return res.status(400).json({ error: 'Missing userId or tier' });
+    }
+
+    if (!enforceAuthenticatedUserMatch(req, res, userId, 'body.userId')) {
+      return;
     }
 
     if (!TIER_PRICING[tier]) {
@@ -39,7 +50,7 @@ router.post('/select-tier', async (req: Request, res: Response): Promise<any> =>
 
     // Check if user exists
     const user = await prisma.user.findUnique({
-      where: { id: userId }
+      where: { id: authUserId }
     });
 
     if (!user) {
@@ -48,14 +59,14 @@ router.post('/select-tier', async (req: Request, res: Response): Promise<any> =>
 
     // Create or update membership
     const membership = await prisma.membership.upsert({
-      where: { userId },
+      where: { userId: authUserId },
       update: {
         tier,
         status: 'active',
         startDate: new Date()
       },
       create: {
-        userId,
+        userId: authUserId,
         tier,
         status: 'active',
         startDate: new Date()
@@ -66,7 +77,7 @@ router.post('/select-tier', async (req: Request, res: Response): Promise<any> =>
     const tierInfo = TIER_PRICING[tier];
     const payment = await prisma.paymentHistory.create({
       data: {
-        userId,
+        userId: authUserId,
         membershipId: membership.id,
         amount: tierInfo.price,
         tier,
@@ -79,7 +90,7 @@ router.post('/select-tier', async (req: Request, res: Response): Promise<any> =>
 
     // Update user tier and subscription status
     const updatedUser = await prisma.user.update({
-      where: { id: userId },
+      where: { id: authUserId },
       data: {
         tier,
         subscriptionStatus: 'active',
@@ -103,7 +114,7 @@ router.post('/select-tier', async (req: Request, res: Response): Promise<any> =>
       },
       user: {
         id: updatedUser.id,
-        tier: updatedUser.tier,
+        tier: normalizeTier(updatedUser.tier),
         subscriptionStatus: updatedUser.subscriptionStatus
       }
     });
@@ -117,9 +128,13 @@ router.post('/select-tier', async (req: Request, res: Response): Promise<any> =>
  * GET /api/membership/status/:userId
  * Get user's membership and subscription status
  */
-router.get('/status/:userId', async (req: Request, res: Response): Promise<any> => {
+router.get('/status/:userId', requireCanonicalIdentity, async (req: Request, res: Response): Promise<any> => {
   try {
     const { userId } = req.params;
+    if (!enforceAuthenticatedUserMatch(req, res, userId, 'params.userId')) {
+      return;
+    }
+
     const prisma = getPrismaClient();
 
     const user = await prisma.user.findUnique({
@@ -145,9 +160,10 @@ router.get('/status/:userId', async (req: Request, res: Response): Promise<any> 
         id: user.id,
         email: user.email,
         name: user.name,
-        tier: user.tier,
+        tier: normalizeTier(user.tier),
         subscriptionStatus: user.subscriptionStatus,
-        subscriptionStartDate: user.subscriptionStartDate
+        subscriptionStartDate: user.subscriptionStartDate,
+        createdAt: user.createdAt,
       },
       membership: user.memberships[0] || null,
       paymentHistory: user.payments,
@@ -163,13 +179,18 @@ router.get('/status/:userId', async (req: Request, res: Response): Promise<any> 
  * POST /api/membership/confirm-payment
  * Simulated payment confirmation endpoint for MVP
  */
-router.post('/confirm-payment', async (req: Request, res: Response): Promise<any> => {
+router.post('/confirm-payment', requireCanonicalIdentity, async (req: Request, res: Response): Promise<any> => {
   try {
+    const authUserId = getAuthenticatedUserId(req);
     const { userId, tier } = req.body;
     const prisma = getPrismaClient();
 
-    if (!userId || !tier) {
+    if (!authUserId || !userId || !tier) {
       return res.status(400).json({ error: 'Missing required fields' });
+    }
+
+    if (!enforceAuthenticatedUserMatch(req, res, userId, 'body.userId')) {
+      return;
     }
 
     // Simulate 2-second processing delay
@@ -177,8 +198,11 @@ router.post('/confirm-payment', async (req: Request, res: Response): Promise<any
 
     // Create payment confirmation
     const tierInfo = TIER_PRICING[tier];
+    if (!tierInfo) {
+      return res.status(400).json({ error: 'Invalid tier selected' });
+    }
     const membership = await prisma.membership.findUnique({
-      where: { userId }
+      where: { userId: authUserId }
     });
 
     if (!membership) {
@@ -187,14 +211,14 @@ router.post('/confirm-payment', async (req: Request, res: Response): Promise<any
 
     const payment = await prisma.paymentHistory.create({
       data: {
-        userId,
+        userId: authUserId,
         membershipId: membership.id,
         amount: tierInfo.price,
         tier,
         currency: 'USD',
         status: 'completed',
         paymentMethod: 'mock',
-        description: `Payment Confirmation - ${tier}`
+        description: `MVP Membership - ${tier} (Mock Payment)`
       }
     });
 

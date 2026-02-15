@@ -1,5 +1,10 @@
 import { Router, Request, Response } from 'express';
 import { PrismaClient } from '@prisma/client';
+import {
+  enforceAuthenticatedUserMatch,
+  getAuthenticatedUserId,
+  requireCanonicalIdentity,
+} from '../middleware';
 
 const router = Router();
 let prismaInstance: PrismaClient | null = null;
@@ -33,15 +38,19 @@ function getPrismaClient() {
  * POST /api/reflection
  * Create a new reflection (with fileUrl and fileType)
  */
-router.post('/', async (req: Request, res: Response): Promise<any> => {
+router.post('/', requireCanonicalIdentity, async (req: Request, res: Response): Promise<any> => {
   try {
+    const authUserId = getAuthenticatedUserId(req);
     const { userId, content, fileUrl, fileType } = req.body;
     const prisma = getPrismaClient();
-    if (!userId || !fileUrl || !fileType) {
+    if (!authUserId || !userId || !fileUrl || !fileType) {
       return res.status(400).json({ error: 'Missing required fields' });
     }
+    if (!enforceAuthenticatedUserMatch(req, res, userId, 'body.userId')) {
+      return;
+    }
     const reflection = await prisma.reflection.create({
-      data: { userId, content, fileUrl: absolutizeUrl(req, fileUrl)!, fileType }
+      data: { userId: authUserId, content, fileUrl: absolutizeUrl(req, fileUrl)!, fileType }
     });
     res.json({ success: true, reflection });
   } catch (error) {
@@ -54,9 +63,12 @@ router.post('/', async (req: Request, res: Response): Promise<any> => {
  * GET /api/reflection/:userId
  * Get all reflections for a user
  */
-router.get('/:userId', async (req: Request, res: Response): Promise<any> => {
+router.get('/:userId', requireCanonicalIdentity, async (req: Request, res: Response): Promise<any> => {
   try {
     const { userId } = req.params;
+    if (!enforceAuthenticatedUserMatch(req, res, userId, 'params.userId')) {
+      return;
+    }
     const prisma = getPrismaClient();
     const reflections = await prisma.reflection.findMany({
       where: { userId },

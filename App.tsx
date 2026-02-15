@@ -26,6 +26,8 @@ import aiTransparencyPolicy from './docs/compliance/ai-transparency-policy-draft
 import blockchainDataPolicy from './docs/compliance/blockchain-data-policy-draft.md?raw';
 import vendorApiGovernancePolicy from './docs/compliance/vendor-api-governance-policy-draft.md?raw';
 import nistMappingSummary from './docs/compliance/nist-mapping-summary.md?raw';
+import { buildAuthHeaders, clearAuthSession, getAuthToken, setAuthSession } from './services/sessionService';
+import { canTierAccessNavItem, canTierAccessView } from './services/tierAccess';
 
 const App: React.FC = () => {
   const [currentView, setCurrentView] = useState<AppView>(AppView.ENTRY);
@@ -36,7 +38,7 @@ const App: React.FC = () => {
   const [isSignupModalOpen, setSignupModalOpen] = useState(false);
   const [isSigninModalOpen, setSigninModalOpen] = useState(false);
   const [isWalletOpen, setWalletOpen] = useState(false);
-  const [selectedTier, setSelectedTier] = useState('Free / Community');
+  const [selectedTier, setSelectedTier] = useState('Free / Community Tier');
   
   const [hasApiKey, setHasApiKey] = useState<boolean | null>(null);
 
@@ -89,6 +91,34 @@ const App: React.FC = () => {
     }
   ];
 
+  const resolveBackendUrl = () => {
+    if (import.meta.env.VITE_BACKEND_URL) return import.meta.env.VITE_BACKEND_URL.replace(/\/+$/, '');
+    if (typeof window !== 'undefined') {
+      return window.location.origin.replace(/\/+$/, '');
+    }
+    return '';
+  };
+
+  const toCanonicalUser = (rawUser: any): UserProfile => ({
+    id: rawUser.id,
+    name: rawUser.name || (rawUser.email ? rawUser.email.split('@')[0] : 'Node'),
+    email: rawUser.email,
+    tier: rawUser.tier || 'Free / Community Tier',
+    createdAt: rawUser.createdAt || new Date().toISOString(),
+    hasProfile: rawUser.hasProfile ?? false,
+    identityVerified: true,
+    reputationScore: rawUser.reputationScore ?? 100,
+    walletBalanceTokens: rawUser.walletBalanceTokens ?? 200,
+    avatarUrl: rawUser.avatarUrl,
+    bannerUrl: rawUser.bannerUrl,
+    bio: rawUser.bio,
+    interests: rawUser.interests,
+    twitterUrl: rawUser.twitterUrl,
+    githubUrl: rawUser.githubUrl,
+    websiteUrl: rawUser.websiteUrl,
+    privacySettings: rawUser.privacySettings,
+  });
+
   useEffect(() => {
     const checkApiKey = async () => {
       // @ts-ignore
@@ -103,14 +133,37 @@ const App: React.FC = () => {
     checkApiKey();
 
     if (window.innerWidth >= 1024) setSidebarOpen(true);
-
-    const savedUser = localStorage.getItem('hcn_active_user');
-    if (savedUser) {
-      setUser(JSON.parse(savedUser));
-      setCurrentView(AppView.DASHBOARD);
-    }
     const savedCourses = localStorage.getItem('hcn_enrolled_courses');
     if (savedCourses) setEnrolledCourses(JSON.parse(savedCourses));
+
+    const initializeSession = async () => {
+      const token = getAuthToken();
+      if (!token) {
+        return;
+      }
+
+      try {
+        const response = await fetch(`${resolveBackendUrl()}/api/user/current`, {
+          headers: buildAuthHeaders(),
+        });
+        if (!response.ok) {
+          clearAuthSession();
+          setUser(null);
+          return;
+        }
+
+        const data = await response.json();
+        const canonicalUser = toCanonicalUser(data.user);
+        setUser(canonicalUser);
+        setAuthSession(token, canonicalUser);
+        setCurrentView(AppView.DASHBOARD);
+      } catch {
+        clearAuthSession();
+        setUser(null);
+      }
+    };
+
+    initializeSession();
   }, []);
 
   useEffect(() => {
@@ -119,14 +172,6 @@ const App: React.FC = () => {
       setDropdownPos({ top: rect.bottom, left: rect.left });
     }
   }, [isConnectDropdownOpen]);
-
-  const resolveBackendUrl = () => {
-    if (import.meta.env.VITE_BACKEND_URL) return import.meta.env.VITE_BACKEND_URL;
-    if (typeof window !== 'undefined') {
-      return window.location.origin;
-    }
-    return '';
-  };
 
   useEffect(() => {
     const controller = new AbortController();
@@ -149,6 +194,12 @@ const App: React.FC = () => {
     }
   }, [pendingScrollWisdom, currentView]);
 
+  useEffect(() => {
+    if (user && !canTierAccessView(user.tier, currentView)) {
+      setCurrentView(AppView.DASHBOARD);
+    }
+  }, [user, currentView]);
+
   const handleOpenSelectKey = async () => {
     // @ts-ignore
     if (window.aistudio?.openSelectKey) {
@@ -165,6 +216,7 @@ const App: React.FC = () => {
   const handleGoHome = () => setCurrentView(AppView.ENTRY);
   
   const handleExploreAsGuest = () => {
+    clearAuthSession();
     setUser(null);
     setCurrentView(AppView.DASHBOARD);
     if (window.innerWidth >= 1024) setSidebarOpen(true);
@@ -175,64 +227,120 @@ const App: React.FC = () => {
     if (window.innerWidth < 1024) setSidebarOpen(false);
   };
 
+  const refreshCanonicalUser = async (): Promise<UserProfile | null> => {
+    try {
+      const response = await fetch(`${resolveBackendUrl()}/api/user/current`, {
+        headers: buildAuthHeaders(),
+      });
+      if (!response.ok) {
+        clearAuthSession();
+        setUser(null);
+        return null;
+      }
+      const data = await response.json();
+      const canonicalUser = toCanonicalUser(data.user);
+      setUser(canonicalUser);
+      const token = getAuthToken();
+      if (token) {
+        setAuthSession(token, canonicalUser);
+      }
+      return canonicalUser;
+    } catch {
+      clearAuthSession();
+      setUser(null);
+      return null;
+    }
+  };
+
   const handleSignIn = async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
-    const existingProfiles: UserProfile[] = JSON.parse(localStorage.getItem('hcn_profiles') || '[]');
-    const foundUser = existingProfiles.find(p => p.email === emailInput.toLowerCase());
-    if (foundUser) {
-      const inputHash = await hashPassword(passwordInput);
-      if (foundUser.passwordHash === inputHash) {
-        localStorage.setItem('hcn_active_user', JSON.stringify(foundUser));
-        setUser(foundUser);
-        closeModals();
-        setCurrentView(AppView.DASHBOARD);
-        if (window.innerWidth >= 1024) setSidebarOpen(true);
-      } else setError('Invalid credentials.');
-    } else setError('Invalid credentials.');
+
+    try {
+      const response = await fetch(`${resolveBackendUrl()}/api/user/signin`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          email: emailInput,
+          password: passwordInput,
+        }),
+      });
+
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        setError(data?.error || 'Invalid credentials.');
+        return;
+      }
+
+      const canonicalUser = toCanonicalUser(data.user);
+      setAuthSession(data.token, canonicalUser);
+      setUser(canonicalUser);
+      setIsSelectingTier(false);
+      closeModals();
+      setCurrentView(AppView.DASHBOARD);
+      if (window.innerWidth >= 1024) setSidebarOpen(true);
+    } catch {
+      setError('Unable to sign in. Please try again.');
+    }
   };
 
   const handleCreateProfile = async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
-    if (passwordInput !== confirmPasswordInput) { setError('Passwords match error.'); return; }
-    
-    const identityName = emailInput.split('@')[0];
-    const passwordHash = await hashPassword(passwordInput);
+    if (passwordInput !== confirmPasswordInput) {
+      setError('Passwords match error.');
+      return;
+    }
 
-    const newUser: UserProfile = {
-      id: Math.random().toString(36).substr(2, 9),
-      name: identityName,
-      email: emailInput.toLowerCase(),
-      passwordHash: passwordHash,
-      tier: selectedTier,
-      identityVerified: true,
-      reputationScore: 100,
-      walletBalanceTokens: 200, // Seed with some tokens for testing
-      createdAt: new Date().toISOString(),
-      hasProfile: false
-    };
+    try {
+      const identityName = emailInput.split('@')[0] || 'Node';
+      const response = await fetch(`${resolveBackendUrl()}/api/user/create`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          email: emailInput,
+          name: identityName,
+          password: passwordInput,
+        }),
+      });
 
-    const existingProfiles: UserProfile[] = JSON.parse(localStorage.getItem('hcn_profiles') || '[]');
-    existingProfiles.push(newUser);
-    localStorage.setItem('hcn_profiles', JSON.stringify(existingProfiles));
-    localStorage.setItem('hcn_active_user', JSON.stringify(newUser));
-    setUser(newUser);
-    closeModals();
-    // Redirect to membership selection (tier selection flow)
-    setCurrentView(AppView.MEMBERSHIP_ACCESS);
-    setIsSelectingTier(true);
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        setError(data?.error || 'Unable to create profile.');
+        return;
+      }
+      if (!data?.persistenceVerified) {
+        setError('Profile persistence verification failed.');
+        return;
+      }
+
+      const canonicalUser = toCanonicalUser(data.user);
+      setAuthSession(data.token, canonicalUser);
+      setUser(canonicalUser);
+      closeModals();
+      setCurrentView(AppView.MEMBERSHIP_ACCESS);
+      setIsSelectingTier(true);
+    } catch {
+      setError('Unable to create profile. Please try again.');
+    }
   };
 
   const handleMembershipTierSelect = async (tier: string) => {
     if (!user) return;
+    setSelectedTier(tier);
     
     try {
+      const canonicalUser = await refreshCanonicalUser();
+      if (!canonicalUser) {
+        setError('Session expired. Please sign in again.');
+        return;
+      }
+
       // Call backend to select tier and create membership
       const response = await fetch(`${resolveBackendUrl()}/api/membership/select-tier`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ userId: user.id, tier })
+        headers: buildAuthHeaders({ 'Content-Type': 'application/json' }),
+        body: JSON.stringify({ userId: canonicalUser.id, tier })
       });
 
       if (!response.ok) {
@@ -241,10 +349,15 @@ const App: React.FC = () => {
 
       const data = await response.json();
       
-      // Update user tier in local storage
-      const updatedUser = { ...user, tier };
-      setUser(updatedUser);
-      localStorage.setItem('hcn_active_user', JSON.stringify(updatedUser));
+      // Only mutate local membership state from backend-confirmed data.
+      if (data?.user?.tier) {
+        const updatedUser = { ...canonicalUser, tier: data.user.tier };
+        setUser(updatedUser);
+        const token = getAuthToken();
+        if (token) {
+          setAuthSession(token, updatedUser);
+        }
+      }
       
       // Show payment confirmation
       setShowPaymentConfirmation(true);
@@ -255,24 +368,29 @@ const App: React.FC = () => {
   };
 
   const handlePaymentSuccess = () => {
-    setShowPaymentConfirmation(false);
-    setIsSelectingTier(false);
-    setCurrentView(AppView.DASHBOARD);
-    if (window.innerWidth >= 1024) setSidebarOpen(true);
+    const finalize = async () => {
+      const refreshed = await refreshCanonicalUser();
+      if (!refreshed) {
+        setError('Unable to verify membership state. Please sign in again.');
+        handleSignOut();
+        return;
+      }
+      setShowPaymentConfirmation(false);
+      setIsSelectingTier(false);
+      setCurrentView(AppView.DASHBOARD);
+      if (window.innerWidth >= 1024) setSidebarOpen(true);
+    };
+
+    void finalize();
   };
 
   const handleSignOut = () => {
-    localStorage.removeItem('hcn_active_user');
+    clearAuthSession();
     setUser(null);
+    setIsSelectingTier(false);
+    setShowPaymentConfirmation(false);
     setCurrentView(AppView.ENTRY);
     setSidebarOpen(false);
-  };
-
-  const hashPassword = async (p: string) => {
-    const encoder = new TextEncoder();
-    const data = encoder.encode(p);
-    const hash = await crypto.subtle.digest('SHA-256', data);
-    return Array.from(new Uint8Array(hash)).map(b => b.toString(16).padStart(2, '0')).join('');
   };
 
   const closeModals = () => {
@@ -324,11 +442,34 @@ const App: React.FC = () => {
   };
 
   const updateActiveUser = (updated: UserProfile) => {
-    setUser(updated);
-    localStorage.setItem('hcn_active_user', JSON.stringify(updated));
+    const canonicalUpdated = toCanonicalUser({ ...user, ...updated });
+    setUser(canonicalUpdated);
+    const token = getAuthToken();
+    if (token) {
+      setAuthSession(token, canonicalUpdated);
+    }
   };
 
+  const navViewMap: Record<string, AppView> = {
+    dashboard: AppView.DASHBOARD,
+    'social-learning': AppView.CONSCIOUS_SOCIAL_LEARNING,
+    meetings: AppView.CONSCIOUS_MEETINGS,
+    'my-courses': AppView.MY_COURSES,
+    providers: AppView.PROVIDERS,
+    profile: AppView.PROFILE,
+    membership: AppView.MEMBERSHIP,
+  };
+
+  const filteredNavigationItems = useMemo(() => {
+    if (!user) return NAVIGATION_ITEMS;
+    return NAVIGATION_ITEMS.filter((item) => canTierAccessNavItem(user.tier, item.id));
+  }, [user]);
+
   const renderActiveView = () => {
+    if (user && !canTierAccessView(user.tier, currentView)) {
+      return <Dashboard user={user} onEnroll={enrollCourse} insightRef={insightRef} />;
+    }
+
     switch (currentView) {
       case AppView.DASHBOARD: 
         return <Dashboard user={user} onEnroll={enrollCourse} insightRef={insightRef} />;
@@ -730,23 +871,15 @@ const App: React.FC = () => {
                 </div>
                 
                 <nav className="flex-1 space-y-4">
-                  {NAVIGATION_ITEMS.map((item) => {
-                    const viewMap: any = {
-                      'dashboard': AppView.DASHBOARD,
-                      'social-learning': AppView.CONSCIOUS_SOCIAL_LEARNING,
-                      'meetings': AppView.CONSCIOUS_MEETINGS,
-                      'my-courses': AppView.MY_COURSES,
-                      'providers': AppView.PROVIDERS,
-                      'profile': AppView.PROFILE,
-                      'membership': AppView.MEMBERSHIP,
-                    };
-                    const isActive = currentView === viewMap[item.id];
+                  {filteredNavigationItems.map((item) => {
+                    const view = navViewMap[item.id];
+                    const isActive = currentView === view;
                     return (
                       <button
                         key={item.id}
                         onClick={() => {
-                          if (viewMap[item.id]) {
-                            setCurrentView(viewMap[item.id]);
+                          if (view) {
+                            setCurrentView(view);
                             closeSidebarOnMobile();
                           }
                         }}
@@ -761,7 +894,16 @@ const App: React.FC = () => {
 
                 <div className="pt-10 border-t border-white/5 space-y-4">
                   <button 
-                    onClick={() => { setWalletOpen(true); closeSidebarOnMobile(); }} 
+                    onClick={() => {
+                      if (!user) {
+                        setError('Sign in required for wallet access.');
+                        setSigninModalOpen(true);
+                        closeSidebarOnMobile();
+                        return;
+                      }
+                      setWalletOpen(true);
+                      closeSidebarOnMobile();
+                    }} 
                     className="w-full flex items-center justify-between p-4 bg-blue-600/5 hover:bg-blue-600/10 rounded-2xl border border-blue-500/10 transition-all group"
                   >
                     <div className="flex items-center gap-4">

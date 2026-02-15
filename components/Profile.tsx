@@ -1,6 +1,7 @@
 import React, { useState, useEffect, ChangeEvent } from 'react';
 import axios from 'axios';
 import { UserProfile } from '../types';
+import { buildAuthHeaders } from '../services/sessionService';
 
 interface Reflection {
   id: string;
@@ -39,7 +40,9 @@ const Profile: React.FC<ProfileProps> = ({ user, onUserUpdate }) => {
 
   const fetchReflections = async () => {
     try {
-      const res = await axios.get(toApiUrl(`/api/reflection/${user.id}`));
+      const res = await axios.get(toApiUrl(`/api/reflection/${user.id}`), {
+        headers: buildAuthHeaders(),
+      });
       setReflections(
         (res.data.reflections || []).map((reflection: Reflection) => ({
           ...reflection,
@@ -69,11 +72,20 @@ const Profile: React.FC<ProfileProps> = ({ user, onUserUpdate }) => {
       if (bgVideo) {
         const formData = new FormData();
         formData.append('video', bgVideo);
-        const uploadRes = await axios.post(toApiUrl('/api/upload/profile-background'), formData, { headers: { 'Content-Type': 'multipart/form-data' } });
+        const uploadRes = await axios.post(toApiUrl('/api/upload/profile-background'), formData, {
+          headers: {
+            ...buildAuthHeaders(),
+            'Content-Type': 'multipart/form-data',
+          },
+        });
         videoUrl = uploadRes.data.fileUrl;
         setBgVideoUrl(videoUrl);
       }
-      const res = await axios.put(toApiUrl(`/api/user/${user.id}`), { ...editData, profileBackgroundVideo: videoUrl });
+      const res = await axios.put(
+        toApiUrl(`/api/user/${user.id}`),
+        { ...editData, profileBackgroundVideo: videoUrl },
+        { headers: buildAuthHeaders() }
+      );
       onUserUpdate(res.data.user);
     } catch (e) {
       setError('Failed to update profile');
@@ -94,10 +106,19 @@ const Profile: React.FC<ProfileProps> = ({ user, onUserUpdate }) => {
     try {
       const formData = new FormData();
       formData.append('file', reflectionFile);
-      const uploadRes = await axios.post(toApiUrl('/api/upload/reflection'), formData, { headers: { 'Content-Type': 'multipart/form-data' } });
+      const uploadRes = await axios.post(toApiUrl('/api/upload/reflection'), formData, {
+        headers: {
+          ...buildAuthHeaders(),
+          'Content-Type': 'multipart/form-data',
+        },
+      });
       const fileUrl = uploadRes.data.fileUrl;
       const fileType = reflectionFile.type.startsWith('video') ? 'video' : 'document';
-      await axios.post(toApiUrl('/api/reflection'), { userId: user.id, content: reflectionContent, fileUrl, fileType });
+      await axios.post(
+        toApiUrl('/api/reflection'),
+        { userId: user.id, content: reflectionContent, fileUrl, fileType },
+        { headers: buildAuthHeaders() }
+      );
       setReflectionFile(null);
       setReflectionContent('');
       fetchReflections();
