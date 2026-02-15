@@ -595,8 +595,8 @@ const App: React.FC = () => {
         )}
 
         {currentView === AppView.MEMBERSHIP_ACCESS && (
-          <div className="min-h-screen p-4 sm:p-6 md:p-8 lg:p-12 xl:p-20 overflow-y-auto custom-scrollbar animate-in fade-in duration-700 relative z-10">
-            <div className="max-w-7xl mx-auto space-y-8 sm:space-y-10 md:space-y-12">
+          <div className="h-[100dvh] p-4 sm:p-6 md:p-8 lg:p-12 xl:p-20 overflow-y-auto overscroll-y-contain custom-scrollbar animate-in fade-in duration-700 relative z-10">
+            <div className="max-w-7xl mx-auto space-y-8 sm:space-y-10 md:space-y-12 pb-6 sm:pb-10">
               <button onClick={handleGoHome} className="flex items-center gap-2 sm:gap-3 text-slate-500 hover:text-white transition-colors group">
                 <Home className="w-4 h-4 sm:w-5 sm:h-5" /> <span className="font-bold uppercase tracking-[0.4em] text-[9px] sm:text-[10px]">Portal Entry</span>
               </button>
@@ -606,32 +606,32 @@ const App: React.FC = () => {
                 <p className="text-slate-400 text-sm sm:text-base md:text-lg font-light px-2 sm:px-0">Select your level of integration within the decentralized ecosystem.</p>
               </div>
 
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 sm:gap-7 md:gap-8">
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5 sm:gap-7 md:gap-8">
                 {TIERS.map((tier) => (
-                  <div key={tier.name} className={`glass-panel p-10 rounded-[2.5rem] border-white/5 hover:border-${tier.color}-500/30 transition-all flex flex-col justify-between group shadow-2xl relative overflow-hidden border-t-4 border-t-${tier.color}-500/20`}>
-                    <div className={`absolute top-0 right-0 p-8 opacity-5 group-hover:opacity-10 transition-opacity text-${tier.color}-400`}><Shield className="w-24 h-24" /></div>
+                  <div key={tier.name} className={`glass-panel p-5 sm:p-8 md:p-10 rounded-[1.75rem] sm:rounded-[2.5rem] border-white/5 hover:border-${tier.color}-500/30 transition-all flex flex-col justify-between group shadow-2xl relative overflow-hidden border-t-4 border-t-${tier.color}-500/20 min-h-[25rem] sm:min-h-[27rem]`}>
+                    <div className={`absolute top-0 right-0 p-4 sm:p-8 opacity-5 group-hover:opacity-10 transition-opacity text-${tier.color}-400`}><Shield className="w-16 h-16 sm:w-24 sm:h-24" /></div>
                     <div>
-                      <div className="flex justify-between items-start mb-2">
-                        <h3 className="text-2xl font-black text-white leading-tight uppercase tracking-tighter">{tier.name}</h3>
-                        <span className={`px-4 py-1.5 bg-${tier.color}-500/20 text-${tier.color}-400 rounded-full text-[10px] font-black whitespace-nowrap tracking-widest`}>{tier.price}</span>
+                      <div className="flex justify-between items-start gap-3 mb-2">
+                        <h3 className="text-xl sm:text-2xl font-black text-white leading-tight uppercase tracking-tighter">{tier.name}</h3>
+                        <span className={`px-3 sm:px-4 py-1 sm:py-1.5 bg-${tier.color}-500/20 text-${tier.color}-400 rounded-full text-[9px] sm:text-[10px] font-black whitespace-nowrap tracking-widest`}>{tier.price}</span>
                       </div>
-                      <p className="text-blue-400/60 text-[9px] font-black uppercase tracking-[0.3em] mb-8">Sovereign Node Package</p>
+                      <p className="text-blue-400/60 text-[8px] sm:text-[9px] font-black uppercase tracking-[0.3em] mb-6 sm:mb-8">Sovereign Node Package</p>
                       
-                      <div className="space-y-6">
+                      <div className="space-y-4 sm:space-y-6">
                         <div>
                           <h4 className="text-[9px] font-black text-slate-500 uppercase tracking-widest mb-2">Description</h4>
-                          <p className="text-slate-300 text-sm leading-relaxed font-light">{tier.description}</p>
+                          <p className="text-slate-300 text-xs sm:text-sm leading-relaxed font-light">{tier.description}</p>
                         </div>
                         <div>
                           <h4 className="text-[9px] font-black text-slate-500 uppercase tracking-widest mb-2">Access Level</h4>
-                          <div className="flex items-center gap-3 text-white text-xs font-medium">
-                            <CheckCircle2 className={`w-4 h-4 text-${tier.color}-400 shrink-0`} />
+                          <div className="flex items-center gap-2 sm:gap-3 text-white text-[11px] sm:text-xs font-medium">
+                            <CheckCircle2 className={`w-3.5 h-3.5 sm:w-4 sm:h-4 text-${tier.color}-400 shrink-0`} />
                             {tier.access}
                           </div>
                         </div>
                         <div>
                           <h4 className="text-[9px] font-black text-slate-500 uppercase tracking-widest mb-2">Ideal For</h4>
-                          <p className="text-slate-400 text-[11px] italic font-light">{tier.ideal}</p>
+                          <p className="text-slate-400 text-[10px] sm:text-[11px] italic font-light">{tier.ideal}</p>
                         </div>
                       </div>
                     </div>
@@ -646,7 +646,7 @@ const App: React.FC = () => {
                           setSignupModalOpen(true);
                         }
                       }}
-                      className={`mt-10 w-full py-5 bg-white/5 hover:bg-${tier.color}-600 text-white rounded-2xl font-black text-xs uppercase tracking-[0.2em] transition-all shadow-xl border border-white/5 hover:border-${tier.color}-500/50`}
+                      className={`mt-7 sm:mt-10 w-full py-4 sm:py-5 bg-white/5 hover:bg-${tier.color}-600 text-white rounded-xl sm:rounded-2xl font-black text-[10px] sm:text-xs uppercase tracking-[0.18em] sm:tracking-[0.2em] transition-all shadow-xl border border-white/5 hover:border-${tier.color}-500/50`}
                       disabled={showPaymentConfirmation}
                     >
                       Anchor as {tier.name.split(' ')[0]}
@@ -859,33 +859,33 @@ const App: React.FC = () => {
         <WalletPopout isOpen={isWalletOpen} onClose={() => setWalletOpen(false)} user={user} />
 
         {(isSignupModalOpen || isSigninModalOpen) && (
-          <div className="fixed inset-0 z-[200] flex items-center justify-center p-4 bg-black/95 backdrop-blur-3xl animate-in fade-in duration-300">
-            <div className="glass-panel w-full max-w-md p-12 rounded-[3rem] relative animate-in zoom-in duration-300 border-blue-500/20">
-              <button onClick={closeModals} className="absolute top-8 right-8 p-3 hover:bg-white/5 rounded-full transition-colors">
+          <div className="fixed inset-0 z-[200] flex items-start sm:items-center justify-center p-3 sm:p-4 overflow-y-auto bg-black/95 backdrop-blur-3xl animate-in fade-in duration-300">
+            <div className="glass-panel w-full max-w-md p-6 sm:p-10 md:p-12 rounded-[2rem] sm:rounded-[3rem] relative animate-in zoom-in duration-300 border-blue-500/20 my-4 sm:my-8 max-h-[calc(100dvh-1.5rem)] sm:max-h-[92dvh] overflow-y-auto">
+              <button onClick={closeModals} className="absolute top-4 right-4 sm:top-8 sm:right-8 p-2.5 sm:p-3 hover:bg-white/5 rounded-full transition-colors">
                 <X className="w-5 h-5 text-slate-500" />
               </button>
-              <h3 className="text-3xl font-black mb-10 text-white uppercase tracking-tighter">{isSigninModalOpen ? 'Sync Node' : 'Initialize Identity'}</h3>
-              <form onSubmit={isSigninModalOpen ? handleSignIn : handleCreateProfile} className="space-y-6">
-                {error && <p className="text-red-400 text-[10px] bg-red-400/10 p-4 rounded-xl border border-red-400/20 uppercase tracking-widest font-black">{error}</p>}
+              <h3 className="text-2xl sm:text-3xl font-black mb-6 sm:mb-10 text-white uppercase tracking-tighter">{isSigninModalOpen ? 'Sync Node' : 'Initialize Identity'}</h3>
+              <form onSubmit={isSigninModalOpen ? handleSignIn : handleCreateProfile} className="space-y-5 sm:space-y-6">
+                {error && <p className="text-red-400 text-[9px] sm:text-[10px] bg-red-400/10 p-3 sm:p-4 rounded-xl border border-red-400/20 uppercase tracking-widest font-black">{error}</p>}
                 <div className="space-y-3">
                   <label className="text-[9px] font-black text-slate-500 uppercase tracking-widest ml-2">Node Identifier</label>
-                  <input type="email" value={emailInput} onChange={e => setEmailInput(e.target.value)} className="w-full px-8 py-4 bg-white/5 border border-white/10 rounded-2xl text-white outline-none focus:ring-2 focus:ring-blue-500/50 transition-all font-medium text-sm" required placeholder="email@nexus.node" />
+                  <input type="email" value={emailInput} onChange={e => setEmailInput(e.target.value)} className="w-full px-5 sm:px-8 py-3 sm:py-4 bg-white/5 border border-white/10 rounded-xl sm:rounded-2xl text-white outline-none focus:ring-2 focus:ring-blue-500/50 transition-all font-medium text-sm" required placeholder="email@nexus.node" />
                 </div>
                 <div className="space-y-3">
                   <label className="text-[9px] font-black text-slate-500 uppercase tracking-widest ml-2">Secure Passkey</label>
-                  <input type="password" value={passwordInput} onChange={e => setPasswordInput(e.target.value)} className="w-full px-8 py-4 bg-white/5 border border-white/10 rounded-2xl text-white outline-none focus:ring-2 focus:ring-blue-500/50 transition-all font-medium text-sm" required placeholder="••••••••" />
+                  <input type="password" value={passwordInput} onChange={e => setPasswordInput(e.target.value)} className="w-full px-5 sm:px-8 py-3 sm:py-4 bg-white/5 border border-white/10 rounded-xl sm:rounded-2xl text-white outline-none focus:ring-2 focus:ring-blue-500/50 transition-all font-medium text-sm" required placeholder="••••••••" />
                 </div>
                 {!isSigninModalOpen && (
                   <div className="space-y-3">
                     <label className="text-[9px] font-black text-slate-500 uppercase tracking-widest ml-2">Verify Key</label>
-                    <input type="password" value={confirmPasswordInput} onChange={e => setConfirmPasswordInput(e.target.value)} className="w-full px-8 py-4 bg-white/5 border border-white/10 rounded-2xl text-white outline-none focus:ring-2 focus:ring-blue-500/50 transition-all font-medium text-sm" required placeholder="••••••••" />
+                    <input type="password" value={confirmPasswordInput} onChange={e => setConfirmPasswordInput(e.target.value)} className="w-full px-5 sm:px-8 py-3 sm:py-4 bg-white/5 border border-white/10 rounded-xl sm:rounded-2xl text-white outline-none focus:ring-2 focus:ring-blue-500/50 transition-all font-medium text-sm" required placeholder="••••••••" />
                   </div>
                 )}
-                <button type="submit" className="w-full py-5 bg-blue-600 hover:bg-blue-500 text-white rounded-2xl font-black text-sm uppercase tracking-widest transition-all shadow-2xl shadow-blue-900/40 mt-6">
+                <button type="submit" className="w-full py-4 sm:py-5 bg-blue-600 hover:bg-blue-500 text-white rounded-xl sm:rounded-2xl font-black text-xs sm:text-sm uppercase tracking-widest transition-all shadow-2xl shadow-blue-900/40 mt-4 sm:mt-6">
                   {isSigninModalOpen ? 'Initialize Session' : 'Create Identity Hash'}
                 </button>
               </form>
-              <div className="mt-8 text-center text-slate-500 text-[10px] font-black uppercase tracking-widest">
+              <div className="mt-6 sm:mt-8 text-center text-slate-500 text-[9px] sm:text-[10px] font-black uppercase tracking-widest">
                 {isSigninModalOpen ? "New Node?" : "Already Anchored?"}
                 <button onClick={() => { setSigninModalOpen(!isSigninModalOpen); setSignupModalOpen(!isSignupModalOpen); setError(''); }} className="ml-2 text-blue-400 hover:underline">
                   {isSigninModalOpen ? 'Register Identity' : 'Sync Existing'}
