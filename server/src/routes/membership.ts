@@ -7,7 +7,8 @@ import {
 } from '../middleware';
 import { normalizeTier } from '../tierPolicy';
 
-const router = Router();
+const publicRouter = Router();
+const protectedRouter = Router();
 let prismaInstance: PrismaClient | null = null;
 
 // Initialize Prisma Client lazily
@@ -26,11 +27,13 @@ const TIER_PRICING: Record<string, { name: string; price: number }> = {
   "Accelerated Tier": { name: "Accelerated Tier", price: 44 }
 };
 
+protectedRouter.use(requireCanonicalIdentity);
+
 /**
  * POST /api/membership/select-tier
  * User selects a tier and initiates membership process
  */
-router.post('/select-tier', requireCanonicalIdentity, async (req: Request, res: Response): Promise<any> => {
+protectedRouter.post('/select-tier', async (req: Request, res: Response): Promise<any> => {
   try {
     const authUserId = getAuthenticatedUserId(req);
     const { userId, tier } = req.body;
@@ -128,7 +131,7 @@ router.post('/select-tier', requireCanonicalIdentity, async (req: Request, res: 
  * GET /api/membership/status/:userId
  * Get user's membership and subscription status
  */
-router.get('/status/:userId', requireCanonicalIdentity, async (req: Request, res: Response): Promise<any> => {
+protectedRouter.get('/status/:userId', async (req: Request, res: Response): Promise<any> => {
   try {
     const { userId } = req.params;
     if (!enforceAuthenticatedUserMatch(req, res, userId, 'params.userId')) {
@@ -179,7 +182,7 @@ router.get('/status/:userId', requireCanonicalIdentity, async (req: Request, res
  * POST /api/membership/confirm-payment
  * Simulated payment confirmation endpoint for MVP
  */
-router.post('/confirm-payment', requireCanonicalIdentity, async (req: Request, res: Response): Promise<any> => {
+protectedRouter.post('/confirm-payment', async (req: Request, res: Response): Promise<any> => {
   try {
     const authUserId = getAuthenticatedUserId(req);
     const { userId, tier } = req.body;
@@ -243,9 +246,14 @@ router.post('/confirm-payment', requireCanonicalIdentity, async (req: Request, r
  * GET /api/membership/tiers
  * Get all available membership tiers
  */
-router.get('/tiers', (req: Request, res: Response): any => {
+publicRouter.get('/tiers', (req: Request, res: Response): any => {
   const tiers = Object.values(TIER_PRICING);
   return res.json({ tiers });
 });
 
+const router = Router();
+router.use(publicRouter);
+router.use(protectedRouter);
+
+export { publicRouter as membershipPublicRoutes, protectedRouter as membershipProtectedRoutes };
 export default router;

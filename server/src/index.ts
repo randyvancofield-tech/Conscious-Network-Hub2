@@ -8,9 +8,19 @@ import {
   requestLogger,
   errorHandler,
   healthCheck,
+  requireCanonicalIdentity,
 } from './middleware';
 import aiRoutes from './routes/ai';
-import membershipRoutes from './routes/membership';
+import {
+  membershipPublicRoutes,
+  membershipProtectedRoutes,
+} from './routes/membership';
+import {
+  userPublicRoutes,
+  userProtectedRoutes,
+} from './routes/user';
+import uploadRoutes from './routes/upload';
+import reflectionRoutes from './routes/reflection';
 import { initializeVertexAI } from './services/vertexAiService';
 
 // Load environment variables with local override first.
@@ -142,14 +152,16 @@ app.use(requestLogger);
 app.get('/health', healthCheck);
 
 // API routes
-import userRoutes from './routes/user';
-import uploadRoutes from './routes/upload';
-import reflectionRoutes from './routes/reflection';
-app.use('/api/ai', aiRoutes);
-app.use('/api/membership', membershipRoutes);
-app.use('/api/user', userRoutes);
-app.use('/api/upload', uploadRoutes);
-app.use('/api/reflection', reflectionRoutes);
+// Public routes are mounted first.
+app.use('/api/user', userPublicRoutes);
+app.use('/api/membership', membershipPublicRoutes);
+
+// Protected routes are mounted with auth middleware before handler execution.
+app.use('/api/user', requireCanonicalIdentity, userProtectedRoutes);
+app.use('/api/membership', requireCanonicalIdentity, membershipProtectedRoutes);
+app.use('/api/ai', requireCanonicalIdentity, aiRoutes);
+app.use('/api/upload', requireCanonicalIdentity, uploadRoutes);
+app.use('/api/reflection', requireCanonicalIdentity, reflectionRoutes);
 app.use('/uploads', express.static('public/uploads'));
 
 // Catch-all 404 handler

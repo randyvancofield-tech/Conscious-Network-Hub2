@@ -7,6 +7,7 @@ import {
 } from '../middleware';
 
 const router = Router();
+router.use(requireCanonicalIdentity);
 let prismaInstance: PrismaClient | null = null;
 
 function getPublicBaseUrl(req: Request): string {
@@ -38,7 +39,7 @@ function getPrismaClient() {
  * POST /api/reflection
  * Create a new reflection (with fileUrl and fileType)
  */
-router.post('/', requireCanonicalIdentity, async (req: Request, res: Response): Promise<any> => {
+router.post('/', async (req: Request, res: Response): Promise<any> => {
   try {
     const authUserId = getAuthenticatedUserId(req);
     const { userId, content, fileUrl, fileType } = req.body;
@@ -63,7 +64,7 @@ router.post('/', requireCanonicalIdentity, async (req: Request, res: Response): 
  * GET /api/reflection/:userId
  * Get all reflections for a user
  */
-router.get('/:userId', requireCanonicalIdentity, async (req: Request, res: Response): Promise<any> => {
+router.get('/:userId', async (req: Request, res: Response): Promise<any> => {
   try {
     const { userId } = req.params;
     if (!enforceAuthenticatedUserMatch(req, res, userId, 'params.userId')) {

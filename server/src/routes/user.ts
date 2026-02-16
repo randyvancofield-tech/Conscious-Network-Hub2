@@ -10,7 +10,8 @@ import {
 import { mirrorUserToGoogleSheets } from '../services/googleSheetsMirror';
 import { normalizeTier } from '../tierPolicy';
 
-const router = Router();
+const publicRouter = Router();
+const protectedRouter = Router();
 let prismaInstance: PrismaClient | null = null;
 
 function getPublicBaseUrl(req: Request): string {
@@ -58,7 +59,7 @@ const toPublicUser = (req: Request, user: any) => ({
  * POST /api/user/signin
  * Authenticate an existing user with canonical backend identity.
  */
-router.post('/signin', async (req: Request, res: Response): Promise<any> => {
+publicRouter.post('/signin', async (req: Request, res: Response): Promise<any> => {
   try {
     const email = String(req.body?.email || '')
       .trim()
@@ -106,7 +107,7 @@ router.post('/signin', async (req: Request, res: Response): Promise<any> => {
  * POST /api/user/create
  * Create a new canonical user profile in the database.
  */
-router.post('/create', async (req: Request, res: Response): Promise<any> => {
+publicRouter.post('/create', async (req: Request, res: Response): Promise<any> => {
   try {
     const email = String(req.body?.email || '')
       .trim()
@@ -174,7 +175,9 @@ router.post('/create', async (req: Request, res: Response): Promise<any> => {
  * GET /api/user/current
  * Return canonical authenticated user identity.
  */
-router.get('/current', requireCanonicalIdentity, async (req: Request, res: Response): Promise<any> => {
+protectedRouter.use(requireCanonicalIdentity);
+
+protectedRouter.get('/current', async (req: Request, res: Response): Promise<any> => {
   try {
     const authUserId = getAuthenticatedUserId(req);
     if (!authUserId) {
@@ -203,7 +206,7 @@ router.get('/current', requireCanonicalIdentity, async (req: Request, res: Respo
  * GET /api/user/reconcile/:id
  * Reconciliation endpoint for canonical identity/tier/created timestamp.
  */
-router.get('/reconcile/:id', requireCanonicalIdentity, async (req: Request, res: Response): Promise<any> => {
+protectedRouter.get('/reconcile/:id', async (req: Request, res: Response): Promise<any> => {
   try {
     const requestedId = req.params.id;
     if (!enforceAuthenticatedUserMatch(req, res, requestedId, 'params.id')) {
@@ -232,7 +235,7 @@ router.get('/reconcile/:id', requireCanonicalIdentity, async (req: Request, res:
  * GET /api/user/directory
  * Basic directory for authenticated hub users.
  */
-router.get('/directory', requireCanonicalIdentity, async (req: Request, res: Response): Promise<any> => {
+protectedRouter.get('/directory', async (req: Request, res: Response): Promise<any> => {
   try {
     const prisma = getPrismaClient();
     const users = await prisma.user.findMany({
@@ -266,7 +269,7 @@ router.get('/directory', requireCanonicalIdentity, async (req: Request, res: Res
  * Edit user profile (including background video).
  * Requires canonical identity match with user ID.
  */
-router.put('/:id', requireCanonicalIdentity, async (req: Request, res: Response): Promise<any> => {
+protectedRouter.put('/:id', async (req: Request, res: Response): Promise<any> => {
   try {
     const { id } = req.params;
     if (!enforceAuthenticatedUserMatch(req, res, id, 'params.id')) {
@@ -303,4 +306,9 @@ router.put('/:id', requireCanonicalIdentity, async (req: Request, res: Response)
   }
 });
 
+const router = Router();
+router.use(publicRouter);
+router.use(protectedRouter);
+
+export { publicRouter as userPublicRoutes, protectedRouter as userProtectedRoutes };
 export default router;

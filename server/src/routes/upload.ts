@@ -5,6 +5,7 @@ import fs from 'fs';
 import { requireCanonicalIdentity } from '../middleware';
 
 const router = Router();
+router.use(requireCanonicalIdentity);
 
 function getPublicBaseUrl(req: Request): string {
   const configured = process.env.PUBLIC_BASE_URL?.trim();
@@ -37,7 +38,7 @@ const upload = multer({ storage });
 type MulterRequest = Request & { file?: Express.Multer.File };
 
 // Upload endpoint for profile background video
-router.post('/profile-background', requireCanonicalIdentity, upload.single('video'), (req: Request, res: Response): void => {
+router.post('/profile-background', upload.single('video'), (req: Request, res: Response): void => {
   const mReq = req as MulterRequest;
   if (!mReq.file) {
     res.status(400).json({ error: 'No file uploaded' });
@@ -48,7 +49,7 @@ router.post('/profile-background', requireCanonicalIdentity, upload.single('vide
 });
 
 // Upload endpoint for reflection files (video/document)
-router.post('/reflection', requireCanonicalIdentity, upload.single('file'), (req: Request, res: Response): void => {
+router.post('/reflection', upload.single('file'), (req: Request, res: Response): void => {
   const mReq = req as MulterRequest;
   if (!mReq.file) {
     res.status(400).json({ error: 'No file uploaded' });
