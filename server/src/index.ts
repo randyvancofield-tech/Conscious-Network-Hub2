@@ -22,10 +22,20 @@ import {
 import uploadRoutes from './routes/upload';
 import reflectionRoutes from './routes/reflection';
 import { initializeVertexAI } from './services/vertexAiService';
+import { validateRequiredEnv } from './requiredEnv';
 
 // Load environment variables with local override first.
 dotenv.config({ path: '.env.local' });
 dotenv.config({ path: '.env' });
+
+try {
+  validateRequiredEnv();
+} catch (error) {
+  const message =
+    error instanceof Error ? error.message : 'Missing required secrets/environment variables';
+  console.error(message);
+  process.exit(1);
+}
 
 
 const NODE_ENV = process.env.NODE_ENV || 'development';

@@ -9,6 +9,7 @@
         "build": "tsc",
         "start": "npm run build && node dist/index.js",
         "test": "jest",
+        "test:required-secrets": "npm run build && node scripts/verify-required-secrets.js",
         "test:curl": "bash scripts/test.sh",
         "deploy:cloudrun": "powershell -ExecutionPolicy Bypass -File scripts/deploy-cloudrun.ps1",
         "check:cloudrun": "powershell -ExecutionPolicy Bypass -File scripts/post-deploy-check.ps1 -BackendUrl https://conscious-network-backend-181936518282.us-central1.run.app -Origin https://conscious-network.org"

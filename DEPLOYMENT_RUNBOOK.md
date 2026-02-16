@@ -15,8 +15,25 @@ This script:
 3. Ensures:
    - `CORS_ORIGINS=https://conscious-network.org,http://localhost:5173`
    - `OPENAI_API_KEY` is set
+   - `AUTH_TOKEN_SECRET` is set
+   - `DATABASE_URL` is set
 4. Routes 100% traffic to latest revision.
 5. Runs post-deploy checks.
+
+### Required Secrets (Backend Startup)
+
+The backend now fails startup if any required secret is missing.
+
+- `AUTH_TOKEN_SECRET` (preferred; `SESSION_SECRET` is accepted as a legacy alias)
+- `DATABASE_URL`
+- `OPENAI_API_KEY`
+
+Other high-risk secrets referenced in code (set only if those integrations are enabled):
+
+- `EMAIL_PASSWORD`, `SMTP_PASSWORD`
+- `GOOGLE_SHEETS_WEBHOOK_URL`
+
+For Cloud Run, provide secrets via Secret Manager-backed environment variables rather than plain text env values whenever possible.
 
 ### Backend checks only
 
@@ -27,7 +44,8 @@ npm run check:cloudrun
 Expected:
 
 - `GET /health` with `Origin: https://conscious-network.org` returns `200`.
-- `POST /api/ai/chat` with JSON body and same Origin returns `200` with JSON containing `provider` and `reply`.
+- `POST /api/ai/chat` without `Authorization` returns `401` (auth enforcement).
+- `GET /api/membership/tiers` returns `200` (public route still accessible).
 
 ## Frontend Release Checklist
 

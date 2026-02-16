@@ -64,8 +64,8 @@ $chatHeaders = @{
 $chatBody = "{""message"":""$ProbeMessage""}"
 $chat = Invoke-HttpJson -Method "POST" -Url "$trimmedBackend/api/ai/chat" -Headers $chatHeaders -Body $chatBody
 
-if ($chat.StatusCode -ne 200) {
-  throw "AI chat check failed with status $($chat.StatusCode): $($chat.Body)"
+if ($chat.StatusCode -ne 401) {
+  throw "AI chat auth check failed. Expected 401 for unauthenticated request, got $($chat.StatusCode): $($chat.Body)"
 }
 
 $chatJson = $null
@@ -75,10 +75,16 @@ try {
   throw "AI chat response is not JSON: $($chat.Body)"
 }
 
-if (-not $chatJson.provider -or -not $chatJson.reply) {
-  throw "AI chat response missing expected fields: $($chat.Body)"
+if (-not $chatJson.error) {
+  throw "AI chat auth response missing expected error field: $($chat.Body)"
+}
+
+$tiers = Invoke-HttpJson -Method "GET" -Url "$trimmedBackend/api/membership/tiers" -Headers $healthHeaders
+if ($tiers.StatusCode -ne 200) {
+  throw "Membership tiers check failed with status $($tiers.StatusCode): $($tiers.Body)"
 }
 
 Write-Host "Checks passed."
 Write-Host "Health: 200 with CORS allow-origin $Origin"
-Write-Host "AI Chat: 200 with provider '$($chatJson.provider)'"
+Write-Host "AI Chat: 401 when unauthenticated (auth enforcement confirmed)"
+Write-Host "Membership tiers: 200 (public endpoint confirmed)"

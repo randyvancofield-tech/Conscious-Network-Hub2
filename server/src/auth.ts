@@ -1,4 +1,5 @@
 import crypto from 'crypto';
+import { resolveAuthTokenSecret } from './requiredEnv';
 
 export interface SessionTokenPayload {
   userId: string;
@@ -8,10 +9,7 @@ export interface SessionTokenPayload {
 
 const DEFAULT_SESSION_TTL_SECONDS = 60 * 60 * 24 * 7; // 7 days
 
-const getTokenSecret = (): string =>
-  process.env.AUTH_TOKEN_SECRET ||
-  process.env.SESSION_SECRET ||
-  'dev-insecure-change-me';
+const getTokenSecret = (): string => resolveAuthTokenSecret();
 
 const toBase64Url = (value: string): string =>
   Buffer.from(value, 'utf8')
