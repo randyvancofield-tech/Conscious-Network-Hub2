@@ -91,4 +91,8 @@ export interface UserProfile {
     showEmail: boolean;
     allowMessages: boolean;
   };
+  twoFactorEnabled?: boolean;
+  twoFactorMethod?: 'none' | 'phone' | 'wallet';
+  phoneNumberMasked?: string | null;
+  walletDid?: string | null;
 }

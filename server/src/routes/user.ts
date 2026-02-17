@@ -1,25 +1,51 @@
+import crypto from 'crypto';
 import { Router, Request, Response } from 'express';
-import { PrismaClient } from '@prisma/client';
-import { createSessionToken, hashPassword } from '../auth';
+import {
+  computePasswordFingerprint,
+  createSessionToken,
+  hashPassword,
+  needsPasswordRehash,
+  verifyPassword,
+} from '../auth';
+import { verifyProviderSessionToken } from '../auth/providerToken';
 import {
   enforceAuthenticatedUserMatch,
   getAuthenticatedUserId,
   logIdentityValidationFailure,
   requireCanonicalIdentity,
 } from '../middleware';
+import { localStore, TwoFactorMethod } from '../services/localStore';
 import { mirrorUserToGoogleSheets } from '../services/googleSheetsMirror';
+import { getProviderSessionById } from '../services/providerSessionStore';
 import { normalizeTier } from '../tierPolicy';
 
 const publicRouter = Router();
 const protectedRouter = Router();
-let prismaInstance: PrismaClient | null = null;
+
+const MIN_PASSWORD_LENGTH = 12;
+const MAX_FAILED_SIGN_IN_ATTEMPTS = 5;
+const LOCKOUT_WINDOW_MS = 15 * 60 * 1000;
+const PHONE_OTP_TTL_MS = 10 * 60 * 1000;
+const MAX_PHONE_OTP_ATTEMPTS = 5;
+
+const COMMON_PASSWORDS = new Set([
+  'password',
+  'password123',
+  '12345678',
+  'qwerty123',
+  'letmein123',
+  'welcome123',
+  'admin123',
+]);
 
 function getPublicBaseUrl(req: Request): string {
   const configured = process.env.PUBLIC_BASE_URL?.trim();
   if (configured) {
     return configured.replace(/\/+$/, '');
   }
-  const forwardedProto = (req.headers['x-forwarded-proto'] as string | undefined)?.split(',')[0]?.trim();
+  const forwardedProto = (req.headers['x-forwarded-proto'] as string | undefined)
+    ?.split(',')[0]
+    ?.trim();
   const proto = forwardedProto || req.protocol || 'https';
   const host = req.get('host');
   return `${proto}://${host}`;
@@ -32,15 +58,67 @@ function absolutizeUrl(req: Request, url?: string | null): string | null | undef
   return `${getPublicBaseUrl(req)}${path}`;
 }
 
-function getPrismaClient() {
-  if (!prismaInstance) {
-    prismaInstance = new PrismaClient();
-  }
-  return prismaInstance;
-}
-
 const toIdentityName = (email: string): string =>
   email.split('@')[0]?.trim() || 'Node';
+
+const normalizeTwoFactorMethod = (value: unknown): TwoFactorMethod => {
+  const normalized = String(value || 'none').trim().toLowerCase();
+  if (normalized === 'phone') return 'phone';
+  if (normalized === 'wallet') return 'wallet';
+  return 'none';
+};
+
+const normalizePhoneNumber = (value: unknown): string | null => {
+  const raw = String(value || '').trim();
+  if (!raw) return null;
+  const stripped = raw.replace(/[^\d+]/g, '');
+  const normalized = stripped.startsWith('+')
+    ? `+${stripped.slice(1).replace(/\+/g, '')}`
+    : stripped.replace(/\+/g, '');
+  if (!/^\+?\d{10,15}$/.test(normalized)) return null;
+  return normalized;
+};
+
+const maskPhoneNumber = (phone: string): string => {
+  const digits = phone.replace(/\D/g, '');
+  if (digits.length < 4) return '***';
+  return `***-***-${digits.slice(-4)}`;
+};
+
+const validatePasswordPolicy = (email: string, password: string): string | null => {
+  if (password.length < MIN_PASSWORD_LENGTH) {
+    return `Password must be at least ${MIN_PASSWORD_LENGTH} characters`;
+  }
+  if (!/[a-z]/.test(password)) {
+    return 'Password must include at least one lowercase letter';
+  }
+  if (!/[A-Z]/.test(password)) {
+    return 'Password must include at least one uppercase letter';
+  }
+  if (!/\d/.test(password)) {
+    return 'Password must include at least one number';
+  }
+  if (!/[^A-Za-z0-9]/.test(password)) {
+    return 'Password must include at least one symbol';
+  }
+
+  const loweredPassword = password.toLowerCase();
+  if (COMMON_PASSWORDS.has(loweredPassword)) {
+    return 'Password is too common. Choose a more unique passphrase';
+  }
+
+  const emailFragments = email
+    .toLowerCase()
+    .split(/[@._-]+/)
+    .filter((fragment) => fragment.length >= 3);
+  for (const fragment of emailFragments) {
+    if (loweredPassword.includes(fragment)) {
+      return 'Password must not contain parts of your email address';
+    }
+  }
+
+  return null;
+};
 
 const toPublicUser = (req: Request, user: any) => ({
   id: user.id,
@@ -53,6 +131,8 @@ const toPublicUser = (req: Request, user: any) => ({
   createdAt: user.createdAt,
   updatedAt: user.updatedAt,
   profileBackgroundVideo: absolutizeUrl(req, user.profileBackgroundVideo),
+  twoFactorEnabled: user.twoFactorMethod && user.twoFactorMethod !== 'none',
+  twoFactorMethod: user.twoFactorMethod || 'none',
 });
 
 /**
@@ -65,30 +145,163 @@ publicRouter.post('/signin', async (req: Request, res: Response): Promise<any> =
       .trim()
       .toLowerCase();
     const password = String(req.body?.password || '');
+    const twoFactorCode = String(req.body?.twoFactorCode || '').trim();
+    const providerToken = String(req.body?.providerToken || '').trim();
 
     if (!email || !password) {
       return res.status(400).json({ error: 'Missing required fields: email or password' });
     }
 
-    const prisma = getPrismaClient();
-    const user = await prisma.user.findUnique({ where: { email } });
+    let user = localStore.getUserByEmail(email);
     if (!user) {
       return res.status(401).json({ error: 'Invalid credentials' });
     }
 
-    const providedHash = hashPassword(password);
-    const passwordMatches = providedHash === user.password || password === user.password;
+    if (user.lockoutUntil && user.lockoutUntil.getTime() > Date.now()) {
+      return res.status(423).json({
+        error: 'Account temporarily locked due to repeated failed sign-in attempts',
+        lockoutUntil: user.lockoutUntil,
+      });
+    }
+
+    const passwordMatches = verifyPassword(password, user.password);
     if (!passwordMatches) {
+      const failedAttempts = (user.failedSignInAttempts || 0) + 1;
+      const shouldLock = failedAttempts >= MAX_FAILED_SIGN_IN_ATTEMPTS;
+      const lockoutUntil = shouldLock
+        ? new Date(Date.now() + LOCKOUT_WINDOW_MS)
+        : null;
+
+      user =
+        localStore.updateUser(user.id, {
+          failedSignInAttempts: shouldLock ? 0 : failedAttempts,
+          lockoutUntil,
+        }) || user;
+
+      if (shouldLock) {
+        return res.status(423).json({
+          error: 'Account temporarily locked due to repeated failed sign-in attempts',
+          lockoutUntil,
+        });
+      }
+
       return res.status(401).json({ error: 'Invalid credentials' });
     }
 
-    // Opportunistic migration for legacy plain-text records.
-    if (password === user.password && providedHash !== user.password) {
-      await prisma.user.update({
-        where: { id: user.id },
-        data: { password: providedHash },
-      });
+    if (needsPasswordRehash(user.password)) {
+      const upgradedHash = hashPassword(password);
+      const upgradedFingerprint = computePasswordFingerprint(password);
+      user =
+        localStore.updateUser(user.id, {
+          password: upgradedHash,
+          passwordFingerprint: upgradedFingerprint,
+        }) || user;
     }
+
+    if (user.twoFactorMethod === 'phone') {
+      if (!user.phoneNumber) {
+        return res.status(403).json({
+          error: 'Phone 2FA is enabled but no phone number is configured for this profile',
+        });
+      }
+
+      if (!twoFactorCode) {
+        const code = crypto.randomInt(0, 1000000).toString().padStart(6, '0');
+        const hashedCode = computePasswordFingerprint(`otp:${code}`);
+        const expiresAt = new Date(Date.now() + PHONE_OTP_TTL_MS);
+
+        localStore.updateUser(user.id, {
+          pendingPhoneOtpHash: hashedCode,
+          pendingPhoneOtpExpiresAt: expiresAt,
+          pendingPhoneOtpAttempts: 0,
+        });
+
+        console.log(
+          `[2FA][PHONE][DEV] OTP for ${maskPhoneNumber(user.phoneNumber)} (${user.email}): ${code}`
+        );
+
+        return res.status(202).json({
+          success: false,
+          requiresTwoFactor: true,
+          method: 'phone',
+          message: 'Phone verification code required to complete sign-in',
+          ...(process.env.NODE_ENV !== 'production' && { devOtpCode: code }),
+        });
+      }
+
+      const otpExpired =
+        !user.pendingPhoneOtpExpiresAt || user.pendingPhoneOtpExpiresAt.getTime() <= Date.now();
+      if (!user.pendingPhoneOtpHash || otpExpired) {
+        return res.status(401).json({
+          error: 'Phone verification code expired. Retry sign-in to request a new code',
+        });
+      }
+
+      const providedCodeHash = computePasswordFingerprint(`otp:${twoFactorCode}`);
+      if (providedCodeHash !== user.pendingPhoneOtpHash) {
+        const nextAttempts = (user.pendingPhoneOtpAttempts || 0) + 1;
+        const exhausted = nextAttempts >= MAX_PHONE_OTP_ATTEMPTS;
+        localStore.updateUser(user.id, {
+          pendingPhoneOtpAttempts: exhausted ? 0 : nextAttempts,
+          pendingPhoneOtpHash: exhausted ? null : user.pendingPhoneOtpHash,
+          pendingPhoneOtpExpiresAt: exhausted ? null : user.pendingPhoneOtpExpiresAt,
+        });
+
+        if (exhausted) {
+          return res.status(429).json({
+            error: 'Too many invalid 2FA attempts. Restart sign-in to request a new code',
+          });
+        }
+
+        return res.status(401).json({ error: 'Invalid verification code' });
+      }
+
+      user =
+        localStore.updateUser(user.id, {
+          pendingPhoneOtpHash: null,
+          pendingPhoneOtpExpiresAt: null,
+          pendingPhoneOtpAttempts: 0,
+        }) || user;
+    }
+
+    if (user.twoFactorMethod === 'wallet') {
+      if (!providerToken) {
+        return res.status(202).json({
+          success: false,
+          requiresTwoFactor: true,
+          method: 'wallet',
+          message: 'Wallet provider session token required to complete sign-in',
+        });
+      }
+
+      const providerPayload = verifyProviderSessionToken(providerToken);
+      if (!providerPayload) {
+        return res.status(401).json({ error: 'Invalid or expired wallet provider token' });
+      }
+
+      const providerSession = await getProviderSessionById(providerPayload.sessionId);
+      if (!providerSession || providerSession.revokedAt) {
+        return res.status(401).json({ error: 'Wallet provider session is invalid or revoked' });
+      }
+
+      if (providerSession.expiresAt.getTime() <= Date.now()) {
+        return res.status(401).json({ error: 'Wallet provider session expired' });
+      }
+
+      if (providerSession.did !== providerPayload.did) {
+        return res.status(401).json({ error: 'Wallet provider identity mismatch' });
+      }
+
+      if (user.walletDid && providerSession.did !== user.walletDid) {
+        return res.status(403).json({ error: 'Wallet DID does not match enrolled profile wallet' });
+      }
+    }
+
+    user =
+      localStore.updateUser(user.id, {
+        failedSignInAttempts: 0,
+        lockoutUntil: null,
+      }) || user;
 
     const session = createSessionToken(user.id);
     return res.json({
@@ -114,30 +327,51 @@ publicRouter.post('/create', async (req: Request, res: Response): Promise<any> =
       .toLowerCase();
     const password = String(req.body?.password || '');
     const requestedName = String(req.body?.name || '').trim();
-    const prisma = getPrismaClient();
+    const requestedTwoFactor = normalizeTwoFactorMethod(req.body?.twoFactorMethod);
+    const requestedPhone = normalizePhoneNumber(req.body?.phoneNumber);
+    const requestedWalletDid = String(req.body?.walletDid || '').trim() || null;
 
     if (!email || !password) {
       return res.status(400).json({ error: 'Missing required fields: email or password' });
     }
 
-    if (password.length < 8) {
-      return res.status(400).json({ error: 'Password must be at least 8 characters' });
+    const passwordPolicyError = validatePasswordPolicy(email, password);
+    if (passwordPolicyError) {
+      return res.status(400).json({ error: passwordPolicyError });
+    }
+
+    if (requestedTwoFactor === 'phone' && !requestedPhone) {
+      return res.status(400).json({ error: 'Phone number is required for phone-based 2FA' });
+    }
+
+    if (requestedTwoFactor === 'wallet' && !requestedWalletDid) {
+      return res.status(400).json({ error: 'walletDid is required for wallet-based 2FA' });
+    }
+
+    const passwordFingerprint = computePasswordFingerprint(password);
+    const reusedPasswordUser = localStore.findUserByPasswordFingerprint(passwordFingerprint);
+    if (reusedPasswordUser) {
+      return res.status(400).json({
+        error: 'Choose a unique password that is not already used by another profile',
+      });
     }
 
     const name = requestedName || toIdentityName(email);
     const passwordHash = hashPassword(password);
 
-    const user = await prisma.user.create({
-      data: {
-        email,
-        name,
-        password: passwordHash,
-        tier: normalizeTier(req.body?.tier),
-      },
+    const user = localStore.createUser({
+      email,
+      name,
+      password: passwordHash,
+      passwordFingerprint,
+      tier: normalizeTier(req.body?.tier),
+      phoneNumber: requestedPhone,
+      twoFactorMethod: requestedTwoFactor,
+      walletDid: requestedWalletDid,
     });
 
     // Persistence verification before granting hub access.
-    const persisted = await prisma.user.findUnique({ where: { id: user.id } });
+    const persisted = localStore.getUserById(user.id);
     if (!persisted) {
       return res
         .status(500)
@@ -160,10 +394,20 @@ publicRouter.post('/create', async (req: Request, res: Response): Promise<any> =
       expiresAt: session.expiresAt,
       persistenceVerified: true,
       user: toPublicUser(req, persisted),
+      security: {
+        passwordPolicy: {
+          minLength: MIN_PASSWORD_LENGTH,
+          requiresUpper: true,
+          requiresLower: true,
+          requiresNumber: true,
+          requiresSymbol: true,
+        },
+        twoFactorMethod: persisted.twoFactorMethod,
+      },
     });
   } catch (error) {
-    const prismaError = error as { code?: string } | null;
-    if (prismaError?.code === 'P2002') {
+    const duplicateCode = (error as Error & { code?: string })?.code;
+    if (duplicateCode === 'DUPLICATE_USER') {
       return res.status(409).json({ error: 'A profile with this email already exists' });
     }
     console.error('Error creating user profile:', error);
@@ -185,8 +429,7 @@ protectedRouter.get('/current', async (req: Request, res: Response): Promise<any
       return res.status(401).json({ error: 'Authentication required' });
     }
 
-    const prisma = getPrismaClient();
-    const user = await prisma.user.findUnique({ where: { id: authUserId } });
+    const user = localStore.getUserById(authUserId);
     if (!user) {
       logIdentityValidationFailure(req, 'authenticated_user_not_found', { authUserId });
       return res.status(401).json({ error: 'Invalid session user' });
@@ -213,8 +456,7 @@ protectedRouter.get('/reconcile/:id', async (req: Request, res: Response): Promi
       return;
     }
 
-    const prisma = getPrismaClient();
-    const user = await prisma.user.findUnique({ where: { id: requestedId } });
+    const user = localStore.getUserById(requestedId);
     if (!user) {
       return res.status(404).json({ error: 'User not found' });
     }
@@ -237,21 +479,11 @@ protectedRouter.get('/reconcile/:id', async (req: Request, res: Response): Promi
  */
 protectedRouter.get('/directory', async (req: Request, res: Response): Promise<any> => {
   try {
-    const prisma = getPrismaClient();
-    const users = await prisma.user.findMany({
-      orderBy: { createdAt: 'desc' },
-      take: 250,
-      select: {
-        id: true,
-        name: true,
-        tier: true,
-        createdAt: true,
-      },
-    });
+    const users = localStore.listUsers(250);
 
     return res.json({
       success: true,
-      users: users.map((u: { id: string; name: string | null; tier: string; createdAt: Date }) => ({
+      users: users.map((u) => ({
         id: u.id,
         name: u.name || 'Node',
         tier: normalizeTier(u.tier),
@@ -262,6 +494,118 @@ protectedRouter.get('/directory', async (req: Request, res: Response): Promise<a
     console.error('Error loading user directory:', error);
     return res.status(500).json({ error: 'Failed to load user directory' });
   }
+});
+
+/**
+ * GET /api/user/security
+ * Inspect current account security setup.
+ */
+protectedRouter.get('/security', (req: Request, res: Response): any => {
+  const authUserId = getAuthenticatedUserId(req);
+  if (!authUserId) {
+    return res.status(401).json({ error: 'Authentication required' });
+  }
+
+  const user = localStore.getUserById(authUserId);
+  if (!user) {
+    return res.status(404).json({ error: 'User not found' });
+  }
+
+  return res.json({
+    success: true,
+    security: {
+      twoFactorMethod: user.twoFactorMethod,
+      phoneNumberMasked: user.phoneNumber ? maskPhoneNumber(user.phoneNumber) : null,
+      walletDid: user.walletDid,
+      lockoutUntil: user.lockoutUntil,
+    },
+  });
+});
+
+/**
+ * POST /api/user/2fa/phone/enroll
+ * Enroll authenticated user in phone-based 2FA.
+ */
+protectedRouter.post('/2fa/phone/enroll', (req: Request, res: Response): any => {
+  const authUserId = getAuthenticatedUserId(req);
+  if (!authUserId) {
+    return res.status(401).json({ error: 'Authentication required' });
+  }
+
+  const phoneNumber = normalizePhoneNumber(req.body?.phoneNumber);
+  if (!phoneNumber) {
+    return res.status(400).json({ error: 'Valid phoneNumber is required' });
+  }
+
+  const updated = localStore.updateUser(authUserId, {
+    phoneNumber,
+    twoFactorMethod: 'phone',
+  });
+  if (!updated) {
+    return res.status(404).json({ error: 'User not found' });
+  }
+
+  return res.json({
+    success: true,
+    twoFactorMethod: updated.twoFactorMethod,
+    phoneNumberMasked: maskPhoneNumber(phoneNumber),
+  });
+});
+
+/**
+ * POST /api/user/2fa/wallet/enroll
+ * Enroll authenticated user in wallet-based 2FA.
+ */
+protectedRouter.post('/2fa/wallet/enroll', (req: Request, res: Response): any => {
+  const authUserId = getAuthenticatedUserId(req);
+  if (!authUserId) {
+    return res.status(401).json({ error: 'Authentication required' });
+  }
+
+  const walletDid = String(req.body?.walletDid || '').trim();
+  if (!walletDid) {
+    return res.status(400).json({ error: 'walletDid is required' });
+  }
+
+  const updated = localStore.updateUser(authUserId, {
+    walletDid,
+    twoFactorMethod: 'wallet',
+  });
+  if (!updated) {
+    return res.status(404).json({ error: 'User not found' });
+  }
+
+  return res.json({
+    success: true,
+    twoFactorMethod: updated.twoFactorMethod,
+    walletDid: updated.walletDid,
+  });
+});
+
+/**
+ * POST /api/user/2fa/disable
+ * Disable 2FA for authenticated user.
+ */
+protectedRouter.post('/2fa/disable', (req: Request, res: Response): any => {
+  const authUserId = getAuthenticatedUserId(req);
+  if (!authUserId) {
+    return res.status(401).json({ error: 'Authentication required' });
+  }
+
+  const updated = localStore.updateUser(authUserId, {
+    twoFactorMethod: 'none',
+    pendingPhoneOtpHash: null,
+    pendingPhoneOtpExpiresAt: null,
+    pendingPhoneOtpAttempts: 0,
+  });
+  if (!updated) {
+    return res.status(404).json({ error: 'User not found' });
+  }
+
+  return res.json({
+    success: true,
+    twoFactorMethod: updated.twoFactorMethod,
+  });
 });
 
 /**
@@ -276,22 +620,19 @@ protectedRouter.put('/:id', async (req: Request, res: Response): Promise<any> =>
       return;
     }
 
-    const prisma = getPrismaClient();
     const updateData = req.body || {};
+    const nextName =
+      updateData.name !== undefined ? String(updateData.name || '').trim() || null : undefined;
+    const nextBackgroundVideo =
+      updateData.profileBackgroundVideo !== undefined
+        ? String(updateData.profileBackgroundVideo || '').trim() || null
+        : undefined;
 
-    // Only allow profile-safe fields that exist in current Prisma model.
-    const allowedFields = ['name', 'profileBackgroundVideo'];
-    const data: Record<string, unknown> = {};
-    for (const key of allowedFields) {
-      if (updateData[key] !== undefined) data[key] = updateData[key];
-    }
-
-    // Database write first, then return canonical record.
-    await prisma.user.update({
-      where: { id },
-      data,
+    const persisted = localStore.updateUser(id, {
+      name: nextName,
+      profileBackgroundVideo: nextBackgroundVideo,
     });
-    const persisted = await prisma.user.findUnique({ where: { id } });
+
     if (!persisted) {
       return res.status(404).json({ error: 'User not found after update' });
     }

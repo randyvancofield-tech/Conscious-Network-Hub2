@@ -8,6 +8,9 @@ export interface SessionTokenPayload {
 }
 
 const DEFAULT_SESSION_TTL_SECONDS = 60 * 60 * 24 * 7; // 7 days
+const PASSWORD_HASH_PREFIX = 'scrypt';
+const PASSWORD_SALT_BYTES = 16;
+const PASSWORD_KEY_LEN = 64;
 
 const getTokenSecret = (): string => resolveAuthTokenSecret();
 
@@ -33,8 +36,54 @@ const signSegment = (segment: string): string =>
     .replace(/\//g, '_')
     .replace(/=+$/g, '');
 
-export const hashPassword = (password: string): string =>
+const legacySha256 = (password: string): string =>
   crypto.createHash('sha256').update(password).digest('hex');
+
+export const hashPassword = (password: string): string => {
+  const salt = crypto.randomBytes(PASSWORD_SALT_BYTES).toString('hex');
+  const hash = crypto.scryptSync(password, salt, PASSWORD_KEY_LEN).toString('hex');
+  return `${PASSWORD_HASH_PREFIX}$${salt}$${hash}`;
+};
+
+const verifyScryptPassword = (password: string, stored: string): boolean => {
+  const parts = stored.split('$');
+  if (parts.length !== 3 || parts[0] !== PASSWORD_HASH_PREFIX) {
+    return false;
+  }
+
+  const [, salt, expectedHashHex] = parts;
+  if (!salt || !expectedHashHex) return false;
+
+  const actualHashHex = crypto.scryptSync(password, salt, PASSWORD_KEY_LEN).toString('hex');
+  const actualBuffer = Buffer.from(actualHashHex, 'hex');
+  const expectedBuffer = Buffer.from(expectedHashHex, 'hex');
+
+  if (actualBuffer.length !== expectedBuffer.length) {
+    return false;
+  }
+
+  return crypto.timingSafeEqual(actualBuffer, expectedBuffer);
+};
+
+export const verifyPassword = (password: string, storedPassword: string): boolean => {
+  if (!storedPassword || typeof storedPassword !== 'string') return false;
+
+  if (storedPassword.startsWith(`${PASSWORD_HASH_PREFIX}$`)) {
+    return verifyScryptPassword(password, storedPassword);
+  }
+
+  const legacyHash = legacySha256(password);
+  return storedPassword === legacyHash || storedPassword === password;
+};
+
+export const needsPasswordRehash = (storedPassword: string): boolean => {
+  return !storedPassword.startsWith(`${PASSWORD_HASH_PREFIX}$`);
+};
+
+export const computePasswordFingerprint = (password: string): string => {
+  const fingerprintKey = `password-fingerprint:${getTokenSecret()}`;
+  return crypto.createHmac('sha256', fingerprintKey).update(password).digest('hex');
+};
 
 export const createSessionToken = (userId: string): { token: string; expiresAt: number } => {
   const now = Date.now();

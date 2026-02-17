@@ -1,21 +1,22 @@
 import { Router, Request, Response } from 'express';
-import { PrismaClient } from '@prisma/client';
 import {
   enforceAuthenticatedUserMatch,
   getAuthenticatedUserId,
   requireCanonicalIdentity,
 } from '../middleware';
+import { localStore } from '../services/localStore';
 
 const router = Router();
 router.use(requireCanonicalIdentity);
-let prismaInstance: PrismaClient | null = null;
 
 function getPublicBaseUrl(req: Request): string {
   const configured = process.env.PUBLIC_BASE_URL?.trim();
   if (configured) {
     return configured.replace(/\/+$/, '');
   }
-  const forwardedProto = (req.headers['x-forwarded-proto'] as string | undefined)?.split(',')[0]?.trim();
+  const forwardedProto = (req.headers['x-forwarded-proto'] as string | undefined)
+    ?.split(',')[0]
+    ?.trim();
   const proto = forwardedProto || req.protocol || 'https';
   const host = req.get('host');
   return `${proto}://${host}`;
@@ -28,13 +29,6 @@ function absolutizeUrl(req: Request, url?: string | null): string | null | undef
   return `${getPublicBaseUrl(req)}${path}`;
 }
 
-function getPrismaClient() {
-  if (!prismaInstance) {
-    prismaInstance = new PrismaClient();
-  }
-  return prismaInstance;
-}
-
 /**
  * POST /api/reflection
  * Create a new reflection (with fileUrl and fileType)
@@ -43,16 +37,21 @@ router.post('/', async (req: Request, res: Response): Promise<any> => {
   try {
     const authUserId = getAuthenticatedUserId(req);
     const { userId, content, fileUrl, fileType } = req.body;
-    const prisma = getPrismaClient();
+
     if (!authUserId || !userId || !fileUrl || !fileType) {
       return res.status(400).json({ error: 'Missing required fields' });
     }
     if (!enforceAuthenticatedUserMatch(req, res, userId, 'body.userId')) {
       return;
     }
-    const reflection = await prisma.reflection.create({
-      data: { userId: authUserId, content, fileUrl: absolutizeUrl(req, fileUrl)!, fileType }
+
+    const reflection = localStore.createReflection({
+      userId: authUserId,
+      content,
+      fileUrl: absolutizeUrl(req, fileUrl)!,
+      fileType,
     });
+
     res.json({ success: true, reflection });
   } catch (error) {
     console.error('Error creating reflection:', error);
@@ -70,12 +69,9 @@ router.get('/:userId', async (req: Request, res: Response): Promise<any> => {
     if (!enforceAuthenticatedUserMatch(req, res, userId, 'params.userId')) {
       return;
     }
-    const prisma = getPrismaClient();
-    const reflections = await prisma.reflection.findMany({
-      where: { userId },
-      orderBy: { createdAt: 'desc' }
-    });
-    const normalized = reflections.map((reflection: any) => ({
+
+    const reflections = localStore.listReflectionsByUserId(userId);
+    const normalized = reflections.map((reflection) => ({
       ...reflection,
       fileUrl: absolutizeUrl(req, reflection.fileUrl),
     }));

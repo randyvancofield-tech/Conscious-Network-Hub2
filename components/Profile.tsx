@@ -32,10 +32,38 @@ const Profile: React.FC<ProfileProps> = ({ user, onUserUpdate }) => {
   const [reflectionFile, setReflectionFile] = useState<File | null>(null);
   const [reflectionContent, setReflectionContent] = useState('');
   const [loading, setLoading] = useState(false);
+  const [securityLoading, setSecurityLoading] = useState(false);
+  const [securityMessage, setSecurityMessage] = useState('');
+  const [securityError, setSecurityError] = useState('');
+  const [securityState, setSecurityState] = useState<{
+    twoFactorMethod: 'none' | 'phone' | 'wallet';
+    phoneNumberMasked: string | null;
+    walletDid: string | null;
+  }>({
+    twoFactorMethod: user.twoFactorMethod || 'none',
+    phoneNumberMasked: user.phoneNumberMasked || null,
+    walletDid: user.walletDid || null,
+  });
+  const [phoneEnrollInput, setPhoneEnrollInput] = useState('');
+  const [walletEnrollInput, setWalletEnrollInput] = useState('');
   const [error, setError] = useState('');
 
   useEffect(() => {
     fetchReflections();
+  }, [user.id]);
+
+  useEffect(() => {
+    setEditData({ ...user });
+    setBgVideoUrl(toAssetUrl(user.profileBackgroundVideo));
+    setSecurityState({
+      twoFactorMethod: user.twoFactorMethod || 'none',
+      phoneNumberMasked: user.phoneNumberMasked || null,
+      walletDid: user.walletDid || null,
+    });
+  }, [user.id, user.name, user.profileBackgroundVideo, user.twoFactorMethod, user.phoneNumberMasked, user.walletDid]);
+
+  useEffect(() => {
+    fetchSecuritySettings();
   }, [user.id]);
 
   const fetchReflections = async () => {
@@ -51,6 +79,108 @@ const Profile: React.FC<ProfileProps> = ({ user, onUserUpdate }) => {
       );
     } catch (e) {
       setError('Failed to load reflections');
+    }
+  };
+
+  const fetchSecuritySettings = async () => {
+    setSecurityLoading(true);
+    setSecurityError('');
+    try {
+      const res = await axios.get(toApiUrl('/api/user/security'), {
+        headers: buildAuthHeaders(),
+      });
+      const security = res.data?.security || {};
+      setSecurityState({
+        twoFactorMethod: security.twoFactorMethod || 'none',
+        phoneNumberMasked: security.phoneNumberMasked || null,
+        walletDid: security.walletDid || null,
+      });
+      onUserUpdate({
+        ...user,
+        twoFactorEnabled: security.twoFactorMethod && security.twoFactorMethod !== 'none',
+        twoFactorMethod: security.twoFactorMethod || 'none',
+        phoneNumberMasked: security.phoneNumberMasked || null,
+        walletDid: security.walletDid || null,
+      });
+    } catch {
+      setSecurityError('Failed to load security settings');
+    } finally {
+      setSecurityLoading(false);
+    }
+  };
+
+  const enrollPhoneTwoFactor = async () => {
+    if (!phoneEnrollInput.trim()) {
+      setSecurityError('Enter a phone number to enroll phone 2FA');
+      return;
+    }
+
+    setSecurityLoading(true);
+    setSecurityError('');
+    setSecurityMessage('');
+    try {
+      await axios.post(
+        toApiUrl('/api/user/2fa/phone/enroll'),
+        { phoneNumber: phoneEnrollInput.trim() },
+        { headers: buildAuthHeaders() }
+      );
+      setPhoneEnrollInput('');
+      setSecurityMessage('Phone 2FA enabled');
+      await fetchSecuritySettings();
+    } catch (e: any) {
+      setSecurityError(
+        e?.response?.data?.error || 'Failed to enable phone 2FA'
+      );
+    } finally {
+      setSecurityLoading(false);
+    }
+  };
+
+  const enrollWalletTwoFactor = async () => {
+    if (!walletEnrollInput.trim()) {
+      setSecurityError('Enter a wallet DID to enroll wallet 2FA');
+      return;
+    }
+
+    setSecurityLoading(true);
+    setSecurityError('');
+    setSecurityMessage('');
+    try {
+      await axios.post(
+        toApiUrl('/api/user/2fa/wallet/enroll'),
+        { walletDid: walletEnrollInput.trim() },
+        { headers: buildAuthHeaders() }
+      );
+      setWalletEnrollInput('');
+      setSecurityMessage('Wallet 2FA enabled');
+      await fetchSecuritySettings();
+    } catch (e: any) {
+      setSecurityError(
+        e?.response?.data?.error || 'Failed to enable wallet 2FA'
+      );
+    } finally {
+      setSecurityLoading(false);
+    }
+  };
+
+  const disableTwoFactor = async () => {
+    setSecurityLoading(true);
+    setSecurityError('');
+    setSecurityMessage('');
+    try {
+      await axios.post(
+        toApiUrl('/api/user/2fa/disable'),
+        {},
+        { headers: buildAuthHeaders() }
+      );
+      setSecurityMessage('2FA disabled');
+      await fetchSecuritySettings();
+    } catch (e: any) {
+      setSecurityError(
+        e?.response?.data?.error || 'Failed to disable 2FA'
+      );
+    } finally {
+      setSecurityLoading(false);
     }
   };
 
@@ -140,6 +270,47 @@ const Profile: React.FC<ProfileProps> = ({ user, onUserUpdate }) => {
       </div>
       <button onClick={handleProfileSave} disabled={loading}>Save Profile</button>
       {error && <div className="error">{error}</div>}
+      <hr />
+      <h3>Security Settings</h3>
+      <div style={{ border: '1px solid rgba(255,255,255,0.2)', padding: '12px', borderRadius: '10px', marginBottom: '16px' }}>
+        <div style={{ marginBottom: '8px' }}>
+          Current 2FA: <strong>{securityState.twoFactorMethod === 'none' ? 'Disabled' : securityState.twoFactorMethod.toUpperCase()}</strong>
+        </div>
+        {securityState.phoneNumberMasked && (
+          <div style={{ marginBottom: '8px' }}>Phone: {securityState.phoneNumberMasked}</div>
+        )}
+        {securityState.walletDid && (
+          <div style={{ marginBottom: '8px', wordBreak: 'break-all' }}>Wallet DID: {securityState.walletDid}</div>
+        )}
+
+        <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', marginBottom: '10px' }}>
+          <input
+            type="tel"
+            value={phoneEnrollInput}
+            onChange={(e) => setPhoneEnrollInput(e.target.value)}
+            placeholder="Phone for OTP (e.g. +15551234567)"
+          />
+          <button onClick={enrollPhoneTwoFactor} disabled={securityLoading}>Enable Phone 2FA</button>
+        </div>
+
+        <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', marginBottom: '10px' }}>
+          <input
+            type="text"
+            value={walletEnrollInput}
+            onChange={(e) => setWalletEnrollInput(e.target.value)}
+            placeholder="Wallet DID (did:hcn:ed25519:...)"
+          />
+          <button onClick={enrollWalletTwoFactor} disabled={securityLoading}>Enable Wallet 2FA</button>
+        </div>
+
+        <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+          <button onClick={disableTwoFactor} disabled={securityLoading}>Disable 2FA</button>
+          <button onClick={fetchSecuritySettings} disabled={securityLoading}>Refresh Security</button>
+        </div>
+
+        {securityMessage && <div style={{ color: '#34d399', marginTop: '10px' }}>{securityMessage}</div>}
+        {securityError && <div style={{ color: '#f87171', marginTop: '10px' }}>{securityError}</div>}
+      </div>
       <hr />
       <h3>Reflections</h3>
       <textarea value={reflectionContent} onChange={e => setReflectionContent(e.target.value)} placeholder="Reflection notes (optional)" />
