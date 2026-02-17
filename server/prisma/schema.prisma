@@ -76,3 +76,30 @@ model PaymentHistory {
   user          User       @relation(fields: [userId], references: [id], onDelete: Cascade)
   membership    Membership @relation(fields: [membershipId], references: [id], onDelete: Cascade)
 }
+
+model ProviderChallenge {
+  id        String   @id
+  did       String
+  nonce     String
+  statement String
+  expiresAt DateTime
+  usedAt    DateTime?
+  createdAt DateTime @default(now())
+
+  @@index([did])
+  @@index([expiresAt])
+}
+
+model ProviderSession {
+  id         String   @id
+  did        String
+  scopesJson String
+  issuedAt   DateTime
+  expiresAt  DateTime
+  revokedAt  DateTime?
+  createdAt  DateTime @default(now())
+
+  @@index([did])
+  @@index([expiresAt])
+  @@index([revokedAt])
+}

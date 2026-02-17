@@ -21,6 +21,8 @@ import {
 } from './routes/user';
 import uploadRoutes from './routes/upload';
 import reflectionRoutes from './routes/reflection';
+import providerAuthRoutes from './routes/providerAuth';
+import providerSessionRoutes from './routes/providerSession';
 import { initializeVertexAI } from './services/vertexAiService';
 import { validateRequiredEnv } from './requiredEnv';
 
@@ -165,6 +167,7 @@ app.get('/health', healthCheck);
 // Public routes are mounted first.
 app.use('/api/user', userPublicRoutes);
 app.use('/api/membership', membershipPublicRoutes);
+app.use('/api/provider/auth', providerAuthRoutes);
 
 // Protected routes are mounted with auth middleware before handler execution.
 app.use('/api/user', requireCanonicalIdentity, userProtectedRoutes);
@@ -172,6 +175,7 @@ app.use('/api/membership', requireCanonicalIdentity, membershipProtectedRoutes);
 app.use('/api/ai', requireCanonicalIdentity, aiRoutes);
 app.use('/api/upload', requireCanonicalIdentity, uploadRoutes);
 app.use('/api/reflection', requireCanonicalIdentity, reflectionRoutes);
+app.use('/api/provider/session', providerSessionRoutes);
 app.use('/uploads', express.static('public/uploads'));
 
 // Catch-all 404 handler
