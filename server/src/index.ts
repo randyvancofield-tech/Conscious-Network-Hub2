@@ -77,10 +77,13 @@ app.use(helmet());
 app.set('trust proxy', 1);
 
 // CORS configuration
-const configuredCorsOrigins = (process.env.CORS_ORIGINS || 'http://localhost:3000')
+const configuredCorsOrigins = (process.env.CORS_ORIGINS || '')
   .split(/[,\n\r\t ]+/)
   .map((origin) => origin.trim())
   .filter(Boolean);
+
+const localDevCorsOrigins = ['http://localhost:3000', 'http://127.0.0.1:3000'];
+const corsOriginCandidates = [...new Set([...configuredCorsOrigins, ...localDevCorsOrigins])];
 
 const normalizeOrigin = (origin: string): string => {
   try {
@@ -97,7 +100,7 @@ const isLocalHost = (hostname: string): boolean =>
   hostname.endsWith('.localhost');
 
 const corsOrigins = new Set<string>();
-for (const rawOrigin of configuredCorsOrigins) {
+for (const rawOrigin of corsOriginCandidates) {
   const normalized = normalizeOrigin(rawOrigin);
   corsOrigins.add(normalized);
 
