@@ -1,19 +1,24 @@
-﻿# Build stage
+# Build stage
 FROM node:18-alpine AS builder
 
 WORKDIR /app
 
-# Copy package files
+# Copy package and Prisma config first so client generation is cacheable.
 COPY package.json package-lock.json ./
+COPY prisma ./prisma
+COPY prisma.config.ts ./
 
-# Install dependencies
+# Ensure Prisma generation has a datasource during image build.
+ENV DATABASE_URL=file:./prisma/dev.db
+ENV DATABASE_PROVIDER=sqlite
+
+# Install dependencies and generate Prisma client.
 RUN npm ci
+RUN npx prisma generate
 
-# Copy source code
+# Copy source code and build.
 COPY tsconfig.json ./
 COPY src ./src
-
-# Build TypeScript
 RUN npm run build
 
 # Runtime stage
@@ -21,13 +26,19 @@ FROM node:18-alpine
 
 WORKDIR /app
 
-# Copy package files
+# Copy package metadata and Prisma files.
 COPY package.json package-lock.json ./
+COPY prisma ./prisma
+COPY prisma.config.ts ./
 
-# Install production dependencies only
+# Install production dependencies only.
 RUN npm ci --omit=dev
 
-# Copy compiled code from builder
+# Copy generated Prisma client from builder.
+COPY --from=builder /app/node_modules/.prisma ./node_modules/.prisma
+COPY --from=builder /app/node_modules/@prisma ./node_modules/@prisma
+
+# Copy compiled backend code.
 COPY --from=builder /app/dist ./dist
 
 # Expose Cloud Run default port
@@ -43,4 +54,3 @@ HEALTHCHECK --interval=30s --timeout=3s --start-period=40s --retries=3 \
 
 # Start application
 CMD ["node", "dist/index.js"]
-

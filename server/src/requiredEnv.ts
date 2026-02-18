@@ -58,9 +58,14 @@ export const validateRequiredEnv = (): void => {
     );
   }
 
-  if (process.env.NODE_ENV === 'production' && databaseUrl && isFileUrl(databaseUrl)) {
+  if (
+    process.env.NODE_ENV === 'production' &&
+    databaseUrl &&
+    isFileUrl(databaseUrl) &&
+    persistenceBackend !== 'local_file'
+  ) {
     throw new Error(
-      '[STARTUP][FATAL] Production DATABASE_URL cannot use file: storage. Configure shared Postgres persistence.'
+      '[STARTUP][FATAL] Production DATABASE_URL uses file: storage. Configure shared Postgres persistence or set AUTH_PERSISTENCE_BACKEND=local_file for temporary recovery.'
     );
   }
 };
