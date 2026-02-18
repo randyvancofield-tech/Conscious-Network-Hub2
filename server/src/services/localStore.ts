@@ -245,7 +245,18 @@ interface CreateProviderSessionInput {
 
 const STORE_DIR = path.resolve(__dirname, '../../data');
 const STORE_FILE = path.join(STORE_DIR, 'runtime-store.json');
+const STORE_BACKUP_FILE = path.join(STORE_DIR, 'runtime-store.backup.json');
+const STORE_TMP_FILE = path.join(STORE_DIR, 'runtime-store.tmp.json');
 export const LOCAL_STORE_FILE = STORE_FILE;
+
+const toStoreError = (message: string, cause?: unknown): Error & { code: string } => {
+  const error = new Error(message) as Error & { code: string; cause?: unknown };
+  error.code = 'STORE_UNAVAILABLE';
+  if (cause !== undefined) {
+    error.cause = cause;
+  }
+  return error;
+};
 
 const createEmptyStore = (): StoreRow => ({
   version: 1,
@@ -258,11 +269,28 @@ const createEmptyStore = (): StoreRow => ({
 });
 
 const ensureStoreFile = (): void => {
-  if (!fs.existsSync(STORE_DIR)) {
-    fs.mkdirSync(STORE_DIR, { recursive: true });
-  }
-  if (!fs.existsSync(STORE_FILE)) {
+  try {
+    if (!fs.existsSync(STORE_DIR)) {
+      fs.mkdirSync(STORE_DIR, { recursive: true });
+    }
+
+    if (fs.existsSync(STORE_FILE)) {
+      return;
+    }
+
+    if (fs.existsSync(STORE_TMP_FILE)) {
+      fs.renameSync(STORE_TMP_FILE, STORE_FILE);
+      return;
+    }
+
+    if (fs.existsSync(STORE_BACKUP_FILE)) {
+      fs.copyFileSync(STORE_BACKUP_FILE, STORE_FILE);
+      return;
+    }
+
     fs.writeFileSync(STORE_FILE, JSON.stringify(createEmptyStore(), null, 2), 'utf8');
+  } catch (error) {
+    throw toStoreError('[STORE][FATAL] Unable to initialize runtime store files', error);
   }
 };
 
@@ -284,14 +312,54 @@ const parseStore = (raw: string): StoreRow => {
   };
 };
 
-const loadStore = (): StoreRow => {
-  ensureStoreFile();
-  const raw = fs.readFileSync(STORE_FILE, 'utf8');
+const tryReadStore = (filePath: string): StoreRow => {
+  const raw = fs.readFileSync(filePath, 'utf8');
   return parseStore(raw);
 };
 
+const loadStore = (): StoreRow => {
+  ensureStoreFile();
+
+  try {
+    return tryReadStore(STORE_FILE);
+  } catch (primaryError) {
+    if (fs.existsSync(STORE_BACKUP_FILE)) {
+      try {
+        const restored = tryReadStore(STORE_BACKUP_FILE);
+        fs.copyFileSync(STORE_BACKUP_FILE, STORE_FILE);
+        console.warn('[STORE][RECOVERY] Restored runtime store from backup file.');
+        return restored;
+      } catch (backupError) {
+        throw toStoreError(
+          '[STORE][FATAL] Runtime store and backup are unreadable',
+          backupError
+        );
+      }
+    }
+
+    throw toStoreError(
+      '[STORE][FATAL] Runtime store is unreadable and no backup is available',
+      primaryError
+    );
+  }
+};
+
 const saveStore = (store: StoreRow): void => {
-  fs.writeFileSync(STORE_FILE, JSON.stringify(store, null, 2), 'utf8');
+  ensureStoreFile();
+
+  try {
+    const serialized = JSON.stringify(store, null, 2);
+    fs.writeFileSync(STORE_TMP_FILE, serialized, 'utf8');
+
+    if (fs.existsSync(STORE_FILE)) {
+      fs.copyFileSync(STORE_FILE, STORE_BACKUP_FILE);
+      fs.rmSync(STORE_FILE, { force: true });
+    }
+
+    fs.renameSync(STORE_TMP_FILE, STORE_FILE);
+  } catch (error) {
+    throw toStoreError('[STORE][FATAL] Failed to persist runtime store', error);
+  }
 };
 
 const nowIso = (): string => new Date().toISOString();

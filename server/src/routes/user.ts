@@ -410,6 +410,11 @@ publicRouter.post('/create', async (req: Request, res: Response): Promise<any> =
     if (duplicateCode === 'DUPLICATE_USER') {
       return res.status(409).json({ error: 'A profile with this email already exists' });
     }
+    if (duplicateCode === 'STORE_UNAVAILABLE') {
+      return res.status(503).json({
+        error: 'Profile storage is temporarily unavailable. Retry shortly or contact support.',
+      });
+    }
     console.error('Error creating user profile:', error);
     return res.status(500).json({ error: 'Failed to create user profile' });
   }
