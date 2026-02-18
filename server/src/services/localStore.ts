@@ -93,6 +93,51 @@ interface StoreRow {
   providerSessions: ProviderSessionRow[];
 }
 
+type RecoveryState =
+  | 'not_checked'
+  | 'healthy'
+  | 'initialized_empty'
+  | 'initialized_from_tmp'
+  | 'initialized_from_backup'
+  | 'recovered_from_backup'
+  | 'store_unreadable'
+  | 'save_failed';
+
+interface RecoveryStatus {
+  state: RecoveryState;
+  at: string;
+  detail: string;
+}
+
+interface StoreFileHealth {
+  path: string;
+  exists: boolean;
+  readable: boolean;
+  jsonValid: boolean | null;
+  sizeBytes: number | null;
+  modifiedAt: string | null;
+  error: string | null;
+}
+
+export interface LocalStoreDiagnostics {
+  generatedAt: string;
+  files: {
+    primary: StoreFileHealth;
+    backup: StoreFileHealth;
+    temp: StoreFileHealth;
+  };
+  lastRecoveryStatus: RecoveryStatus;
+  activeStore: {
+    source: 'primary' | 'backup' | 'none';
+    users: number;
+    memberships: number;
+    payments: number;
+    reflections: number;
+    providerChallenges: number;
+    providerSessions: number;
+  };
+}
+
 export interface LocalUserRecord {
   id: string;
   email: string;
@@ -249,6 +294,20 @@ const STORE_BACKUP_FILE = path.join(STORE_DIR, 'runtime-store.backup.json');
 const STORE_TMP_FILE = path.join(STORE_DIR, 'runtime-store.tmp.json');
 export const LOCAL_STORE_FILE = STORE_FILE;
 
+let lastRecoveryStatus: RecoveryStatus = {
+  state: 'not_checked',
+  at: new Date().toISOString(),
+  detail: 'No store operations have run yet.',
+};
+
+const setRecoveryStatus = (state: RecoveryState, detail: string): void => {
+  lastRecoveryStatus = {
+    state,
+    at: new Date().toISOString(),
+    detail,
+  };
+};
+
 const toStoreError = (message: string, cause?: unknown): Error & { code: string } => {
   const error = new Error(message) as Error & { code: string; cause?: unknown };
   error.code = 'STORE_UNAVAILABLE';
@@ -280,16 +339,29 @@ const ensureStoreFile = (): void => {
 
     if (fs.existsSync(STORE_TMP_FILE)) {
       fs.renameSync(STORE_TMP_FILE, STORE_FILE);
+      setRecoveryStatus(
+        'initialized_from_tmp',
+        'Primary store was missing; recovered from temp file.'
+      );
       return;
     }
 
     if (fs.existsSync(STORE_BACKUP_FILE)) {
       fs.copyFileSync(STORE_BACKUP_FILE, STORE_FILE);
+      setRecoveryStatus(
+        'initialized_from_backup',
+        'Primary store was missing; restored from backup file.'
+      );
       return;
     }
 
     fs.writeFileSync(STORE_FILE, JSON.stringify(createEmptyStore(), null, 2), 'utf8');
+    setRecoveryStatus(
+      'initialized_empty',
+      'Primary store did not exist and was initialized as empty.'
+    );
   } catch (error) {
+    setRecoveryStatus('store_unreadable', 'Failed while initializing store files.');
     throw toStoreError('[STORE][FATAL] Unable to initialize runtime store files', error);
   }
 };
@@ -321,15 +393,25 @@ const loadStore = (): StoreRow => {
   ensureStoreFile();
 
   try {
-    return tryReadStore(STORE_FILE);
+    const parsed = tryReadStore(STORE_FILE);
+    setRecoveryStatus('healthy', 'Primary store read successfully.');
+    return parsed;
   } catch (primaryError) {
     if (fs.existsSync(STORE_BACKUP_FILE)) {
       try {
         const restored = tryReadStore(STORE_BACKUP_FILE);
         fs.copyFileSync(STORE_BACKUP_FILE, STORE_FILE);
         console.warn('[STORE][RECOVERY] Restored runtime store from backup file.');
+        setRecoveryStatus(
+          'recovered_from_backup',
+          'Primary store was unreadable; recovered from backup.'
+        );
         return restored;
       } catch (backupError) {
+        setRecoveryStatus(
+          'store_unreadable',
+          'Primary and backup stores are unreadable.'
+        );
         throw toStoreError(
           '[STORE][FATAL] Runtime store and backup are unreadable',
           backupError
@@ -337,6 +419,10 @@ const loadStore = (): StoreRow => {
       }
     }
 
+    setRecoveryStatus(
+      'store_unreadable',
+      'Primary store unreadable and no backup store available.'
+    );
     throw toStoreError(
       '[STORE][FATAL] Runtime store is unreadable and no backup is available',
       primaryError
@@ -357,7 +443,9 @@ const saveStore = (store: StoreRow): void => {
     }
 
     fs.renameSync(STORE_TMP_FILE, STORE_FILE);
+    setRecoveryStatus('healthy', 'Store persisted successfully.');
   } catch (error) {
+    setRecoveryStatus('save_failed', 'Store persistence failed.');
     throw toStoreError('[STORE][FATAL] Failed to persist runtime store', error);
   }
 };
@@ -438,6 +526,53 @@ const rowToProviderSession = (
 });
 
 const uniqueId = (): string => crypto.randomUUID();
+
+const inspectStoreFile = (filePath: string): StoreFileHealth => {
+  if (!fs.existsSync(filePath)) {
+    return {
+      path: filePath,
+      exists: false,
+      readable: false,
+      jsonValid: null,
+      sizeBytes: null,
+      modifiedAt: null,
+      error: null,
+    };
+  }
+
+  try {
+    const stats = fs.statSync(filePath);
+    const raw = fs.readFileSync(filePath, 'utf8');
+    let jsonValid = false;
+    let parseError: string | null = null;
+    try {
+      parseStore(raw);
+      jsonValid = true;
+    } catch (error) {
+      parseError = error instanceof Error ? error.message : String(error);
+    }
+
+    return {
+      path: filePath,
+      exists: true,
+      readable: true,
+      jsonValid,
+      sizeBytes: stats.size,
+      modifiedAt: stats.mtime.toISOString(),
+      error: parseError,
+    };
+  } catch (error) {
+    return {
+      path: filePath,
+      exists: true,
+      readable: false,
+      jsonValid: false,
+      sizeBytes: null,
+      modifiedAt: null,
+      error: error instanceof Error ? error.message : String(error),
+    };
+  }
+};
 
 export const localStore = {
   getStoreFilePath(): string {
@@ -742,5 +877,43 @@ export const localStore = {
     if (!row || row.revokedAt) return;
     row.revokedAt = nowIso();
     saveStore(store);
+  },
+
+  getDiagnostics(): LocalStoreDiagnostics {
+    ensureStoreFile();
+
+    const primary = inspectStoreFile(STORE_FILE);
+    const backup = inspectStoreFile(STORE_BACKUP_FILE);
+    const temp = inspectStoreFile(STORE_TMP_FILE);
+
+    let source: 'primary' | 'backup' | 'none' = 'none';
+    let active: StoreRow | null = null;
+
+    if (primary.exists && primary.readable && primary.jsonValid) {
+      active = tryReadStore(STORE_FILE);
+      source = 'primary';
+    } else if (backup.exists && backup.readable && backup.jsonValid) {
+      active = tryReadStore(STORE_BACKUP_FILE);
+      source = 'backup';
+    }
+
+    return {
+      generatedAt: nowIso(),
+      files: {
+        primary,
+        backup,
+        temp,
+      },
+      lastRecoveryStatus: { ...lastRecoveryStatus },
+      activeStore: {
+        source,
+        users: active?.users.length ?? 0,
+        memberships: active?.memberships.length ?? 0,
+        payments: active?.payments.length ?? 0,
+        reflections: active?.reflections.length ?? 0,
+        providerChallenges: active?.providerChallenges.length ?? 0,
+        providerSessions: active?.providerSessions.length ?? 0,
+      },
+    };
   },
 };

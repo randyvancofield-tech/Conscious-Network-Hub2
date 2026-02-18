@@ -38,6 +38,57 @@ const COMMON_PASSWORDS = new Set([
   'admin123',
 ]);
 
+const DIAGNOSTICS_ADMIN_HEADER = 'x-admin-diagnostics-key';
+
+const timingSafeEquals = (a: string, b: string): boolean => {
+  const left = Buffer.from(a, 'utf8');
+  const right = Buffer.from(b, 'utf8');
+  if (left.length !== right.length) return false;
+  return crypto.timingSafeEqual(left, right);
+};
+
+const isLoopbackRequest = (req: Request): boolean => {
+  const forwardedRaw = req.headers['x-forwarded-for'];
+  const forwarded =
+    typeof forwardedRaw === 'string'
+      ? forwardedRaw.split(',')[0].trim()
+      : Array.isArray(forwardedRaw)
+      ? forwardedRaw[0]?.split(',')[0].trim()
+      : '';
+  const ip = forwarded || req.ip || req.socket.remoteAddress || '';
+  return (
+    ip === '127.0.0.1' ||
+    ip === '::1' ||
+    ip === '::ffff:127.0.0.1' ||
+    ip.endsWith('.localhost')
+  );
+};
+
+const enforceDiagnosticsAdminAccess = (req: Request, res: Response): boolean => {
+  const configuredKey = process.env.ADMIN_DIAGNOSTICS_KEY?.trim() || '';
+  const providedHeader = String(req.headers[DIAGNOSTICS_ADMIN_HEADER] || '').trim();
+
+  if (configuredKey) {
+    if (!providedHeader || !timingSafeEquals(providedHeader, configuredKey)) {
+      res.status(401).json({
+        error: `Unauthorized diagnostics access. Provide ${DIAGNOSTICS_ADMIN_HEADER}.`,
+      });
+      return false;
+    }
+    return true;
+  }
+
+  if (process.env.NODE_ENV !== 'production' && isLoopbackRequest(req)) {
+    return true;
+  }
+
+  res.status(503).json({
+    error:
+      'Diagnostics endpoint disabled. Set ADMIN_DIAGNOSTICS_KEY or access from localhost in non-production.',
+  });
+  return false;
+};
+
 function getPublicBaseUrl(req: Request): string {
   const configured = process.env.PUBLIC_BASE_URL?.trim();
   if (configured) {
@@ -417,6 +468,26 @@ publicRouter.post('/create', async (req: Request, res: Response): Promise<any> =
     }
     console.error('Error creating user profile:', error);
     return res.status(500).json({ error: 'Failed to create user profile' });
+  }
+});
+
+/**
+ * GET /api/user/create/diagnostics
+ * Admin endpoint for runtime store health and recovery diagnostics.
+ */
+publicRouter.get('/create/diagnostics', (req: Request, res: Response): any => {
+  if (!enforceDiagnosticsAdminAccess(req, res)) {
+    return;
+  }
+
+  try {
+    return res.json({
+      success: true,
+      diagnostics: localStore.getDiagnostics(),
+    });
+  } catch (error) {
+    console.error('Failed to build create diagnostics:', error);
+    return res.status(500).json({ error: 'Failed to generate diagnostics' });
   }
 });
 
