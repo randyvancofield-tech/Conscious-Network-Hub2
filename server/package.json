@@ -7,6 +7,7 @@
     "scripts": {
         "dev": "nodemon --exec ts-node src/index.ts",
         "build": "tsc",
+        "db:push": "prisma db push",
         "start": "npm run build && node dist/index.js",
         "test": "jest",
         "test:required-secrets": "npm run build && node scripts/verify-required-secrets.js",

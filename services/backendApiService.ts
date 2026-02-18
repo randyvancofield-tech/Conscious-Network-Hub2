@@ -45,9 +45,27 @@ export interface MeetingSummary {
 // Resolve backend URL:
 // - Use VITE_BACKEND_URL if set.
 // - Otherwise use same-origin (empty string), letting dev proxy or reverse proxy handle routing.
+const isLocalBackendUrl = (value: string): boolean => {
+  if (!value) return false;
+  try {
+    const parsed = new URL(value);
+    const host = parsed.hostname.toLowerCase();
+    return host === 'localhost' || host === '127.0.0.1' || host === '::1' || host.endsWith('.localhost');
+  } catch {
+    return false;
+  }
+};
+
 const resolveBackendUrl = (): string => {
-  const envUrl = import.meta.env.VITE_BACKEND_URL;
-  if (envUrl) return envUrl;
+  const envUrl = String(import.meta.env.VITE_BACKEND_URL || '').trim();
+  const allowRemoteInDev = String(import.meta.env.VITE_ALLOW_REMOTE_BACKEND_IN_DEV || '').toLowerCase() === 'true';
+
+  if (envUrl) {
+    if (import.meta.env.DEV && !isLocalBackendUrl(envUrl) && !allowRemoteInDev) {
+      return '';
+    }
+    return envUrl.replace(/\/+$/, '');
+  }
   return '';
 };
 

@@ -8,7 +8,7 @@ import {
 import { getVertexAIService } from '../services/vertexAiService';
 import { getKnowledgeContext, KnowledgeSource } from '../services/knowledgeService';
 import emailService from '../services/emailService';
-import { chatWithOpenAI } from "../services/openAiService";
+import { chatWithOpenAI, isOpenAIConfigured } from "../services/openAiService";
 
 const router = Router();
 router.use(requireCanonicalIdentity);
@@ -150,6 +150,17 @@ const mergeSources = (
   return normalized.slice(0, 6);
 };
 
+const ensureOpenAIAvailability = (res: Response): boolean => {
+  if (isOpenAIConfigured()) {
+    return true;
+  }
+
+  res.status(503).json({
+    error: 'AI service unavailable: OPENAI_API_KEY is not configured',
+  });
+  return false;
+};
+
 /**
  * POST /api/ai/chat
  * Send a message to the AI and get a response
@@ -157,6 +168,9 @@ const mergeSources = (
 router.post('/chat', validateChatInput, async (req: Request, res: Response): Promise<void> => {
   try {
     if (!enforceCanonicalBodyUser(req, res)) {
+      return;
+    }
+    if (!ensureOpenAIAvailability(res)) {
       return;
     }
     const { message } = req.body;
@@ -189,6 +203,9 @@ router.post('/wisdom', async (req: Request, res: Response): Promise<void> => {
     if (!enforceCanonicalBodyUser(req, res)) {
       return;
     }
+    if (!ensureOpenAIAvailability(res)) {
+      return;
+    }
     const prompt =
       "Generate a short, professional, academically grounded daily insight focused on Ethical AI, cybersecurity, decentralized platforms, or blockchain-based social networks. Keep it concise and factual.";
 
@@ -214,6 +231,9 @@ router.post('/wisdom', async (req: Request, res: Response): Promise<void> => {
 router.post('/summarize-meeting', async (req: Request, res: Response): Promise<void> => {
   try {
     if (!enforceCanonicalBodyUser(req, res)) {
+      return;
+    }
+    if (!ensureOpenAIAvailability(res)) {
       return;
     }
     const { transcript } = req.body as { transcript?: unknown };
@@ -379,6 +399,9 @@ router.get('/trending', async (req: Request, res: Response): Promise<void> => {
   const requestStart = Date.now();
   console.log('[AI] GET /api/ai/trending received');
   try {
+    if (!ensureOpenAIAvailability(res)) {
+      return;
+    }
     const prompt =
       "List 5 current trending topics across ethical AI/governance, blockchain/Web3, and wellness/consciousness. For each, include a short explanation on a new line.";
 

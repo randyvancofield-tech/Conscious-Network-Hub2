@@ -4,7 +4,7 @@ import {
   getAuthenticatedUserId,
   requireCanonicalIdentity,
 } from '../middleware';
-import { localStore } from '../services/localStore';
+import { localStore } from '../services/persistenceStore';
 
 const router = Router();
 router.use(requireCanonicalIdentity);
@@ -45,7 +45,7 @@ router.post('/', async (req: Request, res: Response): Promise<any> => {
       return;
     }
 
-    const reflection = localStore.createReflection({
+    const reflection = await localStore.createReflection({
       userId: authUserId,
       content,
       fileUrl: absolutizeUrl(req, fileUrl)!,
@@ -70,7 +70,7 @@ router.get('/:userId', async (req: Request, res: Response): Promise<any> => {
       return;
     }
 
-    const reflections = localStore.listReflectionsByUserId(userId);
+    const reflections = await localStore.listReflectionsByUserId(userId);
     const normalized = reflections.map((reflection) => ({
       ...reflection,
       fileUrl: absolutizeUrl(req, reflection.fileUrl),

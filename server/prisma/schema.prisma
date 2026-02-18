@@ -6,15 +6,25 @@ generator client {
 }
 
 datasource db {
-  provider = "sqlite"
+  provider = "postgresql"
   url      = env("DATABASE_URL")
 }
 
 model User {
-  id            String     @id @default(cuid())
+  id            String     @id @default(uuid())
   email         String     @unique
   name          String?
+  handle        String?
+  bio           String?
+  avatarUrl     String?
+  bannerUrl     String?
+  interests     Json?
+  twitterUrl    String?
+  githubUrl     String?
+  websiteUrl    String?
+  privacySettings Json?
   password      String
+  passwordFingerprint String?
   createdAt     DateTime   @default(now())
   updatedAt     DateTime   @updatedAt
 
@@ -26,27 +36,40 @@ model User {
 
   // Profile customization
   profileBackgroundVideo String?
+  phoneNumber    String?
+  twoFactorMethod String  @default("none")
+  walletDid      String?
+  pendingPhoneOtpHash String?
+  pendingPhoneOtpExpiresAt DateTime?
+  pendingPhoneOtpAttempts Int @default(0)
+  failedSignInAttempts Int @default(0)
+  lockoutUntil   DateTime?
 
   // Relations
   memberships   Membership[]
   payments      PaymentHistory[]
   reflections   Reflection[]
+
+  @@index([createdAt])
 }
 
 model Reflection {
-  id          String   @id @default(cuid())
+  id          String   @id @default(uuid())
   userId      String
   content     String?
-  fileUrl     String?
-  fileType    String? // e.g., 'video', 'document'
+  fileUrl     String
+  fileType    String
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 
   user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([createdAt])
 }
 
 model Membership {
-  id            String     @id @default(cuid())
+  id            String     @id @default(uuid())
   userId        String
   tier          String
   status        String     @default("active")
@@ -59,10 +82,11 @@ model Membership {
   payments      PaymentHistory[]
 
   @@unique([userId])
+  @@index([createdAt])
 }
 
 model PaymentHistory {
-  id            String     @id @default(cuid())
+  id            String     @id @default(uuid())
   userId        String
   membershipId  String
   amount        Float
@@ -75,6 +99,9 @@ model PaymentHistory {
 
   user          User       @relation(fields: [userId], references: [id], onDelete: Cascade)
   membership    Membership @relation(fields: [membershipId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([createdAt])
 }
 
 model ProviderChallenge {

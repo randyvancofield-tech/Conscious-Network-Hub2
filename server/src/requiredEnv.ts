@@ -10,14 +10,15 @@ const trimEnv = (name: string): string | null => {
   return trimmed.length > 0 ? trimmed : null;
 };
 
+const isPostgresUrl = (value: string): boolean => /^postgres(?:ql)?:\/\//i.test(value.trim());
+const isFileUrl = (value: string): boolean => /^file:/i.test(value.trim());
+
 // Required high-risk secrets/environment variables for backend startup.
 // - AUTH_TOKEN_SECRET (or legacy SESSION_SECRET alias)
 // - DATABASE_URL
-// - OPENAI_API_KEY
 export const REQUIRED_SECRETS = [
   'AUTH_TOKEN_SECRET (or SESSION_SECRET)',
   'DATABASE_URL',
-  'OPENAI_API_KEY',
 ] as const;
 
 export const resolveAuthTokenSecret = (): string => {
@@ -34,17 +35,15 @@ export const resolveAuthTokenSecret = (): string => {
 
 export const validateRequiredEnv = (): void => {
   const missing: string[] = [];
+  const databaseUrl = trimEnv('DATABASE_URL');
+  const persistenceBackend = (trimEnv('AUTH_PERSISTENCE_BACKEND') || '').toLowerCase();
 
   if (!hasNonEmptyEnv('AUTH_TOKEN_SECRET') && !hasNonEmptyEnv('SESSION_SECRET')) {
     missing.push('AUTH_TOKEN_SECRET (or SESSION_SECRET)');
   }
 
-  if (!hasNonEmptyEnv('DATABASE_URL')) {
+  if (!databaseUrl) {
     missing.push('DATABASE_URL');
-  }
-
-  if (!hasNonEmptyEnv('OPENAI_API_KEY')) {
-    missing.push('OPENAI_API_KEY');
   }
 
   if (missing.length > 0) {
@@ -52,5 +51,18 @@ export const validateRequiredEnv = (): void => {
       `[STARTUP][FATAL] Missing required secrets/environment variables: ${missing.join(', ')}`
     );
   }
+
+  if (persistenceBackend === 'shared_db' && databaseUrl && !isPostgresUrl(databaseUrl)) {
+    throw new Error(
+      '[STARTUP][FATAL] AUTH_PERSISTENCE_BACKEND=shared_db requires DATABASE_URL to use postgres:// or postgresql://'
+    );
+  }
+
+  if (process.env.NODE_ENV === 'production' && databaseUrl && isFileUrl(databaseUrl)) {
+    throw new Error(
+      '[STARTUP][FATAL] Production DATABASE_URL cannot use file: storage. Configure shared Postgres persistence.'
+    );
+  }
 };
 
+export const hasOpenAiApiKey = (): boolean => hasNonEmptyEnv('OPENAI_API_KEY');

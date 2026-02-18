@@ -82,6 +82,7 @@ export interface UserProfile {
   hasProfile?: boolean;
   avatarUrl?: string;
   bannerUrl?: string;
+  profileBackgroundVideo?: string | null;
   bio?: string;
   interests?: string[];
   twitterUrl?: string;

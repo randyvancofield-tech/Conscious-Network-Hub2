@@ -3,7 +3,7 @@ import {
   localStore,
   LocalProviderChallengeRecord,
   LocalProviderSessionRecord,
-} from './localStore';
+} from './persistenceStore';
 
 export interface ProviderChallengeRecord extends LocalProviderChallengeRecord {}
 
@@ -47,7 +47,7 @@ export const getProviderChallengeById = async (
 };
 
 export const markProviderChallengeUsed = async (challengeId: string): Promise<void> => {
-  localStore.markProviderChallengeUsed(challengeId);
+  await localStore.markProviderChallengeUsed(challengeId);
 };
 
 export const createProviderSession = async (
@@ -78,5 +78,5 @@ export const getProviderSessionById = async (
 };
 
 export const revokeProviderSession = async (sessionId: string): Promise<void> => {
-  localStore.revokeProviderSession(sessionId);
+  await localStore.revokeProviderSession(sessionId);
 };

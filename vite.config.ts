@@ -4,6 +4,24 @@ import react from '@vitejs/plugin-react'
 
 export default defineConfig(({ mode }) => {
   const env = loadEnv(mode, '.', 'VITE_')
+  const configuredBackendUrl = (env.VITE_BACKEND_URL || '').trim()
+  const allowRemoteBackendInDev = String(env.VITE_ALLOW_REMOTE_BACKEND_IN_DEV || '').toLowerCase() === 'true'
+
+  const isLocalBackendUrl = (value: string): boolean => {
+    if (!value) return false
+    try {
+      const parsed = new URL(value)
+      const host = parsed.hostname.toLowerCase()
+      return host === 'localhost' || host === '127.0.0.1' || host === '::1' || host.endsWith('.localhost')
+    } catch {
+      return false
+    }
+  }
+
+  const devProxyTarget =
+    configuredBackendUrl && (isLocalBackendUrl(configuredBackendUrl) || allowRemoteBackendInDev)
+      ? configuredBackendUrl
+      : 'http://localhost:3001'
 
   return {
     server: {
@@ -12,11 +30,11 @@ export default defineConfig(({ mode }) => {
       host: '0.0.0.0',
       proxy: {
         '/api': {
-          target: env.VITE_BACKEND_URL || 'http://localhost:3001',
+          target: devProxyTarget,
           changeOrigin: true,
         },
         '/health': {
-          target: env.VITE_BACKEND_URL || 'http://localhost:3001',
+          target: devProxyTarget,
           changeOrigin: true,
         },
       },

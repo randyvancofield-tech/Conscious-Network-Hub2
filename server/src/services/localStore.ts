@@ -6,10 +6,24 @@ export type TwoFactorMethod = 'none' | 'phone' | 'wallet';
 
 type NullableIso = string | null;
 
+interface UserPrivacySettings {
+  showEmail: boolean;
+  allowMessages: boolean;
+}
+
 interface UserRow {
   id: string;
   email: string;
   name: string | null;
+  handle: string | null;
+  bio: string | null;
+  avatarUrl: string | null;
+  bannerUrl: string | null;
+  interests: string[];
+  twitterUrl: string | null;
+  githubUrl: string | null;
+  websiteUrl: string | null;
+  privacySettings: UserPrivacySettings;
   password: string;
   passwordFingerprint: string | null;
   tier: string;
@@ -142,6 +156,15 @@ export interface LocalUserRecord {
   id: string;
   email: string;
   name: string | null;
+  handle: string | null;
+  bio: string | null;
+  avatarUrl: string | null;
+  bannerUrl: string | null;
+  interests: string[];
+  twitterUrl: string | null;
+  githubUrl: string | null;
+  websiteUrl: string | null;
+  privacySettings: UserPrivacySettings;
   password: string;
   passwordFingerprint: string | null;
   tier: string;
@@ -218,6 +241,15 @@ export interface LocalProviderSessionRecord {
 interface CreateUserInput {
   email: string;
   name: string;
+  handle?: string | null;
+  bio?: string | null;
+  avatarUrl?: string | null;
+  bannerUrl?: string | null;
+  interests?: string[];
+  twitterUrl?: string | null;
+  githubUrl?: string | null;
+  websiteUrl?: string | null;
+  privacySettings?: UserPrivacySettings;
   password: string;
   passwordFingerprint?: string | null;
   tier: string;
@@ -228,6 +260,15 @@ interface CreateUserInput {
 
 interface UpdateUserInput {
   name?: string | null;
+  handle?: string | null;
+  bio?: string | null;
+  avatarUrl?: string | null;
+  bannerUrl?: string | null;
+  interests?: string[];
+  twitterUrl?: string | null;
+  githubUrl?: string | null;
+  websiteUrl?: string | null;
+  privacySettings?: UserPrivacySettings;
   password?: string;
   passwordFingerprint?: string | null;
   tier?: string;
@@ -456,10 +497,36 @@ const normalizeEmail = (email: string): string => email.trim().toLowerCase();
 
 const toDate = (value: string): Date => new Date(value);
 
+const normalizeInterests = (value: unknown): string[] => {
+  if (!Array.isArray(value)) return [];
+  return value
+    .filter((entry): entry is string => typeof entry === 'string')
+    .map((entry) => entry.trim())
+    .filter((entry) => entry.length > 0)
+    .slice(0, 20);
+};
+
+const normalizePrivacySettings = (value: unknown): UserPrivacySettings => {
+  const input = value && typeof value === 'object' ? (value as Record<string, unknown>) : {};
+  return {
+    showEmail: Boolean(input.showEmail),
+    allowMessages: input.allowMessages === undefined ? true : Boolean(input.allowMessages),
+  };
+};
+
 const rowToUser = (row: UserRow): LocalUserRecord => ({
   id: row.id,
   email: row.email,
   name: row.name,
+  handle: row.handle || null,
+  bio: row.bio || null,
+  avatarUrl: row.avatarUrl || null,
+  bannerUrl: row.bannerUrl || null,
+  interests: normalizeInterests(row.interests),
+  twitterUrl: row.twitterUrl || null,
+  githubUrl: row.githubUrl || null,
+  websiteUrl: row.websiteUrl || null,
+  privacySettings: normalizePrivacySettings(row.privacySettings),
   password: row.password,
   passwordFingerprint: row.passwordFingerprint,
   tier: row.tier,
@@ -624,6 +691,15 @@ export const localStore = {
       id: uniqueId(),
       email,
       name: input.name || null,
+      handle: input.handle?.trim() || null,
+      bio: input.bio?.trim() || null,
+      avatarUrl: input.avatarUrl?.trim() || null,
+      bannerUrl: input.bannerUrl?.trim() || null,
+      interests: normalizeInterests(input.interests),
+      twitterUrl: input.twitterUrl?.trim() || null,
+      githubUrl: input.githubUrl?.trim() || null,
+      websiteUrl: input.websiteUrl?.trim() || null,
+      privacySettings: normalizePrivacySettings(input.privacySettings),
       password: input.password,
       passwordFingerprint: input.passwordFingerprint || null,
       tier: input.tier,
@@ -656,6 +732,17 @@ export const localStore = {
     const row = store.users[index];
 
     if (updates.name !== undefined) row.name = updates.name;
+    if (updates.handle !== undefined) row.handle = updates.handle;
+    if (updates.bio !== undefined) row.bio = updates.bio;
+    if (updates.avatarUrl !== undefined) row.avatarUrl = updates.avatarUrl;
+    if (updates.bannerUrl !== undefined) row.bannerUrl = updates.bannerUrl;
+    if (updates.interests !== undefined) row.interests = normalizeInterests(updates.interests);
+    if (updates.twitterUrl !== undefined) row.twitterUrl = updates.twitterUrl;
+    if (updates.githubUrl !== undefined) row.githubUrl = updates.githubUrl;
+    if (updates.websiteUrl !== undefined) row.websiteUrl = updates.websiteUrl;
+    if (updates.privacySettings !== undefined) {
+      row.privacySettings = normalizePrivacySettings(updates.privacySettings);
+    }
     if (updates.password !== undefined) row.password = updates.password;
     if (updates.passwordFingerprint !== undefined) {
       row.passwordFingerprint = updates.passwordFingerprint;

@@ -98,8 +98,39 @@ const App: React.FC = () => {
     }
   ];
 
+  const isLocalBackendUrl = (value: string): boolean => {
+    if (!value) return false;
+    try {
+      const parsed = new URL(value);
+      const host = parsed.hostname.toLowerCase();
+      return (
+        host === 'localhost' ||
+        host === '127.0.0.1' ||
+        host === '::1' ||
+        host.endsWith('.localhost')
+      );
+    } catch {
+      return false;
+    }
+  };
+
+  const allowRemoteBackendInDev =
+    String(import.meta.env.VITE_ALLOW_REMOTE_BACKEND_IN_DEV || '').toLowerCase() === 'true';
+  const signupTwoFactorEnabled =
+    String(import.meta.env.VITE_ENABLE_SIGNUP_2FA || '').toLowerCase() === 'true';
+
   const resolveBackendUrl = () => {
-    if (import.meta.env.VITE_BACKEND_URL) return import.meta.env.VITE_BACKEND_URL.replace(/\/+$/, '');
+    const configured = String(import.meta.env.VITE_BACKEND_URL || '').trim();
+    if (configured) {
+      const normalized = configured.replace(/\/+$/, '');
+      if (import.meta.env.DEV && !isLocalBackendUrl(normalized) && !allowRemoteBackendInDev) {
+        if (typeof window !== 'undefined') {
+          return window.location.origin.replace(/\/+$/, '');
+        }
+        return '';
+      }
+      return normalized;
+    }
     if (typeof window !== 'undefined') {
       return window.location.origin.replace(/\/+$/, '');
     }
@@ -109,6 +140,7 @@ const App: React.FC = () => {
   const toCanonicalUser = (rawUser: any): UserProfile => ({
     id: rawUser.id,
     name: rawUser.name || (rawUser.email ? rawUser.email.split('@')[0] : 'Node'),
+    handle: rawUser.handle,
     email: rawUser.email,
     tier: rawUser.tier || 'Free / Community Tier',
     createdAt: rawUser.createdAt || new Date().toISOString(),
@@ -118,6 +150,7 @@ const App: React.FC = () => {
     walletBalanceTokens: rawUser.walletBalanceTokens ?? 200,
     avatarUrl: rawUser.avatarUrl,
     bannerUrl: rawUser.bannerUrl,
+    profileBackgroundVideo: rawUser.profileBackgroundVideo || null,
     bio: rawUser.bio,
     interests: rawUser.interests,
     twitterUrl: rawUser.twitterUrl,
@@ -201,6 +234,14 @@ const App: React.FC = () => {
 
     initializeSession();
   }, []);
+
+  useEffect(() => {
+    if (!signupTwoFactorEnabled && twoFactorMethodInput !== 'none') {
+      setTwoFactorMethodInput('none');
+      setPhoneNumberInput('');
+      setWalletDidInput('');
+    }
+  }, [signupTwoFactorEnabled, twoFactorMethodInput]);
 
   useEffect(() => {
     if (isConnectDropdownOpen && connectButtonRef.current) {
@@ -346,6 +387,12 @@ const App: React.FC = () => {
   const handleCreateProfile = async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
+    if (!signupTwoFactorEnabled && twoFactorMethodInput !== 'none') {
+      setError(
+        'Signup 2FA enrollment is temporarily disabled. Create your profile first, then enable 2FA in Profile Security.'
+      );
+      return;
+    }
     if (passwordInput !== confirmPasswordInput) {
       setError('Passwords match error.');
       return;
@@ -533,6 +580,45 @@ const App: React.FC = () => {
     }
   };
 
+  const handleIdentityComplete = (profileData: Partial<UserProfile>) => {
+    if (!user) return;
+
+    const optimistic = { ...user, ...profileData, hasProfile: true };
+    updateActiveUser(optimistic);
+
+    void (async () => {
+      try {
+        const response = await fetch(`${resolveBackendUrl()}/api/user/${user.id}`, {
+          method: 'PUT',
+          headers: buildAuthHeaders({ 'Content-Type': 'application/json' }),
+          body: JSON.stringify({
+            name: profileData.name ?? user.name,
+            handle: profileData.handle,
+            bio: profileData.bio,
+            avatarUrl: profileData.avatarUrl,
+            bannerUrl: profileData.bannerUrl,
+            interests: profileData.interests,
+            twitterUrl: profileData.twitterUrl,
+            githubUrl: profileData.githubUrl,
+            websiteUrl: profileData.websiteUrl,
+            privacySettings: profileData.privacySettings,
+          }),
+        });
+
+        const data = await response.json().catch(() => ({}));
+        if (!response.ok) {
+          throw new Error(data?.error || 'Failed to persist profile');
+        }
+
+        const canonical = toCanonicalUser(data.user);
+        updateActiveUser({ ...canonical, hasProfile: true });
+      } catch (persistError) {
+        console.error('Identity persistence error:', persistError);
+        setError('Profile changes were not fully saved to backend. Please retry.');
+      }
+    })();
+  };
+
   const navViewMap: Record<string, AppView> = {
     dashboard: AppView.DASHBOARD,
     'social-learning': AppView.CONSCIOUS_SOCIAL_LEARNING,
@@ -567,12 +653,7 @@ const App: React.FC = () => {
           <ConsciousIdentity 
             user={user} 
             enrolledCourses={enrolledCourses}
-            onComplete={(p) => {
-              if (user) {
-                const updated = { ...user, ...p, hasProfile: true };
-                updateActiveUser(updated);
-              }
-            }}
+            onComplete={handleIdentityComplete}
             onSignOut={handleSignOut}
             onGoBack={() => setCurrentView(AppView.DASHBOARD)}
             onSignInPrompt={() => {
@@ -1192,11 +1273,19 @@ const App: React.FC = () => {
                         className="w-full px-5 sm:px-8 py-3 sm:py-4 bg-white/5 border border-white/10 rounded-xl sm:rounded-2xl text-white outline-none focus:ring-2 focus:ring-blue-500/50 transition-all font-medium text-sm"
                       >
                         <option value="none">Password only</option>
-                        <option value="phone">Password + Phone OTP</option>
-                        <option value="wallet">Password + Wallet Token</option>
+                        <option value="phone" disabled={!signupTwoFactorEnabled}>
+                          {signupTwoFactorEnabled
+                            ? 'Password + Phone OTP'
+                            : 'Password + Phone OTP (temporarily disabled)'}
+                        </option>
+                        <option value="wallet" disabled={!signupTwoFactorEnabled}>
+                          {signupTwoFactorEnabled
+                            ? 'Password + Wallet Token'
+                            : 'Password + Wallet Token (temporarily disabled)'}
+                        </option>
                       </select>
                     </div>
-                    {twoFactorMethodInput === 'phone' && (
+                    {signupTwoFactorEnabled && twoFactorMethodInput === 'phone' && (
                       <div className="space-y-3">
                         <label className="text-[9px] font-black text-slate-500 uppercase tracking-widest ml-2">Phone Number</label>
                         <input
@@ -1209,7 +1298,7 @@ const App: React.FC = () => {
                         />
                       </div>
                     )}
-                    {twoFactorMethodInput === 'wallet' && (
+                    {signupTwoFactorEnabled && twoFactorMethodInput === 'wallet' && (
                       <div className="space-y-3">
                         <label className="text-[9px] font-black text-slate-500 uppercase tracking-widest ml-2">Wallet DID</label>
                         <input
@@ -1224,6 +1313,11 @@ const App: React.FC = () => {
                           Sign in later by providing a valid provider session token from wallet verification.
                         </p>
                       </div>
+                    )}
+                    {!signupTwoFactorEnabled && (
+                      <p className="text-[9px] text-amber-300/90 uppercase tracking-widest px-1">
+                        Signup 2FA enrollment is temporarily disabled to prevent lockouts. Enable 2FA after sign-in from Profile Security.
+                      </p>
                     )}
                   </>
                 )}

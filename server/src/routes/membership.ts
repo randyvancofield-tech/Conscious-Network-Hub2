@@ -4,7 +4,7 @@ import {
   getAuthenticatedUserId,
   requireCanonicalIdentity,
 } from '../middleware';
-import { localStore } from '../services/localStore';
+import { localStore } from '../services/persistenceStore';
 import { normalizeTier } from '../tierPolicy';
 
 const publicRouter = Router();
@@ -41,13 +41,13 @@ protectedRouter.post('/select-tier', async (req: Request, res: Response): Promis
     }
 
     // Check if user exists
-    const user = localStore.getUserById(authUserId);
+    const user = await localStore.getUserById(authUserId);
     if (!user) {
       return res.status(404).json({ error: 'User not found' });
     }
 
     // Create or update membership
-    const membership = localStore.upsertMembership({
+    const membership = await localStore.upsertMembership({
       userId: authUserId,
       tier,
       status: 'active',
@@ -56,7 +56,7 @@ protectedRouter.post('/select-tier', async (req: Request, res: Response): Promis
 
     // Create payment history record
     const tierInfo = TIER_PRICING[tier];
-    const payment = localStore.createPayment({
+    const payment = await localStore.createPayment({
       userId: authUserId,
       membershipId: membership.id,
       amount: tierInfo.price,
@@ -68,7 +68,7 @@ protectedRouter.post('/select-tier', async (req: Request, res: Response): Promis
     });
 
     // Update user tier and subscription status
-    const updatedUser = localStore.updateUser(authUserId, {
+    const updatedUser = await localStore.updateUser(authUserId, {
       tier,
       subscriptionStatus: 'active',
       subscriptionStartDate: new Date(),
@@ -115,13 +115,13 @@ protectedRouter.get('/status/:userId', async (req: Request, res: Response): Prom
       return;
     }
 
-    const user = localStore.getUserById(userId);
+    const user = await localStore.getUserById(userId);
     if (!user) {
       return res.status(404).json({ error: 'User not found' });
     }
 
-    const memberships = localStore.listMembershipsByUserId(userId, 1);
-    const paymentHistory = localStore.listPaymentsByUserId(userId, 5);
+    const memberships = await localStore.listMembershipsByUserId(userId, 1);
+    const paymentHistory = await localStore.listPaymentsByUserId(userId, 5);
 
     return res.json({
       user: {
@@ -169,12 +169,12 @@ protectedRouter.post('/confirm-payment', async (req: Request, res: Response): Pr
       return res.status(400).json({ error: 'Invalid tier selected' });
     }
 
-    const membership = localStore.getMembershipByUserId(authUserId);
+    const membership = await localStore.getMembershipByUserId(authUserId);
     if (!membership) {
       return res.status(404).json({ error: 'Membership not found' });
     }
 
-    const payment = localStore.createPayment({
+    const payment = await localStore.createPayment({
       userId: authUserId,
       membershipId: membership.id,
       amount: tierInfo.price,

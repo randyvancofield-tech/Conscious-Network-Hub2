@@ -24,7 +24,7 @@ import reflectionRoutes from './routes/reflection';
 import providerAuthRoutes from './routes/providerAuth';
 import providerSessionRoutes from './routes/providerSession';
 import { initializeVertexAI } from './services/vertexAiService';
-import { validateRequiredEnv } from './requiredEnv';
+import { hasOpenAiApiKey, validateRequiredEnv } from './requiredEnv';
 
 // Load environment variables with local override first.
 dotenv.config({ path: '.env.local' });
@@ -37,6 +37,12 @@ try {
     error instanceof Error ? error.message : 'Missing required secrets/environment variables';
   console.error(message);
   process.exit(1);
+}
+
+if (!hasOpenAiApiKey()) {
+  console.warn(
+    '[STARTUP][WARN] OPENAI_API_KEY is not set. Authentication/profile routes remain available, but /api/ai routes will return 503 until configured.'
+  );
 }
 
 

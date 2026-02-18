@@ -5,7 +5,9 @@ const SERVER_DIR = path.resolve(__dirname, '..');
 const ENTRY = path.join(SERVER_DIR, 'dist', 'index.js');
 
 const REQUIRED_MISSING_PATTERN =
-  /Missing required secrets\/environment variables: .*AUTH_TOKEN_SECRET \(or SESSION_SECRET\).*DATABASE_URL.*OPENAI_API_KEY/i;
+  /Missing required secrets\/environment variables: .*AUTH_TOKEN_SECRET \(or SESSION_SECRET\).*DATABASE_URL/i;
+const SHARED_DB_MISMATCH_PATTERN =
+  /AUTH_PERSISTENCE_BACKEND=shared_db requires DATABASE_URL to use postgres:\/\/ or postgresql:\/\//i;
 
 const buildEnv = ({ unset = [], set = {} } = {}) => {
   const env = { ...process.env };
@@ -34,7 +36,6 @@ const runExpectFailure = () =>
         AUTH_TOKEN_SECRET: '',
         SESSION_SECRET: '',
         DATABASE_URL: '',
-        OPENAI_API_KEY: '',
       },
     });
 
@@ -76,13 +77,12 @@ const runExpectSuccess = () =>
   new Promise((resolve, reject) => {
     const testPort = 3982;
     const env = buildEnv({
-      unset: ['AUTH_TOKEN_SECRET', 'SESSION_SECRET', 'DATABASE_URL', 'OPENAI_API_KEY'],
+      unset: ['AUTH_TOKEN_SECRET', 'SESSION_SECRET', 'DATABASE_URL'],
       set: {
         NODE_ENV: 'test',
         PORT: String(testPort),
         AUTH_TOKEN_SECRET: 'integration-test-auth-secret',
         DATABASE_URL: 'file:./prisma/dev.db',
-        OPENAI_API_KEY: 'integration-test-openai-key',
         CORS_ORIGINS: 'http://localhost:3000',
       },
     });
@@ -119,8 +119,59 @@ const runExpectSuccess = () =>
     });
   });
 
+const runExpectFailureSharedDbMisconfig = () =>
+  new Promise((resolve, reject) => {
+    const env = buildEnv({
+      set: {
+        NODE_ENV: 'test',
+        PORT: '3983',
+        AUTH_TOKEN_SECRET: 'integration-test-auth-secret',
+        DATABASE_URL: 'file:./prisma/dev.db',
+        AUTH_PERSISTENCE_BACKEND: 'shared_db',
+      },
+    });
+
+    const proc = spawn(process.execPath, [ENTRY], { cwd: SERVER_DIR, env });
+    let output = '';
+    const timeout = setTimeout(() => {
+      stopProcess(proc);
+      reject(new Error('Timeout waiting for shared_db misconfiguration failure.'));
+    }, 12000);
+
+    proc.stdout.on('data', (chunk) => {
+      output += chunk.toString();
+    });
+    proc.stderr.on('data', (chunk) => {
+      output += chunk.toString();
+    });
+
+    proc.on('exit', (code) => {
+      clearTimeout(timeout);
+      if (code === 0) {
+        reject(
+          new Error(
+            'Expected startup to fail for AUTH_PERSISTENCE_BACKEND=shared_db with file DATABASE_URL, but it exited with code 0.'
+          )
+        );
+        return;
+      }
+
+      if (!SHARED_DB_MISMATCH_PATTERN.test(output)) {
+        reject(
+          new Error(
+            `Startup failed, but shared_db validation message was not clear enough.\nOutput:\n${output}`
+          )
+        );
+        return;
+      }
+
+      resolve();
+    });
+  });
+
 const main = async () => {
   await runExpectFailure();
+  await runExpectFailureSharedDbMisconfig();
   await runExpectSuccess();
   console.log('Required secret startup checks passed.');
 };

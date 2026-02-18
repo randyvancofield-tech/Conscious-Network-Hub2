@@ -6,6 +6,7 @@ param(
   [string]$OpenAIApiKey = "",
   [string]$AuthTokenSecret = "",
   [string]$DatabaseUrl = "",
+  [string]$AdminDiagnosticsKey = "",
   [switch]$SkipChecks
 )
 
@@ -38,10 +39,6 @@ if (-not $OpenAIApiKey) {
   $OpenAIApiKey = Get-ValueFromLocalEnv -Name "OPENAI_API_KEY"
 }
 
-if (-not $OpenAIApiKey) {
-  throw "OPENAI_API_KEY is required. Set -OpenAIApiKey, OPENAI_API_KEY env var, or server/.env.local."
-}
-
 if (-not $AuthTokenSecret) {
   $AuthTokenSecret = $env:AUTH_TOKEN_SECRET
 }
@@ -66,6 +63,26 @@ if (-not $DatabaseUrl) {
   throw "DATABASE_URL is required. Set -DatabaseUrl, DATABASE_URL env var, or server/.env.local."
 }
 
+if (-not $AdminDiagnosticsKey) {
+  $AdminDiagnosticsKey = $env:ADMIN_DIAGNOSTICS_KEY
+}
+
+if (-not $AdminDiagnosticsKey) {
+  $AdminDiagnosticsKey = Get-ValueFromLocalEnv -Name "ADMIN_DIAGNOSTICS_KEY"
+}
+
+if ($DatabaseUrl -match "^\s*file:") {
+  throw "DATABASE_URL points to a local file. Cloud Run requires a shared Postgres URL (postgresql://...) for durable auth/profile persistence."
+}
+
+if ($DatabaseUrl -notmatch "^\s*postgres(ql)?://") {
+  throw "DATABASE_URL must be a Postgres connection string for Cloud Run (postgresql://... or postgres://...)."
+}
+
+if (-not $OpenAIApiKey) {
+  Write-Warning "OPENAI_API_KEY not provided. Auth/profile routes will work, but /api/ai routes will return 503 until the key is configured."
+}
+
 Write-Host "Deploying $Service from source..."
 gcloud run deploy $Service `
   --source . `
@@ -74,7 +91,20 @@ gcloud run deploy $Service `
   --allow-unauthenticated | Out-Host
 
 Write-Host "Updating env vars without overwriting unrelated settings..."
-$envArg = "^@^CORS_ORIGINS=$AllowedOrigins@OPENAI_API_KEY=$OpenAIApiKey@AUTH_TOKEN_SECRET=$AuthTokenSecret@DATABASE_URL=$DatabaseUrl"
+$envUpdates = @(
+  "CORS_ORIGINS=$AllowedOrigins",
+  "AUTH_TOKEN_SECRET=$AuthTokenSecret",
+  "DATABASE_URL=$DatabaseUrl",
+  "AUTH_PERSISTENCE_BACKEND=shared_db",
+  "DATABASE_PROVIDER=postgresql"
+)
+if ($OpenAIApiKey) {
+  $envUpdates += "OPENAI_API_KEY=$OpenAIApiKey"
+}
+if ($AdminDiagnosticsKey) {
+  $envUpdates += "ADMIN_DIAGNOSTICS_KEY=$AdminDiagnosticsKey"
+}
+$envArg = "^@^" + ($envUpdates -join "@")
 gcloud run services update $Service `
   --region $Region `
   --project $ProjectId `
@@ -95,7 +125,13 @@ Write-Host "Service URL: $url"
 
 if (-not $SkipChecks) {
   Write-Host "Running post-deploy checks..."
-  & (Join-Path $PSScriptRoot "post-deploy-check.ps1") `
-    -BackendUrl $url `
-    -Origin "https://conscious-network.org"
+  $checkArgs = @{
+    BackendUrl = $url
+    Origin = "https://conscious-network.org"
+  }
+  if ($AdminDiagnosticsKey) {
+    $checkArgs["DiagnosticsKey"] = $AdminDiagnosticsKey
+    $checkArgs["RequireSharedStore"] = $true
+  }
+  & (Join-Path $PSScriptRoot "post-deploy-check.ps1") @checkArgs
 }

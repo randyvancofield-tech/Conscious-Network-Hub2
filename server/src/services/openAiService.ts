@@ -2,6 +2,9 @@
 
 let client: OpenAI | null = null;
 
+export const isOpenAIConfigured = (): boolean =>
+  typeof process.env.OPENAI_API_KEY === 'string' && process.env.OPENAI_API_KEY.trim().length > 0;
+
 function getClient(): OpenAI {
   const apiKey = process.env.OPENAI_API_KEY;
   if (!apiKey) {

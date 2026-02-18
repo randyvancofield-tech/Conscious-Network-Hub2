@@ -14,7 +14,7 @@ import {
   logIdentityValidationFailure,
   requireCanonicalIdentity,
 } from '../middleware';
-import { localStore, TwoFactorMethod } from '../services/localStore';
+import { localStore, TwoFactorMethod } from '../services/persistenceStore';
 import { mirrorUserToGoogleSheets } from '../services/googleSheetsMirror';
 import { getProviderSessionById } from '../services/providerSessionStore';
 import { normalizeTier } from '../tierPolicy';
@@ -104,7 +104,7 @@ function getPublicBaseUrl(req: Request): string {
 
 function absolutizeUrl(req: Request, url?: string | null): string | null | undefined {
   if (!url) return url;
-  if (/^https?:\/\//i.test(url)) return url;
+  if (/^[a-z][a-z0-9+.-]*:/i.test(url)) return url;
   const path = url.startsWith('/') ? url : `/${url}`;
   return `${getPublicBaseUrl(req)}${path}`;
 }
@@ -134,6 +134,28 @@ const maskPhoneNumber = (phone: string): string => {
   const digits = phone.replace(/\D/g, '');
   if (digits.length < 4) return '***';
   return `***-***-${digits.slice(-4)}`;
+};
+
+const normalizeOptionalString = (value: unknown): string | null => {
+  const normalized = String(value || '').trim();
+  return normalized.length > 0 ? normalized : null;
+};
+
+const normalizeInterests = (value: unknown): string[] => {
+  if (!Array.isArray(value)) return [];
+  return value
+    .filter((entry): entry is string => typeof entry === 'string')
+    .map((entry) => entry.trim())
+    .filter((entry) => entry.length > 0)
+    .slice(0, 20);
+};
+
+const normalizePrivacySettings = (value: unknown): { showEmail: boolean; allowMessages: boolean } => {
+  const input = value && typeof value === 'object' ? (value as Record<string, unknown>) : {};
+  return {
+    showEmail: Boolean(input.showEmail),
+    allowMessages: input.allowMessages === undefined ? true : Boolean(input.allowMessages),
+  };
 };
 
 const validatePasswordPolicy = (email: string, password: string): string | null => {
@@ -175,6 +197,15 @@ const toPublicUser = (req: Request, user: any) => ({
   id: user.id,
   email: user.email,
   name: user.name || toIdentityName(user.email),
+  handle: user.handle || null,
+  bio: user.bio || null,
+  avatarUrl: absolutizeUrl(req, user.avatarUrl),
+  bannerUrl: absolutizeUrl(req, user.bannerUrl),
+  interests: Array.isArray(user.interests) ? user.interests : [],
+  twitterUrl: user.twitterUrl || null,
+  githubUrl: user.githubUrl || null,
+  websiteUrl: user.websiteUrl || null,
+  privacySettings: normalizePrivacySettings(user.privacySettings),
   tier: normalizeTier(user.tier),
   subscriptionStatus: user.subscriptionStatus,
   subscriptionStartDate: user.subscriptionStartDate,
@@ -203,7 +234,7 @@ publicRouter.post('/signin', async (req: Request, res: Response): Promise<any> =
       return res.status(400).json({ error: 'Missing required fields: email or password' });
     }
 
-    let user = localStore.getUserByEmail(email);
+    let user = await localStore.getUserByEmail(email);
     if (!user) {
       return res.status(401).json({ error: 'Invalid credentials' });
     }
@@ -224,10 +255,10 @@ publicRouter.post('/signin', async (req: Request, res: Response): Promise<any> =
         : null;
 
       user =
-        localStore.updateUser(user.id, {
+        (await localStore.updateUser(user.id, {
           failedSignInAttempts: shouldLock ? 0 : failedAttempts,
           lockoutUntil,
-        }) || user;
+        })) || user;
 
       if (shouldLock) {
         return res.status(423).json({
@@ -243,10 +274,10 @@ publicRouter.post('/signin', async (req: Request, res: Response): Promise<any> =
       const upgradedHash = hashPassword(password);
       const upgradedFingerprint = computePasswordFingerprint(password);
       user =
-        localStore.updateUser(user.id, {
+        (await localStore.updateUser(user.id, {
           password: upgradedHash,
           passwordFingerprint: upgradedFingerprint,
-        }) || user;
+        })) || user;
     }
 
     if (user.twoFactorMethod === 'phone') {
@@ -261,7 +292,7 @@ publicRouter.post('/signin', async (req: Request, res: Response): Promise<any> =
         const hashedCode = computePasswordFingerprint(`otp:${code}`);
         const expiresAt = new Date(Date.now() + PHONE_OTP_TTL_MS);
 
-        localStore.updateUser(user.id, {
+        await localStore.updateUser(user.id, {
           pendingPhoneOtpHash: hashedCode,
           pendingPhoneOtpExpiresAt: expiresAt,
           pendingPhoneOtpAttempts: 0,
@@ -292,7 +323,7 @@ publicRouter.post('/signin', async (req: Request, res: Response): Promise<any> =
       if (providedCodeHash !== user.pendingPhoneOtpHash) {
         const nextAttempts = (user.pendingPhoneOtpAttempts || 0) + 1;
         const exhausted = nextAttempts >= MAX_PHONE_OTP_ATTEMPTS;
-        localStore.updateUser(user.id, {
+        await localStore.updateUser(user.id, {
           pendingPhoneOtpAttempts: exhausted ? 0 : nextAttempts,
           pendingPhoneOtpHash: exhausted ? null : user.pendingPhoneOtpHash,
           pendingPhoneOtpExpiresAt: exhausted ? null : user.pendingPhoneOtpExpiresAt,
@@ -308,11 +339,11 @@ publicRouter.post('/signin', async (req: Request, res: Response): Promise<any> =
       }
 
       user =
-        localStore.updateUser(user.id, {
+        (await localStore.updateUser(user.id, {
           pendingPhoneOtpHash: null,
           pendingPhoneOtpExpiresAt: null,
           pendingPhoneOtpAttempts: 0,
-        }) || user;
+        })) || user;
     }
 
     if (user.twoFactorMethod === 'wallet') {
@@ -349,10 +380,10 @@ publicRouter.post('/signin', async (req: Request, res: Response): Promise<any> =
     }
 
     user =
-      localStore.updateUser(user.id, {
+      (await localStore.updateUser(user.id, {
         failedSignInAttempts: 0,
         lockoutUntil: null,
-      }) || user;
+      })) || user;
 
     const session = createSessionToken(user.id);
     return res.json({
@@ -362,6 +393,12 @@ publicRouter.post('/signin', async (req: Request, res: Response): Promise<any> =
       user: toPublicUser(req, user),
     });
   } catch (error) {
+    const errorCode = (error as Error & { code?: string })?.code;
+    if (errorCode === 'STORE_UNAVAILABLE') {
+      return res.status(503).json({
+        error: 'Profile storage is temporarily unavailable. Retry shortly or contact support.',
+      });
+    }
     console.error('Error signing in user:', error);
     return res.status(500).json({ error: 'Failed to sign in user' });
   }
@@ -400,7 +437,7 @@ publicRouter.post('/create', async (req: Request, res: Response): Promise<any> =
     }
 
     const passwordFingerprint = computePasswordFingerprint(password);
-    const reusedPasswordUser = localStore.findUserByPasswordFingerprint(passwordFingerprint);
+    const reusedPasswordUser = await localStore.findUserByPasswordFingerprint(passwordFingerprint);
     if (reusedPasswordUser) {
       return res.status(400).json({
         error: 'Choose a unique password that is not already used by another profile',
@@ -410,7 +447,7 @@ publicRouter.post('/create', async (req: Request, res: Response): Promise<any> =
     const name = requestedName || toIdentityName(email);
     const passwordHash = hashPassword(password);
 
-    const user = localStore.createUser({
+    const user = await localStore.createUser({
       email,
       name,
       password: passwordHash,
@@ -422,7 +459,7 @@ publicRouter.post('/create', async (req: Request, res: Response): Promise<any> =
     });
 
     // Persistence verification before granting hub access.
-    const persisted = localStore.getUserById(user.id);
+    const persisted = await localStore.getUserById(user.id);
     if (!persisted) {
       return res
         .status(500)
@@ -475,7 +512,7 @@ publicRouter.post('/create', async (req: Request, res: Response): Promise<any> =
  * GET /api/user/create/diagnostics
  * Admin endpoint for runtime store health and recovery diagnostics.
  */
-publicRouter.get('/create/diagnostics', (req: Request, res: Response): any => {
+publicRouter.get('/create/diagnostics', async (req: Request, res: Response): Promise<any> => {
   if (!enforceDiagnosticsAdminAccess(req, res)) {
     return;
   }
@@ -483,7 +520,7 @@ publicRouter.get('/create/diagnostics', (req: Request, res: Response): any => {
   try {
     return res.json({
       success: true,
-      diagnostics: localStore.getDiagnostics(),
+      diagnostics: await localStore.getDiagnostics(),
     });
   } catch (error) {
     console.error('Failed to build create diagnostics:', error);
@@ -505,7 +542,7 @@ protectedRouter.get('/current', async (req: Request, res: Response): Promise<any
       return res.status(401).json({ error: 'Authentication required' });
     }
 
-    const user = localStore.getUserById(authUserId);
+    const user = await localStore.getUserById(authUserId);
     if (!user) {
       logIdentityValidationFailure(req, 'authenticated_user_not_found', { authUserId });
       return res.status(401).json({ error: 'Invalid session user' });
@@ -532,7 +569,7 @@ protectedRouter.get('/reconcile/:id', async (req: Request, res: Response): Promi
       return;
     }
 
-    const user = localStore.getUserById(requestedId);
+    const user = await localStore.getUserById(requestedId);
     if (!user) {
       return res.status(404).json({ error: 'User not found' });
     }
@@ -555,7 +592,7 @@ protectedRouter.get('/reconcile/:id', async (req: Request, res: Response): Promi
  */
 protectedRouter.get('/directory', async (req: Request, res: Response): Promise<any> => {
   try {
-    const users = localStore.listUsers(250);
+    const users = await localStore.listUsers(250);
 
     return res.json({
       success: true,
@@ -576,13 +613,13 @@ protectedRouter.get('/directory', async (req: Request, res: Response): Promise<a
  * GET /api/user/security
  * Inspect current account security setup.
  */
-protectedRouter.get('/security', (req: Request, res: Response): any => {
+protectedRouter.get('/security', async (req: Request, res: Response): Promise<any> => {
   const authUserId = getAuthenticatedUserId(req);
   if (!authUserId) {
     return res.status(401).json({ error: 'Authentication required' });
   }
 
-  const user = localStore.getUserById(authUserId);
+  const user = await localStore.getUserById(authUserId);
   if (!user) {
     return res.status(404).json({ error: 'User not found' });
   }
@@ -602,7 +639,7 @@ protectedRouter.get('/security', (req: Request, res: Response): any => {
  * POST /api/user/2fa/phone/enroll
  * Enroll authenticated user in phone-based 2FA.
  */
-protectedRouter.post('/2fa/phone/enroll', (req: Request, res: Response): any => {
+protectedRouter.post('/2fa/phone/enroll', async (req: Request, res: Response): Promise<any> => {
   const authUserId = getAuthenticatedUserId(req);
   if (!authUserId) {
     return res.status(401).json({ error: 'Authentication required' });
@@ -613,7 +650,7 @@ protectedRouter.post('/2fa/phone/enroll', (req: Request, res: Response): any => 
     return res.status(400).json({ error: 'Valid phoneNumber is required' });
   }
 
-  const updated = localStore.updateUser(authUserId, {
+  const updated = await localStore.updateUser(authUserId, {
     phoneNumber,
     twoFactorMethod: 'phone',
   });
@@ -632,7 +669,7 @@ protectedRouter.post('/2fa/phone/enroll', (req: Request, res: Response): any => 
  * POST /api/user/2fa/wallet/enroll
  * Enroll authenticated user in wallet-based 2FA.
  */
-protectedRouter.post('/2fa/wallet/enroll', (req: Request, res: Response): any => {
+protectedRouter.post('/2fa/wallet/enroll', async (req: Request, res: Response): Promise<any> => {
   const authUserId = getAuthenticatedUserId(req);
   if (!authUserId) {
     return res.status(401).json({ error: 'Authentication required' });
@@ -643,7 +680,7 @@ protectedRouter.post('/2fa/wallet/enroll', (req: Request, res: Response): any =>
     return res.status(400).json({ error: 'walletDid is required' });
   }
 
-  const updated = localStore.updateUser(authUserId, {
+  const updated = await localStore.updateUser(authUserId, {
     walletDid,
     twoFactorMethod: 'wallet',
   });
@@ -662,13 +699,13 @@ protectedRouter.post('/2fa/wallet/enroll', (req: Request, res: Response): any =>
  * POST /api/user/2fa/disable
  * Disable 2FA for authenticated user.
  */
-protectedRouter.post('/2fa/disable', (req: Request, res: Response): any => {
+protectedRouter.post('/2fa/disable', async (req: Request, res: Response): Promise<any> => {
   const authUserId = getAuthenticatedUserId(req);
   if (!authUserId) {
     return res.status(401).json({ error: 'Authentication required' });
   }
 
-  const updated = localStore.updateUser(authUserId, {
+  const updated = await localStore.updateUser(authUserId, {
     twoFactorMethod: 'none',
     pendingPhoneOtpHash: null,
     pendingPhoneOtpExpiresAt: null,
@@ -698,14 +735,47 @@ protectedRouter.put('/:id', async (req: Request, res: Response): Promise<any> =>
 
     const updateData = req.body || {};
     const nextName =
-      updateData.name !== undefined ? String(updateData.name || '').trim() || null : undefined;
+      updateData.name !== undefined ? normalizeOptionalString(updateData.name) : undefined;
+    const nextHandle =
+      updateData.handle !== undefined ? normalizeOptionalString(updateData.handle) : undefined;
+    const nextBio =
+      updateData.bio !== undefined ? normalizeOptionalString(updateData.bio) : undefined;
+    const nextAvatarUrl =
+      updateData.avatarUrl !== undefined ? normalizeOptionalString(updateData.avatarUrl) : undefined;
+    const nextBannerUrl =
+      updateData.bannerUrl !== undefined ? normalizeOptionalString(updateData.bannerUrl) : undefined;
+    const nextInterests =
+      updateData.interests !== undefined ? normalizeInterests(updateData.interests) : undefined;
+    const nextTwitterUrl =
+      updateData.twitterUrl !== undefined
+        ? normalizeOptionalString(updateData.twitterUrl)
+        : undefined;
+    const nextGithubUrl =
+      updateData.githubUrl !== undefined ? normalizeOptionalString(updateData.githubUrl) : undefined;
+    const nextWebsiteUrl =
+      updateData.websiteUrl !== undefined
+        ? normalizeOptionalString(updateData.websiteUrl)
+        : undefined;
+    const nextPrivacySettings =
+      updateData.privacySettings !== undefined
+        ? normalizePrivacySettings(updateData.privacySettings)
+        : undefined;
     const nextBackgroundVideo =
       updateData.profileBackgroundVideo !== undefined
-        ? String(updateData.profileBackgroundVideo || '').trim() || null
+        ? normalizeOptionalString(updateData.profileBackgroundVideo)
         : undefined;
 
-    const persisted = localStore.updateUser(id, {
+    const persisted = await localStore.updateUser(id, {
       name: nextName,
+      handle: nextHandle,
+      bio: nextBio,
+      avatarUrl: nextAvatarUrl,
+      bannerUrl: nextBannerUrl,
+      interests: nextInterests,
+      twitterUrl: nextTwitterUrl,
+      githubUrl: nextGithubUrl,
+      websiteUrl: nextWebsiteUrl,
+      privacySettings: nextPrivacySettings,
       profileBackgroundVideo: nextBackgroundVideo,
     });
 
