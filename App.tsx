@@ -137,6 +137,18 @@ const App: React.FC = () => {
     return '';
   };
 
+  const normalizePrivacySettings = (raw: any) => ({
+    profileVisibility: raw?.profileVisibility === 'private' ? 'private' as const : 'public' as const,
+    showEmail: Boolean(raw?.showEmail),
+    allowMessages: raw?.allowMessages === undefined ? true : Boolean(raw?.allowMessages),
+    blockedUsers: Array.isArray(raw?.blockedUsers)
+      ? raw.blockedUsers
+          .filter((entry: unknown): entry is string => typeof entry === 'string')
+          .map((entry: string) => entry.trim())
+          .filter((entry: string) => entry.length > 0)
+      : [],
+  });
+
   const toCanonicalUser = (rawUser: any): UserProfile => ({
     id: rawUser.id,
     name: rawUser.name || (rawUser.email ? rawUser.email.split('@')[0] : 'Node'),
@@ -150,13 +162,16 @@ const App: React.FC = () => {
     walletBalanceTokens: rawUser.walletBalanceTokens ?? 200,
     avatarUrl: rawUser.avatarUrl,
     bannerUrl: rawUser.bannerUrl,
+    location: rawUser.location ?? null,
+    dateOfBirth: rawUser.dateOfBirth ?? null,
+    profileMedia: rawUser.profileMedia,
     profileBackgroundVideo: rawUser.profileBackgroundVideo || null,
     bio: rawUser.bio,
     interests: rawUser.interests,
     twitterUrl: rawUser.twitterUrl,
     githubUrl: rawUser.githubUrl,
     websiteUrl: rawUser.websiteUrl,
-    privacySettings: rawUser.privacySettings,
+    privacySettings: normalizePrivacySettings(rawUser.privacySettings),
     twoFactorEnabled: rawUser.twoFactorEnabled,
     twoFactorMethod: rawUser.twoFactorMethod || 'none',
     phoneNumberMasked: rawUser.phoneNumberMasked || null,
@@ -595,8 +610,11 @@ const App: React.FC = () => {
             name: profileData.name ?? user.name,
             handle: profileData.handle,
             bio: profileData.bio,
+            location: profileData.location,
+            dateOfBirth: profileData.dateOfBirth,
             avatarUrl: profileData.avatarUrl,
             bannerUrl: profileData.bannerUrl,
+            profileMedia: profileData.profileMedia,
             interests: profileData.interests,
             twitterUrl: profileData.twitterUrl,
             githubUrl: profileData.githubUrl,

@@ -21,6 +21,7 @@ import {
 } from './routes/user';
 import uploadRoutes from './routes/upload';
 import reflectionRoutes from './routes/reflection';
+import socialRoutes from './routes/social';
 import providerAuthRoutes from './routes/providerAuth';
 import providerSessionRoutes from './routes/providerSession';
 import { initializeVertexAI } from './services/vertexAiService';
@@ -184,6 +185,7 @@ app.use('/api/membership', requireCanonicalIdentity, membershipProtectedRoutes);
 app.use('/api/ai', requireCanonicalIdentity, aiRoutes);
 app.use('/api/upload', requireCanonicalIdentity, uploadRoutes);
 app.use('/api/reflection', requireCanonicalIdentity, reflectionRoutes);
+app.use('/api/social', requireCanonicalIdentity, socialRoutes);
 app.use('/api/provider/session', providerSessionRoutes);
 app.use('/uploads', express.static('public/uploads'));
 

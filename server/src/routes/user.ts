@@ -141,6 +141,73 @@ const normalizeOptionalString = (value: unknown): string | null => {
   return normalized.length > 0 ? normalized : null;
 };
 
+type UserMediaAsset = {
+  url: string | null;
+  storageProvider: string | null;
+  objectKey: string | null;
+};
+
+type UserProfileMedia = {
+  avatar: UserMediaAsset;
+  cover: UserMediaAsset;
+};
+
+const normalizeUserMediaAsset = (
+  value: unknown,
+  fallbackUrl: string | null
+): UserMediaAsset => {
+  const input = value && typeof value === 'object' ? (value as Record<string, unknown>) : {};
+  const rawUrl = String(input.url ?? '').trim();
+  const rawStorageProvider = String(input.storageProvider ?? '').trim();
+  const rawObjectKey = String(input.objectKey ?? '').trim();
+  return {
+    url: rawUrl || fallbackUrl || null,
+    storageProvider: rawStorageProvider || null,
+    objectKey: rawObjectKey || null,
+  };
+};
+
+const normalizeProfileMedia = (
+  value: unknown,
+  avatarFallback: string | null,
+  coverFallback: string | null
+): UserProfileMedia => {
+  const input = value && typeof value === 'object' ? (value as Record<string, unknown>) : {};
+  return {
+    avatar: normalizeUserMediaAsset(input.avatar, avatarFallback),
+    cover: normalizeUserMediaAsset(input.cover, coverFallback),
+  };
+};
+
+const absolutizeProfileMedia = (
+  req: Request,
+  profileMedia: unknown,
+  avatarUrl: string | null | undefined,
+  bannerUrl: string | null | undefined
+): UserProfileMedia => {
+  const normalized = normalizeProfileMedia(profileMedia, avatarUrl || null, bannerUrl || null);
+  return {
+    avatar: {
+      ...normalized.avatar,
+      url: absolutizeUrl(req, normalized.avatar.url) || null,
+    },
+    cover: {
+      ...normalized.cover,
+      url: absolutizeUrl(req, normalized.cover.url) || null,
+    },
+  };
+};
+
+const normalizeDateOfBirth = (value: unknown): Date | null | 'invalid' => {
+  if (value === undefined) return null;
+  if (value === null) return null;
+  const raw = String(value).trim();
+  if (!raw) return null;
+  const parsed = new Date(raw);
+  if (Number.isNaN(parsed.getTime())) return 'invalid';
+  return parsed;
+};
+
 const normalizeInterests = (value: unknown): string[] => {
   if (!Array.isArray(value)) return [];
   return value
@@ -150,11 +217,26 @@ const normalizeInterests = (value: unknown): string[] => {
     .slice(0, 20);
 };
 
-const normalizePrivacySettings = (value: unknown): { showEmail: boolean; allowMessages: boolean } => {
+const normalizePrivacySettings = (
+  value: unknown
+): { profileVisibility: 'public' | 'private'; showEmail: boolean; allowMessages: boolean; blockedUsers: string[] } => {
   const input = value && typeof value === 'object' ? (value as Record<string, unknown>) : {};
+  const visibility =
+    String(input.profileVisibility || '').trim().toLowerCase() === 'private'
+      ? 'private'
+      : 'public';
+  const blockedUsers = Array.isArray(input.blockedUsers)
+    ? input.blockedUsers
+        .filter((entry): entry is string => typeof entry === 'string')
+        .map((entry) => entry.trim())
+        .filter((entry) => entry.length > 0)
+        .slice(0, 500)
+    : [];
   return {
+    profileVisibility: visibility,
     showEmail: Boolean(input.showEmail),
     allowMessages: input.allowMessages === undefined ? true : Boolean(input.allowMessages),
+    blockedUsers: [...new Set(blockedUsers)],
   };
 };
 
@@ -199,8 +281,11 @@ const toPublicUser = (req: Request, user: any) => ({
   name: user.name || toIdentityName(user.email),
   handle: user.handle || null,
   bio: user.bio || null,
+  location: user.location || null,
+  dateOfBirth: user.dateOfBirth || null,
   avatarUrl: absolutizeUrl(req, user.avatarUrl),
   bannerUrl: absolutizeUrl(req, user.bannerUrl),
+  profileMedia: absolutizeProfileMedia(req, user.profileMedia, user.avatarUrl, user.bannerUrl),
   interests: Array.isArray(user.interests) ? user.interests : [],
   twitterUrl: user.twitterUrl || null,
   githubUrl: user.githubUrl || null,
@@ -415,9 +500,16 @@ publicRouter.post('/create', async (req: Request, res: Response): Promise<any> =
       .toLowerCase();
     const password = String(req.body?.password || '');
     const requestedName = String(req.body?.name || '').trim();
+    const requestedLocation = normalizeOptionalString(req.body?.location);
+    const requestedDateOfBirth = normalizeDateOfBirth(req.body?.dateOfBirth);
     const requestedTwoFactor = normalizeTwoFactorMethod(req.body?.twoFactorMethod);
     const requestedPhone = normalizePhoneNumber(req.body?.phoneNumber);
     const requestedWalletDid = String(req.body?.walletDid || '').trim() || null;
+    const requestedProfileMedia = normalizeProfileMedia(
+      req.body?.profileMedia,
+      normalizeOptionalString(req.body?.avatarUrl),
+      normalizeOptionalString(req.body?.bannerUrl)
+    );
 
     if (!email || !password) {
       return res.status(400).json({ error: 'Missing required fields: email or password' });
@@ -434,6 +526,10 @@ publicRouter.post('/create', async (req: Request, res: Response): Promise<any> =
 
     if (requestedTwoFactor === 'wallet' && !requestedWalletDid) {
       return res.status(400).json({ error: 'walletDid is required for wallet-based 2FA' });
+    }
+
+    if (requestedDateOfBirth === 'invalid') {
+      return res.status(400).json({ error: 'dateOfBirth must be a valid date string' });
     }
 
     const passwordFingerprint = computePasswordFingerprint(password);
@@ -453,6 +549,11 @@ publicRouter.post('/create', async (req: Request, res: Response): Promise<any> =
       password: passwordHash,
       passwordFingerprint,
       tier: normalizeTier(req.body?.tier),
+      location: requestedLocation,
+      dateOfBirth: requestedDateOfBirth || null,
+      avatarUrl: normalizeOptionalString(req.body?.avatarUrl),
+      bannerUrl: normalizeOptionalString(req.body?.bannerUrl),
+      profileMedia: requestedProfileMedia,
       phoneNumber: requestedPhone,
       twoFactorMethod: requestedTwoFactor,
       walletDid: requestedWalletDid,
@@ -610,6 +711,139 @@ protectedRouter.get('/directory', async (req: Request, res: Response): Promise<a
 });
 
 /**
+ * GET /api/user/privacy
+ * Get authenticated user's privacy settings.
+ */
+protectedRouter.get('/privacy', async (req: Request, res: Response): Promise<any> => {
+  const authUserId = getAuthenticatedUserId(req);
+  if (!authUserId) {
+    return res.status(401).json({ error: 'Authentication required' });
+  }
+
+  const user = await localStore.getUserById(authUserId);
+  if (!user) {
+    return res.status(404).json({ error: 'User not found' });
+  }
+
+  return res.json({
+    success: true,
+    privacySettings: normalizePrivacySettings(user.privacySettings),
+  });
+});
+
+/**
+ * PUT /api/user/privacy
+ * Update authenticated user's privacy settings.
+ */
+protectedRouter.put('/privacy', async (req: Request, res: Response): Promise<any> => {
+  const authUserId = getAuthenticatedUserId(req);
+  if (!authUserId) {
+    return res.status(401).json({ error: 'Authentication required' });
+  }
+
+  const nextPrivacySettings = normalizePrivacySettings(req.body?.privacySettings);
+  const updated = await localStore.updateUser(authUserId, {
+    privacySettings: nextPrivacySettings,
+  });
+
+  if (!updated) {
+    return res.status(404).json({ error: 'User not found' });
+  }
+
+  return res.json({
+    success: true,
+    privacySettings: normalizePrivacySettings(updated.privacySettings),
+  });
+});
+
+/**
+ * POST /api/user/privacy/block/:blockedUserId
+ * Add a user to the authenticated user's blocked list.
+ */
+protectedRouter.post('/privacy/block/:blockedUserId', async (req: Request, res: Response): Promise<any> => {
+  const authUserId = getAuthenticatedUserId(req);
+  if (!authUserId) {
+    return res.status(401).json({ error: 'Authentication required' });
+  }
+
+  const blockedUserId = String(req.params.blockedUserId || '').trim();
+  if (!blockedUserId) {
+    return res.status(400).json({ error: 'blockedUserId is required' });
+  }
+  if (blockedUserId === authUserId) {
+    return res.status(400).json({ error: 'Users cannot block themselves' });
+  }
+
+  const [currentUser, targetUser] = await Promise.all([
+    localStore.getUserById(authUserId),
+    localStore.getUserById(blockedUserId),
+  ]);
+  if (!currentUser) {
+    return res.status(404).json({ error: 'Authenticated user not found' });
+  }
+  if (!targetUser) {
+    return res.status(404).json({ error: 'Target user not found' });
+  }
+
+  const settings = normalizePrivacySettings(currentUser.privacySettings);
+  const blockedUsers = [...new Set([...settings.blockedUsers, blockedUserId])];
+  const updated = await localStore.updateUser(authUserId, {
+    privacySettings: {
+      ...settings,
+      blockedUsers,
+    },
+  });
+
+  if (!updated) {
+    return res.status(404).json({ error: 'User not found' });
+  }
+
+  return res.json({
+    success: true,
+    privacySettings: normalizePrivacySettings(updated.privacySettings),
+  });
+});
+
+/**
+ * DELETE /api/user/privacy/block/:blockedUserId
+ * Remove a user from the authenticated user's blocked list.
+ */
+protectedRouter.delete('/privacy/block/:blockedUserId', async (req: Request, res: Response): Promise<any> => {
+  const authUserId = getAuthenticatedUserId(req);
+  if (!authUserId) {
+    return res.status(401).json({ error: 'Authentication required' });
+  }
+
+  const blockedUserId = String(req.params.blockedUserId || '').trim();
+  if (!blockedUserId) {
+    return res.status(400).json({ error: 'blockedUserId is required' });
+  }
+
+  const currentUser = await localStore.getUserById(authUserId);
+  if (!currentUser) {
+    return res.status(404).json({ error: 'Authenticated user not found' });
+  }
+
+  const settings = normalizePrivacySettings(currentUser.privacySettings);
+  const blockedUsers = settings.blockedUsers.filter((entry) => entry !== blockedUserId);
+  const updated = await localStore.updateUser(authUserId, {
+    privacySettings: {
+      ...settings,
+      blockedUsers,
+    },
+  });
+
+  if (!updated) {
+    return res.status(404).json({ error: 'User not found' });
+  }
+
+  return res.json({
+    success: true,
+    privacySettings: normalizePrivacySettings(updated.privacySettings),
+  });
+});
+
+/**
  * GET /api/user/security
  * Inspect current account security setup.
  */
@@ -740,10 +974,23 @@ protectedRouter.put('/:id', async (req: Request, res: Response): Promise<any> =>
       updateData.handle !== undefined ? normalizeOptionalString(updateData.handle) : undefined;
     const nextBio =
       updateData.bio !== undefined ? normalizeOptionalString(updateData.bio) : undefined;
+    const nextLocation =
+      updateData.location !== undefined ? normalizeOptionalString(updateData.location) : undefined;
+    const nextDateOfBirthRaw =
+      updateData.dateOfBirth !== undefined ? normalizeDateOfBirth(updateData.dateOfBirth) : undefined;
+    if (nextDateOfBirthRaw === 'invalid') {
+      return res.status(400).json({ error: 'dateOfBirth must be a valid date string' });
+    }
+    const nextDateOfBirth =
+      nextDateOfBirthRaw === undefined ? undefined : nextDateOfBirthRaw;
     const nextAvatarUrl =
       updateData.avatarUrl !== undefined ? normalizeOptionalString(updateData.avatarUrl) : undefined;
     const nextBannerUrl =
       updateData.bannerUrl !== undefined ? normalizeOptionalString(updateData.bannerUrl) : undefined;
+    const nextProfileMedia =
+      updateData.profileMedia !== undefined
+        ? normalizeProfileMedia(updateData.profileMedia, nextAvatarUrl || null, nextBannerUrl || null)
+        : undefined;
     const nextInterests =
       updateData.interests !== undefined ? normalizeInterests(updateData.interests) : undefined;
     const nextTwitterUrl =
@@ -769,8 +1016,11 @@ protectedRouter.put('/:id', async (req: Request, res: Response): Promise<any> =>
       name: nextName,
       handle: nextHandle,
       bio: nextBio,
+      location: nextLocation,
+      dateOfBirth: nextDateOfBirth,
       avatarUrl: nextAvatarUrl,
       bannerUrl: nextBannerUrl,
+      profileMedia: nextProfileMedia,
       interests: nextInterests,
       twitterUrl: nextTwitterUrl,
       githubUrl: nextGithubUrl,

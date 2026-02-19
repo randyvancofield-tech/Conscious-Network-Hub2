@@ -11,7 +11,6 @@ const trimEnv = (name: string): string | null => {
 };
 
 const isPostgresUrl = (value: string): boolean => /^postgres(?:ql)?:\/\//i.test(value.trim());
-const isFileUrl = (value: string): boolean => /^file:/i.test(value.trim());
 
 // Required high-risk secrets/environment variables for backend startup.
 // - AUTH_TOKEN_SECRET (or legacy SESSION_SECRET alias)
@@ -37,6 +36,7 @@ export const validateRequiredEnv = (): void => {
   const missing: string[] = [];
   const databaseUrl = trimEnv('DATABASE_URL');
   const persistenceBackend = (trimEnv('AUTH_PERSISTENCE_BACKEND') || '').toLowerCase();
+  const nodeEnv = (trimEnv('NODE_ENV') || '').toLowerCase();
 
   if (!hasNonEmptyEnv('AUTH_TOKEN_SECRET') && !hasNonEmptyEnv('SESSION_SECRET')) {
     missing.push('AUTH_TOKEN_SECRET (or SESSION_SECRET)');
@@ -52,20 +52,21 @@ export const validateRequiredEnv = (): void => {
     );
   }
 
-  if (persistenceBackend === 'shared_db' && databaseUrl && !isPostgresUrl(databaseUrl)) {
+  if (nodeEnv === 'production' && persistenceBackend !== 'shared_db') {
     throw new Error(
-      '[STARTUP][FATAL] AUTH_PERSISTENCE_BACKEND=shared_db requires DATABASE_URL to use postgres:// or postgresql://'
+      '[STARTUP][FATAL] Production requires AUTH_PERSISTENCE_BACKEND=shared_db.'
     );
   }
 
-  if (
-    process.env.NODE_ENV === 'production' &&
-    databaseUrl &&
-    isFileUrl(databaseUrl) &&
-    persistenceBackend !== 'local_file'
-  ) {
+  if (nodeEnv === 'production' && databaseUrl && !isPostgresUrl(databaseUrl)) {
     throw new Error(
-      '[STARTUP][FATAL] Production DATABASE_URL uses file: storage. Configure shared Postgres persistence or set AUTH_PERSISTENCE_BACKEND=local_file for temporary recovery.'
+      '[STARTUP][FATAL] Production requires DATABASE_URL to use postgres:// or postgresql://.'
+    );
+  }
+
+  if (persistenceBackend === 'shared_db' && databaseUrl && !isPostgresUrl(databaseUrl)) {
+    throw new Error(
+      '[STARTUP][FATAL] AUTH_PERSISTENCE_BACKEND=shared_db requires DATABASE_URL to use postgres:// or postgresql://'
     );
   }
 };

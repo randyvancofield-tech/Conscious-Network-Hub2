@@ -28,6 +28,10 @@ const Profile: React.FC<ProfileProps> = ({ user, onUserUpdate }) => {
   const [editData, setEditData] = useState<Partial<UserProfile>>({ ...user });
   const [bgVideo, setBgVideo] = useState<File | null>(null);
   const [bgVideoUrl, setBgVideoUrl] = useState<string | undefined>(toAssetUrl(user.profileBackgroundVideo));
+  const [avatarImage, setAvatarImage] = useState<File | null>(null);
+  const [coverImage, setCoverImage] = useState<File | null>(null);
+  const [avatarPreviewUrl, setAvatarPreviewUrl] = useState<string | undefined>(toAssetUrl(user.avatarUrl));
+  const [coverPreviewUrl, setCoverPreviewUrl] = useState<string | undefined>(toAssetUrl(user.bannerUrl));
   const [reflections, setReflections] = useState<Reflection[]>([]);
   const [reflectionFile, setReflectionFile] = useState<File | null>(null);
   const [reflectionContent, setReflectionContent] = useState('');
@@ -55,12 +59,14 @@ const Profile: React.FC<ProfileProps> = ({ user, onUserUpdate }) => {
   useEffect(() => {
     setEditData({ ...user });
     setBgVideoUrl(toAssetUrl(user.profileBackgroundVideo));
+    setAvatarPreviewUrl(toAssetUrl(user.avatarUrl));
+    setCoverPreviewUrl(toAssetUrl(user.bannerUrl));
     setSecurityState({
       twoFactorMethod: user.twoFactorMethod || 'none',
       phoneNumberMasked: user.phoneNumberMasked || null,
       walletDid: user.walletDid || null,
     });
-  }, [user.id, user.name, user.profileBackgroundVideo, user.twoFactorMethod, user.phoneNumberMasked, user.walletDid]);
+  }, [user.id, user.name, user.profileBackgroundVideo, user.avatarUrl, user.bannerUrl, user.twoFactorMethod, user.phoneNumberMasked, user.walletDid]);
 
   useEffect(() => {
     fetchSecuritySettings();
@@ -194,11 +200,34 @@ const Profile: React.FC<ProfileProps> = ({ user, onUserUpdate }) => {
     }
   };
 
+  const handleAvatarImageChange = (e: ChangeEvent<HTMLInputElement>) => {
+    if (e.target.files && e.target.files[0]) {
+      const file = e.target.files[0];
+      setAvatarImage(file);
+      setAvatarPreviewUrl(URL.createObjectURL(file));
+    }
+  };
+
+  const handleCoverImageChange = (e: ChangeEvent<HTMLInputElement>) => {
+    if (e.target.files && e.target.files[0]) {
+      const file = e.target.files[0];
+      setCoverImage(file);
+      setCoverPreviewUrl(URL.createObjectURL(file));
+    }
+  };
+
   const handleProfileSave = async () => {
     setLoading(true);
     setError('');
     try {
       let videoUrl = bgVideoUrl;
+      let avatarUrl = editData.avatarUrl || avatarPreviewUrl || user.avatarUrl || null;
+      let bannerUrl = editData.bannerUrl || coverPreviewUrl || user.bannerUrl || null;
+      let profileMedia = editData.profileMedia || user.profileMedia || {
+        avatar: { url: avatarUrl, storageProvider: null, objectKey: null },
+        cover: { url: bannerUrl, storageProvider: null, objectKey: null },
+      };
+
       if (bgVideo) {
         const formData = new FormData();
         formData.append('video', bgVideo);
@@ -211,11 +240,62 @@ const Profile: React.FC<ProfileProps> = ({ user, onUserUpdate }) => {
         videoUrl = uploadRes.data.fileUrl;
         setBgVideoUrl(videoUrl);
       }
+
+      if (avatarImage) {
+        const formData = new FormData();
+        formData.append('image', avatarImage);
+        const uploadRes = await axios.post(toApiUrl('/api/upload/avatar'), formData, {
+          headers: {
+            ...buildAuthHeaders(),
+            'Content-Type': 'multipart/form-data',
+          },
+        });
+        avatarUrl = uploadRes.data.fileUrl;
+        setAvatarPreviewUrl(avatarUrl || undefined);
+        profileMedia = {
+          ...profileMedia,
+          avatar: {
+            url: avatarUrl,
+            storageProvider: uploadRes.data?.media?.storageProvider || 'local',
+            objectKey: uploadRes.data?.media?.objectKey || null,
+          },
+        };
+      }
+
+      if (coverImage) {
+        const formData = new FormData();
+        formData.append('image', coverImage);
+        const uploadRes = await axios.post(toApiUrl('/api/upload/cover'), formData, {
+          headers: {
+            ...buildAuthHeaders(),
+            'Content-Type': 'multipart/form-data',
+          },
+        });
+        bannerUrl = uploadRes.data.fileUrl;
+        setCoverPreviewUrl(bannerUrl || undefined);
+        profileMedia = {
+          ...profileMedia,
+          cover: {
+            url: bannerUrl,
+            storageProvider: uploadRes.data?.media?.storageProvider || 'local',
+            objectKey: uploadRes.data?.media?.objectKey || null,
+          },
+        };
+      }
+
       const res = await axios.put(
         toApiUrl(`/api/user/${user.id}`),
-        { ...editData, profileBackgroundVideo: videoUrl },
+        {
+          ...editData,
+          avatarUrl,
+          bannerUrl,
+          profileMedia,
+          profileBackgroundVideo: videoUrl,
+        },
         { headers: buildAuthHeaders() }
       );
+      setAvatarImage(null);
+      setCoverImage(null);
       onUserUpdate(res.data.user);
     } catch (e) {
       setError('Failed to update profile');
@@ -259,14 +339,69 @@ const Profile: React.FC<ProfileProps> = ({ user, onUserUpdate }) => {
   };
 
   return (
-    <div className="profile-container">
+    <div
+      className="profile-container"
+      style={{ maxWidth: '980px', width: '100%', margin: '0 auto', display: 'grid', gap: '12px' }}
+    >
       <h2>Edit Profile</h2>
-      <input name="name" value={editData.name || ''} onChange={handleProfileChange} placeholder="Name" />
-      <textarea name="bio" value={editData.bio || ''} onChange={handleProfileChange} placeholder="Bio" />
-      <div>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '10px' }}>
+        <input
+          name="name"
+          value={editData.name || ''}
+          onChange={handleProfileChange}
+          placeholder="Name"
+          style={{ width: '100%' }}
+        />
+        <input
+          name="location"
+          value={editData.location || ''}
+          onChange={handleProfileChange}
+          placeholder="Location"
+          style={{ width: '100%' }}
+        />
+        <input
+          type="date"
+          name="dateOfBirth"
+          value={editData.dateOfBirth ? String(editData.dateOfBirth).slice(0, 10) : ''}
+          onChange={handleProfileChange}
+          style={{ width: '100%' }}
+        />
+      </div>
+      <textarea
+        name="bio"
+        value={editData.bio || ''}
+        onChange={handleProfileChange}
+        placeholder="Bio"
+        style={{ width: '100%', minHeight: '110px' }}
+      />
+      <div style={{ display: 'grid', gap: '10px', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))' }}>
+        <div>
+        <label>Avatar Image:</label>
+        <input type="file" accept="image/*" onChange={handleAvatarImageChange} />
+        {avatarPreviewUrl && (
+          <img
+            src={avatarPreviewUrl}
+            alt="Avatar preview"
+            style={{ width: '100%', maxWidth: '240px', borderRadius: '12px' }}
+          />
+        )}
+        </div>
+        <div>
+        <label>Cover Image:</label>
+        <input type="file" accept="image/*" onChange={handleCoverImageChange} />
+        {coverPreviewUrl && (
+          <img
+            src={coverPreviewUrl}
+            alt="Cover preview"
+            style={{ width: '100%', maxWidth: '420px', borderRadius: '12px' }}
+          />
+        )}
+        </div>
+      </div>
+      <div style={{ display: 'grid', gap: '8px' }}>
         <label>Profile Background Video:</label>
         <input type="file" accept="video/*" onChange={handleBgVideoChange} />
-        {bgVideoUrl && <video src={bgVideoUrl} controls width={320} />}
+        {bgVideoUrl && <video src={bgVideoUrl} controls style={{ width: '100%', maxWidth: '520px' }} />}
       </div>
       <button onClick={handleProfileSave} disabled={loading}>Save Profile</button>
       {error && <div className="error">{error}</div>}
@@ -318,9 +453,9 @@ const Profile: React.FC<ProfileProps> = ({ user, onUserUpdate }) => {
       <button onClick={handleReflectionUpload} disabled={loading}>Upload Reflection</button>
       <div className="reflections-list">
         {reflections.map(ref => (
-          <div key={ref.id} className="reflection-item">
+          <div key={ref.id} className="reflection-item" style={{ marginBottom: '14px' }}>
             {ref.fileType === 'video' ? (
-              <video src={ref.fileUrl} controls width={240} />
+              <video src={ref.fileUrl} controls style={{ width: '100%', maxWidth: '420px' }} />
             ) : (
               <a href={ref.fileUrl} target="_blank" rel="noopener noreferrer">View Document</a>
             )}

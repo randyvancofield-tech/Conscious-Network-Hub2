@@ -10,14 +10,22 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
+enum SocialPostVisibility {
+  public
+  private
+}
+
 model User {
   id            String     @id @default(uuid())
   email         String     @unique
   name          String?
   handle        String?
   bio           String?
+  location      String?
+  dateOfBirth   DateTime?
   avatarUrl     String?
   bannerUrl     String?
+  profileMedia  Json?
   interests     Json?
   twitterUrl    String?
   githubUrl     String?
@@ -49,6 +57,10 @@ model User {
   memberships   Membership[]
   payments      PaymentHistory[]
   reflections   Reflection[]
+  socialPosts   SocialPost[]
+  socialLikes   SocialPostLike[]
+  following     SocialFollow[] @relation("SocialFollowFollower")
+  followers     SocialFollow[] @relation("SocialFollowFollowing")
 
   @@index([createdAt])
 }
@@ -129,4 +141,61 @@ model ProviderSession {
   @@index([did])
   @@index([expiresAt])
   @@index([revokedAt])
+}
+
+model SocialPost {
+  id         String          @id
+  authorId   String
+  text       String
+  visibility SocialPostVisibility @default(public)
+  createdAt  DateTime        @default(now())
+  updatedAt  DateTime        @updatedAt
+
+  author     User            @relation(fields: [authorId], references: [id], onDelete: Cascade)
+  media      SocialPostMedia[]
+  likes      SocialPostLike[]
+
+  @@index([authorId])
+  @@index([createdAt])
+}
+
+model SocialPostMedia {
+  id              String     @id
+  postId          String
+  mediaType       String
+  url             String
+  storageProvider String?
+  objectKey       String?
+  createdAt       DateTime   @default(now())
+
+  post            SocialPost @relation(fields: [postId], references: [id], onDelete: Cascade)
+
+  @@index([postId])
+}
+
+model SocialPostLike {
+  userId    String
+  postId    String
+  createdAt DateTime @default(now())
+
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  post      SocialPost @relation(fields: [postId], references: [id], onDelete: Cascade)
+
+  @@id([userId, postId])
+  @@index([postId])
+  @@index([createdAt])
+}
+
+model SocialFollow {
+  followerId  String
+  followingId String
+  createdAt   DateTime @default(now())
+
+  follower    User     @relation("SocialFollowFollower", fields: [followerId], references: [id], onDelete: Cascade)
+  following   User     @relation("SocialFollowFollowing", fields: [followingId], references: [id], onDelete: Cascade)
+
+  @@id([followerId, followingId])
+  @@index([followerId])
+  @@index([followingId])
+  @@index([createdAt])
 }

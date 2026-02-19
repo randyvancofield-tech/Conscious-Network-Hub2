@@ -10,6 +10,7 @@ import {
   type LocalStoreDiagnostics,
   type LocalUserRecord,
   type TwoFactorMethod,
+  type UserProfileMedia,
 } from './localStore';
 
 type StoreApi = typeof fileStore;
@@ -56,11 +57,53 @@ const normalizeInterests = (value: unknown): string[] => {
     .slice(0, 20);
 };
 
-const normalizePrivacySettings = (value: unknown): { showEmail: boolean; allowMessages: boolean } => {
+const normalizePrivacySettings = (
+  value: unknown
+): { profileVisibility: 'public' | 'private'; showEmail: boolean; allowMessages: boolean; blockedUsers: string[] } => {
   const input = value && typeof value === 'object' ? (value as Record<string, unknown>) : {};
+  const visibility =
+    String(input.profileVisibility || '').trim().toLowerCase() === 'private'
+      ? 'private'
+      : 'public';
+  const blockedUsers = Array.isArray(input.blockedUsers)
+    ? input.blockedUsers
+        .filter((entry): entry is string => typeof entry === 'string')
+        .map((entry) => entry.trim())
+        .filter((entry) => entry.length > 0)
+        .slice(0, 500)
+    : [];
   return {
+    profileVisibility: visibility,
     showEmail: Boolean(input.showEmail),
     allowMessages: input.allowMessages === undefined ? true : Boolean(input.allowMessages),
+    blockedUsers: [...new Set(blockedUsers)],
+  };
+};
+
+const normalizeUserMediaAsset = (
+  value: unknown,
+  fallbackUrl: string | null
+): { url: string | null; storageProvider: string | null; objectKey: string | null } => {
+  const input = value && typeof value === 'object' ? (value as Record<string, unknown>) : {};
+  const rawUrl = String(input.url ?? '').trim();
+  const rawStorageProvider = String(input.storageProvider ?? '').trim();
+  const rawObjectKey = String(input.objectKey ?? '').trim();
+  return {
+    url: rawUrl || fallbackUrl || null,
+    storageProvider: rawStorageProvider || null,
+    objectKey: rawObjectKey || null,
+  };
+};
+
+const normalizeProfileMedia = (
+  value: unknown,
+  avatarFallback: string | null,
+  coverFallback: string | null
+): UserProfileMedia => {
+  const input = value && typeof value === 'object' ? (value as Record<string, unknown>) : {};
+  return {
+    avatar: normalizeUserMediaAsset(input.avatar, avatarFallback),
+    cover: normalizeUserMediaAsset(input.cover, coverFallback),
   };
 };
 
@@ -82,8 +125,15 @@ const toLocalUser = (row: any): LocalUserRecord => ({
   name: row.name,
   handle: toNullableString(row.handle),
   bio: toNullableString(row.bio),
+  location: toNullableString(row.location),
+  dateOfBirth: row.dateOfBirth || null,
   avatarUrl: toNullableString(row.avatarUrl),
   bannerUrl: toNullableString(row.bannerUrl),
+  profileMedia: normalizeProfileMedia(
+    readJsonObject(row.profileMedia ?? null),
+    toNullableString(row.avatarUrl),
+    toNullableString(row.bannerUrl)
+  ),
   interests: normalizeInterests(readJsonStringArray(row.interests ?? null)),
   twitterUrl: toNullableString(row.twitterUrl),
   githubUrl: toNullableString(row.githubUrl),
@@ -272,10 +322,17 @@ export const localStore = {
           id: crypto.randomUUID(),
           email: input.email.trim().toLowerCase(),
           name: toNullableString(input.name),
-          handle: null,
-          bio: null,
-          avatarUrl: null,
-          bannerUrl: null,
+          handle: toNullableString(input.handle),
+          bio: toNullableString(input.bio),
+          location: toNullableString(input.location),
+          dateOfBirth: input.dateOfBirth || null,
+          avatarUrl: toNullableString(input.avatarUrl),
+          bannerUrl: toNullableString(input.bannerUrl),
+          profileMedia: normalizeProfileMedia(
+            input.profileMedia,
+            toNullableString(input.avatarUrl),
+            toNullableString(input.bannerUrl)
+          ),
           interests: [],
           twitterUrl: null,
           githubUrl: null,
@@ -314,8 +371,17 @@ export const localStore = {
       if (updates.name !== undefined) data.name = updates.name;
       if (updates.handle !== undefined) data.handle = updates.handle;
       if (updates.bio !== undefined) data.bio = updates.bio;
+      if (updates.location !== undefined) data.location = updates.location;
+      if (updates.dateOfBirth !== undefined) data.dateOfBirth = updates.dateOfBirth;
       if (updates.avatarUrl !== undefined) data.avatarUrl = updates.avatarUrl;
       if (updates.bannerUrl !== undefined) data.bannerUrl = updates.bannerUrl;
+      if (updates.profileMedia !== undefined) {
+        data.profileMedia = normalizeProfileMedia(
+          updates.profileMedia,
+          toNullableString(updates.avatarUrl),
+          toNullableString(updates.bannerUrl)
+        );
+      }
       if (updates.interests !== undefined) data.interests = normalizeInterests(updates.interests);
       if (updates.twitterUrl !== undefined) data.twitterUrl = updates.twitterUrl;
       if (updates.githubUrl !== undefined) data.githubUrl = updates.githubUrl;

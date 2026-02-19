@@ -7,8 +7,21 @@ export type TwoFactorMethod = 'none' | 'phone' | 'wallet';
 type NullableIso = string | null;
 
 interface UserPrivacySettings {
+  profileVisibility: 'public' | 'private';
   showEmail: boolean;
   allowMessages: boolean;
+  blockedUsers: string[];
+}
+
+interface UserMediaAsset {
+  url: string | null;
+  storageProvider: string | null;
+  objectKey: string | null;
+}
+
+export interface UserProfileMedia {
+  avatar: UserMediaAsset;
+  cover: UserMediaAsset;
 }
 
 interface UserRow {
@@ -17,8 +30,11 @@ interface UserRow {
   name: string | null;
   handle: string | null;
   bio: string | null;
+  location: string | null;
+  dateOfBirth: NullableIso;
   avatarUrl: string | null;
   bannerUrl: string | null;
+  profileMedia: UserProfileMedia;
   interests: string[];
   twitterUrl: string | null;
   githubUrl: string | null;
@@ -158,8 +174,11 @@ export interface LocalUserRecord {
   name: string | null;
   handle: string | null;
   bio: string | null;
+  location: string | null;
+  dateOfBirth: Date | null;
   avatarUrl: string | null;
   bannerUrl: string | null;
+  profileMedia: UserProfileMedia;
   interests: string[];
   twitterUrl: string | null;
   githubUrl: string | null;
@@ -243,8 +262,11 @@ interface CreateUserInput {
   name: string;
   handle?: string | null;
   bio?: string | null;
+  location?: string | null;
+  dateOfBirth?: Date | null;
   avatarUrl?: string | null;
   bannerUrl?: string | null;
+  profileMedia?: UserProfileMedia;
   interests?: string[];
   twitterUrl?: string | null;
   githubUrl?: string | null;
@@ -262,8 +284,11 @@ interface UpdateUserInput {
   name?: string | null;
   handle?: string | null;
   bio?: string | null;
+  location?: string | null;
+  dateOfBirth?: Date | null;
   avatarUrl?: string | null;
   bannerUrl?: string | null;
+  profileMedia?: UserProfileMedia;
   interests?: string[];
   twitterUrl?: string | null;
   githubUrl?: string | null;
@@ -508,9 +533,50 @@ const normalizeInterests = (value: unknown): string[] => {
 
 const normalizePrivacySettings = (value: unknown): UserPrivacySettings => {
   const input = value && typeof value === 'object' ? (value as Record<string, unknown>) : {};
+  const visibility =
+    String(input.profileVisibility || '').trim().toLowerCase() === 'private'
+      ? 'private'
+      : 'public';
+  const blockedUsers = Array.isArray(input.blockedUsers)
+    ? input.blockedUsers
+        .filter((entry): entry is string => typeof entry === 'string')
+        .map((entry) => entry.trim())
+        .filter((entry) => entry.length > 0)
+        .slice(0, 500)
+    : [];
   return {
+    profileVisibility: visibility,
     showEmail: Boolean(input.showEmail),
     allowMessages: input.allowMessages === undefined ? true : Boolean(input.allowMessages),
+    blockedUsers: [...new Set(blockedUsers)],
+  };
+};
+
+const normalizeUserMediaAsset = (
+  value: unknown,
+  fallbackUrl: string | null
+): UserMediaAsset => {
+  const input = value && typeof value === 'object' ? (value as Record<string, unknown>) : {};
+  const rawUrl = String(input.url ?? '').trim();
+  const rawStorageProvider = String(input.storageProvider ?? '').trim();
+  const rawObjectKey = String(input.objectKey ?? '').trim();
+
+  return {
+    url: rawUrl || fallbackUrl || null,
+    storageProvider: rawStorageProvider || null,
+    objectKey: rawObjectKey || null,
+  };
+};
+
+const normalizeProfileMedia = (
+  value: unknown,
+  avatarFallback: string | null,
+  coverFallback: string | null
+): UserProfileMedia => {
+  const input = value && typeof value === 'object' ? (value as Record<string, unknown>) : {};
+  return {
+    avatar: normalizeUserMediaAsset(input.avatar, avatarFallback),
+    cover: normalizeUserMediaAsset(input.cover, coverFallback),
   };
 };
 
@@ -520,8 +586,11 @@ const rowToUser = (row: UserRow): LocalUserRecord => ({
   name: row.name,
   handle: row.handle || null,
   bio: row.bio || null,
+  location: row.location || null,
+  dateOfBirth: row.dateOfBirth ? toDate(row.dateOfBirth) : null,
   avatarUrl: row.avatarUrl || null,
   bannerUrl: row.bannerUrl || null,
+  profileMedia: normalizeProfileMedia(row.profileMedia, row.avatarUrl || null, row.bannerUrl || null),
   interests: normalizeInterests(row.interests),
   twitterUrl: row.twitterUrl || null,
   githubUrl: row.githubUrl || null,
@@ -693,8 +762,15 @@ export const localStore = {
       name: input.name || null,
       handle: input.handle?.trim() || null,
       bio: input.bio?.trim() || null,
+      location: input.location?.trim() || null,
+      dateOfBirth: input.dateOfBirth ? input.dateOfBirth.toISOString() : null,
       avatarUrl: input.avatarUrl?.trim() || null,
       bannerUrl: input.bannerUrl?.trim() || null,
+      profileMedia: normalizeProfileMedia(
+        input.profileMedia,
+        input.avatarUrl?.trim() || null,
+        input.bannerUrl?.trim() || null
+      ),
       interests: normalizeInterests(input.interests),
       twitterUrl: input.twitterUrl?.trim() || null,
       githubUrl: input.githubUrl?.trim() || null,
@@ -734,8 +810,25 @@ export const localStore = {
     if (updates.name !== undefined) row.name = updates.name;
     if (updates.handle !== undefined) row.handle = updates.handle;
     if (updates.bio !== undefined) row.bio = updates.bio;
+    if (updates.location !== undefined) row.location = updates.location;
+    if (updates.dateOfBirth !== undefined) {
+      row.dateOfBirth = updates.dateOfBirth ? updates.dateOfBirth.toISOString() : null;
+    }
     if (updates.avatarUrl !== undefined) row.avatarUrl = updates.avatarUrl;
     if (updates.bannerUrl !== undefined) row.bannerUrl = updates.bannerUrl;
+    if (updates.profileMedia !== undefined) {
+      row.profileMedia = normalizeProfileMedia(
+        updates.profileMedia,
+        row.avatarUrl || null,
+        row.bannerUrl || null
+      );
+    } else if (updates.avatarUrl !== undefined || updates.bannerUrl !== undefined) {
+      row.profileMedia = normalizeProfileMedia(
+        row.profileMedia,
+        row.avatarUrl || null,
+        row.bannerUrl || null
+      );
+    }
     if (updates.interests !== undefined) row.interests = normalizeInterests(updates.interests);
     if (updates.twitterUrl !== undefined) row.twitterUrl = updates.twitterUrl;
     if (updates.githubUrl !== undefined) row.githubUrl = updates.githubUrl;

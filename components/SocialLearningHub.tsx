@@ -8,6 +8,7 @@ import {
   Activity, Terminal, ChevronRight, Link as LinkIcon, Youtube, ExternalLink
 } from 'lucide-react';
 import { UserProfile } from '../types';
+import { buildAuthHeaders } from '../services/sessionService';
 
 interface Comment {
   id: string;
@@ -88,7 +89,41 @@ const getFirstUrl = (text: string) => {
   return matches ? matches[0] : null;
 };
 
+const toRelativeTimestamp = (value: string): string => {
+  const parsed = new Date(value);
+  if (Number.isNaN(parsed.getTime())) return 'Just now';
+  const deltaMs = Date.now() - parsed.getTime();
+  const deltaMinutes = Math.floor(deltaMs / (60 * 1000));
+  if (deltaMinutes < 1) return 'Just now';
+  if (deltaMinutes < 60) return `${deltaMinutes}m ago`;
+  const deltaHours = Math.floor(deltaMinutes / 60);
+  if (deltaHours < 24) return `${deltaHours}h ago`;
+  const deltaDays = Math.floor(deltaHours / 24);
+  return `${deltaDays}d ago`;
+};
+
+const mapSocialPostToNode = (post: any): NodeContent => {
+  const media = Array.isArray(post?.media) ? post.media[0] : null;
+  const type = media?.mediaType === 'video' ? 'video' : media?.mediaType === 'file' ? 'file' : media ? 'image' : 'text';
+  return {
+    id: String(post?.id || Date.now()),
+    author: String(post?.authorName || 'Node'),
+    avatar:
+      String(post?.authorAvatarUrl || '').trim() ||
+      `https://api.dicebear.com/7.x/avataaars/svg?seed=${String(post?.authorId || 'node')}`,
+    type,
+    title: type === 'text' ? 'Knowledge Node' : `${type.toUpperCase()} Node`,
+    content: media?.url || String(post?.text || ''),
+    timestamp: toRelativeTimestamp(String(post?.createdAt || '')),
+    resonances: Number(post?.likeCount || 0),
+    links: 0,
+    comments: [],
+  };
+};
+
 const SocialLearningHub: React.FC<SocialLearningHubProps> = ({ user }) => {
+  const backendBaseUrl = (import.meta.env.VITE_BACKEND_URL || '').replace(/\/+$/, '');
+  const toApiUrl = (route: string) => `${backendBaseUrl}${route}`;
   const [nodes, setNodes] = useState<NodeContent[]>(INITIAL_NODES);
   const [newPost, setNewPost] = useState('');
   const [isInjecting, setIsInjecting] = useState(false);
@@ -102,6 +137,41 @@ const SocialLearningHub: React.FC<SocialLearningHubProps> = ({ user }) => {
 
   const detectedUrl = useMemo(() => getFirstUrl(newPost), [newPost]);
   const detectedYoutubeId = useMemo(() => detectedUrl ? getYoutubeId(detectedUrl) : null, [detectedUrl]);
+
+  useEffect(() => {
+    if (!user) {
+      setNodes(INITIAL_NODES);
+      return;
+    }
+
+    let cancelled = false;
+    const loadFeed = async () => {
+      try {
+        const response = await fetch(toApiUrl('/api/social/newsfeed?limit=100'), {
+          headers: buildAuthHeaders(),
+        });
+        const data = await response.json().catch(() => ({}));
+        if (!response.ok) {
+          throw new Error(data?.error || 'Failed to load social newsfeed');
+        }
+
+        const posts = Array.isArray(data?.posts) ? data.posts : [];
+        const mapped = posts.map(mapSocialPostToNode);
+        if (!cancelled) {
+          setNodes(mapped.length > 0 ? mapped : INITIAL_NODES);
+        }
+      } catch {
+        if (!cancelled) {
+          setNodes(INITIAL_NODES);
+        }
+      }
+    };
+
+    void loadFeed();
+    return () => {
+      cancelled = true;
+    };
+  }, [user?.id, backendBaseUrl]);
 
   const handleMouseMove = (e: React.MouseEvent<HTMLDivElement>) => {
     if (!injectionPanelRef.current || window.innerWidth < 1024) return;
@@ -138,45 +208,102 @@ const SocialLearningHub: React.FC<SocialLearningHubProps> = ({ user }) => {
     }
   };
 
-  const handleInject = (e: React.FormEvent) => {
+  const handleInject = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!newPost.trim() && !selectedFile) return;
 
     setIsInjecting(true);
 
-    setTimeout(() => {
-      const newNode: NodeContent = {
-        id: Date.now().toString(),
-        author: user?.name || 'Guest Node',
-        avatar: user?.avatarUrl || `https://api.dicebear.com/7.x/avataaars/svg?seed=${user?.id || 'guest'}`,
-        type: selectedFile?.type || 'text',
-        title: selectedFile ? `New ${selectedFile.type.toUpperCase()} Node` : 'New Cognitive Node',
-        content: selectedFile ? selectedFile.data : newPost,
-        timestamp: 'Just now',
-        resonances: 0,
-        links: 0,
-        comments: []
-      };
+    try {
+      if (user) {
+        const media = selectedFile
+          ? [
+              {
+                mediaType: selectedFile.type,
+                url: selectedFile.data,
+                storageProvider: 'inline',
+                objectKey: null,
+              },
+            ]
+          : [];
 
-      setNodes([newNode, ...nodes]);
+        const response = await fetch(toApiUrl('/api/social/posts'), {
+          method: 'POST',
+          headers: buildAuthHeaders({ 'Content-Type': 'application/json' }),
+          body: JSON.stringify({
+            text: newPost.trim(),
+            visibility: 'public',
+            media,
+          }),
+        });
+        const data = await response.json().catch(() => ({}));
+        if (!response.ok) {
+          throw new Error(data?.error || 'Failed to publish node');
+        }
+        const mapped = mapSocialPostToNode(data.post);
+        setNodes((prev) => [mapped, ...prev.filter((entry) => entry.id !== mapped.id)]);
+      } else {
+        const newNode: NodeContent = {
+          id: Date.now().toString(),
+          author: user?.name || 'Guest Node',
+          avatar: user?.avatarUrl || `https://api.dicebear.com/7.x/avataaars/svg?seed=${user?.id || 'guest'}`,
+          type: selectedFile?.type || 'text',
+          title: selectedFile ? `New ${selectedFile.type.toUpperCase()} Node` : 'New Cognitive Node',
+          content: selectedFile ? selectedFile.data : newPost,
+          timestamp: 'Just now',
+          resonances: 0,
+          links: 0,
+          comments: []
+        };
+        setNodes((prev) => [newNode, ...prev]);
+      }
       setNewPost('');
       setSelectedFile(null);
+    } finally {
       setIsInjecting(false);
-    }, 1200);
+    }
   };
 
-  const toggleResonance = (nodeId: string) => {
-    setNodes(prev => prev.map(node => {
-      if (node.id === nodeId) {
-        const hasResonated = !node.hasResonated;
-        return {
-          ...node,
-          hasResonated,
-          resonances: hasResonated ? node.resonances + 1 : node.resonances - 1
-        };
+  const toggleResonance = async (nodeId: string) => {
+    if (user) {
+      try {
+        const response = await fetch(toApiUrl(`/api/social/posts/${nodeId}/like`), {
+          method: 'POST',
+          headers: buildAuthHeaders(),
+        });
+        const data = await response.json().catch(() => ({}));
+        if (response.ok) {
+          setNodes((prev) =>
+            prev.map((node) =>
+              node.id === nodeId
+                ? {
+                    ...node,
+                    hasResonated: Boolean(data?.liked),
+                    resonances: Number(data?.likeCount || 0),
+                  }
+                : node
+            )
+          );
+          return;
+        }
+      } catch {
+        // Fallback to local optimistic behavior below.
       }
-      return node;
-    }));
+    }
+
+    setNodes((prev) =>
+      prev.map((node) => {
+        if (node.id === nodeId) {
+          const hasResonated = !node.hasResonated;
+          return {
+            ...node,
+            hasResonated,
+            resonances: hasResonated ? node.resonances + 1 : Math.max(0, node.resonances - 1),
+          };
+        }
+        return node;
+      })
+    );
   };
 
   const toggleComments = (nodeId: string) => {

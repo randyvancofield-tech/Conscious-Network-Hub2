@@ -82,6 +82,20 @@ export interface UserProfile {
   hasProfile?: boolean;
   avatarUrl?: string;
   bannerUrl?: string;
+  location?: string | null;
+  dateOfBirth?: string | null;
+  profileMedia?: {
+    avatar: {
+      url: string | null;
+      storageProvider: string | null;
+      objectKey: string | null;
+    };
+    cover: {
+      url: string | null;
+      storageProvider: string | null;
+      objectKey: string | null;
+    };
+  };
   profileBackgroundVideo?: string | null;
   bio?: string;
   interests?: string[];
@@ -89,8 +103,10 @@ export interface UserProfile {
   githubUrl?: string;
   websiteUrl?: string;
   privacySettings?: {
+    profileVisibility: 'public' | 'private';
     showEmail: boolean;
     allowMessages: boolean;
+    blockedUsers: string[];
   };
   twoFactorEnabled?: boolean;
   twoFactorMethod?: 'none' | 'phone' | 'wallet';

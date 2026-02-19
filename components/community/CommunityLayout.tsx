@@ -8,6 +8,7 @@ import {
   Twitter, Github, Globe
 } from 'lucide-react';
 import { UserProfile, Course } from '../../types';
+import { buildAuthHeaders } from '../../services/sessionService';
 
 interface ConsciousIdentityProps {
   user: UserProfile | null;
@@ -60,21 +61,42 @@ export const ConsciousIdentity: React.FC<ConsciousIdentityProps> = ({
 
   const [isEditing, setIsEditing] = useState(!user.hasProfile);
   const [step, setStep] = useState(1);
+  const [uploadingField, setUploadingField] = useState<'avatarUrl' | 'bannerUrl' | null>(null);
+  const [uploadError, setUploadError] = useState('');
   const avatarInputRef = useRef<HTMLInputElement>(null);
   const bannerInputRef = useRef<HTMLInputElement>(null);
+
+  const backendBaseUrl = (import.meta.env.VITE_BACKEND_URL || '').replace(/\/+$/, '');
+  const toApiUrl = (route: string) => `${backendBaseUrl}${route}`;
 
   const [formData, setFormData] = useState({
     handle: user.handle || user.name.toLowerCase().replace(/\s+/g, '_'),
     bio: user.bio || '',
+    location: user.location || '',
+    dateOfBirth: user.dateOfBirth || '',
     interests: user.interests || [] as string[],
     avatarUrl: user.avatarUrl || `https://picsum.photos/seed/${user.name}/200`,
     bannerUrl: user.bannerUrl || `https://picsum.photos/seed/${user.name}_banner/1200/400`,
+    profileMedia: user.profileMedia || {
+      avatar: {
+        url: user.avatarUrl || null,
+        storageProvider: null,
+        objectKey: null,
+      },
+      cover: {
+        url: user.bannerUrl || null,
+        storageProvider: null,
+        objectKey: null,
+      },
+    },
     twitterUrl: user.twitterUrl || '',
     githubUrl: user.githubUrl || '',
     websiteUrl: user.websiteUrl || '',
     privacySettings: user.privacySettings || {
+      profileVisibility: 'public',
       showEmail: false,
-      allowMessages: true
+      allowMessages: true,
+      blockedUsers: [],
     }
   });
 
@@ -84,18 +106,71 @@ export const ConsciousIdentity: React.FC<ConsciousIdentityProps> = ({
   ]);
   const [newReflection, setNewReflection] = useState('');
 
-  const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>, field: 'avatarUrl' | 'bannerUrl') => {
+  const handleFileUpload = async (
+    e: React.ChangeEvent<HTMLInputElement>,
+    field: 'avatarUrl' | 'bannerUrl'
+  ) => {
     const file = e.target.files?.[0];
-    if (file) {
-      const reader = new FileReader();
-      reader.onloadend = () => {
-        setFormData(prev => ({ ...prev, [field]: reader.result as string }));
-      };
-      reader.readAsDataURL(file);
+    if (!file) {
+      return;
+    }
+
+    setUploadError('');
+    setUploadingField(field);
+
+    try {
+      const endpoint = field === 'avatarUrl' ? '/api/upload/avatar' : '/api/upload/cover';
+      const payload = new FormData();
+      payload.append('image', file);
+
+      const response = await fetch(toApiUrl(endpoint), {
+        method: 'POST',
+        headers: buildAuthHeaders(),
+        body: payload,
+      });
+
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        throw new Error(data?.error || 'Upload failed');
+      }
+
+      const fileUrl = String(data?.fileUrl || '').trim();
+      if (!fileUrl) {
+        throw new Error('Upload succeeded without a file URL');
+      }
+
+      const media = data?.media || {};
+      setFormData((prev) => ({
+        ...prev,
+        [field]: fileUrl,
+        profileMedia: {
+          ...prev.profileMedia,
+          ...(field === 'avatarUrl'
+            ? {
+                avatar: {
+                  url: fileUrl,
+                  storageProvider: media.storageProvider || prev.profileMedia.avatar.storageProvider,
+                  objectKey: media.objectKey || prev.profileMedia.avatar.objectKey,
+                },
+              }
+            : {
+                cover: {
+                  url: fileUrl,
+                  storageProvider: media.storageProvider || prev.profileMedia.cover.storageProvider,
+                  objectKey: media.objectKey || prev.profileMedia.cover.objectKey,
+                },
+              }),
+        },
+      }));
+    } catch (error) {
+      setUploadError(error instanceof Error ? error.message : 'Failed to upload image');
+    } finally {
+      setUploadingField(null);
     }
   };
 
   const handleSave = () => {
+    if (uploadingField) return;
     onComplete(formData);
     setIsEditing(false);
   };
@@ -179,10 +254,19 @@ export const ConsciousIdentity: React.FC<ConsciousIdentityProps> = ({
                   </div>
                 </div>
               </div>
-              
+
+              {(uploadingField || uploadError) && (
+                <div className={`rounded-2xl border px-4 py-3 text-xs font-bold uppercase tracking-widest ${uploadError ? 'border-red-500/40 bg-red-500/10 text-red-300' : 'border-blue-500/30 bg-blue-500/10 text-blue-300'}`}>
+                  {uploadError
+                    ? uploadError
+                    : `Uploading ${uploadingField === 'avatarUrl' ? 'avatar' : 'cover'} image...`}
+                </div>
+              )}
+               
               <button 
                 onClick={() => setStep(2)}
-                className="w-full py-6 bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-500 hover:to-blue-600 text-white rounded-3xl font-bold text-xl shadow-2xl shadow-blue-900/40 flex items-center justify-center gap-3 transition-all hover:-translate-y-1 active:scale-95"
+                disabled={Boolean(uploadingField)}
+                className="w-full py-6 bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-500 hover:to-blue-600 disabled:opacity-60 text-white rounded-3xl font-bold text-xl shadow-2xl shadow-blue-900/40 flex items-center justify-center gap-3 transition-all hover:-translate-y-1 active:scale-95"
               >
                 Continue Design <ChevronRight className="w-6 h-6" />
               </button>
@@ -200,6 +284,28 @@ export const ConsciousIdentity: React.FC<ConsciousIdentityProps> = ({
                   className="w-full px-6 py-5 bg-white/5 border border-white/10 rounded-3xl text-white focus:ring-2 focus:ring-teal-500/30 transition-all outline-none min-h-[160px] resize-none text-lg leading-relaxed placeholder:text-slate-600 shadow-inner"
                   placeholder="What values do you bring to the network? Define your learning objectives and sovereign intentions..."
                 />
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <label className="text-[10px] font-bold text-slate-500 uppercase tracking-[0.2em]">Location</label>
+                  <input
+                    type="text"
+                    value={formData.location}
+                    onChange={e => setFormData({ ...formData, location: e.target.value })}
+                    className="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-2xl text-white focus:ring-2 focus:ring-teal-500/30 outline-none text-sm shadow-inner"
+                    placeholder="City, Country"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <label className="text-[10px] font-bold text-slate-500 uppercase tracking-[0.2em]">Date of Birth</label>
+                  <input
+                    type="date"
+                    value={formData.dateOfBirth ? String(formData.dateOfBirth).slice(0, 10) : ''}
+                    onChange={e => setFormData({ ...formData, dateOfBirth: e.target.value })}
+                    className="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-2xl text-white focus:ring-2 focus:ring-teal-500/30 outline-none text-sm shadow-inner"
+                  />
+                </div>
               </div>
 
               <div className="space-y-4">
@@ -241,6 +347,29 @@ export const ConsciousIdentity: React.FC<ConsciousIdentityProps> = ({
               <div className="space-y-4">
                 <label className="text-[10px] font-bold text-slate-500 uppercase tracking-[0.2em]">Privacy Toggles</label>
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <button
+                    onClick={() =>
+                      setFormData((prev) => ({
+                        ...prev,
+                        privacySettings: {
+                          ...prev.privacySettings,
+                          profileVisibility:
+                            prev.privacySettings.profileVisibility === 'public'
+                              ? 'private'
+                              : 'public',
+                        },
+                      }))
+                    }
+                    className={`flex items-center justify-between p-5 rounded-2xl border transition-all ${formData.privacySettings.profileVisibility === 'private' ? 'bg-amber-600/10 border-amber-500/50 text-white' : 'bg-blue-600/10 border-blue-500/50 text-white'}`}
+                  >
+                    <div className="flex items-center gap-3 text-sm font-bold uppercase tracking-wider">
+                      <Shield className={`w-4 h-4 ${formData.privacySettings.profileVisibility === 'private' ? 'text-amber-400' : 'text-blue-400'}`} />
+                      Profile Visibility
+                    </div>
+                    <div className={`px-2 py-1 rounded-full text-[9px] font-black uppercase tracking-widest ${formData.privacySettings.profileVisibility === 'private' ? 'bg-amber-500/30 text-amber-300' : 'bg-blue-500/30 text-blue-300'}`}>
+                      {formData.privacySettings.profileVisibility}
+                    </div>
+                  </button>
                   <button 
                     onClick={() => setFormData(prev => ({ ...prev, privacySettings: { ...prev.privacySettings, showEmail: !prev.privacySettings.showEmail }}))}
                     className={`flex items-center justify-between p-5 rounded-2xl border transition-all ${formData.privacySettings.showEmail ? 'bg-blue-600/10 border-blue-500/50 text-white' : 'bg-white/5 border-white/10 text-slate-400'}`}
@@ -420,6 +549,15 @@ export const ConsciousIdentity: React.FC<ConsciousIdentityProps> = ({
                   </div>
                   <h4 className="text-[10px] font-bold text-slate-500 uppercase tracking-[0.4em] mb-6">Sovereign Privacy</h4>
                   <div className="space-y-6 relative z-10">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-3">
+                        <Shield className={`w-5 h-5 ${formData.privacySettings.profileVisibility === 'private' ? 'text-amber-400' : 'text-blue-400'}`} />
+                        <span className="text-sm font-medium text-slate-300">Profile Visibility</span>
+                      </div>
+                      <div className={`px-3 py-1 rounded-full text-[9px] font-bold uppercase tracking-widest ${formData.privacySettings.profileVisibility === 'private' ? 'bg-amber-500/20 text-amber-300' : 'bg-blue-500/20 text-blue-300'}`}>
+                        {formData.privacySettings.profileVisibility}
+                      </div>
+                    </div>
                     <div className="flex items-center justify-between">
                       <div className="flex items-center gap-3">
                         <Mail className={`w-5 h-5 ${formData.privacySettings.showEmail ? 'text-blue-400' : 'text-slate-600'}`} />
