@@ -5,41 +5,28 @@ import {
 } from '../middleware';
 import { localStore } from '../services/persistenceStore';
 import {
+  canViewProfileByPrivacy,
+  resolvePrivacyBlockState,
+} from '../services/privacyGuard';
+import { normalizePrivacySettings } from '../services/profileNormalization';
+import {
   SocialPostMediaInput,
   SocialPostVisibility,
   socialStore,
 } from '../services/socialStore';
+import {
+  parseUserProfilePatch,
+  SOCIAL_PROFILE_PATCH_FIELDS,
+} from '../services/userProfilePatch';
+import { validateJsonBody } from '../validation/jsonSchema';
+import {
+  socialCreatePostSchema,
+  socialFollowRequestSchema,
+  socialProfilePatchSchema,
+} from '../validation/requestSchemas';
 
 const router = Router();
 router.use(requireCanonicalIdentity);
-
-type PrivacySettings = {
-  profileVisibility: 'public' | 'private';
-  showEmail: boolean;
-  allowMessages: boolean;
-  blockedUsers: string[];
-};
-
-const normalizePrivacySettings = (value: unknown): PrivacySettings => {
-  const input = value && typeof value === 'object' ? (value as Record<string, unknown>) : {};
-  const visibility =
-    String(input.profileVisibility || '').trim().toLowerCase() === 'private'
-      ? 'private'
-      : 'public';
-  const blockedUsers = Array.isArray(input.blockedUsers)
-    ? input.blockedUsers
-        .filter((entry): entry is string => typeof entry === 'string')
-        .map((entry) => entry.trim())
-        .filter((entry) => entry.length > 0)
-        .slice(0, 500)
-    : [];
-  return {
-    profileVisibility: visibility,
-    showEmail: Boolean(input.showEmail),
-    allowMessages: input.allowMessages === undefined ? true : Boolean(input.allowMessages),
-    blockedUsers: [...new Set(blockedUsers)],
-  };
-};
 
 const normalizePostVisibility = (value: unknown): SocialPostVisibility =>
   String(value || '').trim().toLowerCase() === 'private' ? 'private' : 'public';
@@ -115,16 +102,21 @@ router.get('/profile/:userId', async (req: Request, res: Response): Promise<any>
 
   const targetPrivacy = normalizePrivacySettings(targetUser.privacySettings);
   const viewerPrivacy = normalizePrivacySettings(viewerUser.privacySettings);
-  const blockedEitherWay =
-    targetPrivacy.blockedUsers.includes(authUserId) ||
-    viewerPrivacy.blockedUsers.includes(userId);
-  if (blockedEitherWay) {
+  const blockState = resolvePrivacyBlockState(authUserId, viewerPrivacy, userId, targetPrivacy);
+  if (blockState.blockedEitherWay) {
     return res.status(403).json({ error: 'Profile is unavailable' });
   }
 
   const isOwner = userId === authUserId;
   const isFollowing = isOwner ? false : await socialStore.isFollowing(authUserId, userId);
-  if (targetPrivacy.profileVisibility === 'private' && !isOwner && !isFollowing) {
+  if (
+    !canViewProfileByPrivacy({
+      viewerUserId: authUserId,
+      targetUserId: userId,
+      targetPrivacy,
+      isFollowing,
+    })
+  ) {
     return res.status(403).json({ error: 'Profile is private' });
   }
 
@@ -150,7 +142,7 @@ router.get('/profile/:userId', async (req: Request, res: Response): Promise<any>
     profile: toPublicProfile(targetUser, authUserId),
     relationship: {
       isFollowing,
-      blockedEitherWay,
+      blockedEitherWay: blockState.blockedEitherWay,
       visibility: targetPrivacy.profileVisibility,
     },
     posts: enrichedPosts,
@@ -163,40 +155,19 @@ router.get('/profile/:userId', async (req: Request, res: Response): Promise<any>
  * POST /api/social/profile
  * Update authenticated user's social profile fields.
  */
-router.post('/profile', async (req: Request, res: Response): Promise<any> => {
+router.post('/profile', validateJsonBody(socialProfilePatchSchema), async (req: Request, res: Response): Promise<any> => {
   const authUserId = getAuthenticatedUserId(req);
   if (!authUserId) {
     return res.status(401).json({ error: 'Authentication required' });
   }
-
-  const body = req.body || {};
-  let nextDateOfBirth: Date | null | undefined = undefined;
-  if (body.dateOfBirth !== undefined) {
-    const raw = String(body.dateOfBirth || '').trim();
-    if (!raw) {
-      nextDateOfBirth = null;
-    } else {
-      const parsed = new Date(raw);
-      if (Number.isNaN(parsed.getTime())) {
-        return res.status(400).json({ error: 'dateOfBirth must be a valid date string' });
-      }
-      nextDateOfBirth = parsed;
-    }
+  const parsedPatch = parseUserProfilePatch(req.body, {
+    allowedFields: SOCIAL_PROFILE_PATCH_FIELDS,
+  });
+  if (parsedPatch.error) {
+    return res.status(400).json({ error: parsedPatch.error });
   }
 
-  const updated = await localStore.updateUser(authUserId, {
-    name: body.name !== undefined ? String(body.name || '').trim() || null : undefined,
-    handle: body.handle !== undefined ? String(body.handle || '').trim() || null : undefined,
-    bio: body.bio !== undefined ? String(body.bio || '').trim() || null : undefined,
-    location: body.location !== undefined ? String(body.location || '').trim() || null : undefined,
-    dateOfBirth: nextDateOfBirth,
-    avatarUrl: body.avatarUrl !== undefined ? String(body.avatarUrl || '').trim() || null : undefined,
-    bannerUrl: body.bannerUrl !== undefined ? String(body.bannerUrl || '').trim() || null : undefined,
-    profileMedia: body.profileMedia !== undefined ? body.profileMedia : undefined,
-    interests: body.interests,
-    privacySettings:
-      body.privacySettings !== undefined ? normalizePrivacySettings(body.privacySettings) : undefined,
-  });
+  const updated = await localStore.updateUser(authUserId, parsedPatch.updates);
 
   if (!updated) {
     return res.status(404).json({ error: 'User not found' });
@@ -212,7 +183,7 @@ router.post('/profile', async (req: Request, res: Response): Promise<any> => {
  * POST /api/social/posts
  * Create a new social post.
  */
-router.post('/posts', async (req: Request, res: Response): Promise<any> => {
+router.post('/posts', validateJsonBody(socialCreatePostSchema), async (req: Request, res: Response): Promise<any> => {
   const authUserId = getAuthenticatedUserId(req);
   if (!authUserId) {
     return res.status(401).json({ error: 'Authentication required' });
@@ -274,7 +245,7 @@ router.post('/posts/:postId/like', async (req: Request, res: Response): Promise<
  * POST /api/social/users/:targetUserId/follow
  * Follow or unfollow another user.
  */
-router.post('/users/:targetUserId/follow', async (req: Request, res: Response): Promise<any> => {
+router.post('/users/:targetUserId/follow', validateJsonBody(socialFollowRequestSchema), async (req: Request, res: Response): Promise<any> => {
   const authUserId = getAuthenticatedUserId(req);
   if (!authUserId) {
     return res.status(401).json({ error: 'Authentication required' });
@@ -301,10 +272,13 @@ router.post('/users/:targetUserId/follow', async (req: Request, res: Response): 
 
   const viewerPrivacy = normalizePrivacySettings(viewerUser.privacySettings);
   const targetPrivacy = normalizePrivacySettings(targetUser.privacySettings);
-  if (
-    viewerPrivacy.blockedUsers.includes(targetUserId) ||
-    targetPrivacy.blockedUsers.includes(authUserId)
-  ) {
+  const blockState = resolvePrivacyBlockState(
+    authUserId,
+    viewerPrivacy,
+    targetUserId,
+    targetPrivacy
+  );
+  if (blockState.blockedEitherWay) {
     return res.status(403).json({ error: 'Follow relationship not allowed' });
   }
 
@@ -359,10 +333,13 @@ router.get('/newsfeed', async (req: Request, res: Response): Promise<any> => {
     if (!author) return false;
 
     const authorPrivacy = normalizePrivacySettings(author.privacySettings);
-    const blockedEitherWay =
-      viewerPrivacy.blockedUsers.includes(post.authorId) ||
-      authorPrivacy.blockedUsers.includes(authUserId);
-    if (blockedEitherWay) return false;
+    const blockState = resolvePrivacyBlockState(
+      authUserId,
+      viewerPrivacy,
+      post.authorId,
+      authorPrivacy
+    );
+    if (blockState.blockedEitherWay) return false;
 
     if (post.visibility === 'private') {
       return post.authorId === authUserId || followingSet.has(post.authorId);

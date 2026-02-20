@@ -17,7 +17,27 @@ import {
 import { localStore, TwoFactorMethod } from '../services/persistenceStore';
 import { mirrorUserToGoogleSheets } from '../services/googleSheetsMirror';
 import { getProviderSessionById } from '../services/providerSessionStore';
+import {
+  normalizeDateOfBirth,
+  normalizeOptionalString,
+  normalizePrivacySettings,
+  normalizeProfileMedia,
+  type UserProfileMedia,
+} from '../services/profileNormalization';
+import {
+  parseUserProfilePatch,
+  USER_PROFILE_PATCH_FIELDS,
+} from '../services/userProfilePatch';
 import { normalizeTier } from '../tierPolicy';
+import { validateJsonBody } from '../validation/jsonSchema';
+import {
+  userCreateSchema,
+  userPhoneEnrollSchema,
+  userPrivacyUpdateSchema,
+  userProfilePatchSchema,
+  userSignInSchema,
+  userWalletEnrollSchema,
+} from '../validation/requestSchemas';
 
 const publicRouter = Router();
 const protectedRouter = Router();
@@ -136,49 +156,6 @@ const maskPhoneNumber = (phone: string): string => {
   return `***-***-${digits.slice(-4)}`;
 };
 
-const normalizeOptionalString = (value: unknown): string | null => {
-  const normalized = String(value || '').trim();
-  return normalized.length > 0 ? normalized : null;
-};
-
-type UserMediaAsset = {
-  url: string | null;
-  storageProvider: string | null;
-  objectKey: string | null;
-};
-
-type UserProfileMedia = {
-  avatar: UserMediaAsset;
-  cover: UserMediaAsset;
-};
-
-const normalizeUserMediaAsset = (
-  value: unknown,
-  fallbackUrl: string | null
-): UserMediaAsset => {
-  const input = value && typeof value === 'object' ? (value as Record<string, unknown>) : {};
-  const rawUrl = String(input.url ?? '').trim();
-  const rawStorageProvider = String(input.storageProvider ?? '').trim();
-  const rawObjectKey = String(input.objectKey ?? '').trim();
-  return {
-    url: rawUrl || fallbackUrl || null,
-    storageProvider: rawStorageProvider || null,
-    objectKey: rawObjectKey || null,
-  };
-};
-
-const normalizeProfileMedia = (
-  value: unknown,
-  avatarFallback: string | null,
-  coverFallback: string | null
-): UserProfileMedia => {
-  const input = value && typeof value === 'object' ? (value as Record<string, unknown>) : {};
-  return {
-    avatar: normalizeUserMediaAsset(input.avatar, avatarFallback),
-    cover: normalizeUserMediaAsset(input.cover, coverFallback),
-  };
-};
-
 const absolutizeProfileMedia = (
   req: Request,
   profileMedia: unknown,
@@ -195,48 +172,6 @@ const absolutizeProfileMedia = (
       ...normalized.cover,
       url: absolutizeUrl(req, normalized.cover.url) || null,
     },
-  };
-};
-
-const normalizeDateOfBirth = (value: unknown): Date | null | 'invalid' => {
-  if (value === undefined) return null;
-  if (value === null) return null;
-  const raw = String(value).trim();
-  if (!raw) return null;
-  const parsed = new Date(raw);
-  if (Number.isNaN(parsed.getTime())) return 'invalid';
-  return parsed;
-};
-
-const normalizeInterests = (value: unknown): string[] => {
-  if (!Array.isArray(value)) return [];
-  return value
-    .filter((entry): entry is string => typeof entry === 'string')
-    .map((entry) => entry.trim())
-    .filter((entry) => entry.length > 0)
-    .slice(0, 20);
-};
-
-const normalizePrivacySettings = (
-  value: unknown
-): { profileVisibility: 'public' | 'private'; showEmail: boolean; allowMessages: boolean; blockedUsers: string[] } => {
-  const input = value && typeof value === 'object' ? (value as Record<string, unknown>) : {};
-  const visibility =
-    String(input.profileVisibility || '').trim().toLowerCase() === 'private'
-      ? 'private'
-      : 'public';
-  const blockedUsers = Array.isArray(input.blockedUsers)
-    ? input.blockedUsers
-        .filter((entry): entry is string => typeof entry === 'string')
-        .map((entry) => entry.trim())
-        .filter((entry) => entry.length > 0)
-        .slice(0, 500)
-    : [];
-  return {
-    profileVisibility: visibility,
-    showEmail: Boolean(input.showEmail),
-    allowMessages: input.allowMessages === undefined ? true : Boolean(input.allowMessages),
-    blockedUsers: [...new Set(blockedUsers)],
   };
 };
 
@@ -306,7 +241,7 @@ const toPublicUser = (req: Request, user: any) => ({
  * POST /api/user/signin
  * Authenticate an existing user with canonical backend identity.
  */
-publicRouter.post('/signin', async (req: Request, res: Response): Promise<any> => {
+publicRouter.post('/signin', validateJsonBody(userSignInSchema), async (req: Request, res: Response): Promise<any> => {
   try {
     const email = String(req.body?.email || '')
       .trim()
@@ -493,7 +428,7 @@ publicRouter.post('/signin', async (req: Request, res: Response): Promise<any> =
  * POST /api/user/create
  * Create a new canonical user profile in the database.
  */
-publicRouter.post('/create', async (req: Request, res: Response): Promise<any> => {
+publicRouter.post('/create', validateJsonBody(userCreateSchema), async (req: Request, res: Response): Promise<any> => {
   try {
     const email = String(req.body?.email || '')
       .trim()
@@ -735,7 +670,7 @@ protectedRouter.get('/privacy', async (req: Request, res: Response): Promise<any
  * PUT /api/user/privacy
  * Update authenticated user's privacy settings.
  */
-protectedRouter.put('/privacy', async (req: Request, res: Response): Promise<any> => {
+protectedRouter.put('/privacy', validateJsonBody(userPrivacyUpdateSchema), async (req: Request, res: Response): Promise<any> => {
   const authUserId = getAuthenticatedUserId(req);
   if (!authUserId) {
     return res.status(401).json({ error: 'Authentication required' });
@@ -873,7 +808,7 @@ protectedRouter.get('/security', async (req: Request, res: Response): Promise<an
  * POST /api/user/2fa/phone/enroll
  * Enroll authenticated user in phone-based 2FA.
  */
-protectedRouter.post('/2fa/phone/enroll', async (req: Request, res: Response): Promise<any> => {
+protectedRouter.post('/2fa/phone/enroll', validateJsonBody(userPhoneEnrollSchema), async (req: Request, res: Response): Promise<any> => {
   const authUserId = getAuthenticatedUserId(req);
   if (!authUserId) {
     return res.status(401).json({ error: 'Authentication required' });
@@ -903,7 +838,7 @@ protectedRouter.post('/2fa/phone/enroll', async (req: Request, res: Response): P
  * POST /api/user/2fa/wallet/enroll
  * Enroll authenticated user in wallet-based 2FA.
  */
-protectedRouter.post('/2fa/wallet/enroll', async (req: Request, res: Response): Promise<any> => {
+protectedRouter.post('/2fa/wallet/enroll', validateJsonBody(userWalletEnrollSchema), async (req: Request, res: Response): Promise<any> => {
   const authUserId = getAuthenticatedUserId(req);
   if (!authUserId) {
     return res.status(401).json({ error: 'Authentication required' });
@@ -960,74 +895,21 @@ protectedRouter.post('/2fa/disable', async (req: Request, res: Response): Promis
  * Edit user profile (including background video).
  * Requires canonical identity match with user ID.
  */
-protectedRouter.put('/:id', async (req: Request, res: Response): Promise<any> => {
+protectedRouter.put('/:id', validateJsonBody(userProfilePatchSchema), async (req: Request, res: Response): Promise<any> => {
   try {
     const { id } = req.params;
     if (!enforceAuthenticatedUserMatch(req, res, id, 'params.id')) {
       return;
     }
 
-    const updateData = req.body || {};
-    const nextName =
-      updateData.name !== undefined ? normalizeOptionalString(updateData.name) : undefined;
-    const nextHandle =
-      updateData.handle !== undefined ? normalizeOptionalString(updateData.handle) : undefined;
-    const nextBio =
-      updateData.bio !== undefined ? normalizeOptionalString(updateData.bio) : undefined;
-    const nextLocation =
-      updateData.location !== undefined ? normalizeOptionalString(updateData.location) : undefined;
-    const nextDateOfBirthRaw =
-      updateData.dateOfBirth !== undefined ? normalizeDateOfBirth(updateData.dateOfBirth) : undefined;
-    if (nextDateOfBirthRaw === 'invalid') {
-      return res.status(400).json({ error: 'dateOfBirth must be a valid date string' });
-    }
-    const nextDateOfBirth =
-      nextDateOfBirthRaw === undefined ? undefined : nextDateOfBirthRaw;
-    const nextAvatarUrl =
-      updateData.avatarUrl !== undefined ? normalizeOptionalString(updateData.avatarUrl) : undefined;
-    const nextBannerUrl =
-      updateData.bannerUrl !== undefined ? normalizeOptionalString(updateData.bannerUrl) : undefined;
-    const nextProfileMedia =
-      updateData.profileMedia !== undefined
-        ? normalizeProfileMedia(updateData.profileMedia, nextAvatarUrl || null, nextBannerUrl || null)
-        : undefined;
-    const nextInterests =
-      updateData.interests !== undefined ? normalizeInterests(updateData.interests) : undefined;
-    const nextTwitterUrl =
-      updateData.twitterUrl !== undefined
-        ? normalizeOptionalString(updateData.twitterUrl)
-        : undefined;
-    const nextGithubUrl =
-      updateData.githubUrl !== undefined ? normalizeOptionalString(updateData.githubUrl) : undefined;
-    const nextWebsiteUrl =
-      updateData.websiteUrl !== undefined
-        ? normalizeOptionalString(updateData.websiteUrl)
-        : undefined;
-    const nextPrivacySettings =
-      updateData.privacySettings !== undefined
-        ? normalizePrivacySettings(updateData.privacySettings)
-        : undefined;
-    const nextBackgroundVideo =
-      updateData.profileBackgroundVideo !== undefined
-        ? normalizeOptionalString(updateData.profileBackgroundVideo)
-        : undefined;
-
-    const persisted = await localStore.updateUser(id, {
-      name: nextName,
-      handle: nextHandle,
-      bio: nextBio,
-      location: nextLocation,
-      dateOfBirth: nextDateOfBirth,
-      avatarUrl: nextAvatarUrl,
-      bannerUrl: nextBannerUrl,
-      profileMedia: nextProfileMedia,
-      interests: nextInterests,
-      twitterUrl: nextTwitterUrl,
-      githubUrl: nextGithubUrl,
-      websiteUrl: nextWebsiteUrl,
-      privacySettings: nextPrivacySettings,
-      profileBackgroundVideo: nextBackgroundVideo,
+    const parsedPatch = parseUserProfilePatch(req.body, {
+      allowedFields: USER_PROFILE_PATCH_FIELDS,
     });
+    if (parsedPatch.error) {
+      return res.status(400).json({ error: parsedPatch.error });
+    }
+
+    const persisted = await localStore.updateUser(id, parsedPatch.updates);
 
     if (!persisted) {
       return res.status(404).json({ error: 'User not found after update' });

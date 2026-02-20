@@ -367,21 +367,49 @@ export const localStore = {
     }
 
     try {
+      const db = ensurePrisma();
       const data: Record<string, unknown> = {};
       if (updates.name !== undefined) data.name = updates.name;
       if (updates.handle !== undefined) data.handle = updates.handle;
       if (updates.bio !== undefined) data.bio = updates.bio;
       if (updates.location !== undefined) data.location = updates.location;
       if (updates.dateOfBirth !== undefined) data.dateOfBirth = updates.dateOfBirth;
-      if (updates.avatarUrl !== undefined) data.avatarUrl = updates.avatarUrl;
-      if (updates.bannerUrl !== undefined) data.bannerUrl = updates.bannerUrl;
+
+      const needsMediaRebuild =
+        updates.profileMedia !== undefined ||
+        updates.avatarUrl !== undefined ||
+        updates.bannerUrl !== undefined;
+      let existingMediaRow: any | null = null;
+      if (needsMediaRebuild) {
+        existingMediaRow = await db.user.findUnique({ where: { id } });
+        if (!existingMediaRow) {
+          return null;
+        }
+      }
+
+      const currentAvatarUrl = toNullableString(existingMediaRow?.avatarUrl);
+      const currentBannerUrl = toNullableString(existingMediaRow?.bannerUrl);
+      const nextAvatarUrl =
+        updates.avatarUrl !== undefined ? toNullableString(updates.avatarUrl) : currentAvatarUrl;
+      const nextBannerUrl =
+        updates.bannerUrl !== undefined ? toNullableString(updates.bannerUrl) : currentBannerUrl;
+
+      if (updates.avatarUrl !== undefined) data.avatarUrl = nextAvatarUrl;
+      if (updates.bannerUrl !== undefined) data.bannerUrl = nextBannerUrl;
       if (updates.profileMedia !== undefined) {
         data.profileMedia = normalizeProfileMedia(
           updates.profileMedia,
-          toNullableString(updates.avatarUrl),
-          toNullableString(updates.bannerUrl)
+          nextAvatarUrl,
+          nextBannerUrl
+        );
+      } else if (updates.avatarUrl !== undefined || updates.bannerUrl !== undefined) {
+        data.profileMedia = normalizeProfileMedia(
+          readJsonObject(existingMediaRow?.profileMedia ?? null),
+          nextAvatarUrl,
+          nextBannerUrl
         );
       }
+
       if (updates.interests !== undefined) data.interests = normalizeInterests(updates.interests);
       if (updates.twitterUrl !== undefined) data.twitterUrl = updates.twitterUrl;
       if (updates.githubUrl !== undefined) data.githubUrl = updates.githubUrl;
@@ -419,7 +447,7 @@ export const localStore = {
       }
       if (updates.lockoutUntil !== undefined) data.lockoutUntil = updates.lockoutUntil;
 
-      const row = await ensurePrisma().user.update({
+      const row = await db.user.update({
         where: { id },
         data: data as any,
       });
