@@ -3,6 +3,7 @@ import {
   getAuthenticatedUserId,
   requireCanonicalIdentity,
 } from '../middleware';
+import { recordAuditEvent } from '../services/auditTelemetry';
 import { localStore } from '../services/persistenceStore';
 import {
   canViewProfileByPrivacy,
@@ -158,20 +159,55 @@ router.get('/profile/:userId', async (req: Request, res: Response): Promise<any>
 router.post('/profile', validateJsonBody(socialProfilePatchSchema), async (req: Request, res: Response): Promise<any> => {
   const authUserId = getAuthenticatedUserId(req);
   if (!authUserId) {
+    recordAuditEvent(req, {
+      domain: 'social',
+      action: 'profile_patch',
+      outcome: 'deny',
+      statusCode: 401,
+      metadata: { reason: 'missing_authentication' },
+    });
     return res.status(401).json({ error: 'Authentication required' });
   }
   const parsedPatch = parseUserProfilePatch(req.body, {
     allowedFields: SOCIAL_PROFILE_PATCH_FIELDS,
   });
   if (parsedPatch.error) {
+    recordAuditEvent(req, {
+      domain: 'social',
+      action: 'profile_patch',
+      outcome: 'deny',
+      actorUserId: authUserId,
+      targetUserId: authUserId,
+      statusCode: 400,
+      metadata: { reason: 'invalid_patch_payload' },
+    });
     return res.status(400).json({ error: parsedPatch.error });
   }
 
   const updated = await localStore.updateUser(authUserId, parsedPatch.updates);
 
   if (!updated) {
+    recordAuditEvent(req, {
+      domain: 'social',
+      action: 'profile_patch',
+      outcome: 'deny',
+      actorUserId: authUserId,
+      targetUserId: authUserId,
+      statusCode: 404,
+      metadata: { reason: 'user_not_found' },
+    });
     return res.status(404).json({ error: 'User not found' });
   }
+
+  recordAuditEvent(req, {
+    domain: 'social',
+    action: 'profile_patch',
+    outcome: 'success',
+    actorUserId: authUserId,
+    targetUserId: authUserId,
+    statusCode: 200,
+    metadata: { fieldsUpdated: Object.keys(parsedPatch.updates) },
+  });
 
   return res.json({
     success: true,
@@ -186,6 +222,13 @@ router.post('/profile', validateJsonBody(socialProfilePatchSchema), async (req: 
 router.post('/posts', validateJsonBody(socialCreatePostSchema), async (req: Request, res: Response): Promise<any> => {
   const authUserId = getAuthenticatedUserId(req);
   if (!authUserId) {
+    recordAuditEvent(req, {
+      domain: 'social',
+      action: 'post_create',
+      outcome: 'deny',
+      statusCode: 401,
+      metadata: { reason: 'missing_authentication' },
+    });
     return res.status(401).json({ error: 'Authentication required' });
   }
 
@@ -194,6 +237,15 @@ router.post('/posts', validateJsonBody(socialCreatePostSchema), async (req: Requ
   const media = normalizePostMedia(req.body?.media);
 
   if (!text && media.length === 0) {
+    recordAuditEvent(req, {
+      domain: 'social',
+      action: 'post_create',
+      outcome: 'deny',
+      actorUserId: authUserId,
+      targetUserId: authUserId,
+      statusCode: 400,
+      metadata: { reason: 'missing_text_and_media' },
+    });
     return res.status(400).json({ error: 'Post requires text or media' });
   }
 
@@ -204,8 +256,30 @@ router.post('/posts', validateJsonBody(socialCreatePostSchema), async (req: Requ
       visibility,
       media,
     });
+    recordAuditEvent(req, {
+      domain: 'social',
+      action: 'post_create',
+      outcome: 'success',
+      actorUserId: authUserId,
+      targetUserId: authUserId,
+      statusCode: 200,
+      metadata: {
+        visibility,
+        hasText: Boolean(text),
+        mediaCount: media.length,
+      },
+    });
     return res.json({ success: true, post });
   } catch (error) {
+    recordAuditEvent(req, {
+      domain: 'social',
+      action: 'post_create',
+      outcome: 'error',
+      actorUserId: authUserId,
+      targetUserId: authUserId,
+      statusCode: 500,
+      metadata: { reason: 'store_error' },
+    });
     return res.status(500).json({
       error: error instanceof Error ? error.message : 'Failed to create post',
     });
@@ -219,22 +293,58 @@ router.post('/posts', validateJsonBody(socialCreatePostSchema), async (req: Requ
 router.post('/posts/:postId/like', async (req: Request, res: Response): Promise<any> => {
   const authUserId = getAuthenticatedUserId(req);
   if (!authUserId) {
+    recordAuditEvent(req, {
+      domain: 'social',
+      action: 'post_like_toggle',
+      outcome: 'deny',
+      statusCode: 401,
+      metadata: { reason: 'missing_authentication' },
+    });
     return res.status(401).json({ error: 'Authentication required' });
   }
 
   const postId = String(req.params.postId || '').trim();
   if (!postId) {
+    recordAuditEvent(req, {
+      domain: 'social',
+      action: 'post_like_toggle',
+      outcome: 'deny',
+      actorUserId: authUserId,
+      statusCode: 400,
+      metadata: { reason: 'missing_post_id' },
+    });
     return res.status(400).json({ error: 'postId is required' });
   }
 
   try {
     const likeState = await socialStore.toggleLike(postId, authUserId);
+    recordAuditEvent(req, {
+      domain: 'social',
+      action: 'post_like_toggle',
+      outcome: 'success',
+      actorUserId: authUserId,
+      targetUserId: postId,
+      statusCode: 200,
+      metadata: {
+        liked: likeState.liked,
+        likeCount: likeState.likeCount,
+      },
+    });
     return res.json({
       success: true,
       postId,
       ...likeState,
     });
   } catch (error) {
+    recordAuditEvent(req, {
+      domain: 'social',
+      action: 'post_like_toggle',
+      outcome: 'deny',
+      actorUserId: authUserId,
+      targetUserId: postId,
+      statusCode: 404,
+      metadata: { reason: 'post_not_found' },
+    });
     return res.status(404).json({
       error: error instanceof Error ? error.message : 'Failed to update like state',
     });
@@ -248,14 +358,38 @@ router.post('/posts/:postId/like', async (req: Request, res: Response): Promise<
 router.post('/users/:targetUserId/follow', validateJsonBody(socialFollowRequestSchema), async (req: Request, res: Response): Promise<any> => {
   const authUserId = getAuthenticatedUserId(req);
   if (!authUserId) {
+    recordAuditEvent(req, {
+      domain: 'social',
+      action: 'follow_toggle',
+      outcome: 'deny',
+      statusCode: 401,
+      metadata: { reason: 'missing_authentication' },
+    });
     return res.status(401).json({ error: 'Authentication required' });
   }
 
   const targetUserId = String(req.params.targetUserId || '').trim();
   if (!targetUserId) {
+    recordAuditEvent(req, {
+      domain: 'social',
+      action: 'follow_toggle',
+      outcome: 'deny',
+      actorUserId: authUserId,
+      statusCode: 400,
+      metadata: { reason: 'missing_target_user_id' },
+    });
     return res.status(400).json({ error: 'targetUserId is required' });
   }
   if (targetUserId === authUserId) {
+    recordAuditEvent(req, {
+      domain: 'social',
+      action: 'follow_toggle',
+      outcome: 'deny',
+      actorUserId: authUserId,
+      targetUserId,
+      statusCode: 400,
+      metadata: { reason: 'cannot_follow_self' },
+    });
     return res.status(400).json({ error: 'Users cannot follow themselves' });
   }
 
@@ -264,9 +398,27 @@ router.post('/users/:targetUserId/follow', validateJsonBody(socialFollowRequestS
     localStore.getUserById(targetUserId),
   ]);
   if (!viewerUser) {
+    recordAuditEvent(req, {
+      domain: 'social',
+      action: 'follow_toggle',
+      outcome: 'deny',
+      actorUserId: authUserId,
+      targetUserId,
+      statusCode: 401,
+      metadata: { reason: 'viewer_session_invalid' },
+    });
     return res.status(401).json({ error: 'Viewer session is invalid' });
   }
   if (!targetUser) {
+    recordAuditEvent(req, {
+      domain: 'social',
+      action: 'follow_toggle',
+      outcome: 'deny',
+      actorUserId: authUserId,
+      targetUserId,
+      statusCode: 404,
+      metadata: { reason: 'target_user_not_found' },
+    });
     return res.status(404).json({ error: 'Target user not found' });
   }
 
@@ -279,6 +431,15 @@ router.post('/users/:targetUserId/follow', validateJsonBody(socialFollowRequestS
     targetPrivacy
   );
   if (blockState.blockedEitherWay) {
+    recordAuditEvent(req, {
+      domain: 'social',
+      action: 'follow_toggle',
+      outcome: 'deny',
+      actorUserId: authUserId,
+      targetUserId,
+      statusCode: 403,
+      metadata: { reason: 'blocked_relationship' },
+    });
     return res.status(403).json({ error: 'Follow relationship not allowed' });
   }
 
@@ -288,6 +449,16 @@ router.post('/users/:targetUserId/follow', validateJsonBody(socialFollowRequestS
       ? requestedFollow
       : !(await socialStore.isFollowing(authUserId, targetUserId));
   const result = await socialStore.setFollow(authUserId, targetUserId, follow);
+
+  recordAuditEvent(req, {
+    domain: 'social',
+    action: 'follow_toggle',
+    outcome: 'success',
+    actorUserId: authUserId,
+    targetUserId,
+    statusCode: 200,
+    metadata: { following: result.following },
+  });
 
   return res.json({
     success: true,

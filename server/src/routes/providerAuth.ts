@@ -1,5 +1,6 @@
 import { Request, Response, Router } from 'express';
 import { createProviderSessionToken } from '../auth/providerToken';
+import { recordAuditEvent } from '../services/auditTelemetry';
 import {
   buildDidFromPublicKey,
   isDidBoundToPublicKey,
@@ -34,11 +35,25 @@ router.post('/challenge', async (req: Request, res: Response): Promise<void> => 
   try {
     const did = String(req.body?.did || '').trim();
     if (!did) {
+      recordAuditEvent(req, {
+        domain: 'auth',
+        action: 'provider_challenge_create',
+        outcome: 'deny',
+        statusCode: 400,
+        metadata: { reason: 'missing_did' },
+      });
       res.status(400).json({ error: 'Missing did' });
       return;
     }
 
     if (!isDidFormatSupported(did)) {
+      recordAuditEvent(req, {
+        domain: 'auth',
+        action: 'provider_challenge_create',
+        outcome: 'deny',
+        statusCode: 400,
+        metadata: { reason: 'unsupported_did_format' },
+      });
       res.status(400).json({
         error: 'Unsupported DID format. Expected did:hcn:ed25519:<fingerprint>.',
       });
@@ -46,6 +61,13 @@ router.post('/challenge', async (req: Request, res: Response): Promise<void> => 
     }
 
     const challenge = await createProviderChallenge(did);
+    recordAuditEvent(req, {
+      domain: 'auth',
+      action: 'provider_challenge_create',
+      outcome: 'success',
+      targetUserId: did,
+      statusCode: 200,
+    });
     res.json({
       success: true,
       did: challenge.did,
@@ -56,6 +78,13 @@ router.post('/challenge', async (req: Request, res: Response): Promise<void> => 
     });
   } catch (error) {
     console.error('[ProviderAuth] challenge generation failed', error);
+    recordAuditEvent(req, {
+      domain: 'auth',
+      action: 'provider_challenge_create',
+      outcome: 'error',
+      statusCode: 500,
+      metadata: { reason: 'unexpected_error' },
+    });
     res.status(500).json({ error: 'Failed to create provider challenge' });
   }
 });
@@ -72,6 +101,14 @@ router.post('/verify', async (req: Request, res: Response): Promise<void> => {
     const signature = String(req.body?.signature || '').trim();
 
     if (!challengeId || !did || !publicKeyPem || !signature) {
+      recordAuditEvent(req, {
+        domain: 'auth',
+        action: 'provider_verify',
+        outcome: 'deny',
+        targetUserId: did || null,
+        statusCode: 400,
+        metadata: { reason: 'missing_required_fields' },
+      });
       res.status(400).json({
         error: 'Missing required fields: challengeId, did, publicKeyPem, signature',
       });
@@ -80,26 +117,66 @@ router.post('/verify', async (req: Request, res: Response): Promise<void> => {
 
     const challenge = await getProviderChallengeById(challengeId);
     if (!challenge) {
+      recordAuditEvent(req, {
+        domain: 'auth',
+        action: 'provider_verify',
+        outcome: 'deny',
+        targetUserId: did,
+        statusCode: 404,
+        metadata: { reason: 'challenge_not_found' },
+      });
       res.status(404).json({ error: 'Challenge not found' });
       return;
     }
 
     if (challenge.did !== did) {
+      recordAuditEvent(req, {
+        domain: 'auth',
+        action: 'provider_verify',
+        outcome: 'deny',
+        targetUserId: did,
+        statusCode: 403,
+        metadata: { reason: 'challenge_did_mismatch' },
+      });
       res.status(403).json({ error: 'Challenge DID mismatch' });
       return;
     }
 
     if (challenge.usedAt) {
+      recordAuditEvent(req, {
+        domain: 'auth',
+        action: 'provider_verify',
+        outcome: 'deny',
+        targetUserId: did,
+        statusCode: 409,
+        metadata: { reason: 'challenge_already_used' },
+      });
       res.status(409).json({ error: 'Challenge already used' });
       return;
     }
 
     if (challenge.expiresAt.getTime() <= Date.now()) {
+      recordAuditEvent(req, {
+        domain: 'auth',
+        action: 'provider_verify',
+        outcome: 'deny',
+        targetUserId: did,
+        statusCode: 410,
+        metadata: { reason: 'challenge_expired' },
+      });
       res.status(410).json({ error: 'Challenge expired' });
       return;
     }
 
     if (!isDidBoundToPublicKey(did, publicKeyPem)) {
+      recordAuditEvent(req, {
+        domain: 'auth',
+        action: 'provider_verify',
+        outcome: 'deny',
+        targetUserId: did,
+        statusCode: 403,
+        metadata: { reason: 'did_public_key_mismatch' },
+      });
       res.status(403).json({
         error: 'DID does not match supplied publicKeyPem fingerprint',
       });
@@ -108,6 +185,14 @@ router.post('/verify', async (req: Request, res: Response): Promise<void> => {
 
     const signatureValid = verifyDidChallengeSignature(challenge.statement, signature, publicKeyPem);
     if (!signatureValid) {
+      recordAuditEvent(req, {
+        domain: 'auth',
+        action: 'provider_verify',
+        outcome: 'deny',
+        targetUserId: did,
+        statusCode: 401,
+        metadata: { reason: 'invalid_signature' },
+      });
       res.status(401).json({ error: 'Invalid challenge signature' });
       return;
     }
@@ -117,6 +202,17 @@ router.post('/verify', async (req: Request, res: Response): Promise<void> => {
     const scopes = sanitizeScopes(req.body?.scopes);
     const session = await createProviderSession(did, scopes);
     const token = createProviderSessionToken(session.id, session.did, session.scopes);
+    recordAuditEvent(req, {
+      domain: 'auth',
+      action: 'provider_verify',
+      outcome: 'success',
+      targetUserId: did,
+      statusCode: 200,
+      metadata: {
+        sessionId: session.id,
+        scopesCount: session.scopes.length,
+      },
+    });
 
     res.json({
       success: true,
@@ -132,6 +228,13 @@ router.post('/verify', async (req: Request, res: Response): Promise<void> => {
     });
   } catch (error) {
     console.error('[ProviderAuth] verification failed', error);
+    recordAuditEvent(req, {
+      domain: 'auth',
+      action: 'provider_verify',
+      outcome: 'error',
+      statusCode: 500,
+      metadata: { reason: 'unexpected_error' },
+    });
     res.status(500).json({ error: 'Provider verification failed' });
   }
 });
@@ -158,4 +261,3 @@ router.post('/derive-did', (req: Request, res: Response): void => {
 });
 
 export default router;
-

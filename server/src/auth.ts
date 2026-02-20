@@ -3,6 +3,7 @@ import { resolveAuthTokenSecret } from './requiredEnv';
 
 export interface SessionTokenPayload {
   userId: string;
+  sessionId?: string;
   issuedAt: number;
   expiresAt: number;
 }
@@ -13,6 +14,16 @@ const PASSWORD_SALT_BYTES = 16;
 const PASSWORD_KEY_LEN = 64;
 
 const getTokenSecret = (): string => resolveAuthTokenSecret();
+
+export const resolveSessionTtlSeconds = (): number => {
+  const ttlSecondsRaw = Number(process.env.SESSION_TTL_SECONDS);
+  return Number.isFinite(ttlSecondsRaw) && ttlSecondsRaw > 0
+    ? ttlSecondsRaw
+    : DEFAULT_SESSION_TTL_SECONDS;
+};
+
+export const resolveSessionExpiry = (issuedAtMs = Date.now()): number =>
+  issuedAtMs + resolveSessionTtlSeconds() * 1000;
 
 const toBase64Url = (value: string): string =>
   Buffer.from(value, 'utf8')
@@ -85,17 +96,24 @@ export const computePasswordFingerprint = (password: string): string => {
   return crypto.createHmac('sha256', fingerprintKey).update(password).digest('hex');
 };
 
-export const createSessionToken = (userId: string): { token: string; expiresAt: number } => {
+export const createSessionToken = (
+  userId: string,
+  options?: {
+    sessionId?: string | null;
+    expiresAt?: number | null;
+  }
+): { token: string; expiresAt: number } => {
   const now = Date.now();
-  const ttlSecondsRaw = Number(process.env.SESSION_TTL_SECONDS);
-  const ttlSeconds =
-    Number.isFinite(ttlSecondsRaw) && ttlSecondsRaw > 0
-      ? ttlSecondsRaw
-      : DEFAULT_SESSION_TTL_SECONDS;
-  const expiresAt = now + ttlSeconds * 1000;
+  const providedExpiresAt = Number(options?.expiresAt);
+  const expiresAt =
+    Number.isFinite(providedExpiresAt) && providedExpiresAt > now
+      ? providedExpiresAt
+      : resolveSessionExpiry(now);
+  const sessionId = String(options?.sessionId || '').trim() || undefined;
 
   const payload: SessionTokenPayload = {
     userId,
+    ...(sessionId ? { sessionId } : {}),
     issuedAt: now,
     expiresAt,
   };
@@ -128,6 +146,9 @@ export const verifySessionToken = (token: string): SessionTokenPayload | null =>
   try {
     const parsed = JSON.parse(fromBase64Url(payloadSegment)) as SessionTokenPayload;
     if (!parsed?.userId || !parsed?.expiresAt) return null;
+    if (parsed.sessionId !== undefined && String(parsed.sessionId || '').trim().length === 0) {
+      return null;
+    }
     if (parsed.expiresAt <= Date.now()) return null;
     return parsed;
   } catch {

@@ -12,6 +12,10 @@ import {
   type TwoFactorMethod,
   type UserProfileMedia,
 } from './localStore';
+import {
+  protectSensitiveField,
+  revealSensitiveField,
+} from './sensitiveDataPolicy';
 
 type StoreApi = typeof fileStore;
 type CreateUserInput = Parameters<StoreApi['createUser']>[0];
@@ -107,6 +111,18 @@ const normalizeProfileMedia = (
   };
 };
 
+const revealSensitiveFieldSafe = (
+  field: 'phoneNumber' | 'walletDid',
+  value: string | null | undefined
+): string | null => {
+  try {
+    return revealSensitiveField(field, value);
+  } catch (error) {
+    console.error(`[SECURITY][WARN] Failed to reveal ${field} from shared store`, error);
+    return null;
+  }
+};
+
 const readJsonObject = (value: Prisma.JsonValue | null): Record<string, unknown> => {
   return value && typeof value === 'object' && !Array.isArray(value)
     ? (value as Record<string, unknown>)
@@ -146,9 +162,9 @@ const toLocalUser = (row: any): LocalUserRecord => ({
   subscriptionStartDate: row.subscriptionStartDate || null,
   subscriptionEndDate: row.subscriptionEndDate || null,
   profileBackgroundVideo: toNullableString(row.profileBackgroundVideo),
-  phoneNumber: toNullableString(row.phoneNumber),
+  phoneNumber: revealSensitiveFieldSafe('phoneNumber', toNullableString(row.phoneNumber)),
   twoFactorMethod: (row.twoFactorMethod || 'none') as TwoFactorMethod,
-  walletDid: toNullableString(row.walletDid),
+  walletDid: revealSensitiveFieldSafe('walletDid', toNullableString(row.walletDid)),
   pendingPhoneOtpHash: toNullableString(row.pendingPhoneOtpHash),
   pendingPhoneOtpExpiresAt: row.pendingPhoneOtpExpiresAt || null,
   pendingPhoneOtpAttempts: Number(row.pendingPhoneOtpAttempts || 0),
@@ -345,9 +361,9 @@ export const localStore = {
           subscriptionStartDate: null,
           subscriptionEndDate: null,
           profileBackgroundVideo: null,
-          phoneNumber: toNullableString(input.phoneNumber),
+          phoneNumber: protectSensitiveField('phoneNumber', toNullableString(input.phoneNumber)),
           twoFactorMethod: input.twoFactorMethod || 'none',
-          walletDid: toNullableString(input.walletDid),
+          walletDid: protectSensitiveField('walletDid', toNullableString(input.walletDid)),
           pendingPhoneOtpHash: null,
           pendingPhoneOtpExpiresAt: null,
           pendingPhoneOtpAttempts: 0,
@@ -430,9 +446,13 @@ export const localStore = {
       if (updates.profileBackgroundVideo !== undefined) {
         data.profileBackgroundVideo = updates.profileBackgroundVideo;
       }
-      if (updates.phoneNumber !== undefined) data.phoneNumber = updates.phoneNumber;
+      if (updates.phoneNumber !== undefined) {
+        data.phoneNumber = protectSensitiveField('phoneNumber', updates.phoneNumber);
+      }
       if (updates.twoFactorMethod !== undefined) data.twoFactorMethod = updates.twoFactorMethod;
-      if (updates.walletDid !== undefined) data.walletDid = updates.walletDid;
+      if (updates.walletDid !== undefined) {
+        data.walletDid = protectSensitiveField('walletDid', updates.walletDid);
+      }
       if (updates.pendingPhoneOtpHash !== undefined) {
         data.pendingPhoneOtpHash = updates.pendingPhoneOtpHash;
       }

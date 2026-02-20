@@ -10,13 +10,17 @@ import {
 import { verifyProviderSessionToken } from '../auth/providerToken';
 import {
   enforceAuthenticatedUserMatch,
+  getAuthenticatedSessionId,
   getAuthenticatedUserId,
   logIdentityValidationFailure,
   requireCanonicalIdentity,
 } from '../middleware';
+import { recordAuditEvent } from '../services/auditTelemetry';
 import { localStore, TwoFactorMethod } from '../services/persistenceStore';
 import { mirrorUserToGoogleSheets } from '../services/googleSheetsMirror';
 import { getProviderSessionById } from '../services/providerSessionStore';
+import { maskPhoneNumber, maskWalletDid } from '../services/sensitiveDataPolicy';
+import { createUserSession, revokeUserSession } from '../services/userSessionStore';
 import {
   normalizeDateOfBirth,
   normalizeOptionalString,
@@ -150,12 +154,6 @@ const normalizePhoneNumber = (value: unknown): string | null => {
   return normalized;
 };
 
-const maskPhoneNumber = (phone: string): string => {
-  const digits = phone.replace(/\D/g, '');
-  if (digits.length < 4) return '***';
-  return `***-***-${digits.slice(-4)}`;
-};
-
 const absolutizeProfileMedia = (
   req: Request,
   profileMedia: unknown,
@@ -235,6 +233,8 @@ const toPublicUser = (req: Request, user: any) => ({
   profileBackgroundVideo: absolutizeUrl(req, user.profileBackgroundVideo),
   twoFactorEnabled: user.twoFactorMethod && user.twoFactorMethod !== 'none',
   twoFactorMethod: user.twoFactorMethod || 'none',
+  phoneNumberMasked: maskPhoneNumber(user.phoneNumber),
+  walletDid: maskWalletDid(user.walletDid),
 });
 
 /**
@@ -249,17 +249,41 @@ publicRouter.post('/signin', validateJsonBody(userSignInSchema), async (req: Req
     const password = String(req.body?.password || '');
     const twoFactorCode = String(req.body?.twoFactorCode || '').trim();
     const providerToken = String(req.body?.providerToken || '').trim();
+    const auditSignIn = (
+      outcome: 'success' | 'deny' | 'error',
+      statusCode: number,
+      reason: string,
+      actorUserId?: string | null,
+      metadata?: Record<string, unknown>
+    ): void => {
+      recordAuditEvent(req, {
+        domain: 'auth',
+        action: 'signin',
+        outcome,
+        actorUserId: actorUserId || null,
+        statusCode,
+        metadata: {
+          reason,
+          ...metadata,
+        },
+      });
+    };
 
     if (!email || !password) {
+      auditSignIn('deny', 400, 'missing_required_fields');
       return res.status(400).json({ error: 'Missing required fields: email or password' });
     }
 
     let user = await localStore.getUserByEmail(email);
     if (!user) {
+      auditSignIn('deny', 401, 'invalid_credentials_user_not_found');
       return res.status(401).json({ error: 'Invalid credentials' });
     }
 
     if (user.lockoutUntil && user.lockoutUntil.getTime() > Date.now()) {
+      auditSignIn('deny', 423, 'account_lockout_active', user.id, {
+        lockoutUntil: user.lockoutUntil.toISOString(),
+      });
       return res.status(423).json({
         error: 'Account temporarily locked due to repeated failed sign-in attempts',
         lockoutUntil: user.lockoutUntil,
@@ -281,12 +305,14 @@ publicRouter.post('/signin', validateJsonBody(userSignInSchema), async (req: Req
         })) || user;
 
       if (shouldLock) {
+        auditSignIn('deny', 423, 'password_mismatch_lockout', user.id);
         return res.status(423).json({
           error: 'Account temporarily locked due to repeated failed sign-in attempts',
           lockoutUntil,
         });
       }
 
+      auditSignIn('deny', 401, 'invalid_credentials_password_mismatch', user.id);
       return res.status(401).json({ error: 'Invalid credentials' });
     }
 
@@ -302,6 +328,7 @@ publicRouter.post('/signin', validateJsonBody(userSignInSchema), async (req: Req
 
     if (user.twoFactorMethod === 'phone') {
       if (!user.phoneNumber) {
+        auditSignIn('deny', 403, 'phone_2fa_missing_phone', user.id);
         return res.status(403).json({
           error: 'Phone 2FA is enabled but no phone number is configured for this profile',
         });
@@ -318,9 +345,10 @@ publicRouter.post('/signin', validateJsonBody(userSignInSchema), async (req: Req
           pendingPhoneOtpAttempts: 0,
         });
 
-        console.log(
-          `[2FA][PHONE][DEV] OTP for ${maskPhoneNumber(user.phoneNumber)} (${user.email}): ${code}`
-        );
+        console.log(`[2FA][PHONE][DEV] Sign-in OTP issued for ${maskPhoneNumber(user.phoneNumber)}`);
+        auditSignIn('deny', 202, 'two_factor_required_phone', user.id, {
+          twoFactorMethod: 'phone',
+        });
 
         return res.status(202).json({
           success: false,
@@ -334,6 +362,7 @@ publicRouter.post('/signin', validateJsonBody(userSignInSchema), async (req: Req
       const otpExpired =
         !user.pendingPhoneOtpExpiresAt || user.pendingPhoneOtpExpiresAt.getTime() <= Date.now();
       if (!user.pendingPhoneOtpHash || otpExpired) {
+        auditSignIn('deny', 401, 'phone_otp_expired_or_missing', user.id);
         return res.status(401).json({
           error: 'Phone verification code expired. Retry sign-in to request a new code',
         });
@@ -350,11 +379,13 @@ publicRouter.post('/signin', validateJsonBody(userSignInSchema), async (req: Req
         });
 
         if (exhausted) {
+          auditSignIn('deny', 429, 'phone_otp_attempts_exhausted', user.id);
           return res.status(429).json({
             error: 'Too many invalid 2FA attempts. Restart sign-in to request a new code',
           });
         }
 
+        auditSignIn('deny', 401, 'phone_otp_invalid', user.id);
         return res.status(401).json({ error: 'Invalid verification code' });
       }
 
@@ -368,6 +399,9 @@ publicRouter.post('/signin', validateJsonBody(userSignInSchema), async (req: Req
 
     if (user.twoFactorMethod === 'wallet') {
       if (!providerToken) {
+        auditSignIn('deny', 202, 'two_factor_required_wallet', user.id, {
+          twoFactorMethod: 'wallet',
+        });
         return res.status(202).json({
           success: false,
           requiresTwoFactor: true,
@@ -378,23 +412,28 @@ publicRouter.post('/signin', validateJsonBody(userSignInSchema), async (req: Req
 
       const providerPayload = verifyProviderSessionToken(providerToken);
       if (!providerPayload) {
+        auditSignIn('deny', 401, 'wallet_provider_token_invalid', user.id);
         return res.status(401).json({ error: 'Invalid or expired wallet provider token' });
       }
 
       const providerSession = await getProviderSessionById(providerPayload.sessionId);
       if (!providerSession || providerSession.revokedAt) {
+        auditSignIn('deny', 401, 'wallet_provider_session_invalid_or_revoked', user.id);
         return res.status(401).json({ error: 'Wallet provider session is invalid or revoked' });
       }
 
       if (providerSession.expiresAt.getTime() <= Date.now()) {
+        auditSignIn('deny', 401, 'wallet_provider_session_expired', user.id);
         return res.status(401).json({ error: 'Wallet provider session expired' });
       }
 
       if (providerSession.did !== providerPayload.did) {
+        auditSignIn('deny', 401, 'wallet_provider_identity_mismatch', user.id);
         return res.status(401).json({ error: 'Wallet provider identity mismatch' });
       }
 
       if (user.walletDid && providerSession.did !== user.walletDid) {
+        auditSignIn('deny', 403, 'wallet_did_mismatch', user.id);
         return res.status(403).json({ error: 'Wallet DID does not match enrolled profile wallet' });
       }
     }
@@ -405,7 +444,14 @@ publicRouter.post('/signin', validateJsonBody(userSignInSchema), async (req: Req
         lockoutUntil: null,
       })) || user;
 
-    const session = createSessionToken(user.id);
+    const persistedSession = await createUserSession(user.id);
+    const session = createSessionToken(user.id, {
+      sessionId: persistedSession.id,
+      expiresAt: persistedSession.expiresAt.getTime(),
+    });
+    auditSignIn('success', 200, 'signin_completed', user.id, {
+      twoFactorMethod: user.twoFactorMethod || 'none',
+    });
     return res.json({
       success: true,
       token: session.token,
@@ -415,11 +461,25 @@ publicRouter.post('/signin', validateJsonBody(userSignInSchema), async (req: Req
   } catch (error) {
     const errorCode = (error as Error & { code?: string })?.code;
     if (errorCode === 'STORE_UNAVAILABLE') {
+      recordAuditEvent(req, {
+        domain: 'auth',
+        action: 'signin',
+        outcome: 'error',
+        statusCode: 503,
+        metadata: { reason: 'store_unavailable' },
+      });
       return res.status(503).json({
         error: 'Profile storage is temporarily unavailable. Retry shortly or contact support.',
       });
     }
     console.error('Error signing in user:', error);
+    recordAuditEvent(req, {
+      domain: 'auth',
+      action: 'signin',
+      outcome: 'error',
+      statusCode: 500,
+      metadata: { reason: 'unexpected_error' },
+    });
     return res.status(500).json({ error: 'Failed to sign in user' });
   }
 });
@@ -445,31 +505,57 @@ publicRouter.post('/create', validateJsonBody(userCreateSchema), async (req: Req
       normalizeOptionalString(req.body?.avatarUrl),
       normalizeOptionalString(req.body?.bannerUrl)
     );
+    const auditCreate = (
+      outcome: 'success' | 'deny' | 'error',
+      statusCode: number,
+      reason: string,
+      actorUserId?: string | null,
+      metadata?: Record<string, unknown>
+    ): void => {
+      recordAuditEvent(req, {
+        domain: 'auth',
+        action: 'create',
+        outcome,
+        actorUserId: actorUserId || null,
+        statusCode,
+        metadata: {
+          reason,
+          requestedTwoFactor,
+          ...metadata,
+        },
+      });
+    };
 
     if (!email || !password) {
+      auditCreate('deny', 400, 'missing_required_fields');
       return res.status(400).json({ error: 'Missing required fields: email or password' });
     }
 
     const passwordPolicyError = validatePasswordPolicy(email, password);
     if (passwordPolicyError) {
+      auditCreate('deny', 400, 'password_policy_rejected');
       return res.status(400).json({ error: passwordPolicyError });
     }
 
     if (requestedTwoFactor === 'phone' && !requestedPhone) {
+      auditCreate('deny', 400, 'phone_2fa_missing_phone');
       return res.status(400).json({ error: 'Phone number is required for phone-based 2FA' });
     }
 
     if (requestedTwoFactor === 'wallet' && !requestedWalletDid) {
+      auditCreate('deny', 400, 'wallet_2fa_missing_wallet_did');
       return res.status(400).json({ error: 'walletDid is required for wallet-based 2FA' });
     }
 
     if (requestedDateOfBirth === 'invalid') {
+      auditCreate('deny', 400, 'invalid_date_of_birth');
       return res.status(400).json({ error: 'dateOfBirth must be a valid date string' });
     }
 
     const passwordFingerprint = computePasswordFingerprint(password);
     const reusedPasswordUser = await localStore.findUserByPasswordFingerprint(passwordFingerprint);
     if (reusedPasswordUser) {
+      auditCreate('deny', 400, 'password_fingerprint_reused');
       return res.status(400).json({
         error: 'Choose a unique password that is not already used by another profile',
       });
@@ -497,6 +583,7 @@ publicRouter.post('/create', validateJsonBody(userCreateSchema), async (req: Req
     // Persistence verification before granting hub access.
     const persisted = await localStore.getUserById(user.id);
     if (!persisted) {
+      auditCreate('error', 500, 'persistence_verification_failed', user.id);
       return res
         .status(500)
         .json({ error: 'User persistence verification failed after database write' });
@@ -510,7 +597,12 @@ publicRouter.post('/create', validateJsonBody(userCreateSchema), async (req: Req
       createdAt: persisted.createdAt.toISOString(),
     });
 
-    const session = createSessionToken(persisted.id);
+    const persistedSession = await createUserSession(persisted.id);
+    const session = createSessionToken(persisted.id, {
+      sessionId: persistedSession.id,
+      expiresAt: persistedSession.expiresAt.getTime(),
+    });
+    auditCreate('success', 200, 'create_completed', persisted.id);
 
     return res.json({
       success: true,
@@ -532,14 +624,35 @@ publicRouter.post('/create', validateJsonBody(userCreateSchema), async (req: Req
   } catch (error) {
     const duplicateCode = (error as Error & { code?: string })?.code;
     if (duplicateCode === 'DUPLICATE_USER') {
+      recordAuditEvent(req, {
+        domain: 'auth',
+        action: 'create',
+        outcome: 'deny',
+        statusCode: 409,
+        metadata: { reason: 'duplicate_user' },
+      });
       return res.status(409).json({ error: 'A profile with this email already exists' });
     }
     if (duplicateCode === 'STORE_UNAVAILABLE') {
+      recordAuditEvent(req, {
+        domain: 'auth',
+        action: 'create',
+        outcome: 'error',
+        statusCode: 503,
+        metadata: { reason: 'store_unavailable' },
+      });
       return res.status(503).json({
         error: 'Profile storage is temporarily unavailable. Retry shortly or contact support.',
       });
     }
     console.error('Error creating user profile:', error);
+    recordAuditEvent(req, {
+      domain: 'auth',
+      action: 'create',
+      outcome: 'error',
+      statusCode: 500,
+      metadata: { reason: 'unexpected_error' },
+    });
     return res.status(500).json({ error: 'Failed to create user profile' });
   }
 });
@@ -591,6 +704,59 @@ protectedRouter.get('/current', async (req: Request, res: Response): Promise<any
   } catch (error) {
     console.error('Error fetching current user:', error);
     return res.status(500).json({ error: 'Failed to fetch current user' });
+  }
+});
+
+/**
+ * POST /api/user/logout
+ * Revoke the active authenticated user session.
+ */
+protectedRouter.post('/logout', async (req: Request, res: Response): Promise<any> => {
+  const authUserId = getAuthenticatedUserId(req);
+  if (!authUserId) {
+    recordAuditEvent(req, {
+      domain: 'auth',
+      action: 'logout',
+      outcome: 'deny',
+      statusCode: 401,
+      metadata: { reason: 'missing_authentication' },
+    });
+    return res.status(401).json({ error: 'Authentication required' });
+  }
+
+  const authSessionId = getAuthenticatedSessionId(req);
+  try {
+    if (authSessionId) {
+      await revokeUserSession(authSessionId);
+    }
+
+    recordAuditEvent(req, {
+      domain: 'auth',
+      action: 'logout',
+      outcome: 'success',
+      actorUserId: authUserId,
+      targetUserId: authUserId,
+      statusCode: 200,
+      metadata: {
+        sessionRevoked: Boolean(authSessionId),
+      },
+    });
+
+    return res.json({
+      success: true,
+      sessionRevoked: Boolean(authSessionId),
+    });
+  } catch (error) {
+    recordAuditEvent(req, {
+      domain: 'auth',
+      action: 'logout',
+      outcome: 'error',
+      actorUserId: authUserId,
+      targetUserId: authUserId,
+      statusCode: 500,
+      metadata: { reason: 'unexpected_error' },
+    });
+    return res.status(500).json({ error: 'Failed to revoke session' });
   }
 });
 
@@ -673,6 +839,13 @@ protectedRouter.get('/privacy', async (req: Request, res: Response): Promise<any
 protectedRouter.put('/privacy', validateJsonBody(userPrivacyUpdateSchema), async (req: Request, res: Response): Promise<any> => {
   const authUserId = getAuthenticatedUserId(req);
   if (!authUserId) {
+    recordAuditEvent(req, {
+      domain: 'profile',
+      action: 'privacy_update',
+      outcome: 'deny',
+      statusCode: 401,
+      metadata: { reason: 'missing_authentication' },
+    });
     return res.status(401).json({ error: 'Authentication required' });
   }
 
@@ -682,8 +855,30 @@ protectedRouter.put('/privacy', validateJsonBody(userPrivacyUpdateSchema), async
   });
 
   if (!updated) {
+    recordAuditEvent(req, {
+      domain: 'profile',
+      action: 'privacy_update',
+      outcome: 'deny',
+      actorUserId: authUserId,
+      targetUserId: authUserId,
+      statusCode: 404,
+      metadata: { reason: 'user_not_found' },
+    });
     return res.status(404).json({ error: 'User not found' });
   }
+
+  recordAuditEvent(req, {
+    domain: 'profile',
+    action: 'privacy_update',
+    outcome: 'success',
+    actorUserId: authUserId,
+    targetUserId: authUserId,
+    statusCode: 200,
+    metadata: {
+      profileVisibility: nextPrivacySettings.profileVisibility,
+      blockedUsersCount: nextPrivacySettings.blockedUsers.length,
+    },
+  });
 
   return res.json({
     success: true,
@@ -698,14 +893,38 @@ protectedRouter.put('/privacy', validateJsonBody(userPrivacyUpdateSchema), async
 protectedRouter.post('/privacy/block/:blockedUserId', async (req: Request, res: Response): Promise<any> => {
   const authUserId = getAuthenticatedUserId(req);
   if (!authUserId) {
+    recordAuditEvent(req, {
+      domain: 'profile',
+      action: 'privacy_block_add',
+      outcome: 'deny',
+      statusCode: 401,
+      metadata: { reason: 'missing_authentication' },
+    });
     return res.status(401).json({ error: 'Authentication required' });
   }
 
   const blockedUserId = String(req.params.blockedUserId || '').trim();
   if (!blockedUserId) {
+    recordAuditEvent(req, {
+      domain: 'profile',
+      action: 'privacy_block_add',
+      outcome: 'deny',
+      actorUserId: authUserId,
+      statusCode: 400,
+      metadata: { reason: 'missing_blocked_user_id' },
+    });
     return res.status(400).json({ error: 'blockedUserId is required' });
   }
   if (blockedUserId === authUserId) {
+    recordAuditEvent(req, {
+      domain: 'profile',
+      action: 'privacy_block_add',
+      outcome: 'deny',
+      actorUserId: authUserId,
+      targetUserId: blockedUserId,
+      statusCode: 400,
+      metadata: { reason: 'cannot_block_self' },
+    });
     return res.status(400).json({ error: 'Users cannot block themselves' });
   }
 
@@ -714,9 +933,27 @@ protectedRouter.post('/privacy/block/:blockedUserId', async (req: Request, res: 
     localStore.getUserById(blockedUserId),
   ]);
   if (!currentUser) {
+    recordAuditEvent(req, {
+      domain: 'profile',
+      action: 'privacy_block_add',
+      outcome: 'deny',
+      actorUserId: authUserId,
+      targetUserId: blockedUserId,
+      statusCode: 404,
+      metadata: { reason: 'authenticated_user_not_found' },
+    });
     return res.status(404).json({ error: 'Authenticated user not found' });
   }
   if (!targetUser) {
+    recordAuditEvent(req, {
+      domain: 'profile',
+      action: 'privacy_block_add',
+      outcome: 'deny',
+      actorUserId: authUserId,
+      targetUserId: blockedUserId,
+      statusCode: 404,
+      metadata: { reason: 'target_user_not_found' },
+    });
     return res.status(404).json({ error: 'Target user not found' });
   }
 
@@ -730,8 +967,27 @@ protectedRouter.post('/privacy/block/:blockedUserId', async (req: Request, res: 
   });
 
   if (!updated) {
+    recordAuditEvent(req, {
+      domain: 'profile',
+      action: 'privacy_block_add',
+      outcome: 'deny',
+      actorUserId: authUserId,
+      targetUserId: blockedUserId,
+      statusCode: 404,
+      metadata: { reason: 'user_not_found_after_update' },
+    });
     return res.status(404).json({ error: 'User not found' });
   }
+
+  recordAuditEvent(req, {
+    domain: 'profile',
+    action: 'privacy_block_add',
+    outcome: 'success',
+    actorUserId: authUserId,
+    targetUserId: blockedUserId,
+    statusCode: 200,
+    metadata: { blockedUsersCount: blockedUsers.length },
+  });
 
   return res.json({
     success: true,
@@ -746,16 +1002,40 @@ protectedRouter.post('/privacy/block/:blockedUserId', async (req: Request, res: 
 protectedRouter.delete('/privacy/block/:blockedUserId', async (req: Request, res: Response): Promise<any> => {
   const authUserId = getAuthenticatedUserId(req);
   if (!authUserId) {
+    recordAuditEvent(req, {
+      domain: 'profile',
+      action: 'privacy_block_remove',
+      outcome: 'deny',
+      statusCode: 401,
+      metadata: { reason: 'missing_authentication' },
+    });
     return res.status(401).json({ error: 'Authentication required' });
   }
 
   const blockedUserId = String(req.params.blockedUserId || '').trim();
   if (!blockedUserId) {
+    recordAuditEvent(req, {
+      domain: 'profile',
+      action: 'privacy_block_remove',
+      outcome: 'deny',
+      actorUserId: authUserId,
+      statusCode: 400,
+      metadata: { reason: 'missing_blocked_user_id' },
+    });
     return res.status(400).json({ error: 'blockedUserId is required' });
   }
 
   const currentUser = await localStore.getUserById(authUserId);
   if (!currentUser) {
+    recordAuditEvent(req, {
+      domain: 'profile',
+      action: 'privacy_block_remove',
+      outcome: 'deny',
+      actorUserId: authUserId,
+      targetUserId: blockedUserId,
+      statusCode: 404,
+      metadata: { reason: 'authenticated_user_not_found' },
+    });
     return res.status(404).json({ error: 'Authenticated user not found' });
   }
 
@@ -769,8 +1049,27 @@ protectedRouter.delete('/privacy/block/:blockedUserId', async (req: Request, res
   });
 
   if (!updated) {
+    recordAuditEvent(req, {
+      domain: 'profile',
+      action: 'privacy_block_remove',
+      outcome: 'deny',
+      actorUserId: authUserId,
+      targetUserId: blockedUserId,
+      statusCode: 404,
+      metadata: { reason: 'user_not_found_after_update' },
+    });
     return res.status(404).json({ error: 'User not found' });
   }
+
+  recordAuditEvent(req, {
+    domain: 'profile',
+    action: 'privacy_block_remove',
+    outcome: 'success',
+    actorUserId: authUserId,
+    targetUserId: blockedUserId,
+    statusCode: 200,
+    metadata: { blockedUsersCount: blockedUsers.length },
+  });
 
   return res.json({
     success: true,
@@ -797,8 +1096,8 @@ protectedRouter.get('/security', async (req: Request, res: Response): Promise<an
     success: true,
     security: {
       twoFactorMethod: user.twoFactorMethod,
-      phoneNumberMasked: user.phoneNumber ? maskPhoneNumber(user.phoneNumber) : null,
-      walletDid: user.walletDid,
+      phoneNumberMasked: maskPhoneNumber(user.phoneNumber),
+      walletDid: maskWalletDid(user.walletDid),
       lockoutUntil: user.lockoutUntil,
     },
   });
@@ -811,11 +1110,26 @@ protectedRouter.get('/security', async (req: Request, res: Response): Promise<an
 protectedRouter.post('/2fa/phone/enroll', validateJsonBody(userPhoneEnrollSchema), async (req: Request, res: Response): Promise<any> => {
   const authUserId = getAuthenticatedUserId(req);
   if (!authUserId) {
+    recordAuditEvent(req, {
+      domain: 'profile',
+      action: '2fa_enroll_phone',
+      outcome: 'deny',
+      statusCode: 401,
+      metadata: { reason: 'missing_authentication' },
+    });
     return res.status(401).json({ error: 'Authentication required' });
   }
 
   const phoneNumber = normalizePhoneNumber(req.body?.phoneNumber);
   if (!phoneNumber) {
+    recordAuditEvent(req, {
+      domain: 'profile',
+      action: '2fa_enroll_phone',
+      outcome: 'deny',
+      actorUserId: authUserId,
+      statusCode: 400,
+      metadata: { reason: 'invalid_phone_number' },
+    });
     return res.status(400).json({ error: 'Valid phoneNumber is required' });
   }
 
@@ -824,8 +1138,27 @@ protectedRouter.post('/2fa/phone/enroll', validateJsonBody(userPhoneEnrollSchema
     twoFactorMethod: 'phone',
   });
   if (!updated) {
+    recordAuditEvent(req, {
+      domain: 'profile',
+      action: '2fa_enroll_phone',
+      outcome: 'deny',
+      actorUserId: authUserId,
+      targetUserId: authUserId,
+      statusCode: 404,
+      metadata: { reason: 'user_not_found' },
+    });
     return res.status(404).json({ error: 'User not found' });
   }
+
+  recordAuditEvent(req, {
+    domain: 'profile',
+    action: '2fa_enroll_phone',
+    outcome: 'success',
+    actorUserId: authUserId,
+    targetUserId: authUserId,
+    statusCode: 200,
+    metadata: { twoFactorMethod: updated.twoFactorMethod },
+  });
 
   return res.json({
     success: true,
@@ -841,11 +1174,26 @@ protectedRouter.post('/2fa/phone/enroll', validateJsonBody(userPhoneEnrollSchema
 protectedRouter.post('/2fa/wallet/enroll', validateJsonBody(userWalletEnrollSchema), async (req: Request, res: Response): Promise<any> => {
   const authUserId = getAuthenticatedUserId(req);
   if (!authUserId) {
+    recordAuditEvent(req, {
+      domain: 'profile',
+      action: '2fa_enroll_wallet',
+      outcome: 'deny',
+      statusCode: 401,
+      metadata: { reason: 'missing_authentication' },
+    });
     return res.status(401).json({ error: 'Authentication required' });
   }
 
   const walletDid = String(req.body?.walletDid || '').trim();
   if (!walletDid) {
+    recordAuditEvent(req, {
+      domain: 'profile',
+      action: '2fa_enroll_wallet',
+      outcome: 'deny',
+      actorUserId: authUserId,
+      statusCode: 400,
+      metadata: { reason: 'missing_wallet_did' },
+    });
     return res.status(400).json({ error: 'walletDid is required' });
   }
 
@@ -854,13 +1202,32 @@ protectedRouter.post('/2fa/wallet/enroll', validateJsonBody(userWalletEnrollSche
     twoFactorMethod: 'wallet',
   });
   if (!updated) {
+    recordAuditEvent(req, {
+      domain: 'profile',
+      action: '2fa_enroll_wallet',
+      outcome: 'deny',
+      actorUserId: authUserId,
+      targetUserId: authUserId,
+      statusCode: 404,
+      metadata: { reason: 'user_not_found' },
+    });
     return res.status(404).json({ error: 'User not found' });
   }
+
+  recordAuditEvent(req, {
+    domain: 'profile',
+    action: '2fa_enroll_wallet',
+    outcome: 'success',
+    actorUserId: authUserId,
+    targetUserId: authUserId,
+    statusCode: 200,
+    metadata: { twoFactorMethod: updated.twoFactorMethod },
+  });
 
   return res.json({
     success: true,
     twoFactorMethod: updated.twoFactorMethod,
-    walletDid: updated.walletDid,
+    walletDid: maskWalletDid(updated.walletDid),
   });
 });
 
@@ -871,6 +1238,13 @@ protectedRouter.post('/2fa/wallet/enroll', validateJsonBody(userWalletEnrollSche
 protectedRouter.post('/2fa/disable', async (req: Request, res: Response): Promise<any> => {
   const authUserId = getAuthenticatedUserId(req);
   if (!authUserId) {
+    recordAuditEvent(req, {
+      domain: 'profile',
+      action: '2fa_disable',
+      outcome: 'deny',
+      statusCode: 401,
+      metadata: { reason: 'missing_authentication' },
+    });
     return res.status(401).json({ error: 'Authentication required' });
   }
 
@@ -881,8 +1255,27 @@ protectedRouter.post('/2fa/disable', async (req: Request, res: Response): Promis
     pendingPhoneOtpAttempts: 0,
   });
   if (!updated) {
+    recordAuditEvent(req, {
+      domain: 'profile',
+      action: '2fa_disable',
+      outcome: 'deny',
+      actorUserId: authUserId,
+      targetUserId: authUserId,
+      statusCode: 404,
+      metadata: { reason: 'user_not_found' },
+    });
     return res.status(404).json({ error: 'User not found' });
   }
+
+  recordAuditEvent(req, {
+    domain: 'profile',
+    action: '2fa_disable',
+    outcome: 'success',
+    actorUserId: authUserId,
+    targetUserId: authUserId,
+    statusCode: 200,
+    metadata: { twoFactorMethod: updated.twoFactorMethod },
+  });
 
   return res.json({
     success: true,
@@ -899,6 +1292,14 @@ protectedRouter.put('/:id', validateJsonBody(userProfilePatchSchema), async (req
   try {
     const { id } = req.params;
     if (!enforceAuthenticatedUserMatch(req, res, id, 'params.id')) {
+      recordAuditEvent(req, {
+        domain: 'profile',
+        action: 'profile_update',
+        outcome: 'deny',
+        targetUserId: id,
+        statusCode: 403,
+        metadata: { reason: 'canonical_user_mismatch' },
+      });
       return;
     }
 
@@ -906,14 +1307,44 @@ protectedRouter.put('/:id', validateJsonBody(userProfilePatchSchema), async (req
       allowedFields: USER_PROFILE_PATCH_FIELDS,
     });
     if (parsedPatch.error) {
+      recordAuditEvent(req, {
+        domain: 'profile',
+        action: 'profile_update',
+        outcome: 'deny',
+        actorUserId: id,
+        targetUserId: id,
+        statusCode: 400,
+        metadata: { reason: 'invalid_patch_payload' },
+      });
       return res.status(400).json({ error: parsedPatch.error });
     }
 
     const persisted = await localStore.updateUser(id, parsedPatch.updates);
 
     if (!persisted) {
+      recordAuditEvent(req, {
+        domain: 'profile',
+        action: 'profile_update',
+        outcome: 'deny',
+        actorUserId: id,
+        targetUserId: id,
+        statusCode: 404,
+        metadata: { reason: 'user_not_found_after_update' },
+      });
       return res.status(404).json({ error: 'User not found after update' });
     }
+
+    recordAuditEvent(req, {
+      domain: 'profile',
+      action: 'profile_update',
+      outcome: 'success',
+      actorUserId: id,
+      targetUserId: id,
+      statusCode: 200,
+      metadata: {
+        fieldsUpdated: Object.keys(parsedPatch.updates),
+      },
+    });
 
     return res.json({
       success: true,
@@ -921,6 +1352,13 @@ protectedRouter.put('/:id', validateJsonBody(userProfilePatchSchema), async (req
     });
   } catch (error) {
     console.error('Error updating user profile:', error);
+    recordAuditEvent(req, {
+      domain: 'profile',
+      action: 'profile_update',
+      outcome: 'error',
+      statusCode: 500,
+      metadata: { reason: 'unexpected_error' },
+    });
     return res.status(500).json({ error: 'Failed to update user profile' });
   }
 });

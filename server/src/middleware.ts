@@ -1,9 +1,11 @@
 import { Request, Response, NextFunction } from 'express';
 import { verifySessionToken } from './auth';
+import { getUserSessionById } from './services/userSessionStore';
 import { hasTierAccess, TierValue } from './tierPolicy';
 
 export interface AuthenticatedRequest extends Request {
   authUserId?: string;
+  authSessionId?: string;
   authTier?: string;
 }
 
@@ -84,29 +86,78 @@ export function requireCanonicalIdentity(
   req: Request,
   res: Response,
   next: NextFunction
-): void {
-  const authHeader = req.headers.authorization;
-  if (!authHeader || !authHeader.startsWith('Bearer ')) {
-    logIdentityValidationFailure(req, 'missing_or_invalid_authorization_header');
-    res.status(401).json({ error: 'Authentication required' });
-    return;
-  }
+): Promise<void> {
+  return (async (): Promise<void> => {
+    const authHeader = req.headers.authorization;
+    if (!authHeader || !authHeader.startsWith('Bearer ')) {
+      logIdentityValidationFailure(req, 'missing_or_invalid_authorization_header');
+      res.status(401).json({ error: 'Authentication required' });
+      return;
+    }
 
-  const token = authHeader.slice('Bearer '.length).trim();
-  const payload = verifySessionToken(token);
-  if (!payload) {
-    logIdentityValidationFailure(req, 'invalid_or_expired_session_token');
-    res.status(401).json({ error: 'Invalid or expired session' });
-    return;
-  }
+    const token = authHeader.slice('Bearer '.length).trim();
+    const payload = verifySessionToken(token);
+    if (!payload) {
+      logIdentityValidationFailure(req, 'invalid_or_expired_session_token');
+      res.status(401).json({ error: 'Invalid or expired session' });
+      return;
+    }
 
-  (req as AuthenticatedRequest).authUserId = payload.userId;
-  next();
+    const nodeEnv = String(process.env.NODE_ENV || '').trim().toLowerCase();
+    const enforcePersistedUserSessions =
+      nodeEnv !== 'test' &&
+      String(process.env.ENFORCE_PERSISTED_USER_SESSIONS || 'true').trim().toLowerCase() !==
+        'false';
+    if (enforcePersistedUserSessions && !payload.sessionId) {
+      logIdentityValidationFailure(req, 'session_id_missing');
+      res.status(401).json({ error: 'Invalid or expired session' });
+      return;
+    }
+
+    const authReq = req as AuthenticatedRequest;
+    if (payload.sessionId) {
+      const persistedSession = await getUserSessionById(payload.sessionId);
+      if (!persistedSession) {
+        logIdentityValidationFailure(req, 'session_not_found', {
+          userId: payload.userId,
+          sessionId: payload.sessionId,
+        });
+        res.status(401).json({ error: 'Invalid or expired session' });
+        return;
+      }
+
+      if (
+        persistedSession.userId !== payload.userId ||
+        persistedSession.revokedAt ||
+        persistedSession.expiresAt.getTime() <= Date.now()
+      ) {
+        logIdentityValidationFailure(req, 'session_invalid', {
+          userId: payload.userId,
+          sessionId: payload.sessionId,
+        });
+        res.status(401).json({ error: 'Invalid or expired session' });
+        return;
+      }
+
+      authReq.authSessionId = persistedSession.id;
+    }
+
+    authReq.authUserId = payload.userId;
+    next();
+  })().catch((error) => {
+    console.error('[AUTH][ERROR] Failed to validate canonical identity', error);
+    res.status(500).json({ error: 'Failed to validate session' });
+  });
 }
 
 export const getAuthenticatedUserId = (req: Request): string | null => {
   const authReq = req as AuthenticatedRequest;
   return authReq.authUserId || null;
+};
+
+export const getAuthenticatedSessionId = (req: Request): string | null => {
+  const authReq = req as AuthenticatedRequest;
+  return authReq.authSessionId || null;
 };
 
 export const enforceAuthenticatedUserMatch = (

@@ -20,6 +20,8 @@ export const REQUIRED_SECRETS = [
   'DATABASE_URL',
 ] as const;
 
+const hasSensitiveDataKey = (): boolean => hasNonEmptyEnv('SENSITIVE_DATA_KEY');
+
 export const resolveAuthTokenSecret = (): string => {
   const primary = trimEnv('AUTH_TOKEN_SECRET');
   if (primary) return primary;
@@ -37,6 +39,15 @@ export const validateRequiredEnv = (): void => {
   const databaseUrl = trimEnv('DATABASE_URL');
   const persistenceBackend = (trimEnv('AUTH_PERSISTENCE_BACKEND') || '').toLowerCase();
   const nodeEnv = (trimEnv('NODE_ENV') || '').toLowerCase();
+  const allowLocalFilePersistence =
+    (trimEnv('ALLOW_LOCAL_FILE_AUTH_PERSISTENCE') || '').toLowerCase() === 'true';
+  const requireSharedDbPersistence = nodeEnv !== 'test' && !allowLocalFilePersistence;
+  const sharedPersistenceLikely =
+    persistenceBackend === 'shared_db' ||
+    (persistenceBackend !== 'local_file' &&
+      Boolean(databaseUrl && isPostgresUrl(databaseUrl)));
+  const requiresSensitiveFieldEncryption =
+    nodeEnv === 'production' || sharedPersistenceLikely;
 
   if (!hasNonEmptyEnv('AUTH_TOKEN_SECRET') && !hasNonEmptyEnv('SESSION_SECRET')) {
     missing.push('AUTH_TOKEN_SECRET (or SESSION_SECRET)');
@@ -52,15 +63,22 @@ export const validateRequiredEnv = (): void => {
     );
   }
 
-  if (nodeEnv === 'production' && persistenceBackend !== 'shared_db') {
+  if (requiresSensitiveFieldEncryption && !hasSensitiveDataKey()) {
     throw new Error(
-      '[STARTUP][FATAL] Production requires AUTH_PERSISTENCE_BACKEND=shared_db.'
+      '[STARTUP][FATAL] Missing required SENSITIVE_DATA_KEY for production/shared_db sensitive-field encryption.'
     );
   }
 
-  if (nodeEnv === 'production' && databaseUrl && !isPostgresUrl(databaseUrl)) {
+  if (requireSharedDbPersistence && persistenceBackend !== 'shared_db') {
     throw new Error(
-      '[STARTUP][FATAL] Production requires DATABASE_URL to use postgres:// or postgresql://.'
+      '[STARTUP][FATAL] AUTH_PERSISTENCE_BACKEND must be set to shared_db. ' +
+        'Set ALLOW_LOCAL_FILE_AUTH_PERSISTENCE=true only for temporary local non-test development.'
+    );
+  }
+
+  if (requireSharedDbPersistence && databaseUrl && !isPostgresUrl(databaseUrl)) {
+    throw new Error(
+      '[STARTUP][FATAL] Shared DB persistence requires DATABASE_URL to use postgres:// or postgresql://.'
     );
   }
 

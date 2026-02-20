@@ -1,6 +1,10 @@
 import crypto from 'crypto';
 import fs from 'fs';
 import path from 'path';
+import {
+  protectSensitiveField,
+  revealSensitiveField,
+} from './sensitiveDataPolicy';
 
 export type TwoFactorMethod = 'none' | 'phone' | 'wallet';
 
@@ -580,6 +584,18 @@ const normalizeProfileMedia = (
   };
 };
 
+const revealSensitiveFieldSafe = (
+  field: 'phoneNumber' | 'walletDid',
+  value: string | null | undefined
+): string | null => {
+  try {
+    return revealSensitiveField(field, value);
+  } catch (error) {
+    console.error(`[SECURITY][WARN] Failed to reveal ${field} from local store`, error);
+    return null;
+  }
+};
+
 const rowToUser = (row: UserRow): LocalUserRecord => ({
   id: row.id,
   email: row.email,
@@ -603,9 +619,9 @@ const rowToUser = (row: UserRow): LocalUserRecord => ({
   subscriptionStartDate: row.subscriptionStartDate ? toDate(row.subscriptionStartDate) : null,
   subscriptionEndDate: row.subscriptionEndDate ? toDate(row.subscriptionEndDate) : null,
   profileBackgroundVideo: row.profileBackgroundVideo,
-  phoneNumber: row.phoneNumber,
+  phoneNumber: revealSensitiveFieldSafe('phoneNumber', row.phoneNumber),
   twoFactorMethod: row.twoFactorMethod,
-  walletDid: row.walletDid,
+  walletDid: revealSensitiveFieldSafe('walletDid', row.walletDid),
   pendingPhoneOtpHash: row.pendingPhoneOtpHash,
   pendingPhoneOtpExpiresAt: row.pendingPhoneOtpExpiresAt ? toDate(row.pendingPhoneOtpExpiresAt) : null,
   pendingPhoneOtpAttempts: row.pendingPhoneOtpAttempts,
@@ -783,9 +799,9 @@ export const localStore = {
       subscriptionStartDate: null,
       subscriptionEndDate: null,
       profileBackgroundVideo: null,
-      phoneNumber: input.phoneNumber?.trim() || null,
+      phoneNumber: protectSensitiveField('phoneNumber', input.phoneNumber?.trim() || null),
       twoFactorMethod: input.twoFactorMethod || 'none',
-      walletDid: input.walletDid?.trim() || null,
+      walletDid: protectSensitiveField('walletDid', input.walletDid?.trim() || null),
       pendingPhoneOtpHash: null,
       pendingPhoneOtpExpiresAt: null,
       pendingPhoneOtpAttempts: 0,
@@ -858,13 +874,13 @@ export const localStore = {
       row.profileBackgroundVideo = updates.profileBackgroundVideo;
     }
     if (updates.phoneNumber !== undefined) {
-      row.phoneNumber = updates.phoneNumber;
+      row.phoneNumber = protectSensitiveField('phoneNumber', updates.phoneNumber);
     }
     if (updates.twoFactorMethod !== undefined) {
       row.twoFactorMethod = updates.twoFactorMethod;
     }
     if (updates.walletDid !== undefined) {
-      row.walletDid = updates.walletDid;
+      row.walletDid = protectSensitiveField('walletDid', updates.walletDid);
     }
     if (updates.pendingPhoneOtpHash !== undefined) {
       row.pendingPhoneOtpHash = updates.pendingPhoneOtpHash;

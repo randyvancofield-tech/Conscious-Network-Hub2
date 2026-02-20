@@ -525,15 +525,32 @@ const App: React.FC = () => {
   };
 
   const handleSignOut = () => {
-    clearAuthSession();
-    setUser(null);
-    setIsSelectingTier(false);
-    setShowPaymentConfirmation(false);
-    setPendingTwoFactorMethod(null);
-    setTwoFactorCodeInput('');
-    setProviderTokenInput('');
-    setCurrentView(AppView.ENTRY);
-    setSidebarOpen(false);
+    const finalizeSignOut = () => {
+      clearAuthSession();
+      setUser(null);
+      setIsSelectingTier(false);
+      setShowPaymentConfirmation(false);
+      setPendingTwoFactorMethod(null);
+      setTwoFactorCodeInput('');
+      setProviderTokenInput('');
+      setCurrentView(AppView.ENTRY);
+      setSidebarOpen(false);
+    };
+
+    void (async () => {
+      try {
+        if (getAuthToken()) {
+          await fetch(`${resolveBackendUrl()}/api/user/logout`, {
+            method: 'POST',
+            headers: buildAuthHeaders(),
+          });
+        }
+      } catch {
+        // Best-effort session revocation; local cleanup always executes.
+      } finally {
+        finalizeSignOut();
+      }
+    })();
   };
 
   const closeModals = () => {
