@@ -51,6 +51,11 @@ const MAX_FAILED_SIGN_IN_ATTEMPTS = 5;
 const LOCKOUT_WINDOW_MS = 15 * 60 * 1000;
 const PHONE_OTP_TTL_MS = 10 * 60 * 1000;
 const MAX_PHONE_OTP_ATTEMPTS = 5;
+const PROFILE_STORE_UNAVAILABLE_RESPONSE = {
+  error: 'Profile service is currently unavailable. Please retry shortly.',
+  code: 'PROFILE_STORE_UNAVAILABLE',
+  retryable: true,
+} as const;
 
 const COMMON_PASSWORDS = new Set([
   'password',
@@ -468,9 +473,7 @@ publicRouter.post('/signin', validateJsonBody(userSignInSchema), async (req: Req
         statusCode: 503,
         metadata: { reason: 'store_unavailable' },
       });
-      return res.status(503).json({
-        error: 'Profile storage is temporarily unavailable. Retry shortly or contact support.',
-      });
+      return res.status(503).json(PROFILE_STORE_UNAVAILABLE_RESPONSE);
     }
     console.error('Error signing in user:', error);
     recordAuditEvent(req, {
@@ -641,9 +644,7 @@ publicRouter.post('/create', validateJsonBody(userCreateSchema), async (req: Req
         statusCode: 503,
         metadata: { reason: 'store_unavailable' },
       });
-      return res.status(503).json({
-        error: 'Profile storage is temporarily unavailable. Retry shortly or contact support.',
-      });
+      return res.status(503).json(PROFILE_STORE_UNAVAILABLE_RESPONSE);
     }
     console.error('Error creating user profile:', error);
     recordAuditEvent(req, {

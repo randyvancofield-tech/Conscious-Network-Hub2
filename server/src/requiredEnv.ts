@@ -39,13 +39,9 @@ export const validateRequiredEnv = (): void => {
   const databaseUrl = trimEnv('DATABASE_URL');
   const persistenceBackend = (trimEnv('AUTH_PERSISTENCE_BACKEND') || '').toLowerCase();
   const nodeEnv = (trimEnv('NODE_ENV') || '').toLowerCase();
-  const allowLocalFilePersistence =
-    (trimEnv('ALLOW_LOCAL_FILE_AUTH_PERSISTENCE') || '').toLowerCase() === 'true';
-  const requireSharedDbPersistence = nodeEnv !== 'test' && !allowLocalFilePersistence;
+  const requireSharedDbPersistence = nodeEnv !== 'test';
   const sharedPersistenceLikely =
-    persistenceBackend === 'shared_db' ||
-    (persistenceBackend !== 'local_file' &&
-      Boolean(databaseUrl && isPostgresUrl(databaseUrl)));
+    persistenceBackend === 'shared_db' || Boolean(databaseUrl && isPostgresUrl(databaseUrl));
   const requiresSensitiveFieldEncryption =
     nodeEnv === 'production' || sharedPersistenceLikely;
 
@@ -71,8 +67,7 @@ export const validateRequiredEnv = (): void => {
 
   if (requireSharedDbPersistence && persistenceBackend !== 'shared_db') {
     throw new Error(
-      '[STARTUP][FATAL] AUTH_PERSISTENCE_BACKEND must be set to shared_db. ' +
-        'Set ALLOW_LOCAL_FILE_AUTH_PERSISTENCE=true only for temporary local non-test development.'
+      '[STARTUP][FATAL] AUTH_PERSISTENCE_BACKEND must be set to shared_db.'
     );
   }
 

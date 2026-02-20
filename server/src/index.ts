@@ -2,7 +2,6 @@ import express, { Express } from 'express';
 import cors from 'cors';
 import helmet from 'helmet';
 import rateLimit from 'express-rate-limit';
-import path from 'path';
 import dotenv from 'dotenv';
 import {
   requestLogger,
@@ -19,7 +18,7 @@ import {
   userPublicRoutes,
   userProtectedRoutes,
 } from './routes/user';
-import uploadRoutes from './routes/upload';
+import { uploadPublicRoutes, uploadProtectedRoutes } from './routes/upload';
 import reflectionRoutes from './routes/reflection';
 import socialRoutes from './routes/social';
 import providerAuthRoutes from './routes/providerAuth';
@@ -183,11 +182,11 @@ app.use('/api/provider/auth', providerAuthRoutes);
 app.use('/api/user', requireCanonicalIdentity, userProtectedRoutes);
 app.use('/api/membership', requireCanonicalIdentity, membershipProtectedRoutes);
 app.use('/api/ai', requireCanonicalIdentity, aiRoutes);
-app.use('/api/upload', requireCanonicalIdentity, uploadRoutes);
+app.use('/api/upload', requireCanonicalIdentity, uploadProtectedRoutes);
 app.use('/api/reflection', requireCanonicalIdentity, reflectionRoutes);
 app.use('/api/social', requireCanonicalIdentity, socialRoutes);
 app.use('/api/provider/session', providerSessionRoutes);
-app.use('/uploads', express.static('public/uploads'));
+app.use('/uploads', uploadPublicRoutes);
 
 // Catch-all 404 handler
 app.use((req, res) => {

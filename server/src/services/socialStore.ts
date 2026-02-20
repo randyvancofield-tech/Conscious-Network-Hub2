@@ -2,7 +2,6 @@ import crypto from 'crypto';
 import fs from 'fs';
 import path from 'path';
 import { Prisma, PrismaClient } from '@prisma/client';
-import { isUsingSharedPersistence } from './persistenceStore';
 
 export type SocialPostVisibility = 'public' | 'private';
 export type SocialPostMediaType = 'image' | 'video' | 'file';
@@ -79,7 +78,7 @@ const STORE_FILE = path.join(STORE_DIR, 'social-store.json');
 const STORE_TMP_FILE = path.join(STORE_DIR, 'social-store.tmp.json');
 const STORE_BACKUP_FILE = path.join(STORE_DIR, 'social-store.backup.json');
 
-const prisma = isUsingSharedPersistence ? new PrismaClient() : null;
+const prisma = new PrismaClient();
 
 const toStoreError = (message: string, cause?: unknown): Error & { code: string } => {
   const error = new Error(message) as Error & { code: string; cause?: unknown };
@@ -91,9 +90,6 @@ const toStoreError = (message: string, cause?: unknown): Error & { code: string 
 };
 
 const ensurePrisma = (): PrismaClient => {
-  if (!prisma) {
-    throw toStoreError('[SOCIAL][FATAL] Shared DB social store is not initialized');
-  }
   return prisma;
 };
 
@@ -278,32 +274,6 @@ export const socialStore = {
       throw new Error('Post requires text or media');
     }
 
-    if (!isUsingSharedPersistence) {
-      const store = loadStore();
-      const now = nowIso();
-      const postId = crypto.randomUUID();
-      const post: SocialPostRow = {
-        id: postId,
-        authorId: input.authorId,
-        text,
-        visibility,
-        media: media.map((entry) => ({
-          id: crypto.randomUUID(),
-          postId,
-          mediaType: normalizeMediaType(entry.mediaType),
-          url: entry.url,
-          storageProvider: entry.storageProvider || null,
-          objectKey: entry.objectKey || null,
-          createdAt: now,
-        })),
-        createdAt: now,
-        updatedAt: now,
-      };
-      store.posts.push(post);
-      saveStore(store);
-      return mapRowToRecord(post, store.postLikes);
-    }
-
     try {
       const db = ensurePrisma() as any;
       const created = await db.socialPost.create({
@@ -338,12 +308,6 @@ export const socialStore = {
   },
 
   async getPostById(postId: string): Promise<SocialPostRecord | null> {
-    if (!isUsingSharedPersistence) {
-      const store = loadStore();
-      const row = store.posts.find((post) => post.id === postId);
-      return row ? mapRowToRecord(row, store.postLikes) : null;
-    }
-
     try {
       const db = ensurePrisma() as any;
       const post = await db.socialPost.findUnique({
@@ -368,12 +332,6 @@ export const socialStore = {
     cursorPostId?: string;
   }): Promise<SocialPostRecord[]> {
     const limit = Math.max(1, Math.min(Number(options.limit) || 20, 200));
-    if (!isUsingSharedPersistence) {
-      const store = loadStore();
-      const sorted = sortPostsDesc(store.posts);
-      const paged = applyCursor(sorted, options.cursorPostId).slice(0, limit);
-      return paged.map((row) => mapRowToRecord(row, store.postLikes));
-    }
 
     try {
       const db = ensurePrisma() as any;
@@ -407,12 +365,6 @@ export const socialStore = {
     cursorPostId?: string;
   }): Promise<SocialPostRecord[]> {
     const limit = Math.max(1, Math.min(Number(options.limit) || 20, 200));
-    if (!isUsingSharedPersistence) {
-      const store = loadStore();
-      const byAuthor = sortPostsDesc(store.posts.filter((post) => post.authorId === options.authorId));
-      const paged = applyCursor(byAuthor, options.cursorPostId).slice(0, limit);
-      return paged.map((row) => mapRowToRecord(row, store.postLikes));
-    }
 
     try {
       const db = ensurePrisma() as any;
@@ -442,31 +394,6 @@ export const socialStore = {
   },
 
   async toggleLike(postId: string, userId: string): Promise<{ liked: boolean; likeCount: number }> {
-    if (!isUsingSharedPersistence) {
-      const store = loadStore();
-      const post = store.posts.find((entry) => entry.id === postId);
-      if (!post) {
-        throw new Error('Post not found');
-      }
-      const existingIndex = store.postLikes.findIndex(
-        (entry) => entry.postId === postId && entry.userId === userId
-      );
-      let liked = false;
-      if (existingIndex >= 0) {
-        store.postLikes.splice(existingIndex, 1);
-      } else {
-        store.postLikes.push({
-          postId,
-          userId,
-          createdAt: nowIso(),
-        });
-        liked = true;
-      }
-      saveStore(store);
-      const likeCount = store.postLikes.filter((entry) => entry.postId === postId).length;
-      return { liked, likeCount };
-    }
-
     try {
       const db = ensurePrisma() as any;
       const existing = await db.socialPostLike.findUnique({
@@ -517,26 +444,6 @@ export const socialStore = {
       throw new Error('Users cannot follow themselves');
     }
 
-    if (!isUsingSharedPersistence) {
-      const store = loadStore();
-      const existingIndex = store.follows.findIndex(
-        (entry) => entry.followerId === followerId && entry.followingId === followingId
-      );
-      if (follow) {
-        if (existingIndex < 0) {
-          store.follows.push({
-            followerId,
-            followingId,
-            createdAt: nowIso(),
-          });
-        }
-      } else if (existingIndex >= 0) {
-        store.follows.splice(existingIndex, 1);
-      }
-      saveStore(store);
-      return { following: follow };
-    }
-
     try {
       const db = ensurePrisma() as any;
       if (follow) {
@@ -568,13 +475,6 @@ export const socialStore = {
   },
 
   async isFollowing(followerId: string, followingId: string): Promise<boolean> {
-    if (!isUsingSharedPersistence) {
-      const store = loadStore();
-      return store.follows.some(
-        (entry) => entry.followerId === followerId && entry.followingId === followingId
-      );
-    }
-
     try {
       const db = ensurePrisma() as any;
       const row = await db.socialFollow.findUnique({
@@ -592,13 +492,6 @@ export const socialStore = {
   },
 
   async listFollowingIds(followerId: string): Promise<string[]> {
-    if (!isUsingSharedPersistence) {
-      const store = loadStore();
-      return store.follows
-        .filter((entry) => entry.followerId === followerId)
-        .map((entry) => entry.followingId);
-    }
-
     try {
       const db = ensurePrisma() as any;
       const rows = await db.socialFollow.findMany({

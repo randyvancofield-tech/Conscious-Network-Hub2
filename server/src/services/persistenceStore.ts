@@ -1,7 +1,6 @@
 import crypto from 'crypto';
 import { Prisma, PrismaClient } from '@prisma/client';
 import {
-  localStore as fileStore,
   type LocalMembershipRecord,
   type LocalPaymentRecord,
   type LocalProviderChallengeRecord,
@@ -12,12 +11,13 @@ import {
   type TwoFactorMethod,
   type UserProfileMedia,
 } from './localStore';
+import type { localStore as LocalFileStoreApi } from './localStore';
 import {
   protectSensitiveField,
   revealSensitiveField,
 } from './sensitiveDataPolicy';
 
-type StoreApi = typeof fileStore;
+type StoreApi = typeof LocalFileStoreApi;
 type CreateUserInput = Parameters<StoreApi['createUser']>[0];
 type UpdateUserInput = Parameters<StoreApi['updateUser']>[1];
 type UpsertMembershipInput = Parameters<StoreApi['upsertMembership']>[0];
@@ -26,17 +26,9 @@ type CreateReflectionInput = Parameters<StoreApi['createReflection']>[0];
 type CreateProviderChallengeInput = Parameters<StoreApi['createProviderChallenge']>[0];
 type CreateProviderSessionInput = Parameters<StoreApi['createProviderSession']>[0];
 
-const databaseUrl = String(process.env.DATABASE_URL || '').trim();
-const backendOverride = String(process.env.AUTH_PERSISTENCE_BACKEND || '')
-  .trim()
-  .toLowerCase();
-const urlSuggestsSharedDb = /^postgres(?:ql)?:\/\//i.test(databaseUrl);
+export const isUsingSharedPersistence = true;
 
-export const isUsingSharedPersistence =
-  backendOverride === 'shared_db' ||
-  (backendOverride !== 'local_file' && urlSuggestsSharedDb);
-
-const prisma = isUsingSharedPersistence ? new PrismaClient() : null;
+const prisma = new PrismaClient();
 
 const storeUnavailableError = (message: string, cause?: unknown): Error & { code: string } => {
   const error = new Error(message) as Error & { code: string; cause?: unknown };
@@ -235,11 +227,6 @@ const toLocalProviderSession = (row: any): LocalProviderSessionRecord => ({
 });
 
 const ensurePrisma = (): PrismaClient => {
-  if (!prisma) {
-    throw storeUnavailableError(
-      '[STORE][FATAL] Shared database store is not initialized. Set DATABASE_URL to postgres://... or postgresql://...'
-    );
-  }
   return prisma;
 };
 
@@ -260,17 +247,10 @@ const translatePrismaError = (error: unknown): never => {
 
 export const localStore = {
   async getStoreFilePath(): Promise<string> {
-    if (!isUsingSharedPersistence) {
-      return fileStore.getStoreFilePath();
-    }
     return 'shared-db://database-url';
   },
 
   async getUserByEmail(email: string): Promise<LocalUserRecord | null> {
-    if (!isUsingSharedPersistence) {
-      return fileStore.getUserByEmail(email);
-    }
-
     try {
       const row = await ensurePrisma().user.findUnique({
         where: { email: email.trim().toLowerCase() },
@@ -282,10 +262,6 @@ export const localStore = {
   },
 
   async getUserById(id: string): Promise<LocalUserRecord | null> {
-    if (!isUsingSharedPersistence) {
-      return fileStore.getUserById(id);
-    }
-
     try {
       const row = await ensurePrisma().user.findUnique({ where: { id } });
       return row ? toLocalUser(row) : null;
@@ -295,10 +271,6 @@ export const localStore = {
   },
 
   async listUsers(limit = 250): Promise<LocalUserRecord[]> {
-    if (!isUsingSharedPersistence) {
-      return fileStore.listUsers(limit);
-    }
-
     try {
       const rows = await ensurePrisma().user.findMany({
         orderBy: { createdAt: 'desc' },
@@ -311,10 +283,6 @@ export const localStore = {
   },
 
   async findUserByPasswordFingerprint(passwordFingerprint: string): Promise<LocalUserRecord | null> {
-    if (!isUsingSharedPersistence) {
-      return fileStore.findUserByPasswordFingerprint(passwordFingerprint);
-    }
-
     try {
       const row = await ensurePrisma().user.findFirst({
         where: {
@@ -328,10 +296,6 @@ export const localStore = {
   },
 
   async createUser(input: CreateUserInput): Promise<LocalUserRecord> {
-    if (!isUsingSharedPersistence) {
-      return fileStore.createUser(input);
-    }
-
     try {
       const row = await ensurePrisma().user.create({
         data: {
@@ -378,10 +342,6 @@ export const localStore = {
   },
 
   async updateUser(id: string, updates: UpdateUserInput): Promise<LocalUserRecord | null> {
-    if (!isUsingSharedPersistence) {
-      return fileStore.updateUser(id, updates);
-    }
-
     try {
       const db = ensurePrisma();
       const data: Record<string, unknown> = {};
@@ -481,10 +441,6 @@ export const localStore = {
   },
 
   async upsertMembership(input: UpsertMembershipInput): Promise<LocalMembershipRecord> {
-    if (!isUsingSharedPersistence) {
-      return fileStore.upsertMembership(input);
-    }
-
     try {
       const row = await ensurePrisma().membership.upsert({
         where: { userId: input.userId },
@@ -508,10 +464,6 @@ export const localStore = {
   },
 
   async getMembershipByUserId(userId: string): Promise<LocalMembershipRecord | null> {
-    if (!isUsingSharedPersistence) {
-      return fileStore.getMembershipByUserId(userId);
-    }
-
     try {
       const row = await ensurePrisma().membership.findUnique({ where: { userId } });
       return row ? toLocalMembership(row) : null;
@@ -521,10 +473,6 @@ export const localStore = {
   },
 
   async listMembershipsByUserId(userId: string, limit = 1): Promise<LocalMembershipRecord[]> {
-    if (!isUsingSharedPersistence) {
-      return fileStore.listMembershipsByUserId(userId, limit);
-    }
-
     try {
       const rows = await ensurePrisma().membership.findMany({
         where: { userId },
@@ -538,10 +486,6 @@ export const localStore = {
   },
 
   async createPayment(input: CreatePaymentInput): Promise<LocalPaymentRecord> {
-    if (!isUsingSharedPersistence) {
-      return fileStore.createPayment(input);
-    }
-
     try {
       const row = await ensurePrisma().paymentHistory.create({
         data: {
@@ -563,10 +507,6 @@ export const localStore = {
   },
 
   async listPaymentsByUserId(userId: string, limit = 5): Promise<LocalPaymentRecord[]> {
-    if (!isUsingSharedPersistence) {
-      return fileStore.listPaymentsByUserId(userId, limit);
-    }
-
     try {
       const rows = await ensurePrisma().paymentHistory.findMany({
         where: { userId },
@@ -580,10 +520,6 @@ export const localStore = {
   },
 
   async createReflection(input: CreateReflectionInput): Promise<LocalReflectionRecord> {
-    if (!isUsingSharedPersistence) {
-      return fileStore.createReflection(input);
-    }
-
     try {
       const row = await ensurePrisma().reflection.create({
         data: {
@@ -601,10 +537,6 @@ export const localStore = {
   },
 
   async listReflectionsByUserId(userId: string): Promise<LocalReflectionRecord[]> {
-    if (!isUsingSharedPersistence) {
-      return fileStore.listReflectionsByUserId(userId);
-    }
-
     try {
       const rows = await ensurePrisma().reflection.findMany({
         where: { userId },
@@ -619,10 +551,6 @@ export const localStore = {
   async createProviderChallenge(
     input: CreateProviderChallengeInput
   ): Promise<LocalProviderChallengeRecord> {
-    if (!isUsingSharedPersistence) {
-      return fileStore.createProviderChallenge(input);
-    }
-
     try {
       const row = await ensurePrisma().providerChallenge.upsert({
         where: { id: input.id },
@@ -651,10 +579,6 @@ export const localStore = {
   },
 
   async getProviderChallengeById(id: string): Promise<LocalProviderChallengeRecord | null> {
-    if (!isUsingSharedPersistence) {
-      return fileStore.getProviderChallengeById(id);
-    }
-
     try {
       const row = await ensurePrisma().providerChallenge.findUnique({ where: { id } });
       return row ? toLocalProviderChallenge(row) : null;
@@ -664,11 +588,6 @@ export const localStore = {
   },
 
   async markProviderChallengeUsed(id: string): Promise<void> {
-    if (!isUsingSharedPersistence) {
-      fileStore.markProviderChallengeUsed(id);
-      return;
-    }
-
     try {
       const challenge = await ensurePrisma().providerChallenge.findUnique({ where: { id } });
       if (!challenge || challenge.usedAt) return;
@@ -682,10 +601,6 @@ export const localStore = {
   },
 
   async createProviderSession(input: CreateProviderSessionInput): Promise<LocalProviderSessionRecord> {
-    if (!isUsingSharedPersistence) {
-      return fileStore.createProviderSession(input);
-    }
-
     try {
       const row = await ensurePrisma().providerSession.upsert({
         where: { id: input.id },
@@ -714,10 +629,6 @@ export const localStore = {
   },
 
   async getProviderSessionById(id: string): Promise<LocalProviderSessionRecord | null> {
-    if (!isUsingSharedPersistence) {
-      return fileStore.getProviderSessionById(id);
-    }
-
     try {
       const row = await ensurePrisma().providerSession.findUnique({ where: { id } });
       return row ? toLocalProviderSession(row) : null;
@@ -727,11 +638,6 @@ export const localStore = {
   },
 
   async revokeProviderSession(id: string): Promise<void> {
-    if (!isUsingSharedPersistence) {
-      fileStore.revokeProviderSession(id);
-      return;
-    }
-
     try {
       const session = await ensurePrisma().providerSession.findUnique({ where: { id } });
       if (!session || session.revokedAt) return;
@@ -745,10 +651,6 @@ export const localStore = {
   },
 
   async getDiagnostics(): Promise<LocalStoreDiagnostics> {
-    if (!isUsingSharedPersistence) {
-      return fileStore.getDiagnostics();
-    }
-
     try {
       const db = ensurePrisma();
       const [
