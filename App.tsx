@@ -137,6 +137,14 @@ const App: React.FC = () => {
     return '';
   };
 
+  const backendConnectionErrorMessage = (actionLabel: string): string => {
+    const backendUrl = resolveBackendUrl();
+    if (!backendUrl) {
+      return `Unable to ${actionLabel}. Backend URL is not configured.`;
+    }
+    return `Unable to ${actionLabel}. Cannot reach backend at ${backendUrl}.`;
+  };
+
   const normalizePrivacySettings = (raw: any) => ({
     profileVisibility: raw?.profileVisibility === 'private' ? 'private' as const : 'public' as const,
     showEmail: Boolean(raw?.showEmail),
@@ -394,8 +402,10 @@ const App: React.FC = () => {
       closeModals();
       setCurrentView(AppView.DASHBOARD);
       if (window.innerWidth >= 1024) setSidebarOpen(true);
-    } catch {
-      setError('Unable to sign in. Please try again.');
+    } catch (error) {
+      console.error('Sign-in request failed:', error);
+      setHealthStatus('offline');
+      setError(backendConnectionErrorMessage('sign in'));
     }
   };
 
@@ -446,7 +456,11 @@ const App: React.FC = () => {
 
       const data = await response.json().catch(() => ({}));
       if (!response.ok) {
-        setError(data?.error || 'Unable to create profile.');
+        if (response.status === 503 && data?.code === 'PROFILE_STORE_UNAVAILABLE') {
+          setError(data?.error || 'Profile service is currently unavailable. Please retry shortly.');
+          return;
+        }
+        setError(data?.error || `Unable to create profile (HTTP ${response.status}).`);
         return;
       }
       if (!data?.persistenceVerified) {
@@ -460,8 +474,10 @@ const App: React.FC = () => {
       closeModals();
       setCurrentView(AppView.MEMBERSHIP_ACCESS);
       setIsSelectingTier(true);
-    } catch {
-      setError('Unable to create profile. Please try again.');
+    } catch (error) {
+      console.error('Profile creation request failed:', error);
+      setHealthStatus('offline');
+      setError(backendConnectionErrorMessage('create profile'));
     }
   };
 
