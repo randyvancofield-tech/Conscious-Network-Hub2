@@ -12,8 +12,9 @@ A community-centered decentralized social learning infrastructure powered by eth
 
 ### Prerequisites
 - Node.js 18+
-- Google Cloud Project with Vertex AI API enabled
-- Google Cloud Application Default Credentials
+- PostgreSQL 14+ (local or managed)
+- Google Cloud Project with Vertex AI API enabled (only required for AI endpoints)
+- Google Cloud Application Default Credentials (only required for AI endpoints)
 
 ### Setup (5 minutes)
 
@@ -30,9 +31,15 @@ npm run dev
 cd server
 npm install
 cp .env.example .env.local
-# Edit .env.local with your GCP credentials:
-# GOOGLE_CLOUD_PROJECT=your-project-id
-# GOOGLE_CLOUD_REGION=us-central1
+# Edit .env.local with required auth/persistence values:
+# DATABASE_URL=postgresql://...
+# AUTH_PERSISTENCE_BACKEND=shared_db
+# AUTH_TOKEN_SECRET=...
+# SENSITIVE_DATA_KEY=...
+# CORS_ORIGINS=http://localhost:5173,http://localhost:3000
+
+# Initialize DB schema
+npm run db:push
 
 # Setup Google Cloud authentication:
 gcloud auth application-default login
@@ -49,6 +56,7 @@ npm run dev
 ## ðŸ“š Documentation
 
 - **[Full Setup Guide](./SETUP_GUIDE.md)** - Complete setup instructions for local development
+- **[Environment Matrix](./docs/ENVIRONMENT_MATRIX.md)** - Canonical frontend/backend env keys and defaults
 - **[Backend README](./server/README.md)** - Backend API documentation and architecture
 - **[API Testing Guide](./server/TESTING.md)** - Comprehensive testing guide with curl examples
 - **[Enhancement Proposal](./ETHICAL_AI_ENHANCEMENT_PROPOSAL.md)** - Feature roadmap

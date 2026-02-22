@@ -6,6 +6,7 @@ param(
   [string]$OpenAIApiKey = "",
   [string]$AuthTokenSecret = "",
   [string]$DatabaseUrl = "",
+  [string]$SensitiveDataKey = "",
   [string]$AdminDiagnosticsKey = "",
   [switch]$SkipChecks
 )
@@ -63,6 +64,18 @@ if (-not $DatabaseUrl) {
   throw "DATABASE_URL is required. Set -DatabaseUrl, DATABASE_URL env var, or server/.env.local."
 }
 
+if (-not $SensitiveDataKey) {
+  $SensitiveDataKey = $env:SENSITIVE_DATA_KEY
+}
+
+if (-not $SensitiveDataKey) {
+  $SensitiveDataKey = Get-ValueFromLocalEnv -Name "SENSITIVE_DATA_KEY"
+}
+
+if (-not $SensitiveDataKey) {
+  throw "SENSITIVE_DATA_KEY is required for production/shared_db sensitive field protection. Set -SensitiveDataKey, SENSITIVE_DATA_KEY env var, or server/.env.local."
+}
+
 if (-not $AdminDiagnosticsKey) {
   $AdminDiagnosticsKey = $env:ADMIN_DIAGNOSTICS_KEY
 }
@@ -95,6 +108,7 @@ $envUpdates = @(
   "CORS_ORIGINS=$AllowedOrigins",
   "AUTH_TOKEN_SECRET=$AuthTokenSecret",
   "DATABASE_URL=$DatabaseUrl",
+  "SENSITIVE_DATA_KEY=$SensitiveDataKey",
   "AUTH_PERSISTENCE_BACKEND=shared_db",
   "DATABASE_PROVIDER=postgresql"
 )
@@ -104,11 +118,21 @@ if ($OpenAIApiKey) {
 if ($AdminDiagnosticsKey) {
   $envUpdates += "ADMIN_DIAGNOSTICS_KEY=$AdminDiagnosticsKey"
 }
-$envArg = "^@^" + ($envUpdates -join "@")
+
+# Pick a delimiter that does not occur in any value (for URLs/secrets containing @, =, etc.).
+$delimiters = @('|', '^', '~', '#', ';')
+$updateBlob = $envUpdates -join ''
+$envDelimiter = $delimiters | Where-Object { $updateBlob -notlike "*$_*" } | Select-Object -First 1
+if (-not $envDelimiter) {
+  throw "Unable to select a safe delimiter for --update-env-vars payload."
+}
+$envArg = "^$envDelimiter^" + ($envUpdates -join $envDelimiter)
+
 gcloud run services update $Service `
   --region $Region `
   --project $ProjectId `
-  --update-env-vars $envArg | Out-Host
+  --update-env-vars $envArg `
+  --remove-env-vars "/conscious_network?host" | Out-Host
 
 Write-Host "Routing 100% traffic to latest revision..."
 gcloud run services update-traffic $Service `
@@ -118,7 +142,19 @@ gcloud run services update-traffic $Service `
 
 $serviceJson = gcloud run services describe $Service --region $Region --project $ProjectId --format json | ConvertFrom-Json
 $latest = $serviceJson.status.latestReadyRevisionName
-$url = $serviceJson.metadata.annotations."run.googleapis.com/urls" | ConvertFrom-Json | Select-Object -First 1
+$rawUrls = $serviceJson.metadata.annotations."run.googleapis.com/urls"
+$parsedUrls = @()
+if ($rawUrls -is [string]) {
+  try {
+    $parsed = $rawUrls | ConvertFrom-Json
+    $parsedUrls = @($parsed)
+  } catch {
+    $parsedUrls = @($rawUrls)
+  }
+} elseif ($null -ne $rawUrls) {
+  $parsedUrls = @($rawUrls)
+}
+$url = $parsedUrls | Select-Object -First 1
 
 Write-Host "Latest revision: $latest"
 Write-Host "Service URL: $url"

@@ -1,361 +1,133 @@
-# 🌐 Conscious Network Hub - Full Stack Setup Guide
+# Conscious Network Hub Setup Guide
 
-Complete setup guide for running both frontend and backend locally with Google Cloud Vertex AI integration.
+This guide is the canonical local setup path for the current production architecture.
 
-## 📋 Prerequisites
+## 1. Backend Choice (Task 2 Decision)
 
-- **Node.js** 18+ and npm/yarn
-- **Google Cloud Account** with billing enabled
-- **Google Cloud Project** created
-- **Vertex AI API** enabled in your GCP project
+Use the existing backend stack:
 
-## 🚀 Quick Start (5 minutes)
+- Backend: Node.js + Express (TypeScript)
+- Data layer: Prisma
+- Database: PostgreSQL
+- Persistence mode: `AUTH_PERSISTENCE_BACKEND=shared_db`
 
-### 1. Clone & Setup Frontend
+This is the correct choice because auth, sessions, profile writes, and post writes already depend on this path in production.
 
-```bash
-# Navigate to project root
-cd /path/to/Conscious-Network-Hub2
+## 2. Prerequisites
 
-# Install frontend dependencies
+- Node.js 18+ (20+ recommended)
+- npm
+- PostgreSQL 14+ (local or managed)
+- Optional for AI routes: Google Cloud credentials + Vertex AI access
+
+## 3. Install Dependencies
+
+From repository root:
+
+```powershell
 npm install
-
-# Create frontend env file
-cp .env.example .env.local
-
-# Edit .env.local
-# VITE_BACKEND_URL=http://localhost:3001
+npm --prefix server install
 ```
 
-### 2. Setup Backend
+## 4. Configure Environment Files
 
-```bash
-# Navigate to backend
-cd server
+### Frontend env
 
-# Install backend dependencies
-npm install
+Create `.env.local` in repo root:
 
-# Copy environment template
-cp .env.example .env.local
-
-# Edit .env.local with your GCP project details
-# GOOGLE_CLOUD_PROJECT=your-project-id
-# GOOGLE_CLOUD_REGION=us-central1
-```
-
-### 3. Configure Google Cloud Authentication
-
-**Option A: Application Default Credentials (Recommended for Dev)**
-
-```bash
-# Install Google Cloud CLI
-# https://cloud.google.com/sdk/docs/install
-
-# Login and set default project
-gcloud auth application-default login
-gcloud config set project YOUR_PROJECT_ID
-gcloud services enable aiplatform.googleapis.com
-```
-
-**Option B: Service Account (Dev/Prod)**
-
-```bash
-# Create service account
-gcloud iam service-accounts create cnh-backend \
-  --display-name="Conscious Network Hub Backend"
-
-# Grant Vertex AI permissions
-gcloud projects add-iam-policy-binding YOUR_PROJECT_ID \
-  --member="serviceAccount:cnh-backend@YOUR_PROJECT_ID.iam.gserviceaccount.com" \
-  --role="roles/aiplatform.user"
-
-# Create and download key
-gcloud iam service-accounts keys create ~/cnh-key.json \
-  --iam-account=cnh-backend@YOUR_PROJECT_ID.iam.gserviceaccount.com
-
-# Add to backend .env.local:
-# GOOGLE_APPLICATION_CREDENTIALS=~/cnh-key.json
-```
-
-### 4. Run Development Servers
-
-**Terminal 1 - Backend Server**
-```bash
-cd server
-npm run dev
-
-# Output should show:
-# ✅ Vertex AI initialized
-# 🚀 Conscious Network Hub Backend Started
-# Listening on http://localhost:3001
-```
-
-**Terminal 2 - Frontend Dev Server**
-```bash
-npm run dev
-
-# Output should show:
-# ➜  local:   http://localhost:5173/
-# ➜  press h to show help
-```
-
-### 5. Verify Everything Works
-
-**Test Backend:**
-```bash
-# Health check
-curl http://localhost:3001/health
-
-# Test chat
-curl -X POST http://localhost:3001/api/ai/chat \
-  -H "Content-Type: application/json" \
-  -d '{"message":"Hello, how are you?"}'
-```
-
-**Test Frontend:**
-- Open http://localhost:5173 in your browser
-- Look for "ETHICAL AI INSIGHT" floating widget (bottom-right)
-- Try sending a message in the Q&A view
-
-## 🏗️ Architecture Overview
-
-```
-┌─────────────────────────────────────────────────────────┐
-│                     Frontend (React)                     │
-│  ┌────────────────────────────────────────────────────┐ │
-│  │  EthicalAIInsight Component                        │ │
-│  │  - 4 Views: Insight, Q&A, Report, Analytics       │ │
-│  │  - Voice input, favorites, ratings, search        │ │
-│  │  - Uses backendApiService to call backend         │ │
-│  └────────────────────────────────────────────────────┘ │
-│                          ↓ (HTTP)                       │
-│  http://localhost:5173    ↑ JSON Response              │
-└─────────────────────────────────────────────────────────┘
-                           |
-            Backend Security Boundary
-            (API keys stay on backend)
-                           |
-┌─────────────────────────────────────────────────────────┐
-│               Backend API (Express/Node)                │
-│  http://localhost:3001                                  │
-│  ┌────────────────────────────────────────────────────┐ │
-│  │  Express Server                                    │ │
-│  │  - CORS: Whitelist origins                        │ │
-│  │  - Rate Limiting: 100 req/15min                   │ │
-│  │  - Helmet: Security headers                       │ │
-│  │  - Input Validation: Sanitization                 │ │
-│  ├────────────────────────────────────────────────────┤ │
-│  │  Routes                                            │ │
-│  │  - POST /api/ai/chat                              │ │
-│  │  - POST /api/ai/wisdom                            │ │
-│  │  - POST /api/ai/report-issue                      │ │
-│  │  - GET  /api/ai/trending                          │ │
-│  │  - GET  /health                                   │ │
-│  ├────────────────────────────────────────────────────┤ │
-│  │  Vertex AI Service                                 │ │
-│  │  - Uses Application Default Credentials           │ │
-│  │  - Calls Google Cloud Vertex AI / Gemini          │ │
-│  │  - Confidence scoring & trending extraction       │ │
-│  └────────────────────────────────────────────────────┘ │
-│                          ↓                               │
-│  Google Cloud Platform - Vertex AI / Gemini              │
-└─────────────────────────────────────────────────────────┘
-```
-
-## 📁 Project Structure
-
-```
-Conscious-Network-Hub2/
-├── components/
-│   └── EthicalAIInsight.tsx    # Main UI component
-├── services/
-│   ├── backendApiService.ts    # ← Backend API caller (NEW)
-│   ├── securityService.ts      # Input validation, rate limiting
-│   ├── cacheService.ts         # Conversation persistence
-│   └── analyticsService.ts     # Event tracking
-├── server/                     # ← Backend API (NEW)
-│   ├── src/
-│   │   ├── index.ts            # Express app
-│   │   ├── middleware.ts       # Validation, errors, logging
-│   │   ├── services/
-│   │   │   └── vertexAiService.ts  # Vertex AI integration
-│   │   └── routes/
-│   │       └── ai.ts           # API endpoints
-│   ├── scripts/
-│   │   └── test.sh             # Test suite
-│   ├── package.json
-│   ├── tsconfig.json
-│   ├── .env.example            # Template
-│   ├── .env.local              # Your config (not committed)
-│   └── README.md               # Backend docs
-├── .env.example                # Frontend template
-├── .env.local                  # Frontend config (not committed)
-└── README.md
-```
-
-## 🔐 Security Features
-
-### Frontend → Backend
-- ✅ No API keys in frontend code
-- ✅ No credentials in localStorage
-- ✅ Input sanitization (XSS prevention)
-- ✅ CORS restricted to backend only
-
-### Backend → Google Cloud
-- ✅ Application Default Credentials (dev) / Service Account (prod)
-- ✅ Credentials never sent to frontend
-- ✅ Server-side validation & sanitization
-- ✅ Rate limiting per IP
-- ✅ Helmet security headers
-- ✅ Request size limits
-
-### Data Protection
-- ✅ LocalStorage for conversation history (client-side only)
-- ✅ Conversation export (MD/JSON)
-- ✅ No server-side data storage
-- ✅ HTTPS-ready for production
-
-## 🧪 Testing
-
-### Run All Tests
-```bash
-cd server
-npm run test:curl
-```
-
-### Individual Tests
-```bash
-# Health check
-curl http://localhost:3001/health
-
-# Chat endpoint
-curl -X POST http://localhost:3001/api/ai/chat \
-  -H "Content-Type: application/json" \
-  -d '{
-    "message": "What is ethical AI?",
-    "context": {"category": "general"}
-  }'
-
-# Daily wisdom
-curl -X POST http://localhost:3001/api/ai/wisdom
-
-# Report issue
-curl -X POST http://localhost:3001/api/ai/report-issue \
-  -H "Content-Type: application/json" \
-  -d '{
-    "title": "App crashes on login",
-    "message": "Getting 500 error when clicking Google OAuth button",
-    "category": "bug"
-  }'
-
-# Trending topics
-curl http://localhost:3001/api/ai/trending
-
-# Test with verbose output
-BASE_URL=http://localhost:3001 VERBOSE=true npm run test:curl
-```
-
-## 🌍 Environment Setup
-
-### Frontend (.env.local)
 ```env
-# Backend API URL
 VITE_BACKEND_URL=http://localhost:3001
+VITE_ALLOW_REMOTE_BACKEND_IN_DEV=false
+VITE_ENABLE_SIGNUP_2FA=false
 ```
 
-### Backend (server/.env.local)
-```env
-# Required
-GOOGLE_CLOUD_PROJECT=your-project-id
-GOOGLE_CLOUD_REGION=us-central1
+### Backend env
 
-# Optional
+Create `server/.env.local` from `server/.env.example` and set at minimum:
+
+```env
+DATABASE_URL=postgresql://postgres:postgres@localhost:5432/conscious_network_hub
+AUTH_PERSISTENCE_BACKEND=shared_db
+DATABASE_PROVIDER=postgresql
+AUTH_TOKEN_SECRET=replace-with-strong-random-secret
+SENSITIVE_DATA_KEY=replace-with-32-byte-key-or-long-passphrase
 PORT=3001
 NODE_ENV=development
 CORS_ORIGINS=http://localhost:5173,http://localhost:3000
-RATE_LIMIT_MAX=100
-VERTEX_AI_MODEL=gemini-1.5-flash-001
 ```
 
-## 🚢 Deployment
+Notes:
 
-### Deploy to Google Cloud Run
+- Do not use `file:` SQLite URLs for this backend.
+- Keep secrets only in `server/.env.local`.
+- Never place backend secrets in frontend env files.
 
-```bash
-# From server/ directory
-gcloud run deploy cnh-backend \
-  --source . \
-  --platform managed \
-  --region us-central1 \
-  --set-env-vars GOOGLE_CLOUD_PROJECT=YOUR_PROJECT_ID,GOOGLE_CLOUD_REGION=us-central1 \
-  --allow-unauthenticated
+## 5. Initialize Database Schema
 
-# Get the URL and update frontend .env
-# VITE_BACKEND_URL=https://cnh-backend-xxxxx.run.app
+```powershell
+npm --prefix server run db:push
 ```
 
-### Deploy Frontend (Firebase Hosting, Vercel, Netlify, etc.)
+This applies Prisma schema to your Postgres database.
 
-```bash
-npm run build
+## 6. Start Local Servers
 
-# Then upload dist/ to your hosting provider
-# Update environment variables with production backend URL
+Terminal A (backend):
+
+```powershell
+npm --prefix server run dev
 ```
 
-## 🔧 Troubleshooting
+Terminal B (frontend):
 
-### "Failed to connect to backend"
-- Check backend is running: `curl http://localhost:3001/health`
-- Check `VITE_BACKEND_URL` in frontend `.env.local`
-- Check browser console for CORS errors
-- Verify `CORS_ORIGINS` in backend `.env.local`
+```powershell
+npm run dev
+```
 
-### "Permission denied" from Vertex AI
-- Ensure service account has `roles/aiplatform.user` role
-- Check `GOOGLE_CLOUD_PROJECT` matches your project
-- Verify Vertex AI API is enabled: `gcloud services enable aiplatform.googleapis.com`
+## 7. Validate Auth + Persistence
 
-### "Rate limited" errors
-- Wait 15 minutes or adjust `RATE_LIMIT_MAX` in backend `.env.local`
-- In production, use distributed rate limiting (Redis)
+### Backend health
 
-### Backend doesn't start
-- Check Node.js version: `node --version` (need 18+)
-- Check all required env vars: `grep "require" server/src/index.ts`
-- Check logs for specific errors
+```powershell
+curl.exe -sS http://localhost:3001/health
+```
 
-### Frontend can't find backend
-- Ensure backend is running on port 3001
-- Check `VITE_BACKEND_URL` environment variable
-- Try: `curl http://localhost:3001/health`
+### Required secret gate
 
-## 📚 Documentation
+```powershell
+npm --prefix server run test:required-secrets
+```
 
-- **Backend API**: `/server/README.md`
-- **Frontend Components**: See inline comments in components/
-- **Security Services**: See inline comments in services/
+### Manual auth smoke test
 
-## 🎯 Next Steps
+Use your app UI or API calls to verify:
 
-1. ✅ Backend running locally
-2. ✅ Frontend connecting to backend
-3. Test all API endpoints with provided curl commands
-4. Deploy backend to Cloud Run
-5. Deploy frontend to hosting provider
-6. Update production URLs
-7. Monitor and scale as needed
+1. Sign up
+2. Log out
+3. Log in again
+4. Confirm profile reloads from backend
 
-## 📞 Support
+## 8. Cloud Run Deployment (Existing Production Path)
 
-Check documentation in:
-- `server/README.md` - Backend API docs
-- `server/.env.example` - Environment variables
-- `components/EthicalAIInsight.tsx` - UI implementation
-- `services/backendApiService.ts` - API integration
+From `server/`:
 
----
+```powershell
+npm run deploy:cloudrun
+```
 
-**Status**: ✅ Ready for Local Development  
-**Last Updated**: January 20, 2024
+Then run:
+
+```powershell
+npm run check:cloudrun
+```
+
+Expected: full smoke checks pass, including `create -> current -> logout -> login`.
+
+## 9. VS Code Workflow
+
+- Open project root in VS Code.
+- Use one terminal for `npm --prefix server run dev`.
+- Use second terminal for `npm run dev`.
+- Keep `.env.local` and `server/.env.local` open in split view when troubleshooting.
+- Use `npm --prefix server run build` before pushing deployment changes.
+

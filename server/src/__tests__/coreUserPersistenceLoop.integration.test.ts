@@ -410,7 +410,6 @@ jest.mock('../services/providerSessionStore', () => ({
   getProviderSessionById: jest.fn(async () => null),
 }));
 
-const { requireCanonicalIdentity } = require('../middleware');
 const { userPublicRoutes, userProtectedRoutes } = require('../routes/user');
 const socialRoutes = require('../routes/social').default;
 const { uploadPublicRoutes, uploadProtectedRoutes } = require('../routes/upload');
@@ -478,9 +477,9 @@ describe('Core user persistence loop', () => {
     const app = express();
     app.use(express.json());
     app.use('/api/user', userPublicRoutes);
-    app.use('/api/user', requireCanonicalIdentity, userProtectedRoutes);
-    app.use('/api/social', requireCanonicalIdentity, socialRoutes);
-    app.use('/api/upload', requireCanonicalIdentity, uploadProtectedRoutes);
+    app.use('/api/user', userProtectedRoutes);
+    app.use('/api/social', socialRoutes);
+    app.use('/api/upload', uploadProtectedRoutes);
     app.use('/uploads', uploadPublicRoutes);
 
     server = await new Promise<http.Server>((resolve) => {
@@ -675,5 +674,38 @@ describe('Core user persistence loop', () => {
     });
     expect(deniedProfileView.status).toBe(403);
     expect(deniedProfileView.body?.error).toBe('Profile is unavailable');
+  });
+
+  it('returns actionable auth recovery when profile persists but session setup fails', async () => {
+    createUserSessionMock.mockRejectedValueOnce(new Error('session-create-failed'));
+    const password = 'Qx#93Lm!T2vA';
+
+    const create = await requestJson({
+      method: 'POST',
+      path: '/api/user/create',
+      body: {
+        email: 'recoverable@example.com',
+        password,
+        name: 'Recoverable',
+      },
+    });
+
+    expect(create.status).toBe(503);
+    expect(create.body?.code).toBe('PROFILE_SESSION_ESTABLISH_FAILED');
+
+    const persisted = await mockLocalStore.getUserByEmail('recoverable@example.com');
+    expect(persisted?.id).toBeTruthy();
+
+    const signin = await requestJson({
+      method: 'POST',
+      path: '/api/user/signin',
+      body: {
+        email: 'recoverable@example.com',
+        password,
+      },
+    });
+
+    expect(signin.status).toBe(200);
+    expect(String(signin.body?.token || '').length).toBeGreaterThan(20);
   });
 });

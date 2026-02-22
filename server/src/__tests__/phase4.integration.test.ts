@@ -300,7 +300,6 @@ jest.mock('../services/providerSessionStore', () => ({
 }));
 
 const { createSessionToken } = require('../auth');
-const { requireCanonicalIdentity } = require('../middleware');
 const { userPublicRoutes, userProtectedRoutes } = require('../routes/user');
 const socialRoutes = require('../routes/social').default;
 
@@ -352,8 +351,8 @@ describe('Phase 4 integration boundaries', () => {
     const app = express();
     app.use(express.json());
     app.use('/api/user', userPublicRoutes);
-    app.use('/api/user', requireCanonicalIdentity, userProtectedRoutes);
-    app.use('/api/social', requireCanonicalIdentity, socialRoutes);
+    app.use('/api/user', userProtectedRoutes);
+    app.use('/api/social', socialRoutes);
 
     server = await new Promise<http.Server>((resolve) => {
       const started = app.listen(0, '127.0.0.1', () => resolve(started));
@@ -507,4 +506,3 @@ describe('Phase 4 integration boundaries', () => {
     expect(String(securityResponse.body?.security?.walletDid || '')).toContain('...');
   });
 });
-

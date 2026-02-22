@@ -15,9 +15,11 @@ const isPostgresUrl = (value: string): boolean => /^postgres(?:ql)?:\/\//i.test(
 // Required high-risk secrets/environment variables for backend startup.
 // - AUTH_TOKEN_SECRET (or legacy SESSION_SECRET alias)
 // - DATABASE_URL
+// - SENSITIVE_DATA_KEY (required for production/shared_db)
 export const REQUIRED_SECRETS = [
   'AUTH_TOKEN_SECRET (or SESSION_SECRET)',
   'DATABASE_URL',
+  'SENSITIVE_DATA_KEY (production/shared_db)',
 ] as const;
 
 const hasSensitiveDataKey = (): boolean => hasNonEmptyEnv('SENSITIVE_DATA_KEY');

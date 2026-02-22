@@ -15,10 +15,14 @@ This backend provides REST API endpoints that handle all communication with Goog
 
 ## 📋 Requirements
 
-- Node.js 18+ 
+- Node.js 18+
 - npm or yarn
-- Google Cloud Project with Vertex AI API enabled
-- Service account or Application Default Credentials configured
+- PostgreSQL 14+ (local or managed)
+- `AUTH_PERSISTENCE_BACKEND=shared_db`
+- `AUTH_TOKEN_SECRET` configured
+- `SENSITIVE_DATA_KEY` configured
+- Google Cloud Project with Vertex AI API enabled (required only for AI endpoints)
+- Service account or Application Default Credentials configured (required only for AI endpoints)
 
 ## 🚀 Quick Start
 
@@ -35,9 +39,18 @@ npm install
 # Copy the example file
 cp .env.example .env.local
 
-# Edit .env.local with your values
-# GOOGLE_CLOUD_PROJECT=your-project-id
-# GOOGLE_CLOUD_REGION=us-central1
+# Edit .env.local with required values
+# DATABASE_URL=postgresql://...
+# AUTH_PERSISTENCE_BACKEND=shared_db
+# AUTH_TOKEN_SECRET=...
+# SENSITIVE_DATA_KEY=...
+# CORS_ORIGINS=http://localhost:5173,http://localhost:3000
+```
+
+Apply schema to Postgres:
+
+```bash
+npm run db:push
 ```
 
 ### 3. Set Up Google Cloud Authentication
@@ -94,6 +107,12 @@ npm run dev
 ```
 
 Server will start on `http://localhost:3001`
+
+## Canonical Setup References
+
+- Root setup: `../SETUP_GUIDE.md`
+- Environment key matrix: `../docs/ENVIRONMENT_MATRIX.md`
+- Deployment checks: `../DEPLOYMENT_RUNBOOK.md`
 
 ## 📚 API Endpoints
 

@@ -7,7 +7,6 @@ import {
   requestLogger,
   errorHandler,
   healthCheck,
-  requireCanonicalIdentity,
 } from './middleware';
 import aiRoutes from './routes/ai';
 import {
@@ -178,13 +177,14 @@ app.use('/api/user', userPublicRoutes);
 app.use('/api/membership', membershipPublicRoutes);
 app.use('/api/provider/auth', providerAuthRoutes);
 
-// Protected routes are mounted with auth middleware before handler execution.
-app.use('/api/user', requireCanonicalIdentity, userProtectedRoutes);
-app.use('/api/membership', requireCanonicalIdentity, membershipProtectedRoutes);
-app.use('/api/ai', requireCanonicalIdentity, aiRoutes);
-app.use('/api/upload', requireCanonicalIdentity, uploadProtectedRoutes);
-app.use('/api/reflection', requireCanonicalIdentity, reflectionRoutes);
-app.use('/api/social', requireCanonicalIdentity, socialRoutes);
+// Protected routes enforce canonical identity within their own routers.
+// This avoids duplicate middleware execution while preserving route-level security.
+app.use('/api/user', userProtectedRoutes);
+app.use('/api/membership', membershipProtectedRoutes);
+app.use('/api/ai', aiRoutes);
+app.use('/api/upload', uploadProtectedRoutes);
+app.use('/api/reflection', reflectionRoutes);
+app.use('/api/social', socialRoutes);
 app.use('/api/provider/session', providerSessionRoutes);
 app.use('/uploads', uploadPublicRoutes);
 

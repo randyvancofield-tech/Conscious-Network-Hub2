@@ -9,9 +9,9 @@ const REQUIRED_MISSING_PATTERN =
 const SHARED_DB_MISMATCH_PATTERN =
   /AUTH_PERSISTENCE_BACKEND=shared_db requires DATABASE_URL to use postgres:\/\/ or postgresql:\/\//i;
 const PROD_BACKEND_MISMATCH_PATTERN =
-  /Production requires AUTH_PERSISTENCE_BACKEND=shared_db/i;
+  /Production requires AUTH_PERSISTENCE_BACKEND=shared_db|AUTH_PERSISTENCE_BACKEND must be set to shared_db/i;
 const PROD_DATABASE_URL_MISMATCH_PATTERN =
-  /Production requires DATABASE_URL to use postgres:\/\/ or postgresql:\/\//i;
+  /Production requires DATABASE_URL to use postgres:\/\/ or postgresql:\/\/|Shared DB persistence requires DATABASE_URL to use postgres:\/\/ or postgresql:\/\/|AUTH_PERSISTENCE_BACKEND=shared_db requires DATABASE_URL to use postgres:\/\/ or postgresql:\/\//i;
 
 const buildEnv = ({ unset = [], set = {} } = {}) => {
   const env = { ...process.env };
@@ -132,6 +132,7 @@ const runExpectFailureSharedDbMisconfig = () =>
         AUTH_TOKEN_SECRET: 'integration-test-auth-secret',
         DATABASE_URL: 'file:./prisma/dev.db',
         AUTH_PERSISTENCE_BACKEND: 'shared_db',
+        SENSITIVE_DATA_KEY: 'integration-test-sensitive-key',
       },
     });
 
@@ -182,6 +183,7 @@ const runExpectFailureProdBackendMisconfig = () =>
         AUTH_TOKEN_SECRET: 'integration-test-auth-secret',
         DATABASE_URL: 'postgres://example.com/app',
         AUTH_PERSISTENCE_BACKEND: 'local_file',
+        SENSITIVE_DATA_KEY: 'integration-test-sensitive-key',
       },
     });
 
@@ -232,6 +234,7 @@ const runExpectFailureProdDatabaseUrlMisconfig = () =>
         AUTH_TOKEN_SECRET: 'integration-test-auth-secret',
         DATABASE_URL: 'file:./prisma/dev.db',
         AUTH_PERSISTENCE_BACKEND: 'shared_db',
+        SENSITIVE_DATA_KEY: 'integration-test-sensitive-key',
       },
     });
 

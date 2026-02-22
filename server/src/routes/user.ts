@@ -56,6 +56,12 @@ const PROFILE_STORE_UNAVAILABLE_RESPONSE = {
   code: 'PROFILE_STORE_UNAVAILABLE',
   retryable: true,
 } as const;
+const PROFILE_SESSION_ESTABLISH_FAILED_RESPONSE = {
+  error:
+    'Profile was created, but session setup could not be completed. Please sign in to continue.',
+  code: 'PROFILE_SESSION_ESTABLISH_FAILED',
+  retryable: true,
+} as const;
 
 const COMMON_PASSWORDS = new Set([
   'password',
@@ -68,6 +74,38 @@ const COMMON_PASSWORDS = new Set([
 ]);
 
 const DIAGNOSTICS_ADMIN_HEADER = 'x-admin-diagnostics-key';
+
+const getRequestTraceId = (req: Request): string | null => {
+  const raw = String(req.headers['x-cloud-trace-context'] || '').trim();
+  if (!raw) return null;
+  return raw.split('/')[0]?.trim() || null;
+};
+
+const safeLogHash = (value: string): string =>
+  crypto.createHash('sha256').update(value, 'utf8').digest('hex').slice(0, 16);
+
+const logAuthFlowError = (
+  req: Request,
+  action: 'create' | 'signin' | 'logout' | 'current',
+  stage: string,
+  error: unknown,
+  metadata?: Record<string, unknown>
+): void => {
+  const err = error as Error & { code?: string };
+  const payload = {
+    action,
+    stage,
+    method: req.method,
+    path: req.path,
+    requestId: String(req.headers['x-request-id'] || '').trim() || null,
+    traceId: getRequestTraceId(req),
+    errorCode: err?.code || null,
+    errorName: err?.name || null,
+    errorMessage: err?.message || String(error),
+    ...(metadata || {}),
+  };
+  console.error('[AUTH][ERROR]', JSON.stringify(payload));
+};
 
 const timingSafeEquals = (a: string, b: string): boolean => {
   const left = Buffer.from(a, 'utf8');
@@ -247,10 +285,12 @@ const toPublicUser = (req: Request, user: any) => ({
  * Authenticate an existing user with canonical backend identity.
  */
 publicRouter.post('/signin', validateJsonBody(userSignInSchema), async (req: Request, res: Response): Promise<any> => {
+  let emailHash: string | null = null;
   try {
     const email = String(req.body?.email || '')
       .trim()
       .toLowerCase();
+    emailHash = email ? safeLogHash(email) : null;
     const password = String(req.body?.password || '');
     const twoFactorCode = String(req.body?.twoFactorCode || '').trim();
     const providerToken = String(req.body?.providerToken || '').trim();
@@ -466,6 +506,9 @@ publicRouter.post('/signin', validateJsonBody(userSignInSchema), async (req: Req
   } catch (error) {
     const errorCode = (error as Error & { code?: string })?.code;
     if (errorCode === 'STORE_UNAVAILABLE') {
+      logAuthFlowError(req, 'signin', 'persisted_signin_failed', error, {
+        statusCode: 503,
+      });
       recordAuditEvent(req, {
         domain: 'auth',
         action: 'signin',
@@ -475,7 +518,10 @@ publicRouter.post('/signin', validateJsonBody(userSignInSchema), async (req: Req
       });
       return res.status(503).json(PROFILE_STORE_UNAVAILABLE_RESPONSE);
     }
-    console.error('Error signing in user:', error);
+    logAuthFlowError(req, 'signin', 'unexpected_exception', error, {
+      statusCode: 500,
+      emailHash,
+    });
     recordAuditEvent(req, {
       domain: 'auth',
       action: 'signin',
@@ -492,10 +538,12 @@ publicRouter.post('/signin', validateJsonBody(userSignInSchema), async (req: Req
  * Create a new canonical user profile in the database.
  */
 publicRouter.post('/create', validateJsonBody(userCreateSchema), async (req: Request, res: Response): Promise<any> => {
+  let emailHash: string | null = null;
   try {
     const email = String(req.body?.email || '')
       .trim()
       .toLowerCase();
+    emailHash = email ? safeLogHash(email) : null;
     const password = String(req.body?.password || '');
     const requestedName = String(req.body?.name || '').trim();
     const requestedLocation = normalizeOptionalString(req.body?.location);
@@ -600,7 +648,19 @@ publicRouter.post('/create', validateJsonBody(userCreateSchema), async (req: Req
       createdAt: persisted.createdAt.toISOString(),
     });
 
-    const persistedSession = await createUserSession(persisted.id);
+    let persistedSession;
+    try {
+      persistedSession = await createUserSession(persisted.id);
+    } catch (sessionError) {
+      logAuthFlowError(req, 'create', 'session_establish_failed', sessionError, {
+        statusCode: 503,
+        userId: persisted.id,
+        emailHash,
+      });
+      auditCreate('error', 503, 'session_establish_failed', persisted.id);
+      return res.status(503).json(PROFILE_SESSION_ESTABLISH_FAILED_RESPONSE);
+    }
+
     const session = createSessionToken(persisted.id, {
       sessionId: persistedSession.id,
       expiresAt: persistedSession.expiresAt.getTime(),
@@ -637,6 +697,9 @@ publicRouter.post('/create', validateJsonBody(userCreateSchema), async (req: Req
       return res.status(409).json({ error: 'A profile with this email already exists' });
     }
     if (duplicateCode === 'STORE_UNAVAILABLE') {
+      logAuthFlowError(req, 'create', 'profile_persistence_failed', error, {
+        statusCode: 503,
+      });
       recordAuditEvent(req, {
         domain: 'auth',
         action: 'create',
@@ -646,7 +709,10 @@ publicRouter.post('/create', validateJsonBody(userCreateSchema), async (req: Req
       });
       return res.status(503).json(PROFILE_STORE_UNAVAILABLE_RESPONSE);
     }
-    console.error('Error creating user profile:', error);
+    logAuthFlowError(req, 'create', 'unexpected_exception', error, {
+      statusCode: 500,
+      emailHash,
+    });
     recordAuditEvent(req, {
       domain: 'auth',
       action: 'create',
@@ -703,7 +769,9 @@ protectedRouter.get('/current', async (req: Request, res: Response): Promise<any
       user: toPublicUser(req, user),
     });
   } catch (error) {
-    console.error('Error fetching current user:', error);
+    logAuthFlowError(req, 'current', 'unexpected_exception', error, {
+      statusCode: 500,
+    });
     return res.status(500).json({ error: 'Failed to fetch current user' });
   }
 });
@@ -748,6 +816,10 @@ protectedRouter.post('/logout', async (req: Request, res: Response): Promise<any
       sessionRevoked: Boolean(authSessionId),
     });
   } catch (error) {
+    logAuthFlowError(req, 'logout', 'session_revoke_failed', error, {
+      statusCode: 500,
+      authSessionId: authSessionId || null,
+    });
     recordAuditEvent(req, {
       domain: 'auth',
       action: 'logout',

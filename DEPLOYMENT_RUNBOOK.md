@@ -16,6 +16,7 @@ This script:
    - `CORS_ORIGINS=https://conscious-network.org,http://localhost:5173`
    - `AUTH_TOKEN_SECRET` is set
    - `DATABASE_URL` is a shared Postgres URL (not `file:`)
+   - `SENSITIVE_DATA_KEY` is set for sensitive-field encryption
    - `AUTH_PERSISTENCE_BACKEND=shared_db`
    - `DATABASE_PROVIDER=postgresql`
    - `OPENAI_API_KEY` (optional; required only for `/api/ai/*` routes)
@@ -28,6 +29,7 @@ The backend now fails startup if any required secret is missing.
 
 - `AUTH_TOKEN_SECRET` (preferred; `SESSION_SECRET` is accepted as a legacy alias)
 - `DATABASE_URL`
+- `SENSITIVE_DATA_KEY`
 
 Optional for AI routes only:
 
@@ -65,6 +67,7 @@ Expected:
 - `GET /api/membership/tiers` returns `200` (public route still accessible).
 - `POST /api/user/create` with empty JSON returns `400` (profile creation validation active).
 - `POST /api/user/signin` with empty JSON returns `400` (sign-in validation active).
+- End-to-end auth flow succeeds: create profile -> read current user -> logout -> login.
 - If `ADMIN_DIAGNOSTICS_KEY` is configured, diagnostics check confirms `shared-db://primary` as active store.
 
 ## Frontend Release Checklist

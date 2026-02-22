@@ -4,7 +4,8 @@ param(
   [string]$Origin = "https://conscious-network.org",
   [string]$ProbeMessage = "Post-deploy smoke test",
   [string]$DiagnosticsKey = "",
-  [switch]$RequireSharedStore
+  [switch]$RequireSharedStore,
+  [switch]$SkipAuthFlow
 )
 
 $ErrorActionPreference = "Stop"
@@ -130,6 +131,98 @@ if (-not $signinJson.error) {
   throw "User sign-in validation response missing expected error field: $($signin.Body)"
 }
 
+if (-not $SkipAuthFlow) {
+  $nonce = [Guid]::NewGuid().ToString("N").Substring(0, 12)
+  $passwordNonce = [Guid]::NewGuid().ToString("N").Substring(0, 16)
+  $flowEmail = "smoke.$nonce@example.com"
+  $flowPassword = "Aa1!$passwordNonce"
+  $flowName = "Smoke User $nonce"
+  $flowCreateBody = (@{
+      email = $flowEmail
+      name = $flowName
+      password = $flowPassword
+    } | ConvertTo-Json -Compress)
+
+  $flowCreate = Invoke-HttpJson -Method "POST" -Url "$trimmedBackend/api/user/create" -Headers $userHeaders -Body $flowCreateBody
+  if ($flowCreate.StatusCode -ne 200) {
+    throw "Auth flow create failed. Expected 200, got $($flowCreate.StatusCode): $($flowCreate.Body)"
+  }
+
+  $flowCreateJson = $null
+  try {
+    $flowCreateJson = $flowCreate.Body | ConvertFrom-Json
+  } catch {
+    throw "Auth flow create response is not JSON: $($flowCreate.Body)"
+  }
+
+  if (-not $flowCreateJson.success -or -not $flowCreateJson.persistenceVerified -or -not $flowCreateJson.token -or -not $flowCreateJson.user) {
+    throw "Auth flow create response missing required fields: $($flowCreate.Body)"
+  }
+
+  $flowToken = [string]$flowCreateJson.token
+  $flowCurrentHeaders = @{
+    Origin = $Origin
+    Authorization = "Bearer $flowToken"
+  }
+
+  $flowCurrent = Invoke-HttpJson -Method "GET" -Url "$trimmedBackend/api/user/current" -Headers $flowCurrentHeaders
+  if ($flowCurrent.StatusCode -ne 200) {
+    throw "Auth flow current-user check failed after create. Expected 200, got $($flowCurrent.StatusCode): $($flowCurrent.Body)"
+  }
+
+  $flowCurrentJson = $null
+  try {
+    $flowCurrentJson = $flowCurrent.Body | ConvertFrom-Json
+  } catch {
+    throw "Auth flow current-user response is not JSON: $($flowCurrent.Body)"
+  }
+
+  if (-not $flowCurrentJson.success -or -not $flowCurrentJson.user -or [string]$flowCurrentJson.user.email -ne $flowEmail) {
+    throw "Auth flow current-user payload mismatch after create: $($flowCurrent.Body)"
+  }
+
+  $flowLogout = Invoke-HttpJson -Method "POST" -Url "$trimmedBackend/api/user/logout" -Headers $flowCurrentHeaders
+  if ($flowLogout.StatusCode -ne 200) {
+    throw "Auth flow logout failed. Expected 200, got $($flowLogout.StatusCode): $($flowLogout.Body)"
+  }
+
+  $flowLogoutJson = $null
+  try {
+    $flowLogoutJson = $flowLogout.Body | ConvertFrom-Json
+  } catch {
+    throw "Auth flow logout response is not JSON: $($flowLogout.Body)"
+  }
+
+  if (-not $flowLogoutJson.success) {
+    throw "Auth flow logout payload missing success=true: $($flowLogout.Body)"
+  }
+
+  $flowCurrentAfterLogout = Invoke-HttpJson -Method "GET" -Url "$trimmedBackend/api/user/current" -Headers $flowCurrentHeaders
+  if ($flowCurrentAfterLogout.StatusCode -ne 401) {
+    throw "Auth flow expected /api/user/current to return 401 after logout, got $($flowCurrentAfterLogout.StatusCode): $($flowCurrentAfterLogout.Body)"
+  }
+
+  $flowSignInBody = (@{
+      email = $flowEmail
+      password = $flowPassword
+    } | ConvertTo-Json -Compress)
+  $flowSignIn = Invoke-HttpJson -Method "POST" -Url "$trimmedBackend/api/user/signin" -Headers $userHeaders -Body $flowSignInBody
+  if ($flowSignIn.StatusCode -ne 200) {
+    throw "Auth flow sign-in failed after logout. Expected 200, got $($flowSignIn.StatusCode): $($flowSignIn.Body)"
+  }
+
+  $flowSignInJson = $null
+  try {
+    $flowSignInJson = $flowSignIn.Body | ConvertFrom-Json
+  } catch {
+    throw "Auth flow sign-in response is not JSON: $($flowSignIn.Body)"
+  }
+
+  if (-not $flowSignInJson.success -or -not $flowSignInJson.token -or -not $flowSignInJson.user) {
+    throw "Auth flow sign-in payload missing required fields: $($flowSignIn.Body)"
+  }
+}
+
 if ($RequireSharedStore) {
   if (-not $DiagnosticsKey) {
     throw "RequireSharedStore was set but DiagnosticsKey was not provided."
@@ -173,6 +266,9 @@ Write-Host "AI Chat: 401 when unauthenticated (auth enforcement confirmed)"
 Write-Host "Membership tiers: 200 (public endpoint confirmed)"
 Write-Host "User create: 400 for empty payload (validation confirmed)"
 Write-Host "User signin: 400 for empty payload (validation confirmed)"
+if (-not $SkipAuthFlow) {
+  Write-Host "Auth flow: create -> current -> logout -> login passed"
+}
 if ($RequireSharedStore) {
   Write-Host "Store diagnostics: shared DB-backed persistence confirmed"
 }

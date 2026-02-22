@@ -366,13 +366,14 @@ const App: React.FC = () => {
   const handleSignIn = async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
+    const normalizedEmail = emailInput.trim().toLowerCase();
 
     try {
       const response = await fetch(`${resolveBackendUrl()}/api/user/signin`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          email: emailInput,
+          email: normalizedEmail,
           password: passwordInput,
           twoFactorCode: twoFactorCodeInput,
           providerToken: providerTokenInput,
@@ -388,6 +389,10 @@ const App: React.FC = () => {
       }
 
       if (!response.ok) {
+        if (response.status === 503 && data?.code === 'PROFILE_STORE_UNAVAILABLE') {
+          setError(data?.error || 'Profile service is currently unavailable. Please retry shortly.');
+          return;
+        }
         setError(data?.error || 'Invalid credentials.');
         return;
       }
@@ -412,6 +417,7 @@ const App: React.FC = () => {
   const handleCreateProfile = async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
+    const normalizedEmail = emailInput.trim().toLowerCase();
     if (!signupTwoFactorEnabled && twoFactorMethodInput !== 'none') {
       setError(
         'Signup 2FA enrollment is temporarily disabled. Create your profile first, then enable 2FA in Profile Security.'
@@ -440,12 +446,12 @@ const App: React.FC = () => {
     }
 
     try {
-      const identityName = emailInput.split('@')[0] || 'Node';
+      const identityName = normalizedEmail.split('@')[0] || 'Node';
       const response = await fetch(`${resolveBackendUrl()}/api/user/create`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          email: emailInput,
+          email: normalizedEmail,
           name: identityName,
           password: passwordInput,
           twoFactorMethod: twoFactorMethodInput,
@@ -458,6 +464,18 @@ const App: React.FC = () => {
       if (!response.ok) {
         if (response.status === 503 && data?.code === 'PROFILE_STORE_UNAVAILABLE') {
           setError(data?.error || 'Profile service is currently unavailable. Please retry shortly.');
+          return;
+        }
+        if (response.status === 503 && data?.code === 'PROFILE_SESSION_ESTABLISH_FAILED') {
+          setSignupModalOpen(false);
+          setSigninModalOpen(true);
+          setPasswordInput('');
+          setConfirmPasswordInput('');
+          setPendingTwoFactorMethod(null);
+          setError(
+            data?.error ||
+              'Profile was created, but session setup failed. Please sign in to continue.'
+          );
           return;
         }
         setError(data?.error || `Unable to create profile (HTTP ${response.status}).`);
