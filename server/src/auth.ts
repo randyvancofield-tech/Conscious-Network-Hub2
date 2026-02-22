@@ -1,4 +1,5 @@
 import crypto from 'crypto';
+import bcrypt from 'bcryptjs';
 import { resolveAuthTokenSecret } from './requiredEnv';
 
 export interface SessionTokenPayload {
@@ -9,6 +10,7 @@ export interface SessionTokenPayload {
 }
 
 const DEFAULT_SESSION_TTL_SECONDS = 60 * 60 * 24 * 7; // 7 days
+const DEFAULT_BCRYPT_ROUNDS = 12;
 const PASSWORD_HASH_PREFIX = 'scrypt';
 const PASSWORD_SALT_BYTES = 16;
 const PASSWORD_KEY_LEN = 64;
@@ -50,10 +52,18 @@ const signSegment = (segment: string): string =>
 const legacySha256 = (password: string): string =>
   crypto.createHash('sha256').update(password).digest('hex');
 
+const resolveBcryptRounds = (): number => {
+  const parsed = Number(process.env.BCRYPT_SALT_ROUNDS);
+  if (Number.isFinite(parsed) && parsed >= 8 && parsed <= 15) {
+    return Math.floor(parsed);
+  }
+  return DEFAULT_BCRYPT_ROUNDS;
+};
+
+const isBcryptHash = (stored: string): boolean => /^\$2[aby]\$\d{2}\$/.test(stored);
+
 export const hashPassword = (password: string): string => {
-  const salt = crypto.randomBytes(PASSWORD_SALT_BYTES).toString('hex');
-  const hash = crypto.scryptSync(password, salt, PASSWORD_KEY_LEN).toString('hex');
-  return `${PASSWORD_HASH_PREFIX}$${salt}$${hash}`;
+  return bcrypt.hashSync(password, resolveBcryptRounds());
 };
 
 const verifyScryptPassword = (password: string, stored: string): boolean => {
@@ -79,6 +89,14 @@ const verifyScryptPassword = (password: string, stored: string): boolean => {
 export const verifyPassword = (password: string, storedPassword: string): boolean => {
   if (!storedPassword || typeof storedPassword !== 'string') return false;
 
+  if (isBcryptHash(storedPassword)) {
+    try {
+      return bcrypt.compareSync(password, storedPassword);
+    } catch {
+      return false;
+    }
+  }
+
   if (storedPassword.startsWith(`${PASSWORD_HASH_PREFIX}$`)) {
     return verifyScryptPassword(password, storedPassword);
   }
@@ -88,7 +106,7 @@ export const verifyPassword = (password: string, storedPassword: string): boolea
 };
 
 export const needsPasswordRehash = (storedPassword: string): boolean => {
-  return !storedPassword.startsWith(`${PASSWORD_HASH_PREFIX}$`);
+  return !isBcryptHash(storedPassword);
 };
 
 export const computePasswordFingerprint = (password: string): string => {
