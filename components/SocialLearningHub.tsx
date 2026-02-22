@@ -1,8 +1,8 @@
 
 import React, { useState, useRef, useEffect, useMemo } from 'react';
 import { 
-  Upload, MessageSquare, Heart, Share2, Plus, 
-  User, Send, Globe, Zap, Sparkles, Filter, 
+  MessageSquare, Heart,
+  Send, Globe, Zap, Sparkles, Filter, 
   LayoutGrid, BookOpen, Layers, Users, ShieldCheck, 
   ArrowRight, FileText, ImageIcon, FileVideo, Cpu, X, Play,
   Activity, Terminal, ChevronRight, Link as LinkIcon, Youtube, ExternalLink

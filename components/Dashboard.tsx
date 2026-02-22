@@ -1,6 +1,6 @@
 
-import React, { useState, useEffect, RefObject } from 'react';
-import { Search, Bell, ShieldCheck, TrendingUp, Users, ExternalLink, PlayCircle, BookOpen, Layers, Globe, Plus, Target, Rocket, BarChart3, HeartHandshake } from 'lucide-react';
+import React, { RefObject } from 'react';
+import { ShieldCheck, TrendingUp, Layers, Globe, Target, Rocket, BarChart3, HeartHandshake } from 'lucide-react';
 import { CORE_COMPONENTS } from '../constants';
 import EthicalAIInsight from './EthicalAIInsight';
 import { UserProfile, Course } from '../types';
@@ -11,7 +11,7 @@ interface DashboardProps {
   insightRef?: RefObject<HTMLDivElement>;
 }
 
-const Dashboard: React.FC<DashboardProps> = ({ user, onEnroll, insightRef }) => {
+const Dashboard: React.FC<DashboardProps> = ({ user, onEnroll: _onEnroll, insightRef }) => {
   return (
     <div className="space-y-12 animate-in fade-in duration-700 pb-20">
       {/* Welcome Hero - Ethical AI Insight */}

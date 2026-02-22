@@ -109,7 +109,7 @@ export class SecurityService {
   /**
    * Encrypt sensitive data (client-side)
    */
-  encryptData(data: string, key: string): string {
+  encryptData(data: string, _key: string): string {
     try {
       // Simple base64 encoding for demonstration
       // In production, use proper encryption libraries
@@ -124,7 +124,7 @@ export class SecurityService {
   /**
    * Decrypt sensitive data (client-side)
    */
-  decryptData(encrypted: string, key: string): string {
+  decryptData(encrypted: string, _key: string): string {
     try {
       const decoded = decodeURIComponent(escape(atob(encrypted)));
       return decoded;

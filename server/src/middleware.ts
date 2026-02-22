@@ -211,9 +211,9 @@ function sanitizeInput(input: string): string {
  */
 export function errorHandler(
   err: Error,
-  req: Request,
+  _req: Request,
   res: Response,
-  next: NextFunction
+  _next: NextFunction
 ): void {
   console.error('Error:', err);
 
@@ -254,7 +254,7 @@ export function requestLogger(
 /**
  * Health check endpoint
  */
-export function healthCheck(req: Request, res: Response): void {
+export function healthCheck(_req: Request, res: Response): void {
   res.json({
     status: 'healthy',
     timestamp: new Date().toISOString(),

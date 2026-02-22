@@ -24,7 +24,7 @@ export interface ResolvedUploadObject {
   sizeBytes: number;
 }
 
-const prisma = new PrismaClient();
+let prisma: PrismaClient | null = null;
 
 const toStoreError = (message: string, cause?: unknown): Error & { code: string } => {
   const error = new Error(message) as Error & { code: string; cause?: unknown };
@@ -71,6 +71,9 @@ const decodePostgresUploadKey = (objectKey: string): PostgresUploadKeyPayload | 
 };
 
 const ensurePrisma = (): PrismaClient => {
+  if (!prisma) {
+    prisma = new PrismaClient();
+  }
   return prisma;
 };
 

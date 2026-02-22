@@ -259,7 +259,7 @@ You must cite sources whenever possible and avoid fabricating sources.`;
     return Math.min(100, score);
   }
 
-  private extractCitations(response: any): Array<{
+  private extractCitations(_response: any): Array<{
     title: string;
     url?: string;
     relevance?: number;

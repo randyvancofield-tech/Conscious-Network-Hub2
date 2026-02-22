@@ -7,14 +7,6 @@
  */
 import { buildAuthHeaders } from './sessionService';
 
-interface ImportMetaEnv {
-  readonly VITE_BACKEND_URL?: string;
-}
-
-interface ImportMeta {
-  readonly env: ImportMetaEnv;
-}
-
 export interface GroundingChunk {
   text?: string;
   web?: {
@@ -89,7 +81,7 @@ class BackendAPIService {
   async askEthicalAI(
     question: string,
     context?: { category?: string; userId?: string },
-    onStream?: (chunk: string) => void
+    _onStream?: (chunk: string) => void
   ): Promise<EnhancedResponse> {
     try {
       // Ensure we load the correct user-scoped history
@@ -339,7 +331,7 @@ class BackendAPIService {
    * Generate suggested follow-up questions
    */
   async generateSuggestedQuestions(
-    lastQuestion: string,
+    _lastQuestion: string,
     lastResponse: string
   ): Promise<string[]> {
     // Generate questions based on the last exchange

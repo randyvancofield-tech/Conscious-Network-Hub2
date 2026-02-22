@@ -1,6 +1,4 @@
 import crypto from 'crypto';
-import fs from 'fs';
-import path from 'path';
 import { Prisma, PrismaClient } from '@prisma/client';
 
 export type SocialPostVisibility = 'public' | 'private';
@@ -23,16 +21,6 @@ export interface SocialPostMediaRecord {
   createdAt: Date;
 }
 
-interface SocialPostMediaRow {
-  id: string;
-  postId: string;
-  mediaType: SocialPostMediaType;
-  url: string;
-  storageProvider: string | null;
-  objectKey: string | null;
-  createdAt: string;
-}
-
 export interface SocialPostRecord {
   id: string;
   authorId: string;
@@ -44,41 +32,7 @@ export interface SocialPostRecord {
   updatedAt: Date;
 }
 
-interface SocialPostRow {
-  id: string;
-  authorId: string;
-  text: string;
-  visibility: SocialPostVisibility;
-  media: SocialPostMediaRow[];
-  createdAt: string;
-  updatedAt: string;
-}
-
-interface SocialPostLikeRow {
-  userId: string;
-  postId: string;
-  createdAt: string;
-}
-
-interface SocialFollowRow {
-  followerId: string;
-  followingId: string;
-  createdAt: string;
-}
-
-interface SocialStoreRow {
-  version: number;
-  posts: SocialPostRow[];
-  postLikes: SocialPostLikeRow[];
-  follows: SocialFollowRow[];
-}
-
-const STORE_DIR = path.resolve(__dirname, '../../data');
-const STORE_FILE = path.join(STORE_DIR, 'social-store.json');
-const STORE_TMP_FILE = path.join(STORE_DIR, 'social-store.tmp.json');
-const STORE_BACKUP_FILE = path.join(STORE_DIR, 'social-store.backup.json');
-
-const prisma = new PrismaClient();
+let prisma: PrismaClient | null = null;
 
 const toStoreError = (message: string, cause?: unknown): Error & { code: string } => {
   const error = new Error(message) as Error & { code: string; cause?: unknown };
@@ -90,68 +44,10 @@ const toStoreError = (message: string, cause?: unknown): Error & { code: string 
 };
 
 const ensurePrisma = (): PrismaClient => {
+  if (!prisma) {
+    prisma = new PrismaClient();
+  }
   return prisma;
-};
-
-const nowIso = (): string => new Date().toISOString();
-
-const createEmptyStore = (): SocialStoreRow => ({
-  version: 1,
-  posts: [],
-  postLikes: [],
-  follows: [],
-});
-
-const ensureStoreFile = (): void => {
-  if (!fs.existsSync(STORE_DIR)) {
-    fs.mkdirSync(STORE_DIR, { recursive: true });
-  }
-  if (!fs.existsSync(STORE_FILE)) {
-    fs.writeFileSync(STORE_FILE, JSON.stringify(createEmptyStore(), null, 2), 'utf8');
-  }
-};
-
-const parseStore = (raw: string): SocialStoreRow => {
-  if (!raw.trim()) return createEmptyStore();
-  const parsed = JSON.parse(raw) as Partial<SocialStoreRow>;
-  return {
-    version: 1,
-    posts: Array.isArray(parsed.posts) ? parsed.posts : [],
-    postLikes: Array.isArray(parsed.postLikes) ? parsed.postLikes : [],
-    follows: Array.isArray(parsed.follows) ? parsed.follows : [],
-  };
-};
-
-const loadStore = (): SocialStoreRow => {
-  ensureStoreFile();
-  try {
-    return parseStore(fs.readFileSync(STORE_FILE, 'utf8'));
-  } catch (primaryError) {
-    if (!fs.existsSync(STORE_BACKUP_FILE)) {
-      throw toStoreError('[SOCIAL][FATAL] Social store is unreadable', primaryError);
-    }
-    try {
-      const restored = parseStore(fs.readFileSync(STORE_BACKUP_FILE, 'utf8'));
-      fs.copyFileSync(STORE_BACKUP_FILE, STORE_FILE);
-      return restored;
-    } catch (backupError) {
-      throw toStoreError('[SOCIAL][FATAL] Social store and backup are unreadable', backupError);
-    }
-  }
-};
-
-const saveStore = (store: SocialStoreRow): void => {
-  ensureStoreFile();
-  try {
-    fs.writeFileSync(STORE_TMP_FILE, JSON.stringify(store, null, 2), 'utf8');
-    if (fs.existsSync(STORE_FILE)) {
-      fs.copyFileSync(STORE_FILE, STORE_BACKUP_FILE);
-      fs.rmSync(STORE_FILE, { force: true });
-    }
-    fs.renameSync(STORE_TMP_FILE, STORE_FILE);
-  } catch (error) {
-    throw toStoreError('[SOCIAL][FATAL] Failed to persist social store', error);
-  }
 };
 
 const normalizeVisibility = (value: unknown): SocialPostVisibility =>
@@ -183,53 +79,6 @@ const normalizeMediaInput = (value: unknown): SocialPostMediaInput[] => {
   return normalized;
 };
 
-const mapRowMediaToRecord = (
-  media: unknown,
-  postId: string,
-  fallbackCreatedAtIso: string
-): SocialPostMediaRecord[] => {
-  if (!Array.isArray(media)) return [];
-  const mapped: SocialPostMediaRecord[] = [];
-  for (let index = 0; index < media.length; index += 1) {
-    const entry =
-      media[index] && typeof media[index] === 'object'
-        ? (media[index] as Record<string, unknown>)
-        : null;
-    if (!entry) continue;
-
-    const url = String(entry.url || '').trim();
-    if (!url) continue;
-
-    const id = String(entry.id || '').trim() || `${postId}-media-${index + 1}`;
-    const mediaPostId = String(entry.postId || '').trim() || postId;
-    const createdAtRaw = String(entry.createdAt || '').trim();
-    mapped.push({
-      id,
-      postId: mediaPostId,
-      mediaType: normalizeMediaType(entry.mediaType),
-      url,
-      storageProvider: String(entry.storageProvider || '').trim() || null,
-      objectKey: String(entry.objectKey || '').trim() || null,
-      createdAt: new Date(createdAtRaw || fallbackCreatedAtIso),
-    });
-  }
-  return mapped;
-};
-
-const mapRowToRecord = (
-  row: SocialPostRow,
-  likes: SocialPostLikeRow[]
-): SocialPostRecord => ({
-  id: row.id,
-  authorId: row.authorId,
-  text: row.text,
-  visibility: normalizeVisibility(row.visibility),
-  media: mapRowMediaToRecord(row.media, row.id, row.createdAt),
-  likeCount: likes.filter((like) => like.postId === row.id).length,
-  createdAt: new Date(row.createdAt),
-  updatedAt: new Date(row.updatedAt),
-});
-
 const mapPrismaPostToRecord = (post: any): SocialPostRecord => ({
   id: post.id,
   authorId: post.authorId,
@@ -248,16 +97,6 @@ const mapPrismaPostToRecord = (post: any): SocialPostRecord => ({
   createdAt: post.createdAt,
   updatedAt: post.updatedAt,
 });
-
-const sortPostsDesc = (posts: SocialPostRow[]): SocialPostRow[] =>
-  posts.slice().sort((a, b) => b.createdAt.localeCompare(a.createdAt));
-
-const applyCursor = (rows: SocialPostRow[], cursorPostId?: string): SocialPostRow[] => {
-  if (!cursorPostId) return rows;
-  const index = rows.findIndex((row) => row.id === cursorPostId);
-  if (index < 0) return rows;
-  return rows.slice(index + 1);
-};
 
 export const socialStore = {
   async createPost(input: {

@@ -1,13 +1,13 @@
 import React, { useState, useEffect, useRef } from 'react';
 import {
-  Send, FileText, Sparkles, Globe, X, Loader2, Flag, MessageSquare,
-  ArrowRight, Heart, Copy, Download, Volume2, Mic, TrendingUp, Lightbulb,
-  ThumbsUp, ThumbsDown, Bookmark, RefreshCw, Settings, BarChart3,
-  Eye, CheckCircle, Zap
+  Send, Sparkles, Globe, X, Loader2, Flag, MessageSquare,
+  ArrowRight, Heart, Copy, Download, Mic, TrendingUp,
+  ThumbsUp, ThumbsDown, RefreshCw, Settings, BarChart3,
+  CheckCircle
 } from 'lucide-react';
 import backendAPI, {
   askEthicalAI, getDailyWisdom, processPlatformIssue, generateSuggestedQuestions,
-  getTrendingInsights, EnhancedResponse, GroundingChunk
+  getTrendingInsights, EnhancedResponse
 } from '../services/backendApiService';
 import { securityService } from '../services/securityService';
 import { cacheService, ConversationEntry } from '../services/cacheService';

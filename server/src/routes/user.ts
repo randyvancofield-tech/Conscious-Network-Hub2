@@ -281,47 +281,6 @@ const toPublicUser = (req: Request, user: any) => ({
 });
 
 /**
- * POST /api/user/signin-intake
- * Intake endpoint for sign-in payload connectivity checks.
- */
-publicRouter.post('/signin-intake', validateJsonBody(userSignInSchema), async (req: Request, res: Response): Promise<any> => {
-  const email = String(req.body?.email || '')
-    .trim()
-    .toLowerCase();
-  const passwordRaw = String(req.body?.password || '');
-  const twoFactorCode = String(req.body?.twoFactorCode || '').trim();
-  const providerToken = String(req.body?.providerToken || '').trim();
-  const intakeLog = {
-    method: req.method,
-    path: req.path,
-    emailHash: email ? safeLogHash(email) : null,
-    hasPassword: Boolean(passwordRaw),
-    passwordLength: passwordRaw.length,
-    hasTwoFactorCode: Boolean(twoFactorCode),
-    hasProviderToken: Boolean(providerToken),
-    requestId: String(req.headers['x-request-id'] || '').trim() || null,
-    traceId: getRequestTraceId(req),
-  };
-  console.info('[AUTH][SIGNIN_INTAKE]', JSON.stringify(intakeLog));
-  recordAuditEvent(req, {
-    domain: 'auth',
-    action: 'signin_intake',
-    outcome: 'success',
-    statusCode: 200,
-    metadata: intakeLog,
-  });
-  return res.json({
-    success: true,
-    received: {
-      emailHash: intakeLog.emailHash,
-      hasPassword: intakeLog.hasPassword,
-      hasTwoFactorCode: intakeLog.hasTwoFactorCode,
-      hasProviderToken: intakeLog.hasProviderToken,
-    },
-  });
-});
-
-/**
  * POST /api/user/signin
  * Authenticate an existing user with canonical backend identity.
  */
@@ -906,7 +865,7 @@ protectedRouter.get('/reconcile/:id', async (req: Request, res: Response): Promi
  * GET /api/user/directory
  * Basic directory for authenticated hub users.
  */
-protectedRouter.get('/directory', async (req: Request, res: Response): Promise<any> => {
+protectedRouter.get('/directory', async (_req: Request, res: Response): Promise<any> => {
   try {
     const users = await localStore.listUsers(250);
 

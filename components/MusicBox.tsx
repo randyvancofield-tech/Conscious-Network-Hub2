@@ -753,9 +753,6 @@ const MusicBox: React.FC = () => {
                       onClick={(e) => {
                         e.stopPropagation();
                         setCurrentTrack(idx);
-                        // if user is already playing, keep it playing
-                        // if not playing, you can choose to autoplay by uncommenting:
-                        // safePlay();
                       }}
                       className={`w-full text-left text-[8px] px-3 py-2 rounded-lg transition-all border ${
                         currentTrack === idx

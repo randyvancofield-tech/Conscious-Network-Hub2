@@ -4,7 +4,7 @@ import {
   Camera, Edit3, Plus, ChevronRight, ArrowLeft, X, ShieldCheck, 
   UserCircle, Upload, LogOut, Layout, 
   Award, Zap, Shield, GraduationCap,
-  Sparkles, PenTool, Bookmark, Settings, Lock, MessageSquare, Mail, Eye, EyeOff,
+  Sparkles, PenTool, Bookmark, Lock, MessageSquare, Mail, Eye, EyeOff,
   Twitter, Github, Globe
 } from 'lucide-react';
 import { UserProfile, Course } from '../../types';

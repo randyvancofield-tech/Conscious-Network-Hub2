@@ -60,7 +60,7 @@ export class AnalyticsService {
 
     // Update user stats
     if (this.currentUserId) {
-      this.updateUserStats(eventType, duration);
+      this.updateUserStats(eventType);
     }
 
     this.persistToStorage();
@@ -303,7 +303,7 @@ export class AnalyticsService {
    * Private methods
    */
 
-  private updateUserStats(eventType: string, duration?: number): void {
+  private updateUserStats(eventType: string): void {
     if (!this.currentUserId) return;
 
     let stats = this.userStats.get(this.currentUserId) || this.getDefaultStats();

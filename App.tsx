@@ -1,7 +1,6 @@
 
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import ThreeScene from './components/ThreeScene';
-import Profile from './components/Profile';
 import Dashboard from './components/Dashboard';
 import WalletPopout from './components/WalletPopout';
 import MyCourses from './components/MyCourses';
@@ -11,14 +10,13 @@ import CommunityMembers from './components/CommunityMembers';
 import SocialLearningHub from './components/SocialLearningHub';
 import ConsciousMeetings from './components/ConsciousMeetings';
 import MusicBox from './components/MusicBox';
-import EthicalAIInsight from './components/EthicalAIInsight';
 import PaymentConfirmation from './components/PaymentConfirmation';
 import { ConsciousIdentity } from './components/community/CommunityLayout';
 import { AppView, UserProfile, Course } from './types';
 import { NAVIGATION_ITEMS } from './constants';
 import { 
-  Shield, Brain, Menu, X, Search, Bell, Settings, 
-  ChevronRight, ChevronDown, Wallet, LogIn, Home, LogOut, Compass, UserCircle, Building2, CheckCircle2, Sparkles, Key, Video
+  Shield, Menu, X, Search, Bell,
+  ChevronRight, Wallet, Home, LogOut, Compass, Building2, CheckCircle2, Sparkles, Key
 } from 'lucide-react';
 import logo from './src/assets/brand/logo.png';
 import privacyPolicy from './docs/compliance/privacy-policy-draft.md?raw';
@@ -53,7 +51,6 @@ const App: React.FC = () => {
   const [providerTokenInput, setProviderTokenInput] = useState('');
   const [pendingTwoFactorMethod, setPendingTwoFactorMethod] = useState<'phone' | 'wallet' | null>(null);
 
-  const [isConnectDropdownOpen, setConnectDropdownOpen] = useState(false);
   const [isContactModalOpen, setContactModalOpen] = useState(false);
   const [contactName, setContactName] = useState('');
   const [contactEmail, setContactEmail] = useState('');
@@ -265,13 +262,6 @@ const App: React.FC = () => {
       setWalletDidInput('');
     }
   }, [signupTwoFactorEnabled, twoFactorMethodInput]);
-
-  useEffect(() => {
-    if (isConnectDropdownOpen && connectButtonRef.current) {
-      const rect = connectButtonRef.current.getBoundingClientRect();
-      setDropdownPos({ top: rect.bottom, left: rect.left });
-    }
-  }, [isConnectDropdownOpen]);
 
   useEffect(() => {
     const controller = new AbortController();
@@ -715,8 +705,6 @@ const App: React.FC = () => {
         return <SocialLearningHub user={user} />;
       case AppView.CONSCIOUS_MEETINGS:
         return <ConsciousMeetings user={user} onUpdateUser={updateActiveUser} />;
-      case AppView.PROFILE:
-        return user ? <Profile user={user} onUserUpdate={updateActiveUser} /> : null;
       case AppView.MY_CONSCIOUS_IDENTITY: 
         return (
           <ConsciousIdentity 

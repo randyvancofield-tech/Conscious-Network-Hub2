@@ -2,9 +2,9 @@
 import React, { useState, useEffect, useRef } from 'react';
 import {
   Users, MessageSquare, Search, ShieldCheck,
-  Send, X, Sparkles, Globe, ArrowLeft,
-  ChevronRight, MoreHorizontal, Smile, Paperclip,
-  CheckCircle2, Lock, UserCheck, Smartphone, Info
+  Send, X, ArrowLeft,
+  ChevronRight, Paperclip,
+  CheckCircle2, Lock, Smartphone, Info
 } from 'lucide-react';
 import { UserProfile } from '../types';
 import { buildAuthHeaders, getAuthToken } from '../services/sessionService';

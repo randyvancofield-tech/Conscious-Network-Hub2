@@ -2,7 +2,7 @@
 import React from 'react';
 import { 
   ArrowLeft, Compass, Shield, Users, HeartPulse, 
-  Fingerprint, Scale, HelpCircle, ChevronRight,
+  Fingerprint, Scale, HelpCircle,
   BookOpen, Star, Play
 } from 'lucide-react';
 import { Course } from '../types';

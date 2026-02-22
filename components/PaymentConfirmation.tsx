@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Loader, CheckCircle, AlertCircle } from 'lucide-react';
+import { CheckCircle, AlertCircle } from 'lucide-react';
 import { buildAuthHeaders } from '../services/sessionService';
 
 interface PaymentConfirmationProps {
@@ -33,8 +33,6 @@ const PaymentConfirmation: React.FC<PaymentConfirmationProps> = ({
           throw new Error('Payment confirmation failed');
         }
 
-        const data = await response.json();
-        
         // Fetch updated membership status
         const statusResponse = await fetch(
           `${backendBaseUrl}/api/membership/status/${userId}`,
@@ -135,7 +133,6 @@ const PaymentConfirmation: React.FC<PaymentConfirmationProps> = ({
 
                       if (!response.ok) throw new Error('Payment confirmation failed');
 
-                      const data = await response.json();
                       const statusResponse = await fetch(
                         `${backendBaseUrl}/api/membership/status/${userId}`,
                         { headers: buildAuthHeaders() }

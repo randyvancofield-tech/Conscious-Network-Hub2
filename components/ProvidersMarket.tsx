@@ -1,9 +1,9 @@
 
 import React, { useState } from 'react';
 import { 
-  Search, Filter, Star, Globe, ShieldCheck, 
-  MessageSquare, UserPlus, Info, ExternalLink,
-  ChevronRight, Brain, Sparkles, Heart, Anchor
+  Search, Star, ShieldCheck,
+  UserPlus, Info,
+  ChevronRight, Brain
 } from 'lucide-react';
 
 interface ProviderProfile {

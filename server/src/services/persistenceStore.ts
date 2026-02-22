@@ -28,7 +28,7 @@ type CreateProviderSessionInput = Parameters<StoreApi['createProviderSession']>[
 
 export const isUsingSharedPersistence = true;
 
-const prisma = new PrismaClient();
+let prisma: PrismaClient | null = null;
 
 const storeUnavailableError = (message: string, cause?: unknown): Error & { code: string } => {
   const error = new Error(message) as Error & { code: string; cause?: unknown };
@@ -227,6 +227,9 @@ const toLocalProviderSession = (row: any): LocalProviderSessionRecord => ({
 });
 
 const ensurePrisma = (): PrismaClient => {
+  if (!prisma) {
+    prisma = new PrismaClient();
+  }
   return prisma;
 };
 

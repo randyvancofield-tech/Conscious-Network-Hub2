@@ -6,7 +6,6 @@ import {
   requireCanonicalIdentity,
 } from '../middleware';
 import { getVertexAIService } from '../services/vertexAiService';
-import { getKnowledgeContext, KnowledgeSource } from '../services/knowledgeService';
 import emailService from '../services/emailService';
 import { chatWithOpenAI, isOpenAIConfigured } from "../services/openAiService";
 
@@ -30,21 +29,6 @@ const enforceCanonicalBodyUser = (req: Request, res: Response): boolean => {
 
   return true;
 };
-
-interface ChatRequest {
-  message: string;
-  conversationId?: string;
-  context?: object;
-  conversationHistory?: Array<{ role: string; content: string }>;
-}
-
-interface GroundingChunk {
-  text?: string;
-  web?: {
-    uri: string;
-    title: string;
-  };
-}
 
 interface MeetingActionItem {
   owner: string;
@@ -114,40 +98,6 @@ const parseMeetingSummary = (reply: string): MeetingSummary => {
     decisions: [],
     actionItems: [],
   };
-};
-
-const mergeSources = (
-  modelSources: Array<{ title?: string; url?: string; relevance?: number }> = [],
-  knowledgeSources: KnowledgeSource[] = []
-): GroundingChunk[] => {
-  const normalized: GroundingChunk[] = [];
-  const seen = new Set<string>();
-
-  const pushChunk = (title?: string, url?: string, snippet?: string) => {
-    if (!title) return;
-    const key = `${title}|${url || ''}`;
-    if (seen.has(key)) return;
-    seen.add(key);
-    if (url) {
-      normalized.push({
-        web: { uri: url, title }
-      });
-    } else if (snippet) {
-      normalized.push({
-        text: snippet
-      });
-    }
-  };
-
-  for (const source of modelSources) {
-    pushChunk(source.title, source.url);
-  }
-
-  for (const source of knowledgeSources) {
-    pushChunk(source.title, source.url, source.snippet);
-  }
-
-  return normalized.slice(0, 6);
 };
 
 const ensureOpenAIAvailability = (res: Response): boolean => {
@@ -289,11 +239,10 @@ router.post('/report-issue', validateChatInput, async (req: Request, res: Respon
     if (!enforceCanonicalBodyUser(req, res)) {
       return;
     }
-    const { message, category = 'other', context, title: titleParam, userEmail } = req.body as any;
+    const { message, category = 'other', title: titleParam, userEmail } = req.body as any;
 
     const title = titleParam || 'Issue Report';
     const description = message;
-    const reportEmail = process.env.REPORT_EMAIL || 'higherconscious.network1@gmail.com';
 
     let priority = 'MEDIUM';
     let analysis = '';
@@ -395,7 +344,7 @@ router.post('/report-issue', validateChatInput, async (req: Request, res: Respon
  * GET /api/ai/trending
  * Get trending topics
  */
-router.get('/trending', async (req: Request, res: Response): Promise<void> => {
+router.get('/trending', async (_req: Request, res: Response): Promise<void> => {
   const requestStart = Date.now();
   console.log('[AI] GET /api/ai/trending received');
   try {

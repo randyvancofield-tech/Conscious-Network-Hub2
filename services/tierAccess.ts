@@ -14,7 +14,7 @@ const NAV_VIEW_BY_ID: Record<string, AppView> = {
   meetings: AppView.CONSCIOUS_MEETINGS,
   'my-courses': AppView.MY_COURSES,
   providers: AppView.PROVIDERS,
-  profile: AppView.PROFILE,
+  profile: AppView.MY_CONSCIOUS_IDENTITY,
   membership: AppView.MEMBERSHIP,
 };
 
@@ -52,7 +52,6 @@ const TIER_ACCESS_MAP: Record<FrontendTier, AppView[]> = {
     AppView.MY_COURSES,
     AppView.KNOWLEDGE_PATHWAYS,
     AppView.PROVIDERS,
-    AppView.PROFILE,
     AppView.MEMBERSHIP,
   ],
 };

@@ -12,7 +12,6 @@ export interface SessionTokenPayload {
 const DEFAULT_SESSION_TTL_SECONDS = 60 * 60 * 24 * 7; // 7 days
 const DEFAULT_BCRYPT_ROUNDS = 12;
 const PASSWORD_HASH_PREFIX = 'scrypt';
-const PASSWORD_SALT_BYTES = 16;
 const PASSWORD_KEY_LEN = 64;
 
 const getTokenSecret = (): string => resolveAuthTokenSecret();

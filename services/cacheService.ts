@@ -33,7 +33,6 @@ export class CacheService {
   // Configuration
   private readonly WISDOM_TTL = 24 * 60 * 60 * 1000; // 24 hours
   private readonly QA_TTL = 60 * 60 * 1000; // 1 hour
-  private readonly TRENDING_TTL = 30 * 60 * 1000; // 30 minutes
   private readonly HISTORY_RETENTION = 30 * 24 * 60 * 60 * 1000; // 30 days
   private readonly MAX_HISTORY_ENTRIES = 40; // 20 exchanges
 

@@ -1,6 +1,4 @@
-
-import React from 'react';
-import { Shield, Brain, Users, GraduationCap, Building2, Layout, UserCircle, Briefcase, CreditCard, BookOpen, Sparkles, MessageSquareShare, Video } from 'lucide-react';
+import { Shield, Brain, GraduationCap, Building2, Layout, UserCircle, Briefcase, CreditCard, BookOpen, MessageSquareShare, Video } from 'lucide-react';
 
 export const NAVIGATION_ITEMS = [
   { id: 'dashboard', label: 'Portal Home', icon: <Layout className="w-5 h-5" /> },

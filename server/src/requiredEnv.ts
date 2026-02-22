@@ -41,7 +41,8 @@ export const validateRequiredEnv = (): void => {
   const databaseUrl = trimEnv('DATABASE_URL');
   const persistenceBackend = (trimEnv('AUTH_PERSISTENCE_BACKEND') || '').toLowerCase();
   const nodeEnv = (trimEnv('NODE_ENV') || '').toLowerCase();
-  const requireSharedDbPersistence = nodeEnv !== 'test';
+  const isProduction = nodeEnv === 'production';
+  const requireSharedDbPersistence = isProduction;
   const sharedPersistenceLikely =
     persistenceBackend === 'shared_db' || Boolean(databaseUrl && isPostgresUrl(databaseUrl));
   const requiresSensitiveFieldEncryption =
@@ -73,6 +74,12 @@ export const validateRequiredEnv = (): void => {
     );
   }
 
+  if (!requireSharedDbPersistence && persistenceBackend !== 'shared_db') {
+    console.warn(
+      '[STARTUP][WARN] AUTH_PERSISTENCE_BACKEND is not set to shared_db. This is allowed in non-production only.'
+    );
+  }
+
   if (requireSharedDbPersistence && databaseUrl && !isPostgresUrl(databaseUrl)) {
     throw new Error(
       '[STARTUP][FATAL] Shared DB persistence requires DATABASE_URL to use postgres:// or postgresql://.'
@@ -80,8 +87,13 @@ export const validateRequiredEnv = (): void => {
   }
 
   if (persistenceBackend === 'shared_db' && databaseUrl && !isPostgresUrl(databaseUrl)) {
-    throw new Error(
-      '[STARTUP][FATAL] AUTH_PERSISTENCE_BACKEND=shared_db requires DATABASE_URL to use postgres:// or postgresql://'
+    if (isProduction) {
+      throw new Error(
+        '[STARTUP][FATAL] AUTH_PERSISTENCE_BACKEND=shared_db requires DATABASE_URL to use postgres:// or postgresql://'
+      );
+    }
+    console.warn(
+      '[STARTUP][WARN] AUTH_PERSISTENCE_BACKEND=shared_db with non-postgres DATABASE_URL is allowed in non-production only.'
     );
   }
 };

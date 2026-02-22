@@ -3,6 +3,7 @@ import cors from 'cors';
 import helmet from 'helmet';
 import rateLimit from 'express-rate-limit';
 import dotenv from 'dotenv';
+import path from 'path';
 import {
   requestLogger,
   errorHandler,
@@ -26,6 +27,9 @@ import { initializeVertexAI } from './services/vertexAiService';
 import { hasOpenAiApiKey, validateRequiredEnv } from './requiredEnv';
 
 // Load environment variables with local override first.
+// Use absolute paths so startup works whether launched from project root or /server.
+dotenv.config({ path: path.resolve(__dirname, '../.env.local') });
+dotenv.config({ path: path.resolve(__dirname, '../.env') });
 dotenv.config({ path: '.env.local' });
 dotenv.config({ path: '.env' });
 
@@ -43,9 +47,6 @@ if (!hasOpenAiApiKey()) {
     '[STARTUP][WARN] OPENAI_API_KEY is not set. Authentication/profile routes remain available, but /api/ai routes will return 503 until configured.'
   );
 }
-
-
-const NODE_ENV = process.env.NODE_ENV || 'development';
 const GOOGLE_CLOUD_PROJECT =
   process.env.GOOGLE_CLOUD_PROJECT ||
   process.env.GCLOUD_PROJECT ||

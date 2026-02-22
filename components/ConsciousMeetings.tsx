@@ -5,11 +5,10 @@ import {
   Search, Filter, Clock, CreditCard, CheckCircle2, 
   Plus, X, Camera, Mic, MicOff, CameraOff, 
   Settings, Download, Share2, Info, Loader2, Play,
-  ChevronRight, Pause, Square, Image, Film, Upload
+  ChevronRight, Pause, Square, Image, Upload
 } from 'lucide-react';
 import { UserProfile, Provider, Meeting } from '../types';
 import { summarizeMeeting } from '../services/backendApiService';
-import { SelfieSegmentation } from '@mediapipe/selfie_segmentation';
 
 interface ConsciousMeetingsProps {
   user: UserProfile | null;
@@ -99,7 +98,7 @@ const ConsciousMeetings: React.FC<ConsciousMeetingsProps> = ({ user, onUpdateUse
   // Solo Session States
   const [isSoloSessionActive, setIsSoloSessionActive] = useState(false);
   const [stream, setStream] = useState<MediaStream | null>(null);
-  const [isRecording, setIsRecording] = useState(false);
+  const [, setIsRecording] = useState(false);
   const [recordingState, setRecordingState] = useState<'idle' | 'recording' | 'paused'>('idle');
   const [recordedChunks, setRecordedChunks] = useState<Blob[]>([]);
   const [recordingDuration, setRecordingDuration] = useState(0);

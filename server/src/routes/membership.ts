@@ -206,7 +206,7 @@ protectedRouter.post('/confirm-payment', async (req: Request, res: Response): Pr
  * GET /api/membership/tiers
  * Get all available membership tiers
  */
-publicRouter.get('/tiers', (req: Request, res: Response): any => {
+publicRouter.get('/tiers', (_req: Request, res: Response): any => {
   const tiers = Object.values(TIER_PRICING);
   return res.json({ tiers });
 });
