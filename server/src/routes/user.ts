@@ -197,6 +197,20 @@ const normalizePhoneNumber = (value: unknown): string | null => {
   return normalized;
 };
 
+const toPublicTier = (user: any): string | null => {
+  const rawTier = String(user?.tier || '').trim();
+  if (!rawTier) return null;
+
+  const subscriptionStatus = String(user?.subscriptionStatus || '')
+    .trim()
+    .toLowerCase();
+  if (subscriptionStatus !== 'active') {
+    return null;
+  }
+
+  return normalizeTier(rawTier);
+};
+
 const absolutizeProfileMedia = (
   req: Request,
   profileMedia: unknown,
@@ -267,7 +281,7 @@ const toPublicUser = (req: Request, user: any) => ({
   githubUrl: user.githubUrl || null,
   websiteUrl: user.websiteUrl || null,
   privacySettings: normalizePrivacySettings(user.privacySettings),
-  tier: normalizeTier(user.tier),
+  tier: toPublicTier(user),
   subscriptionStatus: user.subscriptionStatus,
   subscriptionStartDate: user.subscriptionStartDate,
   subscriptionEndDate: user.subscriptionEndDate,
@@ -620,7 +634,8 @@ publicRouter.post('/create', validateJsonBody(userCreateSchema), async (req: Req
       name,
       password: passwordHash,
       passwordFingerprint,
-      tier: normalizeTier(req.body?.tier),
+      // Tier remains unassigned until Stripe checkout confirmation.
+      tier: '',
       location: requestedLocation,
       dateOfBirth: requestedDateOfBirth || null,
       avatarUrl: normalizeOptionalString(req.body?.avatarUrl),
@@ -644,7 +659,7 @@ publicRouter.post('/create', validateJsonBody(userCreateSchema), async (req: Req
       userId: persisted.id,
       email: persisted.email,
       name: persisted.name || toIdentityName(persisted.email),
-      tier: persisted.tier,
+      tier: persisted.tier || '',
       createdAt: persisted.createdAt.toISOString(),
     });
 
@@ -852,7 +867,7 @@ protectedRouter.get('/reconcile/:id', async (req: Request, res: Response): Promi
     return res.json({
       success: true,
       canonicalUserId: user.id,
-      tier: normalizeTier(user.tier),
+      tier: toPublicTier(user),
       createdAt: user.createdAt,
     });
   } catch (error) {
@@ -874,7 +889,7 @@ protectedRouter.get('/directory', async (_req: Request, res: Response): Promise<
       users: users.map((u) => ({
         id: u.id,
         name: u.name || 'Node',
-        tier: normalizeTier(u.tier),
+        tier: toPublicTier(u),
         createdAt: u.createdAt,
       })),
     });

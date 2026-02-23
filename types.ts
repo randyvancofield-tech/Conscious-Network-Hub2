@@ -74,7 +74,8 @@ export interface UserProfile {
   handle?: string;
   email: string;
   passwordHash?: string;
-  tier: string;
+  tier: string | null;
+  subscriptionStatus?: string | null;
   identityVerified?: boolean;
   reputationScore?: number;
   walletBalanceTokens?: number;

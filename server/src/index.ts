@@ -11,6 +11,7 @@ import {
 } from './middleware';
 import aiRoutes from './routes/ai';
 import {
+  handleStripeWebhook,
   membershipPublicRoutes,
   membershipProtectedRoutes,
 } from './routes/membership';
@@ -24,7 +25,7 @@ import socialRoutes from './routes/social';
 import providerAuthRoutes from './routes/providerAuth';
 import providerSessionRoutes from './routes/providerSession';
 import { initializeVertexAI } from './services/vertexAiService';
-import { hasOpenAiApiKey, validateRequiredEnv } from './requiredEnv';
+import { hasOpenAiApiKey, logStripeEnvironmentLoaded, validateRequiredEnv } from './requiredEnv';
 
 // Load environment variables with local override first.
 // Use absolute paths so startup works whether launched from project root or /server.
@@ -35,6 +36,7 @@ dotenv.config({ path: '.env' });
 
 try {
   validateRequiredEnv();
+  logStripeEnvironmentLoaded();
 } catch (error) {
   const message =
     error instanceof Error ? error.message : 'Missing required secrets/environment variables';
@@ -145,6 +147,13 @@ app.use(
     credentials: true,
     maxAge: 86400, // 24 hours
   })
+);
+
+// Stripe webhooks require the raw request body for signature validation.
+app.post(
+  '/api/membership/stripe/webhook',
+  express.raw({ type: 'application/json' }),
+  handleStripeWebhook
 );
 
 // Body parser middleware

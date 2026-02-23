@@ -20,6 +20,12 @@ export const REQUIRED_SECRETS = [
   'AUTH_TOKEN_SECRET (or SESSION_SECRET)',
   'DATABASE_URL',
   'SENSITIVE_DATA_KEY (production/shared_db)',
+  'STRIPE_SECRET_KEY',
+  'STRIPE_WEBHOOK_SECRET',
+  'STRIPE_PRICE_FREE',
+  'STRIPE_PRICE_GUIDED',
+  'STRIPE_PRICE_ACCELERATED',
+  'FRONTEND_BASE_URL',
 ] as const;
 
 const hasSensitiveDataKey = (): boolean => hasNonEmptyEnv('SENSITIVE_DATA_KEY');
@@ -54,6 +60,30 @@ export const validateRequiredEnv = (): void => {
 
   if (!databaseUrl) {
     missing.push('DATABASE_URL');
+  }
+
+  if (!hasNonEmptyEnv('STRIPE_SECRET_KEY')) {
+    missing.push('STRIPE_SECRET_KEY');
+  }
+
+  if (!hasNonEmptyEnv('STRIPE_WEBHOOK_SECRET')) {
+    missing.push('STRIPE_WEBHOOK_SECRET');
+  }
+
+  if (!hasNonEmptyEnv('STRIPE_PRICE_FREE')) {
+    missing.push('STRIPE_PRICE_FREE');
+  }
+
+  if (!hasNonEmptyEnv('STRIPE_PRICE_GUIDED')) {
+    missing.push('STRIPE_PRICE_GUIDED');
+  }
+
+  if (!hasNonEmptyEnv('STRIPE_PRICE_ACCELERATED')) {
+    missing.push('STRIPE_PRICE_ACCELERATED');
+  }
+
+  if (!hasNonEmptyEnv('FRONTEND_BASE_URL')) {
+    missing.push('FRONTEND_BASE_URL');
   }
 
   if (missing.length > 0) {
@@ -99,3 +129,20 @@ export const validateRequiredEnv = (): void => {
 };
 
 export const hasOpenAiApiKey = (): boolean => hasNonEmptyEnv('OPENAI_API_KEY');
+
+export const logStripeEnvironmentLoaded = (): void => {
+  const requiredStripeKeys = [
+    'STRIPE_SECRET_KEY',
+    'STRIPE_WEBHOOK_SECRET',
+    'STRIPE_PRICE_FREE',
+    'STRIPE_PRICE_GUIDED',
+    'STRIPE_PRICE_ACCELERATED',
+    'FRONTEND_BASE_URL',
+  ] as const;
+  const maskedStatus = requiredStripeKeys.reduce<Record<string, string>>((acc, key) => {
+    acc[key] = hasNonEmptyEnv(key) ? 'present' : 'missing';
+    return acc;
+  }, {});
+
+  console.log('[STARTUP] Stripe environment loaded: OK', JSON.stringify(maskedStatus));
+};

@@ -522,6 +522,27 @@ export const localStore = {
     }
   },
 
+  async hasPaymentDescriptionMarker(marker: string): Promise<boolean> {
+    const normalizedMarker = String(marker || '').trim();
+    if (!normalizedMarker) {
+      return false;
+    }
+
+    try {
+      const row = await ensurePrisma().paymentHistory.findFirst({
+        where: {
+          description: {
+            contains: normalizedMarker,
+          },
+        },
+        select: { id: true },
+      });
+      return Boolean(row);
+    } catch (error) {
+      return translatePrismaError(error);
+    }
+  },
+
   async createReflection(input: CreateReflectionInput): Promise<LocalReflectionRecord> {
     try {
       const row = await ensurePrisma().reflection.create({

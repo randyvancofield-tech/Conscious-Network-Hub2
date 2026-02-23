@@ -984,6 +984,18 @@ export const localStore = {
       .map(rowToPayment);
   },
 
+  hasPaymentDescriptionMarker(marker: string): boolean {
+    const normalizedMarker = String(marker || '').trim();
+    if (!normalizedMarker) {
+      return false;
+    }
+
+    const store = loadStore();
+    return store.payments.some((payment) =>
+      String(payment.description || '').includes(normalizedMarker)
+    );
+  },
+
   createReflection(input: CreateReflectionInput): LocalReflectionRecord {
     const store = loadStore();
     const timestamp = nowIso();

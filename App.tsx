@@ -10,7 +10,6 @@ import CommunityMembers from './components/CommunityMembers';
 import SocialLearningHub from './components/SocialLearningHub';
 import ConsciousMeetings from './components/ConsciousMeetings';
 import MusicBox from './components/MusicBox';
-import PaymentConfirmation from './components/PaymentConfirmation';
 import { ConsciousIdentity } from './components/community/CommunityLayout';
 import { AppView, UserProfile, Course } from './types';
 import { NAVIGATION_ITEMS } from './constants';
@@ -56,8 +55,10 @@ const App: React.FC = () => {
   const [contactEmail, setContactEmail] = useState('');
   
   // Membership and payment states
-  const [showPaymentConfirmation, setShowPaymentConfirmation] = useState(false);
   const [isSelectingTier, setIsSelectingTier] = useState(false);
+  const [isMembershipCheckoutPending, setMembershipCheckoutPending] = useState(false);
+  const [membershipNotice, setMembershipNotice] = useState('');
+  const [pendingCheckoutSessionId, setPendingCheckoutSessionId] = useState<string | null>(null);
   const [contactMessage, setContactMessage] = useState('');
 
   const [isPolicyModalOpen, setIsPolicyModalOpen] = useState(false);
@@ -154,34 +155,51 @@ const App: React.FC = () => {
       : [],
   });
 
-  const toCanonicalUser = (rawUser: any): UserProfile => ({
-    id: rawUser.id,
-    name: rawUser.name || (rawUser.email ? rawUser.email.split('@')[0] : 'Node'),
-    handle: rawUser.handle,
-    email: rawUser.email,
-    tier: rawUser.tier || 'Free / Community Tier',
-    createdAt: rawUser.createdAt || new Date().toISOString(),
-    hasProfile: rawUser.hasProfile ?? false,
-    identityVerified: true,
-    reputationScore: rawUser.reputationScore ?? 100,
-    walletBalanceTokens: rawUser.walletBalanceTokens ?? 200,
-    avatarUrl: rawUser.avatarUrl,
-    bannerUrl: rawUser.bannerUrl,
-    location: rawUser.location ?? null,
-    dateOfBirth: rawUser.dateOfBirth ?? null,
-    profileMedia: rawUser.profileMedia,
-    profileBackgroundVideo: rawUser.profileBackgroundVideo || null,
-    bio: rawUser.bio,
-    interests: rawUser.interests,
-    twitterUrl: rawUser.twitterUrl,
-    githubUrl: rawUser.githubUrl,
-    websiteUrl: rawUser.websiteUrl,
-    privacySettings: normalizePrivacySettings(rawUser.privacySettings),
-    twoFactorEnabled: rawUser.twoFactorEnabled,
-    twoFactorMethod: rawUser.twoFactorMethod || 'none',
-    phoneNumberMasked: rawUser.phoneNumberMasked || null,
-    walletDid: rawUser.walletDid || null,
-  });
+  const toCanonicalUser = (rawUser: any): UserProfile => {
+    const rawTier = typeof rawUser?.tier === 'string' ? rawUser.tier.trim() : '';
+    const canonicalTier = rawTier.length > 0 ? rawTier : null;
+    const subscriptionStatus =
+      typeof rawUser?.subscriptionStatus === 'string' && rawUser.subscriptionStatus.trim()
+        ? rawUser.subscriptionStatus.trim()
+        : 'inactive';
+
+    return {
+      id: rawUser.id,
+      name: rawUser.name || (rawUser.email ? rawUser.email.split('@')[0] : 'Node'),
+      handle: rawUser.handle,
+      email: rawUser.email,
+      tier: canonicalTier,
+      subscriptionStatus,
+      createdAt: rawUser.createdAt || new Date().toISOString(),
+      hasProfile: rawUser.hasProfile ?? false,
+      identityVerified: true,
+      reputationScore: rawUser.reputationScore ?? 100,
+      walletBalanceTokens: rawUser.walletBalanceTokens ?? 200,
+      avatarUrl: rawUser.avatarUrl,
+      bannerUrl: rawUser.bannerUrl,
+      location: rawUser.location ?? null,
+      dateOfBirth: rawUser.dateOfBirth ?? null,
+      profileMedia: rawUser.profileMedia,
+      profileBackgroundVideo: rawUser.profileBackgroundVideo || null,
+      bio: rawUser.bio,
+      interests: rawUser.interests,
+      twitterUrl: rawUser.twitterUrl,
+      githubUrl: rawUser.githubUrl,
+      websiteUrl: rawUser.websiteUrl,
+      privacySettings: normalizePrivacySettings(rawUser.privacySettings),
+      twoFactorEnabled: rawUser.twoFactorEnabled,
+      twoFactorMethod: rawUser.twoFactorMethod || 'none',
+      phoneNumberMasked: rawUser.phoneNumberMasked || null,
+      walletDid: rawUser.walletDid || null,
+    };
+  };
+
+  const hasConfirmedMembership = (profile: UserProfile | null | undefined): boolean =>
+    Boolean(
+      profile &&
+        profile.tier &&
+        String(profile.subscriptionStatus || '').trim().toLowerCase() === 'active'
+    );
 
   const MIN_PASSWORD_LENGTH = 12;
 
@@ -245,7 +263,14 @@ const App: React.FC = () => {
         const canonicalUser = toCanonicalUser(data.user);
         setUser(canonicalUser);
         setAuthSession(token, canonicalUser);
-        setCurrentView(AppView.DASHBOARD);
+        if (hasConfirmedMembership(canonicalUser)) {
+          setCurrentView(AppView.DASHBOARD);
+          setIsSelectingTier(false);
+        } else {
+          setCurrentView(AppView.MEMBERSHIP_ACCESS);
+          setIsSelectingTier(true);
+          setMembershipNotice('Complete Stripe checkout to activate your membership tier.');
+        }
       } catch {
         clearAuthSession();
         setUser(null);
@@ -253,6 +278,37 @@ const App: React.FC = () => {
     };
 
     initializeSession();
+  }, []);
+
+  useEffect(() => {
+    if (typeof window === 'undefined') {
+      return;
+    }
+
+    const url = new URL(window.location.href);
+    const checkoutState = url.searchParams.get('checkout');
+    const checkoutSessionId = url.searchParams.get('session_id');
+    if (!checkoutState) {
+      return;
+    }
+
+    url.searchParams.delete('checkout');
+    url.searchParams.delete('session_id');
+    window.history.replaceState({}, document.title, `${url.pathname}${url.search}${url.hash}`);
+
+    if (checkoutState === 'cancel') {
+      setMembershipNotice('Checkout canceled. Select a tier to continue.');
+      setCurrentView(AppView.MEMBERSHIP_ACCESS);
+      setIsSelectingTier(true);
+      return;
+    }
+
+    if (checkoutState === 'success' && checkoutSessionId) {
+      setMembershipNotice('Verifying membership checkout...');
+      setPendingCheckoutSessionId(checkoutSessionId);
+      setCurrentView(AppView.MEMBERSHIP_ACCESS);
+      setIsSelectingTier(true);
+    }
   }, []);
 
   useEffect(() => {
@@ -285,7 +341,14 @@ const App: React.FC = () => {
   }, [pendingScrollWisdom, currentView]);
 
   useEffect(() => {
-    if (user && !canTierAccessView(user.tier, currentView)) {
+    if (!user) return;
+    if (!hasConfirmedMembership(user)) {
+      if (currentView !== AppView.ENTRY && currentView !== AppView.MEMBERSHIP_ACCESS) {
+        setCurrentView(AppView.MEMBERSHIP_ACCESS);
+      }
+      return;
+    }
+    if (!canTierAccessView(user.tier, currentView)) {
       setCurrentView(AppView.DASHBOARD);
     }
   }, [user, currentView]);
@@ -353,6 +416,64 @@ const App: React.FC = () => {
     }
   };
 
+  useEffect(() => {
+    if (!pendingCheckoutSessionId) {
+      return;
+    }
+
+    const confirmCheckoutSession = async () => {
+      setMembershipCheckoutPending(true);
+      setError('');
+
+      try {
+        const response = await fetch(`${resolveBackendUrl()}/api/membership/stripe/confirm-session`, {
+          method: 'POST',
+          headers: buildAuthHeaders({ 'Content-Type': 'application/json' }),
+          body: JSON.stringify({ sessionId: pendingCheckoutSessionId }),
+        });
+
+        const data = await response.json().catch(() => ({}));
+        if (!response.ok) {
+          if (response.status === 401) {
+            clearAuthSession();
+            setUser(null);
+            setSignupModalOpen(false);
+            setSigninModalOpen(true);
+            setMembershipNotice('Session expired during checkout verification. Please sign in again.');
+            return;
+          }
+
+          setMembershipNotice(data?.error || 'Unable to verify checkout. Please retry.');
+          return;
+        }
+
+        const refreshed = await refreshCanonicalUser();
+        if (!refreshed) {
+          setMembershipNotice('Membership updated, but session refresh failed. Please sign in again.');
+          setSignupModalOpen(false);
+          setSigninModalOpen(true);
+          return;
+        }
+
+        setSelectedTier(refreshed.tier || 'Free / Community Tier');
+        setMembershipNotice('');
+        setIsSelectingTier(false);
+        setCurrentView(AppView.DASHBOARD);
+        if (window.innerWidth >= 1024) {
+          setSidebarOpen(true);
+        }
+      } catch (error) {
+        console.error('Checkout confirmation failed:', error);
+        setMembershipNotice('Unable to verify checkout due to a connection issue. Please retry.');
+      } finally {
+        setMembershipCheckoutPending(false);
+        setPendingCheckoutSessionId(null);
+      }
+    };
+
+    void confirmCheckoutSession();
+  }, [pendingCheckoutSessionId]);
+
   const handleSignIn = async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
@@ -390,13 +511,23 @@ const App: React.FC = () => {
       const canonicalUser = toCanonicalUser(data.user);
       setAuthSession(data.token, canonicalUser);
       setUser(canonicalUser);
-      setIsSelectingTier(false);
+      setSelectedTier(canonicalUser.tier || 'Free / Community Tier');
+      const confirmedMembership = hasConfirmedMembership(canonicalUser);
+      setIsSelectingTier(!confirmedMembership);
+      setMembershipCheckoutPending(false);
+      setMembershipNotice('');
+      setPendingCheckoutSessionId(null);
       setPendingTwoFactorMethod(null);
       setTwoFactorCodeInput('');
       setProviderTokenInput('');
       closeModals();
-      setCurrentView(AppView.DASHBOARD);
-      if (window.innerWidth >= 1024) setSidebarOpen(true);
+      if (confirmedMembership) {
+        setCurrentView(AppView.DASHBOARD);
+        if (window.innerWidth >= 1024) setSidebarOpen(true);
+      } else {
+        setCurrentView(AppView.MEMBERSHIP_ACCESS);
+        setMembershipNotice('Complete Stripe checkout to activate your membership tier.');
+      }
     } catch (error) {
       console.error('Sign-in request failed:', error);
       setHealthStatus('offline');
@@ -479,6 +610,9 @@ const App: React.FC = () => {
       const canonicalUser = toCanonicalUser(data.user);
       setAuthSession(data.token, canonicalUser);
       setUser(canonicalUser);
+      setSelectedTier((currentTier) => currentTier || canonicalUser.tier || 'Free / Community Tier');
+      setMembershipCheckoutPending(false);
+      setMembershipNotice('');
       closeModals();
       setCurrentView(AppView.MEMBERSHIP_ACCESS);
       setIsSelectingTier(true);
@@ -490,62 +624,53 @@ const App: React.FC = () => {
   };
 
   const handleMembershipTierSelect = async (tier: string) => {
-    if (!user) return;
+    if (!user || isMembershipCheckoutPending) return;
     setSelectedTier(tier);
-    
+    setMembershipNotice('');
+    setError('');
+    setMembershipCheckoutPending(true);
+
     try {
       const canonicalUser = await refreshCanonicalUser();
       if (!canonicalUser) {
-        setError('Session expired. Please sign in again.');
+        setMembershipNotice('Session expired. Please sign in again.');
+        setSignupModalOpen(false);
+        setSigninModalOpen(true);
+        setMembershipCheckoutPending(false);
         return;
       }
 
-      // Call backend to select tier and create membership
-      const response = await fetch(`${resolveBackendUrl()}/api/membership/select-tier`, {
+      const response = await fetch(`${resolveBackendUrl()}/api/membership/stripe/create-checkout-session`, {
         method: 'POST',
         headers: buildAuthHeaders({ 'Content-Type': 'application/json' }),
-        body: JSON.stringify({ userId: canonicalUser.id, tier })
+        body: JSON.stringify({ userId: canonicalUser.id, tier }),
       });
+      const data = await response.json().catch(() => ({}));
 
       if (!response.ok) {
-        throw new Error('Failed to select tier');
-      }
-
-      const data = await response.json();
-      
-      // Only mutate local membership state from backend-confirmed data.
-      if (data?.user?.tier) {
-        const updatedUser = { ...canonicalUser, tier: data.user.tier };
-        setUser(updatedUser);
-        const token = getAuthToken();
-        if (token) {
-          setAuthSession(token, updatedUser);
+        if (response.status === 503 && data?.code === 'STRIPE_UNAVAILABLE') {
+          setMembershipNotice(
+            data?.error || 'Membership checkout is temporarily unavailable. Please retry shortly.'
+          );
+          setMembershipCheckoutPending(false);
+          return;
         }
+        throw new Error(data?.error || 'Failed to initialize checkout');
       }
-      
-      // Show payment confirmation
-      setShowPaymentConfirmation(true);
-    } catch (err) {
-      setError('Failed to process tier selection. Please try again.');
-      console.error('Tier selection error:', err);
-    }
-  };
 
-  const handlePaymentSuccess = () => {
-    const finalize = async () => {
-      const refreshed = await refreshCanonicalUser();
-      if (!refreshed) {
-        setError('Unable to verify membership state. Please sign in again.');
-        handleSignOut();
+      const checkoutUrl = String(data?.checkoutUrl || '').trim();
+      if (!checkoutUrl) {
+        setMembershipNotice('Checkout session created without a redirect URL. Please retry.');
+        setMembershipCheckoutPending(false);
         return;
       }
-      setShowPaymentConfirmation(false);
-      setIsSelectingTier(false);
-      setCurrentView(AppView.DASHBOARD);
-      if (window.innerWidth >= 1024) setSidebarOpen(true);
-    };
 
-    void finalize();
+      window.location.assign(checkoutUrl);
+    } catch (err) {
+      setMembershipNotice('Failed to process tier selection. Please try again.');
+      setMembershipCheckoutPending(false);
+      console.error('Tier selection error:', err);
+    }
   };
 
   const handleSignOut = () => {
@@ -553,7 +678,9 @@ const App: React.FC = () => {
       clearAuthSession();
       setUser(null);
       setIsSelectingTier(false);
-      setShowPaymentConfirmation(false);
+      setMembershipCheckoutPending(false);
+      setMembershipNotice('');
+      setPendingCheckoutSessionId(null);
       setPendingTwoFactorMethod(null);
       setTwoFactorCodeInput('');
       setProviderTokenInput('');
@@ -694,6 +821,20 @@ const App: React.FC = () => {
   }, [user]);
 
   const renderActiveView = () => {
+    if (user && !hasConfirmedMembership(user)) {
+      return (
+        <div className="p-8 max-w-3xl mx-auto">
+          <div className="glass-panel p-8 rounded-3xl border border-blue-500/20">
+            <h2 className="text-2xl font-black text-white uppercase tracking-tight mb-4">
+              Membership Activation Required
+            </h2>
+            <p className="text-slate-300 text-sm leading-relaxed">
+              Complete Stripe checkout from Membership Access to unlock your tier and enter the hub.
+            </p>
+          </div>
+        </div>
+      );
+    }
     if (user && !canTierAccessView(user.tier, currentView)) {
       return <Dashboard user={user} onEnroll={enrollCourse} insightRef={insightRef} />;
     }
@@ -851,18 +992,6 @@ const App: React.FC = () => {
       {currentView !== AppView.ENTRY && <ThreeScene />}
       <MusicBox />
 
-      {showPaymentConfirmation && user && (
-        <PaymentConfirmation
-          tier={selectedTier}
-          userId={user.id}
-          onSuccess={handlePaymentSuccess}
-          onCancel={() => {
-            setShowPaymentConfirmation(false);
-            setCurrentView(AppView.MEMBERSHIP_ACCESS);
-          }}
-        />
-      )}
-
       {currentView === AppView.ENTRY && (
         <>
           <video
@@ -971,6 +1100,29 @@ const App: React.FC = () => {
               <div className="text-center space-y-3 sm:space-y-4">
                 <h2 className="text-2xl xs:text-3xl sm:text-4xl md:text-5xl lg:text-6xl font-black text-white tracking-tighter">Membership Access</h2>
                 <p className="text-slate-400 text-sm sm:text-base md:text-lg font-light px-2 sm:px-0">Select your level of integration within the decentralized ecosystem.</p>
+                <div className="flex flex-wrap items-center justify-center gap-3 sm:gap-4 pt-3">
+                  <button
+                    onClick={() => {
+                      setSignupModalOpen(false);
+                      setSigninModalOpen(true);
+                      setPendingTwoFactorMethod(null);
+                      setTwoFactorCodeInput('');
+                      setProviderTokenInput('');
+                      setError('');
+                    }}
+                    className="px-6 sm:px-8 py-3 bg-blue-600 hover:bg-blue-500 text-white rounded-xl font-black text-[10px] sm:text-xs uppercase tracking-widest transition-all shadow-xl"
+                  >
+                    Existing User Sign In
+                  </button>
+                </div>
+                <p className="text-slate-500 text-[10px] sm:text-xs uppercase tracking-wider">
+                  New users create accounts by selecting a tier below.
+                </p>
+                {membershipNotice && (
+                  <p className="text-blue-300 text-[10px] sm:text-xs uppercase tracking-widest">
+                    {membershipNotice}
+                  </p>
+                )}
               </div>
 
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5 sm:gap-7 md:gap-8">
@@ -1017,9 +1169,13 @@ const App: React.FC = () => {
                         }
                       }}
                       className={`mt-7 sm:mt-10 w-full py-4 sm:py-5 bg-white/5 hover:bg-${tier.color}-600 text-white rounded-xl sm:rounded-2xl font-black text-[10px] sm:text-xs uppercase tracking-[0.18em] sm:tracking-[0.2em] transition-all shadow-xl border border-white/5 hover:border-${tier.color}-500/50`}
-                      disabled={showPaymentConfirmation}
+                      disabled={isMembershipCheckoutPending || Boolean(pendingCheckoutSessionId)}
                     >
-                      Anchor as {tier.name.split(' ')[0]}
+                      {isMembershipCheckoutPending
+                        ? 'Redirecting to Checkout...'
+                        : pendingCheckoutSessionId
+                        ? 'Verifying Checkout...'
+                        : `Anchor as ${tier.name.split(' ')[0]}`}
                     </button>
                   </div>
                 ))}
