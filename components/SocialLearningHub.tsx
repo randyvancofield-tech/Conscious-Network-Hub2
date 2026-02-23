@@ -32,6 +32,12 @@ interface NodeContent {
   comments: Comment[];
 }
 
+interface SelectedUpload {
+  file: File;
+  data: string;
+  type: 'image' | 'video' | 'file';
+}
+
 interface SocialLearningHubProps {
   user: UserProfile | null;
 }
@@ -127,7 +133,8 @@ const SocialLearningHub: React.FC<SocialLearningHubProps> = ({ user }) => {
   const [nodes, setNodes] = useState<NodeContent[]>(INITIAL_NODES);
   const [newPost, setNewPost] = useState('');
   const [isInjecting, setIsInjecting] = useState(false);
-  const [selectedFile, setSelectedFile] = useState<{data: string, type: 'image' | 'video' | 'file'} | null>(null);
+  const [selectedFile, setSelectedFile] = useState<SelectedUpload | null>(null);
+  const [injectError, setInjectError] = useState('');
   const [tilt, setTilt] = useState({ x: 0, y: 0 });
   const [expandedComments, setExpandedComments] = useState<string[]>([]);
   const [commentInput, setCommentInput] = useState<{[key: string]: string}>({});
@@ -191,19 +198,27 @@ const SocialLearningHub: React.FC<SocialLearningHubProps> = ({ user }) => {
       const reader = new FileReader();
       reader.onloadend = () => {
         setSelectedFile({
+          file,
           data: reader.result as string,
           type: filterType
         });
+        setInjectError('');
       };
       reader.readAsDataURL(file);
     }
   };
 
+  const clearSelectedFile = () => {
+    setSelectedFile(null);
+  };
+
   const triggerUpload = (type: 'image' | 'video' | 'file') => {
     if (fileInputRef.current) {
+      setInjectError('');
       const accept = type === 'image' ? 'image/*' : type === 'video' ? 'video/*' : '*/*';
       fileInputRef.current.setAttribute('accept', accept);
       fileInputRef.current.onchange = (e: any) => handleFileChange(e, type);
+      fileInputRef.current.value = '';
       fileInputRef.current.click();
     }
   };
@@ -213,19 +228,51 @@ const SocialLearningHub: React.FC<SocialLearningHubProps> = ({ user }) => {
     if (!newPost.trim() && !selectedFile) return;
 
     setIsInjecting(true);
+    setInjectError('');
 
     try {
       if (user) {
-        const media = selectedFile
-          ? [
-              {
-                mediaType: selectedFile.type,
-                url: selectedFile.data,
-                storageProvider: 'inline',
-                objectKey: null,
-              },
-            ]
-          : [];
+        let media: Array<{
+          mediaType: 'image' | 'video' | 'file';
+          url: string;
+          storageProvider: string | null;
+          objectKey: string | null;
+        }> = [];
+
+        if (selectedFile) {
+          const uploadPayload = new FormData();
+          uploadPayload.append('file', selectedFile.file);
+
+          const uploadResponse = await fetch(toApiUrl('/api/upload/reflection'), {
+            method: 'POST',
+            headers: buildAuthHeaders(),
+            body: uploadPayload,
+          });
+          const uploadData = await uploadResponse.json().catch(() => ({}));
+          if (!uploadResponse.ok) {
+            throw new Error(uploadData?.error || 'Failed to upload media');
+          }
+
+          const uploadedUrl = String(uploadData?.fileUrl || '').trim();
+          if (!uploadedUrl) {
+            throw new Error('Media upload completed without a file URL');
+          }
+
+          media = [
+            {
+              mediaType: selectedFile.type,
+              url: uploadedUrl,
+              storageProvider:
+                typeof uploadData?.media?.storageProvider === 'string'
+                  ? uploadData.media.storageProvider
+                  : null,
+              objectKey:
+                typeof uploadData?.media?.objectKey === 'string'
+                  ? uploadData.media.objectKey
+                  : null,
+            },
+          ];
+        }
 
         const response = await fetch(toApiUrl('/api/social/posts'), {
           method: 'POST',
@@ -258,7 +305,10 @@ const SocialLearningHub: React.FC<SocialLearningHubProps> = ({ user }) => {
         setNodes((prev) => [newNode, ...prev]);
       }
       setNewPost('');
-      setSelectedFile(null);
+      clearSelectedFile();
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Failed to publish node';
+      setInjectError(message);
     } finally {
       setIsInjecting(false);
     }
@@ -407,7 +457,7 @@ const SocialLearningHub: React.FC<SocialLearningHubProps> = ({ user }) => {
                   <div className="absolute inset-2 bg-black/90 backdrop-blur-2xl rounded-xl border border-blue-500/40 overflow-hidden flex flex-col items-center justify-center p-4 animate-in zoom-in duration-300">
                     <button 
                       type="button" 
-                      onClick={() => setSelectedFile(null)}
+                      onClick={clearSelectedFile}
                       className="absolute top-2 right-2 p-1.5 bg-red-500/20 text-red-400 hover:bg-red-500 hover:text-white rounded-lg transition-all z-20"
                     >
                       <X className="w-4 h-4" />
@@ -503,6 +553,12 @@ const SocialLearningHub: React.FC<SocialLearningHubProps> = ({ user }) => {
                   </>
                 )}
               </button>
+
+              {injectError && (
+                <div className="rounded-xl border border-red-500/40 bg-red-500/10 px-4 py-3 text-[10px] font-black uppercase tracking-widest text-red-200">
+                  {injectError}
+                </div>
+              )}
             </form>
 
             <div className="mt-6 pt-6 border-t border-white/5 flex items-center justify-between">

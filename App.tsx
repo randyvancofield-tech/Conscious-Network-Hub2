@@ -195,11 +195,7 @@ const App: React.FC = () => {
   };
 
   const hasConfirmedMembership = (profile: UserProfile | null | undefined): boolean =>
-    Boolean(
-      profile &&
-        profile.tier &&
-        String(profile.subscriptionStatus || '').trim().toLowerCase() === 'active'
-    );
+    Boolean(profile && typeof profile.tier === 'string' && profile.tier.trim().length > 0);
 
   const MIN_PASSWORD_LENGTH = 12;
 
@@ -269,7 +265,7 @@ const App: React.FC = () => {
         } else {
           setCurrentView(AppView.MEMBERSHIP_ACCESS);
           setIsSelectingTier(true);
-          setMembershipNotice('Complete Stripe checkout to activate your membership tier.');
+          setMembershipNotice('Select a membership tier to continue.');
         }
       } catch {
         clearAuthSession();
@@ -526,7 +522,7 @@ const App: React.FC = () => {
         if (window.innerWidth >= 1024) setSidebarOpen(true);
       } else {
         setCurrentView(AppView.MEMBERSHIP_ACCESS);
-        setMembershipNotice('Complete Stripe checkout to activate your membership tier.');
+        setMembershipNotice('Select a membership tier to continue.');
       }
     } catch (error) {
       console.error('Sign-in request failed:', error);
@@ -829,7 +825,7 @@ const App: React.FC = () => {
               Membership Activation Required
             </h2>
             <p className="text-slate-300 text-sm leading-relaxed">
-              Complete Stripe checkout from Membership Access to unlock your tier and enter the hub.
+              Select a membership tier from Membership Access to unlock your node and enter the hub.
             </p>
           </div>
         </div>

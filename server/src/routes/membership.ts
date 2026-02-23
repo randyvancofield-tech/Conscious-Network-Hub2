@@ -152,13 +152,6 @@ const toPublicTier = (user: any): TierValue | null => {
   const rawTier = String(user?.tier || '').trim();
   if (!rawTier) return null;
 
-  const subscriptionStatus = String(user?.subscriptionStatus || '')
-    .trim()
-    .toLowerCase();
-  if (subscriptionStatus !== 'active') {
-    return null;
-  }
-
   return normalizeTier(rawTier);
 };
 
