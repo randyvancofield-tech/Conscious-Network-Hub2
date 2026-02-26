@@ -37,6 +37,14 @@ const upload = multer({
 
 type MulterRequest = Request & { file?: Express.Multer.File };
 type UploadCategory = 'avatar' | 'cover' | 'profile-background' | 'reflection';
+const ALLOWED_IMAGE_MIME_TYPES = new Set([
+  'image/jpeg',
+  'image/jpg',
+  'image/png',
+  'image/webp',
+  'image/avif',
+  'image/gif',
+]);
 
 async function buildUploadResponse(
   req: Request,
@@ -81,8 +89,12 @@ function ensureImageUpload(mReq: MulterRequest, res: Response): mReq is MulterRe
     res.status(400).json({ error: 'No file uploaded' });
     return false;
   }
-  if (!mReq.file.mimetype.startsWith('image/')) {
-    res.status(400).json({ error: 'Only image uploads are allowed for this endpoint' });
+  const mimeType = String(mReq.file.mimetype || '').trim().toLowerCase();
+  if (!ALLOWED_IMAGE_MIME_TYPES.has(mimeType)) {
+    res.status(400).json({
+      error:
+        'Unsupported image type. Allowed formats: .jpg, .jpeg, .png, .webp, .avif, .gif',
+    });
     return false;
   }
   return true;
@@ -130,11 +142,54 @@ publicRouter.get('/object/:objectKey', async (req: Request, res: Response): Prom
       return;
     }
 
-    res.setHeader('Content-Type', resolved.mimeType || 'application/octet-stream');
-    res.setHeader('Content-Length', String(resolved.sizeBytes));
+    const mimeType = resolved.mimeType || 'application/octet-stream';
+    const totalSize = resolved.sizeBytes;
+    const rangeHeader = String(req.headers.range || '').trim();
+
+    res.setHeader('Content-Type', mimeType);
     res.setHeader('Cache-Control', 'public, max-age=31536000, immutable');
     res.setHeader('ETag', `"upload-${objectKey}"`);
-    res.send(resolved.buffer);
+    // Allow media embedding from frontend origins hosted on a different domain.
+    res.setHeader('Cross-Origin-Resource-Policy', 'cross-origin');
+    res.setHeader('Accept-Ranges', 'bytes');
+
+    if (!rangeHeader) {
+      res.setHeader('Content-Length', String(totalSize));
+      res.send(resolved.buffer);
+      return;
+    }
+
+    const rangeMatch = /^bytes=(\d*)-(\d*)$/i.exec(rangeHeader);
+    if (!rangeMatch) {
+      res.status(416);
+      res.setHeader('Content-Range', `bytes */${totalSize}`);
+      res.end();
+      return;
+    }
+
+    const startText = rangeMatch[1];
+    const endText = rangeMatch[2];
+    const start = startText ? Number(startText) : 0;
+    const end = endText ? Number(endText) : totalSize - 1;
+    if (
+      !Number.isFinite(start) ||
+      !Number.isFinite(end) ||
+      start < 0 ||
+      end < start ||
+      start >= totalSize
+    ) {
+      res.status(416);
+      res.setHeader('Content-Range', `bytes */${totalSize}`);
+      res.end();
+      return;
+    }
+
+    const boundedEnd = Math.min(end, totalSize - 1);
+    const chunk = resolved.buffer.subarray(start, boundedEnd + 1);
+    res.status(206);
+    res.setHeader('Content-Range', `bytes ${start}-${boundedEnd}/${totalSize}`);
+    res.setHeader('Content-Length', String(chunk.length));
+    res.send(chunk);
   } catch (error) {
     const code = (error as Error & { code?: string })?.code;
     if (code === 'STORE_UNAVAILABLE') {

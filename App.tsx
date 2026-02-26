@@ -155,6 +155,26 @@ const App: React.FC = () => {
       : [],
   });
 
+  const toAbsoluteAssetUrl = (value: unknown): string | undefined => {
+    const raw = typeof value === 'string' ? value.trim() : '';
+    if (!raw) return undefined;
+    if (/^[a-z][a-z0-9+.-]*:/i.test(raw)) return raw;
+    const normalizedPath = raw.startsWith('/') ? raw : `/${raw}`;
+    const backendUrl = resolveBackendUrl();
+    if (backendUrl) {
+      return `${backendUrl}${normalizedPath}`;
+    }
+    if (typeof window !== 'undefined') {
+      return `${window.location.origin.replace(/\/+$/, '')}${normalizedPath}`;
+    }
+    return normalizedPath;
+  };
+
+  const toNullableTrimmedString = (value: unknown): string | null => {
+    const normalized = typeof value === 'string' ? value.trim() : '';
+    return normalized.length > 0 ? normalized : null;
+  };
+
   const toCanonicalUser = (rawUser: any): UserProfile => {
     const rawTier = typeof rawUser?.tier === 'string' ? rawUser.tier.trim() : '';
     const canonicalTier = rawTier.length > 0 ? rawTier : null;
@@ -162,6 +182,21 @@ const App: React.FC = () => {
       typeof rawUser?.subscriptionStatus === 'string' && rawUser.subscriptionStatus.trim()
         ? rawUser.subscriptionStatus.trim()
         : 'inactive';
+    const profileMedia =
+      rawUser?.profileMedia && typeof rawUser.profileMedia === 'object'
+        ? {
+            avatar: {
+              url: toAbsoluteAssetUrl(rawUser.profileMedia?.avatar?.url) || null,
+              storageProvider: toNullableTrimmedString(rawUser.profileMedia?.avatar?.storageProvider),
+              objectKey: toNullableTrimmedString(rawUser.profileMedia?.avatar?.objectKey),
+            },
+            cover: {
+              url: toAbsoluteAssetUrl(rawUser.profileMedia?.cover?.url) || null,
+              storageProvider: toNullableTrimmedString(rawUser.profileMedia?.cover?.storageProvider),
+              objectKey: toNullableTrimmedString(rawUser.profileMedia?.cover?.objectKey),
+            },
+          }
+        : undefined;
 
     return {
       id: rawUser.id,
@@ -175,12 +210,12 @@ const App: React.FC = () => {
       identityVerified: true,
       reputationScore: rawUser.reputationScore ?? 100,
       walletBalanceTokens: rawUser.walletBalanceTokens ?? 200,
-      avatarUrl: rawUser.avatarUrl,
-      bannerUrl: rawUser.bannerUrl,
+      avatarUrl: toAbsoluteAssetUrl(rawUser.avatarUrl),
+      bannerUrl: toAbsoluteAssetUrl(rawUser.bannerUrl),
       location: rawUser.location ?? null,
       dateOfBirth: rawUser.dateOfBirth ?? null,
-      profileMedia: rawUser.profileMedia,
-      profileBackgroundVideo: rawUser.profileBackgroundVideo || null,
+      profileMedia,
+      profileBackgroundVideo: toAbsoluteAssetUrl(rawUser.profileBackgroundVideo) || null,
       bio: rawUser.bio,
       interests: rawUser.interests,
       twitterUrl: rawUser.twitterUrl,

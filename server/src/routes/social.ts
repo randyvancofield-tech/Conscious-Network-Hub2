@@ -29,6 +29,25 @@ import {
 const router = Router();
 router.use(requireCanonicalIdentity);
 
+const getPublicBaseUrl = (req: Request): string => {
+  const configured = String(process.env.PUBLIC_BASE_URL || '').trim();
+  if (configured) return configured.replace(/\/+$/, '');
+  const forwardedProto = (req.headers['x-forwarded-proto'] as string | undefined)
+    ?.split(',')[0]
+    ?.trim();
+  const proto = forwardedProto || req.protocol || 'https';
+  const host = req.get('host');
+  return `${proto}://${host}`;
+};
+
+const absolutizeUrl = (req: Request, value: unknown): string | null => {
+  const raw = typeof value === 'string' ? value.trim() : '';
+  if (!raw) return null;
+  if (/^[a-z][a-z0-9+.-]*:/i.test(raw)) return raw;
+  const path = raw.startsWith('/') ? raw : `/${raw}`;
+  return `${getPublicBaseUrl(req)}${path}`;
+};
+
 const normalizePostVisibility = (value: unknown): SocialPostVisibility =>
   String(value || '').trim().toLowerCase() === 'private' ? 'private' : 'public';
 
@@ -54,9 +73,35 @@ const normalizePostMedia = (value: unknown): SocialPostMediaInput[] => {
   return normalized;
 };
 
-const toPublicProfile = (user: any, viewerId: string) => {
+const toPublicProfile = (req: Request, user: any, viewerId: string) => {
   const privacy = normalizePrivacySettings(user.privacySettings);
   const isOwner = user.id === viewerId;
+  const profileMedia = user?.profileMedia && typeof user.profileMedia === 'object'
+    ? {
+        avatar: {
+          url: absolutizeUrl(req, user.profileMedia?.avatar?.url),
+          storageProvider:
+            typeof user.profileMedia?.avatar?.storageProvider === 'string'
+              ? user.profileMedia.avatar.storageProvider.trim() || null
+              : null,
+          objectKey:
+            typeof user.profileMedia?.avatar?.objectKey === 'string'
+              ? user.profileMedia.avatar.objectKey.trim() || null
+              : null,
+        },
+        cover: {
+          url: absolutizeUrl(req, user.profileMedia?.cover?.url),
+          storageProvider:
+            typeof user.profileMedia?.cover?.storageProvider === 'string'
+              ? user.profileMedia.cover.storageProvider.trim() || null
+              : null,
+          objectKey:
+            typeof user.profileMedia?.cover?.objectKey === 'string'
+              ? user.profileMedia.cover.objectKey.trim() || null
+              : null,
+        },
+      }
+    : null;
   return {
     id: user.id,
     name: user.name || 'Node',
@@ -65,9 +110,9 @@ const toPublicProfile = (user: any, viewerId: string) => {
     bio: user.bio || null,
     location: user.location || null,
     dateOfBirth: user.dateOfBirth || null,
-    avatarUrl: user.avatarUrl || null,
-    bannerUrl: user.bannerUrl || null,
-    profileMedia: user.profileMedia || null,
+    avatarUrl: absolutizeUrl(req, user.avatarUrl),
+    bannerUrl: absolutizeUrl(req, user.bannerUrl),
+    profileMedia,
     interests: Array.isArray(user.interests) ? user.interests : [],
     privacySettings: privacy,
     createdAt: user.createdAt,
@@ -134,13 +179,19 @@ router.get('/profile/:userId', async (req: Request, res: Response): Promise<any>
   );
   const enrichedPosts = visiblePosts.map((post) => ({
     ...post,
+    media: Array.isArray(post.media)
+      ? post.media.map((entry) => ({
+          ...entry,
+          url: absolutizeUrl(req, (entry as any)?.url),
+        }))
+      : [],
     authorName: targetUser.name || 'Node',
-    authorAvatarUrl: targetUser.avatarUrl || null,
+    authorAvatarUrl: absolutizeUrl(req, targetUser.avatarUrl),
   }));
 
   return res.json({
     success: true,
-    profile: toPublicProfile(targetUser, authUserId),
+    profile: toPublicProfile(req, targetUser, authUserId),
     relationship: {
       isFollowing,
       blockedEitherWay: blockState.blockedEitherWay,
@@ -211,7 +262,7 @@ router.post('/profile', validateJsonBody(socialProfilePatchSchema), async (req: 
 
   return res.json({
     success: true,
-    profile: toPublicProfile(updated, authUserId),
+    profile: toPublicProfile(req, updated, authUserId),
   });
 });
 
@@ -524,8 +575,14 @@ router.get('/newsfeed', async (req: Request, res: Response): Promise<any> => {
     const author = usersById.get(post.authorId);
     return {
       ...post,
+      media: Array.isArray(post.media)
+        ? post.media.map((entry) => ({
+            ...entry,
+            url: absolutizeUrl(req, (entry as any)?.url),
+          }))
+        : [],
       authorName: author?.name || 'Node',
-      authorAvatarUrl: author?.avatarUrl || null,
+      authorAvatarUrl: absolutizeUrl(req, author?.avatarUrl),
     };
   });
   return res.json({
