@@ -215,7 +215,8 @@ const SocialLearningHub: React.FC<SocialLearningHubProps> = ({ user }) => {
   const triggerUpload = (type: 'image' | 'video' | 'file') => {
     if (fileInputRef.current) {
       setInjectError('');
-      const accept = type === 'image' ? 'image/*' : type === 'video' ? 'video/*' : '*/*';
+      const accept =
+        type === 'image' ? 'image/*' : type === 'video' ? 'video/*,video/mp4,.mp4' : '*/*';
       fileInputRef.current.setAttribute('accept', accept);
       fileInputRef.current.onchange = (e: any) => handleFileChange(e, type);
       fileInputRef.current.value = '';

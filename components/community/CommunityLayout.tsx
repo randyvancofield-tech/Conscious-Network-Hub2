@@ -163,7 +163,7 @@ export const ConsciousIdentity: React.FC<ConsciousIdentityProps> = ({
         },
       }));
     } catch (error) {
-      setUploadError(error instanceof Error ? error.message : 'Failed to upload image');
+      setUploadError(error instanceof Error ? error.message : 'Failed to upload media');
     } finally {
       setUploadingField(null);
     }
@@ -217,7 +217,7 @@ export const ConsciousIdentity: React.FC<ConsciousIdentityProps> = ({
                     </div>
                     <span className="text-xs font-bold text-white uppercase tracking-widest">Replace Banner Image</span>
                   </div>
-                  <input type="file" ref={bannerInputRef} className="hidden" accept="image/*" onChange={(e) => handleFileUpload(e, 'bannerUrl')} />
+                  <input type="file" ref={bannerInputRef} className="hidden" accept="image/*,video/mp4,.mp4" onChange={(e) => handleFileUpload(e, 'bannerUrl')} />
                 </div>
 
                 <div className="flex justify-center -mt-24 relative z-10">
@@ -228,7 +228,7 @@ export const ConsciousIdentity: React.FC<ConsciousIdentityProps> = ({
                     <div className="absolute inset-0 bg-black/40 rounded-[4rem] flex items-center justify-center opacity-0 group-hover:opacity-100 transition-all">
                       <Camera className="w-10 h-10 text-white" />
                     </div>
-                    <input type="file" ref={avatarInputRef} className="hidden" accept="image/*" onChange={(e) => handleFileUpload(e, 'avatarUrl')} />
+                    <input type="file" ref={avatarInputRef} className="hidden" accept="image/*,video/mp4,.mp4" onChange={(e) => handleFileUpload(e, 'avatarUrl')} />
                   </div>
                 </div>
               </div>
@@ -259,7 +259,7 @@ export const ConsciousIdentity: React.FC<ConsciousIdentityProps> = ({
                 <div className={`rounded-2xl border px-4 py-3 text-xs font-bold uppercase tracking-widest ${uploadError ? 'border-red-500/40 bg-red-500/10 text-red-300' : 'border-blue-500/30 bg-blue-500/10 text-blue-300'}`}>
                   {uploadError
                     ? uploadError
-                    : `Uploading ${uploadingField === 'avatarUrl' ? 'avatar' : 'cover'} image...`}
+                    : `Uploading ${uploadingField === 'avatarUrl' ? 'avatar' : 'cover'} media...`}
                 </div>
               )}
                

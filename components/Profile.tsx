@@ -376,8 +376,8 @@ const Profile: React.FC<ProfileProps> = ({ user, onUserUpdate }) => {
       />
       <div style={{ display: 'grid', gap: '10px', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))' }}>
         <div>
-        <label>Avatar Image:</label>
-        <input type="file" accept="image/*" onChange={handleAvatarImageChange} />
+        <label>Avatar Image or MP4:</label>
+        <input type="file" accept="image/*,video/mp4,.mp4" onChange={handleAvatarImageChange} />
         {avatarPreviewUrl && (
           <img
             src={avatarPreviewUrl}
@@ -387,8 +387,8 @@ const Profile: React.FC<ProfileProps> = ({ user, onUserUpdate }) => {
         )}
         </div>
         <div>
-        <label>Cover Image:</label>
-        <input type="file" accept="image/*" onChange={handleCoverImageChange} />
+        <label>Cover Image or MP4:</label>
+        <input type="file" accept="image/*,video/mp4,.mp4" onChange={handleCoverImageChange} />
         {coverPreviewUrl && (
           <img
             src={coverPreviewUrl}
@@ -400,7 +400,7 @@ const Profile: React.FC<ProfileProps> = ({ user, onUserUpdate }) => {
       </div>
       <div style={{ display: 'grid', gap: '8px' }}>
         <label>Profile Background Video:</label>
-        <input type="file" accept="video/*" onChange={handleBgVideoChange} />
+        <input type="file" accept="video/*,video/mp4,.mp4" onChange={handleBgVideoChange} />
         {bgVideoUrl && <video src={bgVideoUrl} controls style={{ width: '100%', maxWidth: '520px' }} />}
       </div>
       <button onClick={handleProfileSave} disabled={loading}>Save Profile</button>

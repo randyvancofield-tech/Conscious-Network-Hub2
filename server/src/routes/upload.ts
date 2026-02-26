@@ -37,13 +37,14 @@ const upload = multer({
 
 type MulterRequest = Request & { file?: Express.Multer.File };
 type UploadCategory = 'avatar' | 'cover' | 'profile-background' | 'reflection';
-const ALLOWED_IMAGE_MIME_TYPES = new Set([
+const ALLOWED_PROFILE_MEDIA_MIME_TYPES = new Set([
   'image/jpeg',
   'image/jpg',
   'image/png',
   'image/webp',
   'image/avif',
   'image/gif',
+  'video/mp4',
 ]);
 
 async function buildUploadResponse(
@@ -84,16 +85,19 @@ async function buildUploadResponse(
   };
 }
 
-function ensureImageUpload(mReq: MulterRequest, res: Response): mReq is MulterRequest & { file: Express.Multer.File } {
+function ensureProfileMediaUpload(
+  mReq: MulterRequest,
+  res: Response
+): mReq is MulterRequest & { file: Express.Multer.File } {
   if (!mReq.file) {
     res.status(400).json({ error: 'No file uploaded' });
     return false;
   }
   const mimeType = String(mReq.file.mimetype || '').trim().toLowerCase();
-  if (!ALLOWED_IMAGE_MIME_TYPES.has(mimeType)) {
+  if (!ALLOWED_PROFILE_MEDIA_MIME_TYPES.has(mimeType)) {
     res.status(400).json({
       error:
-        'Unsupported image type. Allowed formats: .jpg, .jpeg, .png, .webp, .avif, .gif',
+        'Unsupported file type. Allowed formats: .jpg, .jpeg, .png, .webp, .avif, .gif, .mp4',
     });
     return false;
   }
@@ -217,19 +221,19 @@ protectedRouter.post('/profile-background', upload.single('video'), async (req: 
   await sendStoredUpload(req, res, 'profile-background', mReq.file);
 });
 
-// Upload endpoint for profile avatar image
+// Upload endpoint for profile avatar media (image/mp4)
 protectedRouter.post('/avatar', upload.single('image'), async (req: Request, res: Response): Promise<void> => {
   const mReq = req as MulterRequest;
-  if (!ensureImageUpload(mReq, res)) {
+  if (!ensureProfileMediaUpload(mReq, res)) {
     return;
   }
   await sendStoredUpload(req, res, 'avatar', mReq.file);
 });
 
-// Upload endpoint for profile cover image
+// Upload endpoint for profile cover media (image/mp4)
 protectedRouter.post('/cover', upload.single('image'), async (req: Request, res: Response): Promise<void> => {
   const mReq = req as MulterRequest;
-  if (!ensureImageUpload(mReq, res)) {
+  if (!ensureProfileMediaUpload(mReq, res)) {
     return;
   }
   await sendStoredUpload(req, res, 'cover', mReq.file);

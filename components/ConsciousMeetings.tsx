@@ -813,7 +813,7 @@ const ConsciousMeetings: React.FC<ConsciousMeetingsProps> = ({ user, onUpdateUse
                       <input
                         ref={fileInputRef}
                         type="file"
-                        accept="image/*,video/*"
+                        accept="image/*,video/*,video/mp4,.mp4"
                         onChange={handleCustomBackgroundUpload}
                         className="hidden"
                       />
