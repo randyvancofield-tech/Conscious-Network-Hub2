@@ -37,15 +37,9 @@ const upload = multer({
 
 type MulterRequest = Request & { file?: Express.Multer.File };
 type UploadCategory = 'avatar' | 'cover' | 'profile-background' | 'reflection';
-const ALLOWED_PROFILE_MEDIA_MIME_TYPES = new Set([
-  'image/jpeg',
-  'image/jpg',
-  'image/png',
-  'image/webp',
-  'image/avif',
-  'image/gif',
-  'video/mp4',
-]);
+const isAllowedProfileMediaMimeType = (mimeType: string): boolean => {
+  return mimeType.startsWith('image/') || mimeType.startsWith('video/');
+};
 
 async function buildUploadResponse(
   req: Request,
@@ -94,10 +88,10 @@ function ensureProfileMediaUpload(
     return false;
   }
   const mimeType = String(mReq.file.mimetype || '').trim().toLowerCase();
-  if (!ALLOWED_PROFILE_MEDIA_MIME_TYPES.has(mimeType)) {
+  if (!isAllowedProfileMediaMimeType(mimeType)) {
     res.status(400).json({
       error:
-        'Unsupported file type. Allowed formats: .jpg, .jpeg, .png, .webp, .avif, .gif, .mp4',
+        'Unsupported file type. Allowed formats: image/* and video/* (including .gif, .mp4, .webm, .mov)',
     });
     return false;
   }
@@ -221,7 +215,7 @@ protectedRouter.post('/profile-background', upload.single('video'), async (req: 
   await sendStoredUpload(req, res, 'profile-background', mReq.file);
 });
 
-// Upload endpoint for profile avatar media (image/mp4)
+// Upload endpoint for profile avatar media (image/video)
 protectedRouter.post('/avatar', upload.single('image'), async (req: Request, res: Response): Promise<void> => {
   const mReq = req as MulterRequest;
   if (!ensureProfileMediaUpload(mReq, res)) {
@@ -230,7 +224,7 @@ protectedRouter.post('/avatar', upload.single('image'), async (req: Request, res
   await sendStoredUpload(req, res, 'avatar', mReq.file);
 });
 
-// Upload endpoint for profile cover media (image/mp4)
+// Upload endpoint for profile cover media (image/video)
 protectedRouter.post('/cover', upload.single('image'), async (req: Request, res: Response): Promise<void> => {
   const mReq = req as MulterRequest;
   if (!ensureProfileMediaUpload(mReq, res)) {

@@ -16,6 +16,13 @@ interface ProfileProps {
   onUserUpdate: (user: UserProfile) => void;
 }
 
+const isLikelyVideoUrl = (url?: string): boolean => {
+  const value = String(url || '').trim().toLowerCase();
+  if (!value) return false;
+  if (value.startsWith('blob:')) return false;
+  return /\.(mp4|webm|ogg|mov|m4v|avi)([?#].*)?$/.test(value);
+};
+
 const Profile: React.FC<ProfileProps> = ({ user, onUserUpdate }) => {
   const backendBaseUrl = (import.meta.env.VITE_BACKEND_URL || '').replace(/\/+$/, '');
   const toApiUrl = (path: string) => `${backendBaseUrl}${path}`;
@@ -51,6 +58,9 @@ const Profile: React.FC<ProfileProps> = ({ user, onUserUpdate }) => {
   const [phoneEnrollInput, setPhoneEnrollInput] = useState('');
   const [walletEnrollInput, setWalletEnrollInput] = useState('');
   const [error, setError] = useState('');
+
+  const avatarPreviewIsVideo = (avatarImage ? avatarImage.type : '').startsWith('video/') || isLikelyVideoUrl(avatarPreviewUrl);
+  const coverPreviewIsVideo = (coverImage ? coverImage.type : '').startsWith('video/') || isLikelyVideoUrl(coverPreviewUrl);
 
   useEffect(() => {
     fetchReflections();
@@ -377,24 +387,40 @@ const Profile: React.FC<ProfileProps> = ({ user, onUserUpdate }) => {
       <div style={{ display: 'grid', gap: '10px', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))' }}>
         <div>
         <label>Avatar Image or MP4:</label>
-        <input type="file" accept="image/*,video/mp4,.mp4" onChange={handleAvatarImageChange} />
+        <input type="file" accept="image/*,video/*,.gif,.mp4,.webm,.mov" onChange={handleAvatarImageChange} />
         {avatarPreviewUrl && (
-          <img
-            src={avatarPreviewUrl}
-            alt="Avatar preview"
-            style={{ width: '100%', maxWidth: '240px', borderRadius: '12px' }}
-          />
+          avatarPreviewIsVideo ? (
+            <video
+              src={avatarPreviewUrl}
+              controls
+              style={{ width: '100%', maxWidth: '240px', borderRadius: '12px' }}
+            />
+          ) : (
+            <img
+              src={avatarPreviewUrl}
+              alt="Avatar preview"
+              style={{ width: '100%', maxWidth: '240px', borderRadius: '12px' }}
+            />
+          )
         )}
         </div>
         <div>
         <label>Cover Image or MP4:</label>
-        <input type="file" accept="image/*,video/mp4,.mp4" onChange={handleCoverImageChange} />
+        <input type="file" accept="image/*,video/*,.gif,.mp4,.webm,.mov" onChange={handleCoverImageChange} />
         {coverPreviewUrl && (
-          <img
-            src={coverPreviewUrl}
-            alt="Cover preview"
-            style={{ width: '100%', maxWidth: '420px', borderRadius: '12px' }}
-          />
+          coverPreviewIsVideo ? (
+            <video
+              src={coverPreviewUrl}
+              controls
+              style={{ width: '100%', maxWidth: '420px', borderRadius: '12px' }}
+            />
+          ) : (
+            <img
+              src={coverPreviewUrl}
+              alt="Cover preview"
+              style={{ width: '100%', maxWidth: '420px', borderRadius: '12px' }}
+            />
+          )
         )}
         </div>
       </div>

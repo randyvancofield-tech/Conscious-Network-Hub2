@@ -170,6 +170,28 @@ const App: React.FC = () => {
     return normalizedPath;
   };
 
+  const decodeUploadObjectKeyMimeType = (objectKey: unknown): string | null => {
+    const raw = typeof objectKey === 'string' ? objectKey.trim() : '';
+    if (!raw) return null;
+    try {
+      const normalized = raw.replace(/-/g, '+').replace(/_/g, '/');
+      const padded = normalized.padEnd(Math.ceil(normalized.length / 4) * 4, '=');
+      const decoded = atob(padded);
+      const parsed = JSON.parse(decoded) as { mimeType?: unknown } | null;
+      const mimeType = String(parsed?.mimeType || '').trim().toLowerCase();
+      return mimeType || null;
+    } catch {
+      return null;
+    }
+  };
+
+  const isLikelyVideoUrl = (url: unknown): boolean => {
+    const value = typeof url === 'string' ? url.trim().toLowerCase() : '';
+    if (!value) return false;
+    if (value.startsWith('blob:')) return false;
+    return /\.(mp4|webm|ogg|mov|m4v|avi)([?#].*)?$/.test(value);
+  };
+
   const toNullableTrimmedString = (value: unknown): string | null => {
     const normalized = typeof value === 'string' ? value.trim() : '';
     return normalized.length > 0 ? normalized : null;
@@ -1395,11 +1417,33 @@ const App: React.FC = () => {
                   <button onClick={() => { setCurrentView(AppView.MY_CONSCIOUS_IDENTITY); closeSidebarOnMobile(); }} className="flex items-center gap-4 pl-3 pr-6 py-2 hover:bg-white/5 rounded-2xl transition-all border border-transparent hover:border-white/5">
                     <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-blue-600 to-teal-400 flex items-center justify-center font-black text-sm text-white shadow-xl overflow-hidden">
                       {user?.avatarUrl ? (
-                        <img
-                          src={user.avatarUrl}
-                          alt={user.name}
-                          className="w-full h-full object-cover"
-                        />
+                        (() => {
+                          const avatarMimeType = decodeUploadObjectKeyMimeType(
+                            user.profileMedia?.avatar?.objectKey
+                          );
+                          const avatarIsVideo =
+                            String(avatarMimeType || '').startsWith('video/') ||
+                            isLikelyVideoUrl(user.avatarUrl);
+                          if (avatarIsVideo) {
+                            return (
+                              <video
+                                src={user.avatarUrl}
+                                className="w-full h-full object-cover"
+                                muted
+                                autoPlay
+                                loop
+                                playsInline
+                              />
+                            );
+                          }
+                          return (
+                            <img
+                              src={user.avatarUrl}
+                              alt={user.name}
+                              className="w-full h-full object-cover"
+                            />
+                          );
+                        })()
                       ) : (
                         user ? user.name.charAt(0).toUpperCase() : 'G'
                       )}

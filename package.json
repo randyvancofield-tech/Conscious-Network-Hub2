@@ -6,7 +6,8 @@
   "scripts": {
     "dev": "vite",
     "build": "vite build",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "deploy:contracts": "node scripts/deploy-contracts.mjs"
   },
   "dependencies": {
     "@mediapipe/selfie_segmentation": "^0.1.1675465747",
@@ -23,6 +24,7 @@
     "@types/node": "^22.14.0",
     "@vitejs/plugin-react": "^5.0.0",
     "prisma": "^7.3.0",
+    "solc": "^0.8.30",
     "typescript": "~5.8.2",
     "vite": "^6.2.0"
   }
