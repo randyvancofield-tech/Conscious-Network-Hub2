@@ -9,6 +9,7 @@ import {
 } from 'lucide-react';
 import { UserProfile, Course } from '../../types';
 import { buildAuthHeaders } from '../../services/sessionService';
+import ProfileBlockchainAttachment from '../ProfileBlockchainAttachment';
 
 interface ConsciousIdentityProps {
   user: UserProfile | null;
@@ -581,6 +582,26 @@ export const ConsciousIdentity: React.FC<ConsciousIdentityProps> = ({
                     </button>
                   </div>
                 </div>
+
+                <ProfileBlockchainAttachment
+                  user={user}
+                  profilePayload={{
+                    name: user.name,
+                    handle: formData.handle,
+                    bio: formData.bio || null,
+                    location: formData.location || null,
+                    dateOfBirth: formData.dateOfBirth || null,
+                    avatarUrl: formData.profileMedia.avatar.url || formData.avatarUrl || null,
+                    bannerUrl: formData.profileMedia.cover.url || formData.bannerUrl || null,
+                    interests: formData.interests,
+                    links: {
+                      twitterUrl: formData.twitterUrl || null,
+                      githubUrl: formData.githubUrl || null,
+                      websiteUrl: formData.websiteUrl || null,
+                    },
+                    privacySettings: formData.privacySettings,
+                  }}
+                />
               </div>
             </div>
           </div>
