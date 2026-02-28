@@ -9,7 +9,6 @@ const __dirname = path.dirname(__filename);
 const rootDir = path.resolve(__dirname, '..');
 
 const profileContractPath = path.join(rootDir, 'contracts', 'HCNProfileAnchor.sol');
-const creditsContractPath = path.join(rootDir, 'contracts', 'HCNCreditsReputation.sol');
 const frontendEnvLocalPath = path.join(rootDir, '.env.local');
 const frontendEnvProdPath = path.join(rootDir, '.env.production');
 const backendEnvLocalPath = path.join(rootDir, 'server', '.env.local');
@@ -27,9 +26,6 @@ const compileContracts = () => {
     sources: {
       'HCNProfileAnchor.sol': {
         content: readSource(profileContractPath),
-      },
-      'HCNCreditsReputation.sol': {
-        content: readSource(creditsContractPath),
       },
     },
     settings: {
@@ -52,15 +48,12 @@ const compileContracts = () => {
   }
 
   const profileArtifact = compiled?.contracts?.['HCNProfileAnchor.sol']?.HCNProfileAnchor;
-  const creditsArtifact =
-    compiled?.contracts?.['HCNCreditsReputation.sol']?.HCNCreditsReputation;
-  if (!profileArtifact || !creditsArtifact) {
+  if (!profileArtifact) {
     throw new Error('Compiled artifacts are missing expected contracts');
   }
 
   return {
     profileArtifact,
-    creditsArtifact,
   };
 };
 
@@ -153,23 +146,13 @@ const main = async () => {
   const deployerWallet = new ethers.Wallet(normalizedDeployerKey, provider);
   const deployerBalance = await provider.getBalance(deployerWallet.address);
   if (deployerBalance === 0n) {
-    throw new Error(`Deployer wallet ${deployerWallet.address} has zero balance on chain ${chainId}`);
+    throw new Error(`Deployer account ${deployerWallet.address} has no gas funds on chain ${chainId}`);
   }
 
-  const { profileArtifact, creditsArtifact } = compileContracts();
-
-  let oraclePrivateKey = resolveEnv('HCN_ORACLE_PRIVATE_KEY');
-  let generatedOracleKey = false;
-  if (!oraclePrivateKey) {
-    oraclePrivateKey = ethers.Wallet.createRandom().privateKey;
-    generatedOracleKey = true;
-  }
-  oraclePrivateKey = ensureHexPrivateKey(oraclePrivateKey, 'HCN_ORACLE_PRIVATE_KEY');
-  const oracleWallet = new ethers.Wallet(oraclePrivateKey);
+  const { profileArtifact } = compileContracts();
 
   console.log(`[DEPLOY] Chain ID: ${chainId}`);
   console.log(`[DEPLOY] Deployer: ${deployerWallet.address}`);
-  console.log(`[DEPLOY] Oracle signer: ${oracleWallet.address}${generatedOracleKey ? ' (generated)' : ''}`);
 
   const profileFactory = new ethers.ContractFactory(
     profileArtifact.abi,
@@ -180,37 +163,21 @@ const main = async () => {
   await profileContract.waitForDeployment();
   const profileAddress = await profileContract.getAddress();
 
-  const creditsFactory = new ethers.ContractFactory(
-    creditsArtifact.abi,
-    creditsArtifact.evm.bytecode.object,
-    deployerWallet
-  );
-  const creditsContract = await creditsFactory.deploy(oracleWallet.address);
-  await creditsContract.waitForDeployment();
-  const creditsAddress = await creditsContract.getAddress();
-
   console.log(`[DEPLOY] HCNProfileAnchor: ${profileAddress}`);
-  console.log(`[DEPLOY] HCNCreditsReputation: ${creditsAddress}`);
   console.log(`[DEPLOY] Profile deploy tx: ${profileContract.deploymentTransaction()?.hash || 'n/a'}`);
-  console.log(`[DEPLOY] Credits deploy tx: ${creditsContract.deploymentTransaction()?.hash || 'n/a'}`);
 
   if (!fs.existsSync(frontendEnvLocalPath)) fs.writeFileSync(frontendEnvLocalPath, '', 'utf8');
   if (!fs.existsSync(frontendEnvProdPath)) fs.writeFileSync(frontendEnvProdPath, '', 'utf8');
   if (!fs.existsSync(backendEnvLocalPath)) fs.writeFileSync(backendEnvLocalPath, '', 'utf8');
 
   upsertEnvValue(frontendEnvLocalPath, 'VITE_BLOCKCHAIN_NETWORK_ID', String(chainId));
-  upsertEnvValue(frontendEnvLocalPath, 'VITE_HCN_PROFILE_ANCHOR_CONTRACT_ADDRESS', profileAddress);
-  upsertEnvValue(frontendEnvLocalPath, 'VITE_HCN_CREDITS_CONTRACT_ADDRESS', creditsAddress);
   upsertEnvValue(frontendEnvLocalPath, 'VITE_IPFS_GATEWAY', resolveEnv('VITE_IPFS_GATEWAY') || 'https://ipfs.io/ipfs');
 
   upsertEnvValue(frontendEnvProdPath, 'VITE_BLOCKCHAIN_NETWORK_ID', String(chainId));
-  upsertEnvValue(frontendEnvProdPath, 'VITE_HCN_PROFILE_ANCHOR_CONTRACT_ADDRESS', profileAddress);
-  upsertEnvValue(frontendEnvProdPath, 'VITE_HCN_CREDITS_CONTRACT_ADDRESS', creditsAddress);
   upsertEnvValue(frontendEnvProdPath, 'VITE_IPFS_GATEWAY', resolveEnv('VITE_IPFS_GATEWAY') || 'https://ipfs.io/ipfs');
 
-  upsertEnvValue(backendEnvLocalPath, 'HCN_LEDGER_CHAIN_ID', String(chainId));
-  upsertEnvValue(backendEnvLocalPath, 'HCN_LEDGER_CONTRACT_ADDRESS', creditsAddress);
-  upsertEnvValue(backendEnvLocalPath, 'HCN_ORACLE_PRIVATE_KEY', oraclePrivateKey);
+  upsertEnvValue(backendEnvLocalPath, 'HCN_PROFILE_ANCHOR_CONTRACT_ADDRESS', profileAddress);
+  upsertEnvValue(backendEnvLocalPath, 'HCN_PROFILE_ANCHOR_CHAIN_ID', String(chainId));
 
   console.log('[DEPLOY] Updated .env.local, .env.production, and server/.env.local');
 };

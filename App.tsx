@@ -2,7 +2,7 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import ThreeScene from './components/ThreeScene';
 import Dashboard from './components/Dashboard';
-import WalletPopout from './components/WalletPopout';
+import IdentitySecurityPanel from './components/IdentitySecurityPanel';
 import MyCourses from './components/MyCourses';
 import ProvidersMarket from './components/ProvidersMarket';
 import KnowledgePathways from './components/KnowledgePathways';
@@ -15,7 +15,7 @@ import { AppView, UserProfile, Course } from './types';
 import { NAVIGATION_ITEMS } from './constants';
 import { 
   Shield, Menu, X, Search, Bell,
-  ChevronRight, Wallet, Home, LogOut, Compass, Building2, CheckCircle2, Sparkles, Key
+  ChevronRight, Home, LogOut, Compass, Building2, CheckCircle2, Sparkles, Key
 } from 'lucide-react';
 import logo from './src/assets/brand/logo.png';
 import privacyPolicy from './docs/compliance/privacy-policy-draft.md?raw';
@@ -34,7 +34,7 @@ const App: React.FC = () => {
   
   const [isSignupModalOpen, setSignupModalOpen] = useState(false);
   const [isSigninModalOpen, setSigninModalOpen] = useState(false);
-  const [isWalletOpen, setWalletOpen] = useState(false);
+  const [isIdentitySecurityOpen, setIdentitySecurityOpen] = useState(false);
   const [selectedTier, setSelectedTier] = useState('Free / Community Tier');
   
   const [hasApiKey, setHasApiKey] = useState<boolean | null>(null);
@@ -54,7 +54,7 @@ const App: React.FC = () => {
   const [contactName, setContactName] = useState('');
   const [contactEmail, setContactEmail] = useState('');
   
-  // Membership and payment states
+  // Membership checkout states
   const [isSelectingTier, setIsSelectingTier] = useState(false);
   const [isMembershipCheckoutPending, setMembershipCheckoutPending] = useState(false);
   const [membershipNotice, setMembershipNotice] = useState('');
@@ -231,7 +231,7 @@ const App: React.FC = () => {
       hasProfile: rawUser.hasProfile ?? false,
       identityVerified: true,
       reputationScore: rawUser.reputationScore ?? 100,
-      walletBalanceTokens: rawUser.walletBalanceTokens ?? 200,
+      accessKeyIndex: rawUser.accessKeyIndex ?? 200,
       avatarUrl: toAbsoluteAssetUrl(rawUser.avatarUrl),
       bannerUrl: toAbsoluteAssetUrl(rawUser.bannerUrl),
       location: rawUser.location ?? null,
@@ -1338,7 +1338,7 @@ const App: React.FC = () => {
                   <button 
                     onClick={() => {
                       if (!user) {
-                        setError('Sign in required for wallet access.');
+                        setError('Sign in required for identity security access.');
                         setPendingTwoFactorMethod(null);
                         setTwoFactorCodeInput('');
                         setProviderTokenInput('');
@@ -1346,14 +1346,14 @@ const App: React.FC = () => {
                         closeSidebarOnMobile();
                         return;
                       }
-                      setWalletOpen(true);
+                      setIdentitySecurityOpen(true);
                       closeSidebarOnMobile();
                     }} 
                     className="w-full flex items-center justify-between p-4 bg-blue-600/5 hover:bg-blue-600/10 rounded-2xl border border-blue-500/10 transition-all group"
                   >
                     <div className="flex items-center gap-4">
-                      <Wallet className="w-5 h-5 text-blue-400" />
-                      <span className="text-[9px] font-black text-blue-200 uppercase tracking-widest">Vault</span>
+                      <Shield className="w-5 h-5 text-blue-400" />
+                      <span className="text-[9px] font-black text-blue-200 uppercase tracking-widest">Identity Security</span>
                     </div>
                     <ChevronRight className="w-4 h-4 text-blue-500 group-hover:translate-x-1 transition-transform" />
                   </button>
@@ -1473,7 +1473,11 @@ const App: React.FC = () => {
           </div>
         )}
 
-        <WalletPopout isOpen={isWalletOpen} onClose={() => setWalletOpen(false)} user={user} />
+        <IdentitySecurityPanel
+          isOpen={isIdentitySecurityOpen}
+          onClose={() => setIdentitySecurityOpen(false)}
+          user={user}
+        />
 
         {isIdentityGuestPromptOpen && !user && (
           <div className="fixed inset-0 z-[210] flex items-center justify-center p-4 bg-black/95 backdrop-blur-3xl animate-in fade-in duration-300">
@@ -1568,8 +1572,8 @@ const App: React.FC = () => {
                         </option>
                         <option value="wallet" disabled={!signupTwoFactorEnabled}>
                           {signupTwoFactorEnabled
-                            ? 'Password + Wallet Token'
-                            : 'Password + Wallet Token (temporarily disabled)'}
+                            ? 'Password + Address Credential'
+                            : 'Password + Address Credential (temporarily disabled)'}
                         </option>
                       </select>
                     </div>
@@ -1598,7 +1602,7 @@ const App: React.FC = () => {
                           required
                         />
                         <p className="text-[9px] text-slate-400 uppercase tracking-widest px-1">
-                          Sign in later by providing a valid provider session token from wallet verification.
+                          Sign in later by providing a valid provider session credential from identity verification.
                         </p>
                       </div>
                     )}
@@ -1624,13 +1628,13 @@ const App: React.FC = () => {
                 )}
                 {isSigninModalOpen && pendingTwoFactorMethod === 'wallet' && (
                   <div className="space-y-3">
-                    <label className="text-[9px] font-black text-slate-500 uppercase tracking-widest ml-2">Wallet Provider Token</label>
+                    <label className="text-[9px] font-black text-slate-500 uppercase tracking-widest ml-2">Address Session Credential</label>
                     <input
                       type="text"
                       value={providerTokenInput}
                       onChange={(e) => setProviderTokenInput(e.target.value)}
                       className="w-full px-5 sm:px-8 py-3 sm:py-4 bg-white/5 border border-white/10 rounded-xl sm:rounded-2xl text-white outline-none focus:ring-2 focus:ring-blue-500/50 transition-all font-medium text-sm"
-                      placeholder="Paste provider token"
+                      placeholder="Paste session credential"
                       required
                     />
                   </div>

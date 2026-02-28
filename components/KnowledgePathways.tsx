@@ -178,7 +178,7 @@ const KnowledgePathways: React.FC<KnowledgePathwaysProps> = ({ onGoBack, onEnrol
       <div className="glass-panel p-10 rounded-[2.5rem] bg-gradient-to-r from-teal-900/10 to-blue-900/10 border border-white/10 text-center space-y-4">
         <h4 className="text-xl font-black text-white uppercase tracking-tighter">Sovereign Certification Layer</h4>
         <p className="text-slate-400 text-sm max-w-2xl mx-auto font-light">
-          Each completed pathway generates a unique verifiable credential anchored to your Conscious Identity node. These tokens of achievement represent deep work in personal and professional autonomy.
+          Each completed pathway generates a unique verifiable credential anchored to your Conscious Identity node. These achievement records represent deep work in personal and professional autonomy.
         </p>
       </div>
     </div>

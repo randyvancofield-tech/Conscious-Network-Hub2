@@ -28,7 +28,6 @@ export interface Provider {
   courses?: number;
   bio: string;
   availabilitySlots?: string[];
-  tokenPrice?: number;
   tierIncludedMin?: string;
 }
 
@@ -41,7 +40,7 @@ export interface Meeting {
   endTime: string;
   participants: { id: string, name: string, role: 'User' | 'Provider' }[];
   status: 'Upcoming' | 'Live' | 'Completed' | 'Cancelled';
-  paymentType: 'tier' | 'tokens';
+  accessType: 'tier' | 'restricted';
   notes?: {
     transcript: string[];
     summary: string;
@@ -78,7 +77,7 @@ export interface UserProfile {
   subscriptionStatus?: string | null;
   identityVerified?: boolean;
   reputationScore?: number;
-  walletBalanceTokens?: number;
+  accessKeyIndex?: number;
   createdAt?: string;
   hasProfile?: boolean;
   avatarUrl?: string;

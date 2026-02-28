@@ -24,7 +24,8 @@ import reflectionRoutes from './routes/reflection';
 import socialRoutes from './routes/social';
 import providerAuthRoutes from './routes/providerAuth';
 import providerSessionRoutes from './routes/providerSession';
-import walletRoutes from './routes/wallet';
+import identitySecurityRoutes from './routes/identitySecurity';
+import integrityRoutes from './routes/integrity';
 import { initializeVertexAI } from './services/vertexAiService';
 import { hasOpenAiApiKey, logStripeEnvironmentLoaded, validateRequiredEnv } from './requiredEnv';
 
@@ -187,7 +188,8 @@ app.get('/health', healthCheck);
 app.use('/api/user', userPublicRoutes);
 app.use('/api/membership', membershipPublicRoutes);
 app.use('/api/provider/auth', providerAuthRoutes);
-app.use('/api/wallet', walletRoutes);
+app.use('/api/identity-security', identitySecurityRoutes);
+app.use('/api/integrity', integrityRoutes);
 
 // Protected routes enforce canonical identity within their own routers.
 // This avoids duplicate middleware execution while preserving route-level security.

@@ -59,7 +59,7 @@ Performed on isolated backend instance (port `4011`) to avoid stale process inte
 ### 4) Session + Browser Storage
 - Auth token key: `hcn_auth_token` (`services/sessionService.ts`).
 - User cache key: `hcn_active_user` (`services/sessionService.ts`).
-- Optional wallet session key: `hcn_wallet_session_v1` (`components/WalletPopout.tsx`).
+- Optional identity session key: `hcn_identity_security_session_v1` (`components/IdentitySecurityPanel.tsx`).
 
 ### 5) Related User Content Paths
 - Profile/reflection file uploads:

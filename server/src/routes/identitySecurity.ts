@@ -9,7 +9,7 @@ import { localStore } from '../services/persistenceStore';
 import { createProviderSession } from '../services/providerSessionStore';
 import { recordAuditEvent } from '../services/auditTelemetry';
 
-type WalletChallengeRecord = {
+type IdentityChallengeRecord = {
   nonce: string;
   requestId: string;
   userId: string;
@@ -21,7 +21,7 @@ type WalletChallengeRecord = {
   expiresAt: Date;
 };
 
-type WalletSessionJwtPayload = {
+type IdentitySessionJwtPayload = {
   sub: string;
   address: string;
   chainId: number;
@@ -36,19 +36,11 @@ const router = Router();
 const protectedRouter = Router();
 protectedRouter.use(requireCanonicalIdentity);
 
-const walletChallengeStore = new Map<string, WalletChallengeRecord>();
-const signedRewardMarkers = new Set<string>();
+const identityChallengeStore = new Map<string, IdentityChallengeRecord>();
 
-const WALLET_SESSION_COOKIE = 'hcn_wallet_session';
-const DEFAULT_WALLET_CHALLENGE_TTL_SECONDS = 5 * 60;
-const DEFAULT_WALLET_SESSION_TTL_SECONDS = 30 * 24 * 60 * 60; // 30 days
-const DEFAULT_HCN_LEDGER_CHAIN_ID = 1;
-
-const REWARD_ACTIVITY_CONFIG: Record<string, { amount: bigint; reputationPoints: bigint }> = {
-  knowledge_contribution: { amount: 12n, reputationPoints: 3n },
-  peer_support: { amount: 6n, reputationPoints: 2n },
-  course_completion: { amount: 20n, reputationPoints: 5n },
-};
+const IDENTITY_SESSION_COOKIE = 'hcn_identity_session';
+const DEFAULT_IDENTITY_CHALLENGE_TTL_SECONDS = 5 * 60;
+const DEFAULT_IDENTITY_SESSION_TTL_SECONDS = 30 * 24 * 60 * 60; // 30 days
 
 const getPublicBaseUrl = (req: Request): string => {
   const configured = String(process.env.PUBLIC_BASE_URL || '').trim();
@@ -83,20 +75,26 @@ const isSecureRequest = (req: Request): boolean => {
   return forwardedProto === 'https' || req.secure;
 };
 
-const getWalletSessionTtlSeconds = (): number => {
-  const raw = Number(process.env.WALLET_SESSION_TTL_SECONDS);
-  if (!Number.isFinite(raw) || raw <= 0) return DEFAULT_WALLET_SESSION_TTL_SECONDS;
+const getIdentitySessionTtlSeconds = (): number => {
+  const raw = Number(process.env.IDENTITY_SESSION_TTL_SECONDS || process.env.WALLET_SESSION_TTL_SECONDS);
+  if (!Number.isFinite(raw) || raw <= 0) return DEFAULT_IDENTITY_SESSION_TTL_SECONDS;
   return Math.floor(raw);
 };
 
-const getWalletChallengeTtlSeconds = (): number => {
-  const raw = Number(process.env.WALLET_CHALLENGE_TTL_SECONDS);
-  if (!Number.isFinite(raw) || raw <= 0) return DEFAULT_WALLET_CHALLENGE_TTL_SECONDS;
+const getIdentityChallengeTtlSeconds = (): number => {
+  const raw = Number(
+    process.env.IDENTITY_CHALLENGE_TTL_SECONDS || process.env.WALLET_CHALLENGE_TTL_SECONDS
+  );
+  if (!Number.isFinite(raw) || raw <= 0) return DEFAULT_IDENTITY_CHALLENGE_TTL_SECONDS;
   return Math.floor(raw);
 };
 
-const getWalletSessionSecret = (): string => {
-  return String(process.env.WALLET_SESSION_SECRET || '').trim() || resolveAuthTokenSecret();
+const getIdentitySessionSecret = (): string => {
+  return (
+    String(process.env.IDENTITY_SESSION_SECRET || '').trim() ||
+    String(process.env.WALLET_SESSION_SECRET || '').trim() ||
+    resolveAuthTokenSecret()
+  );
 };
 
 const toDidPkh = (chainId: number, address: string): string =>
@@ -137,11 +135,11 @@ const normalizePositiveChainId = (value: unknown): number | null => {
   return Math.floor(parsed);
 };
 
-const cleanupExpiredWalletChallenges = (): void => {
+const cleanupExpiredChallenges = (): void => {
   const now = Date.now();
-  for (const [nonce, challenge] of walletChallengeStore.entries()) {
+  for (const [nonce, challenge] of identityChallengeStore.entries()) {
     if (challenge.expiresAt.getTime() <= now) {
-      walletChallengeStore.delete(nonce);
+      identityChallengeStore.delete(nonce);
     }
   }
 };
@@ -161,7 +159,7 @@ const buildSiweMessage = (input: {
     `${input.domain} wants you to sign in with your Ethereum account:`,
     input.address,
     '',
-    'Sign in with Ethereum to link your HCN identity and establish a sovereign wallet session.',
+    'Sign in with Ethereum to establish a secure identity session for HCN.',
     '',
     `URI: ${input.uri}`,
     'Version: 1',
@@ -190,31 +188,25 @@ const extractSiweAddress = (message: string): string | null => {
   return normalizeAddress(matcher[1]);
 };
 
-const parseBytes32 = (value: unknown): string | null => {
-  const raw = String(value || '').trim();
-  if (!/^0x[0-9a-fA-F]{64}$/.test(raw)) return null;
-  return raw.toLowerCase();
-};
-
-const parseWalletSessionToken = (req: Request): WalletSessionJwtPayload | null => {
+const parseIdentitySessionToken = (req: Request): IdentitySessionJwtPayload | null => {
   const cookies = parseCookieHeader(String(req.headers.cookie || ''));
-  const cookieToken = cookies[WALLET_SESSION_COOKIE];
+  const cookieToken = cookies[IDENTITY_SESSION_COOKIE];
   const authHeader = String(req.headers.authorization || '').trim();
   const bearerToken = authHeader.startsWith('Bearer ') ? authHeader.slice('Bearer '.length) : '';
-  const token = cookieToken || bearerToken;
-  if (!token) return null;
+  const rawSession = cookieToken || bearerToken;
+  if (!rawSession) return null;
   try {
-    return jwt.verify(token, getWalletSessionSecret(), {
-      issuer: 'hcn-wallet',
-      audience: 'hcn-wallet-session',
-    }) as WalletSessionJwtPayload;
+    return jwt.verify(rawSession, getIdentitySessionSecret(), {
+      issuer: 'hcn-identity',
+      audience: 'hcn-identity-session',
+    }) as IdentitySessionJwtPayload;
   } catch {
     return null;
   }
 };
 
 protectedRouter.post('/challenge', async (req: Request, res: Response): Promise<void> => {
-  cleanupExpiredWalletChallenges();
+  cleanupExpiredChallenges();
   const authUserId = getAuthenticatedUserId(req);
   if (!authUserId) {
     res.status(401).json({ error: 'Authentication required' });
@@ -237,7 +229,7 @@ protectedRouter.post('/challenge', async (req: Request, res: Response): Promise<
         return;
       }
     } else if (!isLegacyNodeDid(requestedDid)) {
-      res.status(400).json({ error: 'Unsupported DID format for wallet verification' });
+      res.status(400).json({ error: 'Unsupported DID format for identity verification' });
       return;
     }
   }
@@ -245,7 +237,7 @@ protectedRouter.post('/challenge', async (req: Request, res: Response): Promise<
   const nonce = crypto.randomBytes(16).toString('hex');
   const requestId = crypto.randomUUID();
   const issuedAt = new Date();
-  const ttlSeconds = getWalletChallengeTtlSeconds();
+  const ttlSeconds = getIdentityChallengeTtlSeconds();
   const expiresAt = new Date(issuedAt.getTime() + ttlSeconds * 1000);
   const publicBaseUrl = getPublicBaseUrl(req);
   const domain = (() => {
@@ -259,7 +251,7 @@ protectedRouter.post('/challenge', async (req: Request, res: Response): Promise<
   const message = buildSiweMessage({
     domain,
     address,
-    uri: `${publicBaseUrl}/api/wallet/verify`,
+    uri: `${publicBaseUrl}/api/identity-security/verify`,
     chainId,
     nonce,
     issuedAtIso: issuedAt.toISOString(),
@@ -268,7 +260,7 @@ protectedRouter.post('/challenge', async (req: Request, res: Response): Promise<
     did,
   });
 
-  walletChallengeStore.set(nonce, {
+  identityChallengeStore.set(nonce, {
     nonce,
     requestId,
     userId: authUserId,
@@ -282,7 +274,7 @@ protectedRouter.post('/challenge', async (req: Request, res: Response): Promise<
 
   recordAuditEvent(req, {
     domain: 'auth',
-    action: 'wallet_challenge_create',
+    action: 'identity_challenge_create',
     outcome: 'success',
     actorUserId: authUserId,
     targetUserId: authUserId,
@@ -310,7 +302,7 @@ protectedRouter.post('/challenge', async (req: Request, res: Response): Promise<
 });
 
 protectedRouter.post('/verify', async (req: Request, res: Response): Promise<void> => {
-  cleanupExpiredWalletChallenges();
+  cleanupExpiredChallenges();
   const authUserId = getAuthenticatedUserId(req);
   if (!authUserId) {
     res.status(401).json({ error: 'Authentication required' });
@@ -334,15 +326,15 @@ protectedRouter.post('/verify', async (req: Request, res: Response): Promise<voi
     return;
   }
 
-  const challenge = walletChallengeStore.get(nonce);
+  const challenge = identityChallengeStore.get(nonce);
   if (!challenge) {
-    res.status(410).json({ error: 'Wallet challenge not found or expired' });
+    res.status(410).json({ error: 'Identity challenge not found or expired' });
     return;
   }
 
   if (challenge.expiresAt.getTime() <= Date.now()) {
-    walletChallengeStore.delete(nonce);
-    res.status(410).json({ error: 'Wallet challenge expired' });
+    identityChallengeStore.delete(nonce);
+    res.status(410).json({ error: 'Identity challenge expired' });
     return;
   }
 
@@ -386,11 +378,11 @@ protectedRouter.post('/verify', async (req: Request, res: Response): Promise<voi
   try {
     recoveredAddress = ethers.getAddress(ethers.verifyMessage(message, signature));
   } catch {
-    res.status(401).json({ error: 'Invalid wallet signature' });
+    res.status(401).json({ error: 'Invalid address signature' });
     return;
   }
   if (recoveredAddress.toLowerCase() !== challenge.address.toLowerCase()) {
-    res.status(401).json({ error: 'Wallet signature does not match expected address' });
+    res.status(401).json({ error: 'Address signature does not match expected address' });
     return;
   }
 
@@ -402,11 +394,11 @@ protectedRouter.post('/verify', async (req: Request, res: Response): Promise<voi
       requestedDidPkh.chainId !== challenge.chainId ||
       requestedDidPkh.address.toLowerCase() !== challenge.address.toLowerCase()
     ) {
-      res.status(400).json({ error: 'Provided DID does not match verified wallet identity' });
+      res.status(400).json({ error: 'Provided DID does not match verified address identity' });
       return;
     }
   } else if (!isLegacyNodeDid(requestedDid)) {
-    res.status(400).json({ error: 'Unsupported DID format for wallet binding' });
+    res.status(400).json({ error: 'Unsupported DID format for identity binding' });
     return;
   }
 
@@ -420,7 +412,7 @@ protectedRouter.post('/verify', async (req: Request, res: Response): Promise<voi
 
   const providerSession = await createProviderSession(canonicalDid, [
     'provider:read',
-    'wallet:session',
+    'identity:session',
   ]);
   const providerToken = createProviderSessionToken(
     providerSession.id,
@@ -429,9 +421,9 @@ protectedRouter.post('/verify', async (req: Request, res: Response): Promise<voi
   );
 
   const verifiedAt = new Date();
-  const walletSessionTtlSeconds = getWalletSessionTtlSeconds();
-  const walletSessionExpiresAt = Math.floor(Date.now() / 1000) + walletSessionTtlSeconds;
-  const walletJwtPayload: WalletSessionJwtPayload = {
+  const identitySessionTtlSeconds = getIdentitySessionTtlSeconds();
+  const identitySessionExpiresAt = Math.floor(Date.now() / 1000) + identitySessionTtlSeconds;
+  const identityJwtPayload: IdentitySessionJwtPayload = {
     sub: authUserId,
     address: challenge.address,
     chainId: challenge.chainId,
@@ -439,27 +431,27 @@ protectedRouter.post('/verify', async (req: Request, res: Response): Promise<voi
     legacyDid: isLegacyNodeDid(requestedDid) ? requestedDid : null,
     verifiedAt: verifiedAt.toISOString(),
   };
-  const walletSessionToken = jwt.sign(walletJwtPayload, getWalletSessionSecret(), {
+  const identitySessionToken = jwt.sign(identityJwtPayload, getIdentitySessionSecret(), {
     algorithm: 'HS256',
-    issuer: 'hcn-wallet',
-    audience: 'hcn-wallet-session',
-    expiresIn: walletSessionTtlSeconds,
+    issuer: 'hcn-identity',
+    audience: 'hcn-identity-session',
+    expiresIn: identitySessionTtlSeconds,
   });
 
   const secureRequest = isSecureRequest(req);
-  res.cookie(WALLET_SESSION_COOKIE, walletSessionToken, {
+  res.cookie(IDENTITY_SESSION_COOKIE, identitySessionToken, {
     httpOnly: true,
     secure: secureRequest,
     sameSite: secureRequest ? 'none' : 'lax',
     path: '/',
-    maxAge: walletSessionTtlSeconds * 1000,
+    maxAge: identitySessionTtlSeconds * 1000,
   });
 
-  walletChallengeStore.delete(nonce);
+  identityChallengeStore.delete(nonce);
 
   recordAuditEvent(req, {
     domain: 'auth',
-    action: 'wallet_verify',
+    action: 'identity_verify',
     outcome: 'success',
     actorUserId: authUserId,
     targetUserId: authUserId,
@@ -478,24 +470,24 @@ protectedRouter.post('/verify', async (req: Request, res: Response): Promise<voi
       address: challenge.address,
       chainId: challenge.chainId,
       verifiedAt: verifiedAt.toISOString(),
-      walletSessionExpiresAt: new Date(walletSessionExpiresAt * 1000).toISOString(),
+      identitySessionExpiresAt: new Date(identitySessionExpiresAt * 1000).toISOString(),
       providerToken: providerToken.token,
       providerTokenExpiresAt: providerToken.expiresAt,
     },
-    walletSessionToken,
+    identitySessionToken,
   });
 });
 
 router.get('/session', async (req: Request, res: Response): Promise<void> => {
-  const payload = parseWalletSessionToken(req);
+  const payload = parseIdentitySessionToken(req);
   if (!payload) {
-    res.status(401).json({ error: 'No active wallet session' });
+    res.status(401).json({ error: 'No active identity session' });
     return;
   }
 
   const user = await localStore.getUserById(payload.sub);
   if (!user) {
-    res.status(404).json({ error: 'Wallet session user no longer exists' });
+    res.status(404).json({ error: 'Identity session user no longer exists' });
     return;
   }
 
@@ -514,141 +506,13 @@ router.get('/session', async (req: Request, res: Response): Promise<void> => {
 
 router.post('/logout', async (req: Request, res: Response): Promise<void> => {
   const secureRequest = isSecureRequest(req);
-  res.clearCookie(WALLET_SESSION_COOKIE, {
+  res.clearCookie(IDENTITY_SESSION_COOKIE, {
     httpOnly: true,
     secure: secureRequest,
     sameSite: secureRequest ? 'none' : 'lax',
     path: '/',
   });
   res.json({ success: true });
-});
-
-protectedRouter.post('/rewards/sign', async (req: Request, res: Response): Promise<void> => {
-  const authUserId = getAuthenticatedUserId(req);
-  if (!authUserId) {
-    res.status(401).json({ error: 'Authentication required' });
-    return;
-  }
-
-  const user = await localStore.getUserById(authUserId);
-  if (!user || !user.walletDid) {
-    res.status(400).json({ error: 'Wallet must be verified before requesting reward signatures' });
-    return;
-  }
-
-  const did = String(user.walletDid || '').trim();
-  const didPkh = parseDidPkh(did);
-  if (!didPkh) {
-    res.status(400).json({
-      error: 'Wallet DID must be a did:pkh identity before signing rewards',
-    });
-    return;
-  }
-
-  const requestedWalletAddress = normalizeAddress(req.body?.walletAddress);
-  if (
-    requestedWalletAddress &&
-    requestedWalletAddress.toLowerCase() !== didPkh.address.toLowerCase()
-  ) {
-    res.status(403).json({ error: 'walletAddress does not match verified wallet identity' });
-    return;
-  }
-  const walletAddress = didPkh.address;
-
-  const activityType = String(req.body?.activityType || '').trim().toLowerCase();
-  const rewardConfig = REWARD_ACTIVITY_CONFIG[activityType];
-  if (!rewardConfig) {
-    res.status(400).json({
-      error: `Unsupported activityType. Allowed: ${Object.keys(REWARD_ACTIVITY_CONFIG).join(', ')}`,
-    });
-    return;
-  }
-
-  const proofId = String(req.body?.proofId || '').trim();
-  if (!proofId) {
-    res.status(400).json({ error: 'proofId is required for reward signing' });
-    return;
-  }
-  const marker = `${authUserId}:${activityType}:${proofId}`;
-  if (signedRewardMarkers.has(marker)) {
-    res.status(409).json({ error: 'Reward already signed for this activity proof' });
-    return;
-  }
-
-  const txid =
-    parseBytes32(req.body?.txid) ||
-    ethers.keccak256(
-      ethers.toUtf8Bytes(
-        `${authUserId}:${activityType}:${proofId}:${Date.now().toString(10)}`
-      )
-    );
-
-  const oraclePrivateKey = String(process.env.HCN_ORACLE_PRIVATE_KEY || '').trim();
-  if (!oraclePrivateKey) {
-    res.status(503).json({ error: 'HCN oracle signing key is not configured' });
-    return;
-  }
-
-  const contractAddressRaw = String(process.env.HCN_LEDGER_CONTRACT_ADDRESS || '').trim();
-  let contractAddress: string;
-  try {
-    contractAddress = ethers.getAddress(contractAddressRaw);
-  } catch {
-    res.status(503).json({
-      error: 'HCN_LEDGER_CONTRACT_ADDRESS is missing or invalid in backend configuration',
-    });
-    return;
-  }
-
-  const configuredChainId = normalizePositiveChainId(process.env.HCN_LEDGER_CHAIN_ID);
-  const chainId = configuredChainId || DEFAULT_HCN_LEDGER_CHAIN_ID;
-
-  const claimDigest = ethers.solidityPackedKeccak256(
-    ['address', 'uint256', 'address', 'bytes32', 'uint256', 'uint256'],
-    [
-      contractAddress,
-      BigInt(chainId),
-      walletAddress,
-      txid,
-      rewardConfig.amount,
-      rewardConfig.reputationPoints,
-    ]
-  );
-
-  const oracleWallet = new ethers.Wallet(oraclePrivateKey);
-  const signature = await oracleWallet.signMessage(ethers.getBytes(claimDigest));
-  signedRewardMarkers.add(marker);
-
-  recordAuditEvent(req, {
-    domain: 'auth',
-    action: 'reward_signature_issue',
-    outcome: 'success',
-    actorUserId: authUserId,
-    targetUserId: authUserId,
-    statusCode: 200,
-    metadata: {
-      activityType,
-      proofId,
-      txid,
-      walletAddress,
-    },
-  });
-
-  res.json({
-    success: true,
-    reward: {
-      txid,
-      walletAddress,
-      amount: rewardConfig.amount.toString(),
-      reputationPoints: rewardConfig.reputationPoints.toString(),
-      activityType,
-      proofId,
-      signature,
-      oracleAddress: oracleWallet.address,
-      contractAddress,
-      chainId,
-    },
-  });
 });
 
 router.use(protectedRouter);

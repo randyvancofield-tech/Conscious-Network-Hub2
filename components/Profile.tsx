@@ -154,7 +154,7 @@ const Profile: React.FC<ProfileProps> = ({ user, onUserUpdate }) => {
 
   const enrollWalletTwoFactor = async () => {
     if (!walletEnrollInput.trim()) {
-      setSecurityError('Enter a wallet DID to enroll wallet 2FA');
+      setSecurityError('Enter an address DID to enroll signature-based 2FA');
       return;
     }
 
@@ -168,11 +168,11 @@ const Profile: React.FC<ProfileProps> = ({ user, onUserUpdate }) => {
         { headers: buildAuthHeaders() }
       );
       setWalletEnrollInput('');
-      setSecurityMessage('Wallet 2FA enabled');
+      setSecurityMessage('Signature-based 2FA enabled');
       await fetchSecuritySettings();
     } catch (e: any) {
       setSecurityError(
-        e?.response?.data?.error || 'Failed to enable wallet 2FA'
+        e?.response?.data?.error || 'Failed to enable signature-based 2FA'
       );
     } finally {
       setSecurityLoading(false);
@@ -441,7 +441,7 @@ const Profile: React.FC<ProfileProps> = ({ user, onUserUpdate }) => {
           <div style={{ marginBottom: '8px' }}>Phone: {securityState.phoneNumberMasked}</div>
         )}
         {securityState.walletDid && (
-          <div style={{ marginBottom: '8px', wordBreak: 'break-all' }}>Wallet DID: {securityState.walletDid}</div>
+          <div style={{ marginBottom: '8px', wordBreak: 'break-all' }}>Address DID: {securityState.walletDid}</div>
         )}
 
         <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', marginBottom: '10px' }}>
@@ -459,9 +459,9 @@ const Profile: React.FC<ProfileProps> = ({ user, onUserUpdate }) => {
             type="text"
             value={walletEnrollInput}
             onChange={(e) => setWalletEnrollInput(e.target.value)}
-            placeholder="Wallet DID (did:hcn:ed25519:...)"
+            placeholder="Address DID (did:hcn:ed25519:...)"
           />
-          <button onClick={enrollWalletTwoFactor} disabled={securityLoading}>Enable Wallet 2FA</button>
+          <button onClick={enrollWalletTwoFactor} disabled={securityLoading}>Enable Signature 2FA</button>
         </div>
 
         <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>

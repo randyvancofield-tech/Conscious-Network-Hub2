@@ -9,7 +9,7 @@ import {
 } from 'lucide-react';
 import { UserProfile, Course } from '../../types';
 import { buildAuthHeaders } from '../../services/sessionService';
-import ProfileBlockchainAttachment from '../ProfileBlockchainAttachment';
+import ProfileIntegrityVerificationPanel from '../ProfileIntegrityVerificationPanel';
 
 interface ConsciousIdentityProps {
   user: UserProfile | null;
@@ -624,13 +624,13 @@ export const ConsciousIdentity: React.FC<ConsciousIdentityProps> = ({
                     </div>
                   </div>
                   <div className="p-6 sm:p-10 bg-white/5 border border-white/5 rounded-[2rem] sm:rounded-[3rem] hover:bg-white/10 transition-all flex flex-col justify-between shadow-xl group">
-                    <h4 className="text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-6">Reputation Node</h4>
+                    <h4 className="text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-6">Integrity Node</h4>
                     <div className="flex justify-between items-end">
                       <div className="flex items-center gap-4">
                         <div className="w-12 h-12 bg-yellow-400/10 rounded-2xl flex items-center justify-center">
                           <Zap className="w-7 h-7 text-yellow-400" />
                         </div>
-                        <span className="text-xl text-slate-300 font-medium">Network Trust</span>
+                        <span className="text-xl text-slate-300 font-medium">Security Posture</span>
                       </div>
                       <span className="text-5xl font-mono font-bold text-white group-hover:scale-110 transition-transform">{user.reputationScore}</span>
                     </div>
@@ -678,7 +678,7 @@ export const ConsciousIdentity: React.FC<ConsciousIdentityProps> = ({
                   </div>
                 </div>
 
-                <ProfileBlockchainAttachment
+                <ProfileIntegrityVerificationPanel
                   user={user}
                   profilePayload={{
                     name: user.name,

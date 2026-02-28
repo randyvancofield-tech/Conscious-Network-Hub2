@@ -24,7 +24,6 @@ const PROVIDERS: Provider[] = [
     avatar: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?auto=format&fit=crop&q=80&w=200',
     bio: 'Specialist in restorative trauma-informed coaching for digital nomads navigating decentralized systems.',
     availabilitySlots: ['Mon 10:00 AM', 'Wed 02:00 PM', 'Fri 09:00 AM'],
-    tokenPrice: 50,
     tierIncludedMin: 'Guided Tier'
   },
   {
@@ -35,7 +34,6 @@ const PROVIDERS: Provider[] = [
     avatar: 'https://images.unsplash.com/photo-1544005313-94ddf0286df2?auto=format&fit=crop&q=80&w=200',
     bio: 'Helping professionals navigate career transitions and find purpose in the decentralized economy.',
     availabilitySlots: ['Tue 11:00 AM', 'Thu 03:00 PM'],
-    tokenPrice: 30,
     tierIncludedMin: 'Accelerated Tier'
   },
   {
@@ -46,12 +44,11 @@ const PROVIDERS: Provider[] = [
     avatar: 'https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?auto=format&fit=crop&q=80&w=200',
     bio: 'Performance expert focused on high-stakes decision making, sovereignty, and cognitive optimization.',
     availabilitySlots: ['Sat 10:00 AM'],
-    tokenPrice: 60,
     tierIncludedMin: 'Accelerated Tier'
   }
 ];
 
-const ConsciousMeetings: React.FC<ConsciousMeetingsProps> = ({ user, onUpdateUser }) => {
+const ConsciousMeetings: React.FC<ConsciousMeetingsProps> = ({ user }) => {
   const [meetings, setMeetings] = useState<Meeting[]>([
     {
       id: 'm1',
@@ -65,7 +62,7 @@ const ConsciousMeetings: React.FC<ConsciousMeetingsProps> = ({ user, onUpdateUse
         { id: 'p1', name: 'Dr. Jordan Wells', role: 'Provider' }
       ],
       status: 'Upcoming',
-      paymentType: 'tier',
+      accessType: 'tier',
       notes: { transcript: [], summary: '', decisions: [], actionItems: [] }
     },
     {
@@ -82,7 +79,7 @@ const ConsciousMeetings: React.FC<ConsciousMeetingsProps> = ({ user, onUpdateUse
         { id: 'u3', name: 'Aarav Sharma', role: 'User' }
       ],
       status: 'Upcoming',
-      paymentType: 'tokens',
+      accessType: 'tier',
       notes: { transcript: [], summary: '', decisions: [], actionItems: [] }
     }
   ]);
@@ -145,16 +142,8 @@ const ConsciousMeetings: React.FC<ConsciousMeetingsProps> = ({ user, onUpdateUse
       (user.tier === 'Guided Tier' && selectedProvider.tierIncludedMin === 'Guided Tier');
 
     if (!isIncluded) {
-      if (user.walletBalanceTokens < (selectedProvider.tokenPrice || 0)) {
-        alert("Insufficient tokens. Please top up your vault.");
-        return;
-      }
-
-      const confirmed = window.confirm(`This will deduct ${selectedProvider.tokenPrice} tokens. Confirm?`);
-      if (confirmed) {
-        const updatedUser = { ...user, walletBalanceTokens: user.walletBalanceTokens - (selectedProvider.tokenPrice || 0) };
-        if (onUpdateUser) onUpdateUser(updatedUser);
-      } else return;
+      alert('This provider requires Guided or Accelerated tier access.');
+      return;
     }
 
     const newMeeting: Meeting = {
@@ -169,7 +158,7 @@ const ConsciousMeetings: React.FC<ConsciousMeetingsProps> = ({ user, onUpdateUse
         { id: selectedProvider.id, name: selectedProvider.name, role: 'Provider' }
       ],
       status: 'Upcoming',
-      paymentType: isIncluded ? 'tier' : 'tokens'
+      accessType: 'tier'
     };
 
     setMeetings([newMeeting, ...meetings]);
@@ -405,8 +394,8 @@ const ConsciousMeetings: React.FC<ConsciousMeetingsProps> = ({ user, onUpdateUse
         <div className="flex items-center gap-3 sm:gap-4 md:gap-6">
           <div className="glass-panel px-4 sm:px-5 md:px-6 py-2 sm:py-3 md:py-4 rounded-xl sm:rounded-2xl border-white/5 shadow-xl flex items-center gap-3 sm:gap-4">
             <div className="text-right">
-              <p className="text-[8px] sm:text-[9px] font-black text-slate-500 uppercase tracking-widest">Vault Balance</p>
-              <p className="text-sm sm:text-base md:text-lg font-mono font-bold text-white">{user?.walletBalanceTokens || 0} HCN</p>
+              <p className="text-[8px] sm:text-[9px] font-black text-slate-500 uppercase tracking-widest">Access Tier</p>
+              <p className="text-sm sm:text-base md:text-lg font-mono font-bold text-white">{user?.tier || 'Community'}</p>
             </div>
             <Zap className="w-4 h-4 sm:w-5 sm:h-5 text-teal-400" />
           </div>
@@ -503,7 +492,7 @@ const ConsciousMeetings: React.FC<ConsciousMeetingsProps> = ({ user, onUpdateUse
                             </span>
                           ) : (
                             <span className="px-2 sm:px-3 py-1 bg-blue-500/20 text-blue-400 rounded-full text-[8px] sm:text-[9px] font-black uppercase">
-                              {provider.tokenPrice} HCN
+                              {provider.tierIncludedMin || 'Guided Tier'}+
                             </span>
                           )}
                         </div>
@@ -872,7 +861,7 @@ const ConsciousMeetings: React.FC<ConsciousMeetingsProps> = ({ user, onUpdateUse
                             {meeting.status}
                           </span>
                           <span className="text-[8px] sm:text-[9px] text-slate-500 font-bold uppercase tracking-widest">
-                            {meeting.paymentType === 'tier' ? 'Included' : 'Token Access'}
+                            {meeting.accessType === 'tier' ? 'Tier Access' : 'Restricted'}
                           </span>
                         </div>
 
@@ -962,8 +951,8 @@ const ConsciousMeetings: React.FC<ConsciousMeetingsProps> = ({ user, onUpdateUse
                       <span className="text-white font-mono font-bold text-sm sm:text-base">{meetings.length + 12}</span>
                     </div>
                     <div className="flex justify-between items-center p-3 sm:p-4 bg-white/5 rounded-lg sm:rounded-xl border border-white/5">
-                      <span className="text-[8px] sm:text-[9px] font-black text-slate-500 uppercase tracking-widest">HCN Distributed</span>
-                      <span className="text-white font-mono font-bold text-sm sm:text-base">840 HCN</span>
+                      <span className="text-[8px] sm:text-[9px] font-black text-slate-500 uppercase tracking-widest">Integrity Logs</span>
+                      <span className="text-white font-mono font-bold text-sm sm:text-base">840 Recorded</span>
                     </div>
                     <div className="flex justify-between items-center p-3 sm:p-4 bg-white/5 rounded-lg sm:rounded-xl border border-white/5">
                       <span className="text-[8px] sm:text-[9px] font-black text-slate-500 uppercase tracking-widest">Provider Nodes</span>
@@ -1042,7 +1031,7 @@ const ConsciousMeetings: React.FC<ConsciousMeetingsProps> = ({ user, onUpdateUse
                   <p className="text-white font-bold text-sm sm:text-base md:text-lg uppercase tracking-tighter">
                     {user?.tier === 'Accelerated Tier' || (user?.tier === 'Guided Tier' && selectedProvider.tierIncludedMin === 'Guided Tier')
                       ? 'Included with Membership'
-                      : `${selectedProvider.tokenPrice} HCN Tokens Required`}
+                      : `${selectedProvider.tierIncludedMin || 'Guided Tier'}+ Required`}
                   </p>
                 </div>
                 <button
