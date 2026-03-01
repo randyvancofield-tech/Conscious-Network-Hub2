@@ -873,7 +873,7 @@ protectedRouter.get('/reconcile/:id', async (req: Request, res: Response): Promi
  * GET /api/user/directory
  * Basic directory for authenticated hub users.
  */
-protectedRouter.get('/directory', async (_req: Request, res: Response): Promise<any> => {
+protectedRouter.get('/directory', async (req: Request, res: Response): Promise<any> => {
   try {
     const users = await localStore.listUsers(250);
 
@@ -882,6 +882,11 @@ protectedRouter.get('/directory', async (_req: Request, res: Response): Promise<
       users: users.map((u) => ({
         id: u.id,
         name: u.name || 'Node',
+        handle: u.handle || null,
+        avatarUrl: absolutizeUrl(req, u.avatarUrl),
+        profileMedia: absolutizeProfileMedia(req, u.profileMedia, u.avatarUrl, u.bannerUrl),
+        location: u.location || null,
+        bio: u.bio || null,
         tier: toPublicTier(u),
         createdAt: u.createdAt,
       })),

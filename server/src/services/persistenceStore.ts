@@ -560,6 +560,61 @@ export const localStore = {
     }
   },
 
+  async getReflectionById(reflectionId: string): Promise<LocalReflectionRecord | null> {
+    try {
+      const row = await ensurePrisma().reflection.findUnique({
+        where: { id: reflectionId },
+      });
+      return row ? toLocalReflection(row) : null;
+    } catch (error) {
+      return translatePrismaError(error);
+    }
+  },
+
+  async updateReflection(
+    reflectionId: string,
+    updates: { content?: string | null; fileUrl?: string; fileType?: string }
+  ): Promise<LocalReflectionRecord | null> {
+    try {
+      const data: Record<string, unknown> = {};
+      if (updates.content !== undefined) {
+        const content = String(updates.content || '').trim();
+        data.content = content || null;
+      }
+      if (updates.fileUrl !== undefined) {
+        data.fileUrl = String(updates.fileUrl || '').trim();
+      }
+      if (updates.fileType !== undefined) {
+        data.fileType = String(updates.fileType || '').trim();
+      }
+
+      const row = await ensurePrisma().reflection.update({
+        where: { id: reflectionId },
+        data: data as any,
+      });
+      return toLocalReflection(row);
+    } catch (error) {
+      if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2025') {
+        return null;
+      }
+      return translatePrismaError(error);
+    }
+  },
+
+  async deleteReflection(reflectionId: string): Promise<LocalReflectionRecord | null> {
+    try {
+      const row = await ensurePrisma().reflection.delete({
+        where: { id: reflectionId },
+      });
+      return toLocalReflection(row);
+    } catch (error) {
+      if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2025') {
+        return null;
+      }
+      return translatePrismaError(error);
+    }
+  },
+
   async listReflectionsByUserId(userId: string): Promise<LocalReflectionRecord[]> {
     try {
       const rows = await ensurePrisma().reflection.findMany({

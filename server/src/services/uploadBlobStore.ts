@@ -152,3 +152,30 @@ export const resolveUploadObjectByKey = async (
     throw toStoreError('[UPLOAD][FATAL] Failed to read upload blob', error);
   }
 };
+
+export const deleteUploadObjectByKey = async (objectKey: string): Promise<boolean> => {
+  const parsedKey = decodePostgresUploadKey(objectKey);
+  if (!parsedKey) {
+    return false;
+  }
+
+  try {
+    const rows = await ensurePrisma().$queryRaw<Array<{ unlinked: number | boolean | null }>>`
+      SELECT lo_unlink(${parsedKey.oid}) AS unlinked
+    `;
+    const raw = rows[0]?.unlinked;
+    if (typeof raw === 'boolean') return raw;
+    if (typeof raw === 'number') return raw > 0;
+    return false;
+  } catch (error) {
+    const message = error instanceof Error ? error.message.toLowerCase() : '';
+    if (
+      message.includes('does not exist') ||
+      message.includes('large object') ||
+      message.includes('invalid input syntax')
+    ) {
+      return false;
+    }
+    throw toStoreError('[UPLOAD][FATAL] Failed to delete upload blob', error);
+  }
+};

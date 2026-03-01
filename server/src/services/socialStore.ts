@@ -166,6 +166,72 @@ export const socialStore = {
     }
   },
 
+  async updatePost(input: {
+    postId: string;
+    text?: string;
+    visibility?: SocialPostVisibility;
+  }): Promise<SocialPostRecord | null> {
+    const nextText =
+      input.text === undefined ? undefined : String(input.text || '').trim().slice(0, 5000);
+    const nextVisibility =
+      input.visibility === undefined ? undefined : normalizeVisibility(input.visibility);
+
+    if (nextText !== undefined && !nextText && nextVisibility === undefined) {
+      throw new Error('Post text cannot be empty');
+    }
+
+    try {
+      const db = ensurePrisma() as any;
+      const updated = await db.socialPost.update({
+        where: { id: input.postId },
+        data: {
+          ...(nextText !== undefined ? { text: nextText } : {}),
+          ...(nextVisibility !== undefined ? { visibility: nextVisibility } : {}),
+        },
+        include: {
+          media: true,
+          _count: {
+            select: {
+              likes: true,
+            },
+          },
+        },
+      });
+      return mapPrismaPostToRecord(updated);
+    } catch (error) {
+      if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2025') {
+        return null;
+      }
+      throw toStoreError('[SOCIAL][FATAL] Failed to update post', error);
+    }
+  },
+
+  async deletePost(postId: string): Promise<SocialPostRecord | null> {
+    try {
+      const db = ensurePrisma() as any;
+      const existing = await db.socialPost.findUnique({
+        where: { id: postId },
+        include: {
+          media: true,
+          _count: {
+            select: {
+              likes: true,
+            },
+          },
+        },
+      });
+      if (!existing) return null;
+
+      await db.socialPost.delete({ where: { id: postId } });
+      return mapPrismaPostToRecord(existing);
+    } catch (error) {
+      if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2025') {
+        return null;
+      }
+      throw toStoreError('[SOCIAL][FATAL] Failed to delete post', error);
+    }
+  },
+
   async listPosts(options: {
     limit?: number;
     cursorPostId?: string;

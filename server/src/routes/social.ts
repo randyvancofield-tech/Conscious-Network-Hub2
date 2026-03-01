@@ -15,6 +15,7 @@ import {
   SocialPostVisibility,
   socialStore,
 } from '../services/socialStore';
+import { deleteUploadObjectByKey } from '../services/uploadBlobStore';
 import {
   parseUserProfilePatch,
   SOCIAL_PROFILE_PATCH_FIELDS,
@@ -71,6 +72,23 @@ const normalizePostMedia = (value: unknown): SocialPostMediaInput[] => {
     if (normalized.length >= 8) break;
   }
   return normalized;
+};
+
+const extractUploadObjectKey = (value: unknown): string | null => {
+  const raw = typeof value === 'string' ? value.trim() : '';
+  if (!raw) return null;
+  if (!raw.includes('/') && !raw.includes(':')) {
+    return raw;
+  }
+  try {
+    const parsed = /^https?:\/\//i.test(raw)
+      ? new URL(raw)
+      : new URL(raw.startsWith('/') ? raw : `/${raw}`, 'http://localhost');
+    const match = /^\/uploads\/object\/([^/?#]+)/i.exec(parsed.pathname);
+    return match?.[1] ? decodeURIComponent(match[1]) : null;
+  } catch {
+    return null;
+  }
 };
 
 const toPublicProfile = (req: Request, user: any, viewerId: string) => {
@@ -307,6 +325,18 @@ router.post('/posts', validateJsonBody(socialCreatePostSchema), async (req: Requ
       visibility,
       media,
     });
+    const author = await localStore.getUserById(authUserId);
+    const enrichedPost = {
+      ...post,
+      media: Array.isArray(post.media)
+        ? post.media.map((entry) => ({
+            ...entry,
+            url: absolutizeUrl(req, entry.url),
+          }))
+        : [],
+      authorName: author?.name || 'Node',
+      authorAvatarUrl: absolutizeUrl(req, author?.avatarUrl),
+    };
     recordAuditEvent(req, {
       domain: 'social',
       action: 'post_create',
@@ -320,7 +350,7 @@ router.post('/posts', validateJsonBody(socialCreatePostSchema), async (req: Requ
         mediaCount: media.length,
       },
     });
-    return res.json({ success: true, post });
+    return res.json({ success: true, post: enrichedPost });
   } catch (error) {
     recordAuditEvent(req, {
       domain: 'social',
@@ -400,6 +430,141 @@ router.post('/posts/:postId/like', async (req: Request, res: Response): Promise<
       error: error instanceof Error ? error.message : 'Failed to update like state',
     });
   }
+});
+
+/**
+ * PATCH /api/social/posts/:postId
+ * Update a post owned by the authenticated user.
+ */
+router.patch('/posts/:postId', async (req: Request, res: Response): Promise<any> => {
+  const authUserId = getAuthenticatedUserId(req);
+  if (!authUserId) {
+    recordAuditEvent(req, {
+      domain: 'social',
+      action: 'post_update',
+      outcome: 'deny',
+      statusCode: 401,
+      metadata: { reason: 'missing_authentication' },
+    });
+    return res.status(401).json({ error: 'Authentication required' });
+  }
+
+  const postId = String(req.params.postId || '').trim();
+  if (!postId) {
+    return res.status(400).json({ error: 'postId is required' });
+  }
+
+  const existing = await socialStore.getPostById(postId);
+  if (!existing) {
+    return res.status(404).json({ error: 'Post not found' });
+  }
+  if (existing.authorId !== authUserId) {
+    return res.status(403).json({ error: 'Not authorized to update this post' });
+  }
+
+  const requestedText = req.body?.text;
+  const requestedVisibility = req.body?.visibility;
+  const hasTextField = Object.prototype.hasOwnProperty.call(req.body || {}, 'text');
+  const hasVisibilityField = Object.prototype.hasOwnProperty.call(req.body || {}, 'visibility');
+  if (!hasTextField && !hasVisibilityField) {
+    return res.status(400).json({ error: 'No editable fields provided' });
+  }
+
+  const nextText = hasTextField ? String(requestedText || '').trim() : undefined;
+  if (hasTextField && !nextText && existing.media.length === 0) {
+    return res.status(400).json({ error: 'Post requires text or media' });
+  }
+
+  const updated = await socialStore.updatePost({
+    postId,
+    text: hasTextField ? nextText : undefined,
+    visibility: hasVisibilityField ? normalizePostVisibility(requestedVisibility) : undefined,
+  });
+  if (!updated) {
+    return res.status(404).json({ error: 'Post not found after update' });
+  }
+
+  const author = await localStore.getUserById(updated.authorId);
+  return res.json({
+    success: true,
+    post: {
+      ...updated,
+      media: Array.isArray(updated.media)
+        ? updated.media.map((entry) => ({
+            ...entry,
+            url: absolutizeUrl(req, entry.url),
+          }))
+        : [],
+      authorName: author?.name || 'Node',
+      authorAvatarUrl: absolutizeUrl(req, author?.avatarUrl),
+    },
+  });
+});
+
+/**
+ * DELETE /api/social/posts/:postId
+ * Delete a post owned by the authenticated user.
+ */
+router.delete('/posts/:postId', async (req: Request, res: Response): Promise<any> => {
+  const authUserId = getAuthenticatedUserId(req);
+  if (!authUserId) {
+    recordAuditEvent(req, {
+      domain: 'social',
+      action: 'post_delete',
+      outcome: 'deny',
+      statusCode: 401,
+      metadata: { reason: 'missing_authentication' },
+    });
+    return res.status(401).json({ error: 'Authentication required' });
+  }
+
+  const postId = String(req.params.postId || '').trim();
+  if (!postId) {
+    return res.status(400).json({ error: 'postId is required' });
+  }
+
+  const existing = await socialStore.getPostById(postId);
+  if (!existing) {
+    return res.status(404).json({ error: 'Post not found' });
+  }
+  if (existing.authorId !== authUserId) {
+    return res.status(403).json({ error: 'Not authorized to delete this post' });
+  }
+
+  const deleted = await socialStore.deletePost(postId);
+  if (!deleted) {
+    return res.status(404).json({ error: 'Post not found after delete' });
+  }
+
+  const cleanupKeys = new Set<string>();
+  for (const media of deleted.media || []) {
+    const objectKey =
+      extractUploadObjectKey((media as any)?.objectKey) ||
+      extractUploadObjectKey((media as any)?.url);
+    if (objectKey) cleanupKeys.add(objectKey);
+  }
+
+  for (const key of cleanupKeys) {
+    try {
+      await deleteUploadObjectByKey(key);
+    } catch (cleanupError) {
+      console.error('[SOCIAL] Failed to clean up upload object after post delete', cleanupError);
+    }
+  }
+
+  recordAuditEvent(req, {
+    domain: 'social',
+    action: 'post_delete',
+    outcome: 'success',
+    actorUserId: authUserId,
+    targetUserId: postId,
+    statusCode: 200,
+    metadata: {
+      mediaDeleted: cleanupKeys.size,
+    },
+  });
+
+  return res.json({ success: true, postId });
 });
 
 /**
