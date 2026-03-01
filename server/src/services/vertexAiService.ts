@@ -40,7 +40,7 @@ export class VertexAIService {
   constructor(config: VertexAIConfig) {
     this.projectId = config.projectId;
     this.region = config.region;
-    this.model = config.model || 'gemini-1.5-flash-001';
+    this.model = config.model || 'gemini-2.0-flash-001';
 
     // Initialize Vertex AI - uses Application Default Credentials
     // In dev: set GOOGLE_APPLICATION_CREDENTIALS env var

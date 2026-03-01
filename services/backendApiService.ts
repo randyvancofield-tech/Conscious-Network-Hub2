@@ -158,10 +158,15 @@ class BackendAPIService {
    */
   async getDailyWisdom(): Promise<EnhancedResponse> {
     try {
-      const response = await fetch(`${this.baseUrl}/api/ai/wisdom`, {
+      const refreshNonce = `${Date.now()}_${Math.random().toString(36).slice(2, 10)}`;
+      const response = await fetch(`${this.baseUrl}/api/ai/wisdom?refresh=${encodeURIComponent(refreshNonce)}`, {
         method: 'POST',
+        cache: 'no-store',
         headers: buildAuthHeaders({
           'Content-Type': 'application/json',
+        }),
+        body: JSON.stringify({
+          refreshNonce,
         }),
       });
 

@@ -2,11 +2,12 @@ param(
   [string]$ProjectId = "gen-lang-client-0656716269",
   [string]$Region = "us-central1",
   [string]$Service = "conscious-network-backend",
-  [string]$AllowedOrigins = "https://conscious-network.org,http://localhost:5173",
+  [string]$AllowedOrigins = "https://conscious-network.org,https://higherconscious.network,http://localhost:5173",
   [string]$OpenAIApiKey = "",
   [string]$AuthTokenSecret = "",
   [string]$DatabaseUrl = "",
   [string]$SensitiveDataKey = "",
+  [string]$VertexAiModel = "gemini-2.0-flash-001",
   [string]$AdminDiagnosticsKey = "",
   [switch]$SkipChecks
 )
@@ -109,6 +110,9 @@ $envUpdates = @(
   "AUTH_TOKEN_SECRET=$AuthTokenSecret",
   "DATABASE_URL=$DatabaseUrl",
   "SENSITIVE_DATA_KEY=$SensitiveDataKey",
+  "GOOGLE_CLOUD_PROJECT=$ProjectId",
+  "GOOGLE_CLOUD_REGION=$Region",
+  "VERTEX_AI_MODEL=$VertexAiModel",
   "AUTH_PERSISTENCE_BACKEND=shared_db",
   "DATABASE_PROVIDER=postgresql"
 )

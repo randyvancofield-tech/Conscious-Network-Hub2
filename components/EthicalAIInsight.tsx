@@ -71,7 +71,7 @@ const EthicalAIInsight: React.FC<EthicalAIInsightProps> = ({ userEmail, userId =
   }, [userId]);
 
   useEffect(() => {
-    loadDailyWisdom(true);
+    loadDailyWisdom();
     loadTrendingTopics();
   }, []);
 
@@ -86,27 +86,20 @@ const EthicalAIInsight: React.FC<EthicalAIInsightProps> = ({ userEmail, userId =
     }
   };
 
-  const loadDailyWisdom = async (forceRefresh: boolean = false) => {
+  const loadDailyWisdom = async () => {
     setWisdomLoading(true);
     try {
-      if (!forceRefresh) {
-        const cached = cacheService.getDailyWisdom();
-        if (cached) {
-          setDailyWisdom(cached);
-          setWisdomLoading(false);
-          return;
-        }
-      }
-
       const wisdom = await getDailyWisdom();
       setDailyWisdom(wisdom);
-      cacheService.setDailyWisdom(wisdom);
     } catch (error) {
       console.error('Error loading wisdom:', error);
-      const cached = cacheService.getDailyWisdom();
-      if (cached) {
-        setDailyWisdom(cached);
-      }
+      setDailyWisdom({
+        text: 'Daily Wisdom is temporarily unavailable. Please refresh to try again.',
+        groundingChunks: [],
+        confidenceScore: 0,
+        sourceCount: 0,
+        processingTimeMs: 0,
+      });
     } finally {
       setWisdomLoading(false);
     }
@@ -475,7 +468,7 @@ const EthicalAIInsight: React.FC<EthicalAIInsightProps> = ({ userEmail, userId =
           )}
 
           <button
-            onClick={() => loadDailyWisdom(true)}
+            onClick={() => loadDailyWisdom()}
             className="w-full px-4 py-2 bg-blue-600/10 hover:bg-blue-600/20 text-blue-400 rounded-xl text-[9px] font-bold uppercase tracking-widest transition-all flex items-center justify-center gap-2"
           >
             <RefreshCw className="w-3.5 h-3.5" /> Refresh

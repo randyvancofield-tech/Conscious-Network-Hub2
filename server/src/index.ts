@@ -68,7 +68,7 @@ try {
     initializeVertexAI({
       projectId: GOOGLE_CLOUD_PROJECT,
       region: GOOGLE_CLOUD_REGION,
-      model: process.env.VERTEX_AI_MODEL || 'gemini-1.5-flash-001',
+      model: process.env.VERTEX_AI_MODEL || 'gemini-2.0-flash-001',
     });
     console.log('Vertex AI initialized');
   } else {
