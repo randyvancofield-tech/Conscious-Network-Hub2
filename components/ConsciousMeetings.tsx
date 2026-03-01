@@ -90,6 +90,8 @@ const ConsciousMeetings: React.FC<ConsciousMeetingsProps> = ({ user }) => {
   const [isNoteTakerOn, setNoteTakerOn] = useState(false);
   const [permissionState, setPermissionState] = useState<'idle' | 'pending' | 'granted' | 'denied'>('idle');
   const [searchQuery, setSearchQuery] = useState('');
+  const [showFilterPanel, setShowFilterPanel] = useState(false);
+  const [showIncludedOnly, setShowIncludedOnly] = useState(false);
   const [isJoining, setIsJoining] = useState(false);
 
   // Solo Session States
@@ -103,6 +105,7 @@ const ConsciousMeetings: React.FC<ConsciousMeetingsProps> = ({ user }) => {
   const [backgroundType, setBackgroundType] = useState<'image' | 'video'>('image');
   const [micLevel, setMicLevel] = useState(0);
   const [customBackgroundFile, setCustomBackgroundFile] = useState<File | null>(null);
+  const [selectedSlot, setSelectedSlot] = useState<string | null>(null);
 
   // Refs
   const videoRef = useRef<HTMLVideoElement>(null);
@@ -131,6 +134,7 @@ const ConsciousMeetings: React.FC<ConsciousMeetingsProps> = ({ user }) => {
 
   const handleSchedule = (provider: Provider) => {
     setSelectedProvider(provider);
+    setSelectedSlot(provider.availabilitySlots?.[0] || null);
     setSchedulingModalOpen(true);
   };
 
@@ -151,8 +155,8 @@ const ConsciousMeetings: React.FC<ConsciousMeetingsProps> = ({ user }) => {
       title: `${selectedProvider.specialty} Session`,
       hostUserId: user.id,
       providerId: selectedProvider.id,
-      startTime: 'Next Available',
-      endTime: 'Next Available + 60m',
+      startTime: selectedSlot || selectedProvider.availabilitySlots?.[0] || 'Next Available',
+      endTime: selectedSlot ? `${selectedSlot} + 60m` : 'Next Available + 60m',
       participants: [
         { id: user.id, name: user.name, role: 'User' },
         { id: selectedProvider.id, name: selectedProvider.name, role: 'Provider' }
@@ -162,6 +166,7 @@ const ConsciousMeetings: React.FC<ConsciousMeetingsProps> = ({ user }) => {
     };
 
     setMeetings([newMeeting, ...meetings]);
+    setSelectedSlot(null);
     setSchedulingModalOpen(false);
     setActiveTab('calendar');
   };
@@ -178,10 +183,16 @@ const ConsciousMeetings: React.FC<ConsciousMeetingsProps> = ({ user }) => {
     }
   };
 
-  const filteredProviders = PROVIDERS.filter(p =>
-    p.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    p.specialty.toLowerCase().includes(searchQuery.toLowerCase())
-  );
+  const filteredProviders = PROVIDERS.filter((p) => {
+    const matchesSearch =
+      p.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      p.specialty.toLowerCase().includes(searchQuery.toLowerCase());
+    const matchesTier =
+      !showIncludedOnly ||
+      user?.tier === 'Accelerated Tier' ||
+      (user?.tier === 'Guided Tier' && p.tierIncludedMin === 'Guided Tier');
+    return matchesSearch && matchesTier;
+  });
 
   // Solo Session Functions
   const startSoloSession = async () => {
@@ -354,6 +365,56 @@ const ConsciousMeetings: React.FC<ConsciousMeetingsProps> = ({ user }) => {
     return `${mins}:${secs.toString().padStart(2, '0')}`;
   };
 
+  const handleReschedule = (meeting: Meeting) => {
+    const provider = PROVIDERS.find((entry) => entry.id === meeting.providerId) || null;
+    if (provider) {
+      setSelectedProvider(provider);
+      setSelectedSlot(meeting.startTime);
+      setSchedulingModalOpen(true);
+      return;
+    }
+    alert('Provider details unavailable for reschedule.');
+  };
+
+  const downloadMeetingNotes = (meeting: Meeting) => {
+    if (!meeting.notes?.summary) return;
+    const content = [
+      `Meeting: ${meeting.title}`,
+      `Status: ${meeting.status}`,
+      `Start: ${meeting.startTime}`,
+      '',
+      `Summary: ${meeting.notes.summary}`,
+      '',
+      'Decisions:',
+      ...(meeting.notes.decisions || []).map((item) => `- ${item}`),
+      '',
+      'Action Items:',
+      ...(meeting.notes.actionItems || []).map(
+        (item) => `- ${item.owner}: ${item.task} (Due: ${item.dueDate})`
+      ),
+    ].join('\n');
+    const blob = new Blob([content], { type: 'text/plain;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    const anchor = document.createElement('a');
+    anchor.href = url;
+    anchor.download = `meeting-notes-${meeting.id}.txt`;
+    document.body.appendChild(anchor);
+    anchor.click();
+    document.body.removeChild(anchor);
+    URL.revokeObjectURL(url);
+  };
+
+  const syncMeetingNotes = async (meeting: Meeting) => {
+    if (!meeting.notes?.summary) return;
+    const payload = `${meeting.title}\n${meeting.notes.summary}`;
+    try {
+      await navigator.clipboard.writeText(payload);
+      alert('Meeting synthesis copied for participant sync.');
+    } catch {
+      alert('Unable to access clipboard. Please copy notes manually.');
+    }
+  };
+
   // Cleanup effect
   useEffect(() => {
     return () => {
@@ -437,10 +498,36 @@ const ConsciousMeetings: React.FC<ConsciousMeetingsProps> = ({ user }) => {
                   className="w-full pl-12 sm:pl-14 pr-4 sm:pr-6 py-3 sm:py-4 bg-white/5 border border-white/10 rounded-lg sm:rounded-2xl text-xs outline-none focus:ring-2 focus:ring-blue-500/30 transition-all font-medium"
                 />
               </div>
-              <button className="px-4 sm:px-6 py-3 sm:py-4 bg-white/5 border border-white/10 rounded-lg sm:rounded-2xl text-slate-500 hover:text-white transition-all flex items-center justify-center gap-2">
+              <button
+                onClick={() => setShowFilterPanel((prev) => !prev)}
+                className="px-4 sm:px-6 py-3 sm:py-4 bg-white/5 border border-white/10 rounded-lg sm:rounded-2xl text-slate-500 hover:text-white transition-all flex items-center justify-center gap-2"
+              >
                 <Filter className="w-4 h-4" /> <span className="text-[9px] sm:text-[10px] font-black uppercase tracking-widest hidden xs:inline">Filter</span>
               </button>
             </div>
+
+            {showFilterPanel && (
+              <div className="glass-panel p-4 sm:p-5 rounded-xl border border-white/10 flex flex-col sm:flex-row sm:items-center gap-4">
+                <label className="flex items-center gap-3 text-xs text-slate-300">
+                  <input
+                    type="checkbox"
+                    checked={showIncludedOnly}
+                    onChange={(e) => setShowIncludedOnly(e.target.checked)}
+                    className="w-4 h-4 accent-blue-500"
+                  />
+                  Show only providers included in my tier
+                </label>
+                <button
+                  onClick={() => {
+                    setShowIncludedOnly(false);
+                    setShowFilterPanel(false);
+                  }}
+                  className="sm:ml-auto px-4 py-2 bg-white/5 hover:bg-white/10 border border-white/10 rounded-lg text-[10px] font-black uppercase tracking-widest text-slate-300 transition-colors"
+                >
+                  Reset Filters
+                </button>
+              </div>
+            )}
 
             {/* Providers Grid */}
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6 md:gap-8 pb-10 sm:pb-16 md:pb-20">
@@ -882,7 +969,10 @@ const ConsciousMeetings: React.FC<ConsciousMeetingsProps> = ({ user }) => {
                         >
                           View Synthesis
                         </button>
-                        <button className="px-4 sm:px-6 py-2 sm:py-3 bg-blue-600/10 hover:bg-blue-600 text-blue-400 hover:text-white rounded-lg sm:rounded-xl text-[8px] sm:text-[9px] font-black uppercase tracking-widest transition-all flex-1 sm:flex-none">
+                        <button
+                          onClick={() => handleReschedule(meeting)}
+                          className="px-4 sm:px-6 py-2 sm:py-3 bg-blue-600/10 hover:bg-blue-600 text-blue-400 hover:text-white rounded-lg sm:rounded-xl text-[8px] sm:text-[9px] font-black uppercase tracking-widest transition-all flex-1 sm:flex-none"
+                        >
                           Reschedule
                         </button>
                       </div>
@@ -927,10 +1017,16 @@ const ConsciousMeetings: React.FC<ConsciousMeetingsProps> = ({ user }) => {
                         </div>
 
                         <div className="flex flex-wrap gap-2 sm:gap-4">
-                          <button className="flex items-center gap-2 px-4 sm:px-5 py-2 sm:py-2.5 bg-white/5 hover:bg-white/10 rounded-lg sm:rounded-xl text-[8px] sm:text-[9px] font-black uppercase tracking-widest transition-all text-slate-400">
+                          <button
+                            onClick={() => downloadMeetingNotes(meeting)}
+                            className="flex items-center gap-2 px-4 sm:px-5 py-2 sm:py-2.5 bg-white/5 hover:bg-white/10 rounded-lg sm:rounded-xl text-[8px] sm:text-[9px] font-black uppercase tracking-widest transition-all text-slate-400"
+                          >
                             <Download className="w-3 h-3 sm:w-4 sm:h-4" /> Download Notes
                           </button>
-                          <button className="flex items-center gap-2 px-4 sm:px-5 py-2 sm:py-2.5 bg-white/5 hover:bg-white/10 rounded-lg sm:rounded-xl text-[8px] sm:text-[9px] font-black uppercase tracking-widest transition-all text-slate-400">
+                          <button
+                            onClick={() => syncMeetingNotes(meeting)}
+                            className="flex items-center gap-2 px-4 sm:px-5 py-2 sm:py-2.5 bg-white/5 hover:bg-white/10 rounded-lg sm:rounded-xl text-[8px] sm:text-[9px] font-black uppercase tracking-widest transition-all text-slate-400"
+                          >
                             <Share2 className="w-3 h-3 sm:w-4 sm:h-4" /> Sync to participants
                           </button>
                         </div>
@@ -980,7 +1076,13 @@ const ConsciousMeetings: React.FC<ConsciousMeetingsProps> = ({ user }) => {
       {isSchedulingModalOpen && selectedProvider && (
         <div className="fixed inset-0 z-[200] flex items-center justify-center p-3 sm:p-4 bg-black/95 backdrop-blur-3xl animate-in fade-in duration-300">
           <div className="glass-panel w-full max-w-2xl p-6 sm:p-8 md:p-10 rounded-2xl sm:rounded-3xl md:rounded-[2.5rem] lg:rounded-[4rem] relative animate-in zoom-in duration-300 border-blue-500/20 shadow-2xl max-h-[90vh] overflow-y-auto no-scrollbar">
-            <button onClick={() => setSchedulingModalOpen(false)} className="absolute top-4 sm:top-6 md:top-8 lg:top-10 right-4 sm:right-6 md:right-8 lg:right-10 p-2 sm:p-3 hover:bg-white/5 rounded-full transition-colors text-slate-500">
+            <button
+              onClick={() => {
+                setSchedulingModalOpen(false);
+                setSelectedSlot(null);
+              }}
+              className="absolute top-4 sm:top-6 md:top-8 lg:top-10 right-4 sm:right-6 md:right-8 lg:right-10 p-2 sm:p-3 hover:bg-white/5 rounded-full transition-colors text-slate-500"
+            >
               <X className="w-5 h-5 sm:w-6 sm:h-6" />
             </button>
 
@@ -1003,8 +1105,11 @@ const ConsciousMeetings: React.FC<ConsciousMeetingsProps> = ({ user }) => {
                   {selectedProvider.availabilitySlots?.map((slot, i) => (
                     <button
                       key={i}
+                      onClick={() => setSelectedSlot(slot)}
                       className={`p-4 sm:p-5 rounded-lg sm:rounded-2xl border transition-all text-xs sm:text-sm font-bold uppercase tracking-widest ${
-                        i === 0 ? 'bg-blue-600 border-blue-500 text-white shadow-lg' : 'bg-white/5 border-white/10 text-slate-400 hover:bg-white/10 hover:text-white'
+                        selectedSlot === slot
+                          ? 'bg-blue-600 border-blue-500 text-white shadow-lg'
+                          : 'bg-white/5 border-white/10 text-slate-400 hover:bg-white/10 hover:text-white'
                       }`}
                     >
                       {slot}

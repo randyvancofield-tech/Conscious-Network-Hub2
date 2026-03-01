@@ -84,11 +84,23 @@ const PROVIDERS_DATA: ProviderProfile[] = [
 
 const ProvidersMarket: React.FC = () => {
   const [filter, setFilter] = useState<string>('All');
+  const [searchQuery, setSearchQuery] = useState('');
+  const [selectedProvider, setSelectedProvider] = useState<ProviderProfile | null>(null);
+  const [connectionTarget, setConnectionTarget] = useState<ProviderProfile | null>(null);
+  const [connectionNote, setConnectionNote] = useState('');
+  const [connectionStatus, setConnectionStatus] = useState('');
   const categories = ['All', 'Mental Wellness', 'Religion', 'Spiritual Leader', 'Coach', 'Cultural Enthusiast'];
 
-  const filteredProviders = filter === 'All' 
-    ? PROVIDERS_DATA 
-    : PROVIDERS_DATA.filter(p => p.category === filter);
+  const normalizedQuery = searchQuery.trim().toLowerCase();
+  const filteredProviders = PROVIDERS_DATA.filter((provider) => {
+    const matchesCategory = filter === 'All' || provider.category === filter;
+    const matchesSearch =
+      normalizedQuery.length === 0 ||
+      provider.name.toLowerCase().includes(normalizedQuery) ||
+      provider.specialty.toLowerCase().includes(normalizedQuery) ||
+      provider.bio.toLowerCase().includes(normalizedQuery);
+    return matchesCategory && matchesSearch;
+  });
 
   return (
     <div className="space-y-12 animate-in fade-in slide-in-from-bottom-6 duration-700 pb-32">
@@ -103,6 +115,8 @@ const ProvidersMarket: React.FC = () => {
             <input 
               type="text" 
               placeholder="Filter by name, skill, or node ID..." 
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
               className="w-full pl-14 pr-6 py-4 bg-white/5 border border-white/10 rounded-2xl text-xs outline-none focus:ring-2 focus:ring-blue-500/30 transition-all font-medium placeholder:tracking-wider uppercase" 
             />
           </div>
@@ -181,10 +195,20 @@ const ProvidersMarket: React.FC = () => {
                 </div>
 
                 <div className="grid grid-cols-2 gap-3">
-                  <button className="flex items-center justify-center gap-2 py-3 bg-blue-600 hover:bg-blue-500 text-white rounded-xl font-black text-[9px] uppercase tracking-widest transition-all shadow-lg active:scale-95">
+                  <button
+                    onClick={() => {
+                      setConnectionTarget(provider);
+                      setConnectionStatus('');
+                      setConnectionNote('');
+                    }}
+                    className="flex items-center justify-center gap-2 py-3 bg-blue-600 hover:bg-blue-500 text-white rounded-xl font-black text-[9px] uppercase tracking-widest transition-all shadow-lg active:scale-95"
+                  >
                     <UserPlus className="w-3.5 h-3.5" /> Anchor Link
                   </button>
-                  <button className="flex items-center justify-center gap-2 py-3 bg-white/5 hover:bg-white/10 border border-white/10 text-slate-300 rounded-xl font-black text-[9px] uppercase tracking-widest transition-all active:scale-95">
+                  <button
+                    onClick={() => setSelectedProvider(provider)}
+                    className="flex items-center justify-center gap-2 py-3 bg-white/5 hover:bg-white/10 border border-white/10 text-slate-300 rounded-xl font-black text-[9px] uppercase tracking-widest transition-all active:scale-95"
+                  >
                     <Info className="w-3.5 h-3.5" /> Deep Profile
                   </button>
                 </div>
@@ -211,6 +235,105 @@ const ProvidersMarket: React.FC = () => {
           Apply as Node <ChevronRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" />
         </a>
       </footer>
+
+      {selectedProvider && (
+        <div className="fixed inset-0 z-[180] bg-black/85 backdrop-blur-sm p-4 flex items-center justify-center">
+          <div className="glass-panel w-full max-w-3xl rounded-[2.5rem] border border-white/10 overflow-hidden shadow-2xl animate-in zoom-in duration-300">
+            <div className="relative h-64">
+              <img src={selectedProvider.image} alt={selectedProvider.name} className="w-full h-full object-cover" />
+              <div className="absolute inset-0 bg-gradient-to-t from-[#05070a] via-black/30 to-transparent" />
+              <button
+                onClick={() => setSelectedProvider(null)}
+                className="absolute top-4 right-4 p-2 rounded-xl bg-black/50 hover:bg-black/70 text-white transition-colors"
+              >
+                <ChevronRight className="w-5 h-5 rotate-180" />
+              </button>
+              <div className="absolute bottom-4 left-4 right-4">
+                <p className="text-[10px] uppercase tracking-widest text-blue-300 font-black">{selectedProvider.category}</p>
+                <h4 className="text-3xl font-black text-white tracking-tight mt-1">{selectedProvider.name}</h4>
+              </div>
+            </div>
+            <div className="p-6 sm:p-8 space-y-6">
+              <p className="text-sm text-slate-300 leading-relaxed">{selectedProvider.bio}</p>
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                <div className="p-3 bg-white/5 border border-white/10 rounded-xl">
+                  <p className="text-[9px] uppercase tracking-widest text-slate-500 font-black">Specialty</p>
+                  <p className="text-white text-sm mt-1">{selectedProvider.specialty}</p>
+                </div>
+                <div className="p-3 bg-white/5 border border-white/10 rounded-xl">
+                  <p className="text-[9px] uppercase tracking-widest text-slate-500 font-black">Experience</p>
+                  <p className="text-white text-sm mt-1">{selectedProvider.experience}</p>
+                </div>
+                <div className="p-3 bg-white/5 border border-white/10 rounded-xl">
+                  <p className="text-[9px] uppercase tracking-widest text-slate-500 font-black">Rating</p>
+                  <p className="text-white text-sm mt-1">{selectedProvider.rating}</p>
+                </div>
+              </div>
+              <div className="flex flex-col sm:flex-row gap-3">
+                <button
+                  onClick={() => {
+                    setConnectionTarget(selectedProvider);
+                    setSelectedProvider(null);
+                  }}
+                  className="flex-1 py-3 bg-blue-600 hover:bg-blue-500 text-white rounded-xl font-black text-[11px] uppercase tracking-widest transition-colors"
+                >
+                  Request Anchor Link
+                </button>
+                <button
+                  onClick={() => setSelectedProvider(null)}
+                  className="flex-1 py-3 bg-white/5 hover:bg-white/10 border border-white/10 text-slate-200 rounded-xl font-black text-[11px] uppercase tracking-widest transition-colors"
+                >
+                  Close
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {connectionTarget && (
+        <div className="fixed inset-0 z-[180] bg-black/85 backdrop-blur-sm p-4 flex items-center justify-center">
+          <div className="glass-panel w-full max-w-xl rounded-[2rem] border border-white/10 shadow-2xl p-6 sm:p-8 space-y-5 animate-in zoom-in duration-300">
+            <h4 className="text-2xl font-black text-white tracking-tight">Anchor Link Request</h4>
+            <p className="text-sm text-slate-400">
+              Send an introductory message to <span className="text-white font-bold">{connectionTarget.name}</span>.
+            </p>
+            <textarea
+              value={connectionNote}
+              onChange={(e) => setConnectionNote(e.target.value)}
+              className="w-full min-h-[130px] bg-white/5 border border-white/10 rounded-2xl p-4 text-sm text-white focus:outline-none focus:ring-2 focus:ring-blue-500/40"
+              placeholder="Share your intent, goals, and preferred session focus..."
+            />
+            {connectionStatus && (
+              <div className="p-3 rounded-xl bg-emerald-500/10 border border-emerald-500/30 text-emerald-200 text-[11px] font-black uppercase tracking-widest">
+                {connectionStatus}
+              </div>
+            )}
+            <div className="flex flex-col sm:flex-row gap-3">
+              <button
+                onClick={() => setConnectionTarget(null)}
+                className="flex-1 py-3 bg-white/5 hover:bg-white/10 border border-white/10 text-slate-200 rounded-xl font-black text-[11px] uppercase tracking-widest transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={() => {
+                  setConnectionStatus('Request logged. Provider will review in their secure queue.');
+                  setConnectionNote('');
+                  setTimeout(() => {
+                    setConnectionTarget(null);
+                    setConnectionStatus('');
+                  }, 1200);
+                }}
+                disabled={!connectionNote.trim()}
+                className="flex-1 py-3 bg-blue-600 hover:bg-blue-500 disabled:bg-slate-700 disabled:text-slate-500 text-white rounded-xl font-black text-[11px] uppercase tracking-widest transition-colors"
+              >
+                Send Request
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

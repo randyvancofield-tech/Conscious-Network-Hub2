@@ -42,6 +42,8 @@ const Profile: React.FC<ProfileProps> = ({ user, onUserUpdate }) => {
   const [reflections, setReflections] = useState<Reflection[]>([]);
   const [reflectionFile, setReflectionFile] = useState<File | null>(null);
   const [reflectionContent, setReflectionContent] = useState('');
+  const [editingReflectionId, setEditingReflectionId] = useState<string | null>(null);
+  const [editingReflectionContent, setEditingReflectionContent] = useState('');
   const [loading, setLoading] = useState(false);
   const [securityLoading, setSecurityLoading] = useState(false);
   const [securityMessage, setSecurityMessage] = useState('');
@@ -348,6 +350,48 @@ const Profile: React.FC<ProfileProps> = ({ user, onUserUpdate }) => {
     setLoading(false);
   };
 
+  const handleReflectionDelete = async (reflectionId: string) => {
+    setLoading(true);
+    setError('');
+    try {
+      await axios.delete(toApiUrl(`/api/reflection/${reflectionId}`), {
+        headers: buildAuthHeaders(),
+      });
+      setReflections((prev) => prev.filter((entry) => entry.id !== reflectionId));
+    } catch {
+      setError('Failed to delete reflection');
+    }
+    setLoading(false);
+  };
+
+  const handleReflectionUpdate = async (reflectionId: string) => {
+    setLoading(true);
+    setError('');
+    try {
+      const res = await axios.patch(
+        toApiUrl(`/api/reflection/${reflectionId}`),
+        { content: editingReflectionContent },
+        { headers: buildAuthHeaders() }
+      );
+      const updated = res.data?.reflection;
+      setReflections((prev) =>
+        prev.map((entry) =>
+          entry.id === reflectionId
+            ? {
+                ...entry,
+                content: updated?.content ?? editingReflectionContent,
+              }
+            : entry
+        )
+      );
+      setEditingReflectionId(null);
+      setEditingReflectionContent('');
+    } catch {
+      setError('Failed to update reflection');
+    }
+    setLoading(false);
+  };
+
   return (
     <div
       className="profile-container"
@@ -485,8 +529,42 @@ const Profile: React.FC<ProfileProps> = ({ user, onUserUpdate }) => {
             ) : (
               <a href={ref.fileUrl} target="_blank" rel="noopener noreferrer">View Document</a>
             )}
-            <div>{ref.content}</div>
+            {editingReflectionId === ref.id ? (
+              <div style={{ display: 'grid', gap: '8px', marginTop: '8px' }}>
+                <textarea
+                  value={editingReflectionContent}
+                  onChange={(e) => setEditingReflectionContent(e.target.value)}
+                  style={{ width: '100%', minHeight: '80px' }}
+                />
+                <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+                  <button onClick={() => handleReflectionUpdate(ref.id)} disabled={loading}>Save Reflection</button>
+                  <button
+                    onClick={() => {
+                      setEditingReflectionId(null);
+                      setEditingReflectionContent('');
+                    }}
+                    disabled={loading}
+                  >
+                    Cancel
+                  </button>
+                </div>
+              </div>
+            ) : (
+              <div>{ref.content}</div>
+            )}
             <div><small>{new Date(ref.createdAt).toLocaleString()}</small></div>
+            <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', marginTop: '8px' }}>
+              <button
+                onClick={() => {
+                  setEditingReflectionId(ref.id);
+                  setEditingReflectionContent(ref.content || '');
+                }}
+                disabled={loading}
+              >
+                Edit Reflection
+              </button>
+              <button onClick={() => handleReflectionDelete(ref.id)} disabled={loading}>Delete Reflection</button>
+            </div>
           </div>
         ))}
       </div>

@@ -1,9 +1,9 @@
 
-import React from 'react';
+import React, { useState } from 'react';
 import { 
   ArrowLeft, Compass, Shield, Users, HeartPulse, 
   Fingerprint, Scale, HelpCircle,
-  BookOpen, Star, Play
+  BookOpen, Star, Play, X
 } from 'lucide-react';
 import { Course } from '../types';
 
@@ -76,6 +76,9 @@ const PATHWAYS_DATA = [
 ];
 
 const KnowledgePathways: React.FC<KnowledgePathwaysProps> = ({ onGoBack, onEnroll }) => {
+  const [selectedSyllabusId, setSelectedSyllabusId] = useState<string | null>(null);
+  const selectedSyllabus = PATHWAYS_DATA.find((pathway) => pathway.id === selectedSyllabusId) || null;
+
   return (
     <div className="space-y-12 animate-in fade-in slide-in-from-bottom-8 duration-700 pb-32">
       <header className="space-y-6">
@@ -165,7 +168,10 @@ const KnowledgePathways: React.FC<KnowledgePathwaysProps> = ({ onGoBack, onEnrol
                   >
                     <Play className="w-4 h-4 fill-white" /> Enroll Node
                   </button>
-                  <button className="flex items-center justify-center gap-3 py-4 bg-white/5 hover:bg-white/10 border border-white/10 text-slate-300 rounded-2xl font-black text-[10px] uppercase tracking-widest transition-all active:scale-95">
+                  <button
+                    onClick={() => setSelectedSyllabusId(pathway.id)}
+                    className="flex items-center justify-center gap-3 py-4 bg-white/5 hover:bg-white/10 border border-white/10 text-slate-300 rounded-2xl font-black text-[10px] uppercase tracking-widest transition-all active:scale-95"
+                  >
                     <BookOpen className="w-4 h-4" /> Syllabus
                   </button>
                 </div>
@@ -181,6 +187,63 @@ const KnowledgePathways: React.FC<KnowledgePathwaysProps> = ({ onGoBack, onEnrol
           Each completed pathway generates a unique verifiable credential anchored to your Conscious Identity node. These achievement records represent deep work in personal and professional autonomy.
         </p>
       </div>
+
+      {selectedSyllabus && (
+        <div className="fixed inset-0 z-[180] bg-black/85 backdrop-blur-sm p-4 flex items-center justify-center">
+          <div className="glass-panel w-full max-w-3xl rounded-[2rem] border border-white/10 shadow-2xl overflow-hidden animate-in zoom-in duration-300">
+            <div className="relative h-56 sm:h-64">
+              <img src={selectedSyllabus.image} alt={selectedSyllabus.title} className="w-full h-full object-cover" />
+              <div className="absolute inset-0 bg-gradient-to-t from-[#05070a] via-black/30 to-transparent" />
+              <button
+                onClick={() => setSelectedSyllabusId(null)}
+                className="absolute top-4 right-4 p-2 rounded-xl bg-black/50 hover:bg-black/70 text-white transition-colors"
+              >
+                <X className="w-5 h-5" />
+              </button>
+              <div className="absolute bottom-4 left-4 right-4">
+                <p className="text-[10px] uppercase tracking-widest text-blue-300 font-black">{selectedSyllabus.provider}</p>
+                <h4 className="text-2xl sm:text-3xl font-black text-white tracking-tight mt-1">{selectedSyllabus.title}</h4>
+              </div>
+            </div>
+            <div className="p-6 sm:p-8 space-y-5">
+              <h5 className="text-[11px] uppercase tracking-widest text-slate-400 font-black">Syllabus Preview</h5>
+              <ul className="space-y-3">
+                <li className="p-3 bg-white/5 border border-white/10 rounded-xl text-sm text-slate-200">Module 1: Foundations and Context</li>
+                <li className="p-3 bg-white/5 border border-white/10 rounded-xl text-sm text-slate-200">Module 2: Applied Frameworks and Case Labs</li>
+                <li className="p-3 bg-white/5 border border-white/10 rounded-xl text-sm text-slate-200">Module 3: Personal Integration and Governance Practice</li>
+              </ul>
+              <p className="text-xs text-slate-400 leading-relaxed">
+                Full syllabus expands after enrollment and includes assessments, guided prompts, and completion criteria.
+              </p>
+              <div className="flex flex-col sm:flex-row gap-3">
+                <button
+                  onClick={() => {
+                    onEnroll({
+                      id: selectedSyllabus.id,
+                      title: selectedSyllabus.title,
+                      provider: selectedSyllabus.provider,
+                      tier: selectedSyllabus.tier,
+                      enrolled: selectedSyllabus.enrolled,
+                      image: selectedSyllabus.image,
+                      progress: 0,
+                    });
+                    setSelectedSyllabusId(null);
+                  }}
+                  className="flex-1 py-3 bg-blue-600 hover:bg-blue-500 text-white rounded-xl font-black text-[11px] uppercase tracking-widest transition-colors"
+                >
+                  Enroll Pathway
+                </button>
+                <button
+                  onClick={() => setSelectedSyllabusId(null)}
+                  className="flex-1 py-3 bg-white/5 hover:bg-white/10 border border-white/10 text-slate-200 rounded-xl font-black text-[11px] uppercase tracking-widest transition-colors"
+                >
+                  Close
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

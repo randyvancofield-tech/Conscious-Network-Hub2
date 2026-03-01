@@ -230,6 +230,10 @@ export const ConsciousIdentity: React.FC<ConsciousIdentityProps> = ({
     setNewReflection('');
   };
 
+  const pruneReflection = (reflectionId: number) => {
+    setReflections((prev) => prev.filter((reflection) => reflection.id !== reflectionId));
+  };
+
   if (isEditing) {
     return (
       <div className="max-w-3xl mx-auto py-8 sm:py-12 px-3 sm:px-4 animate-in fade-in slide-in-from-bottom-8">
@@ -597,30 +601,48 @@ export const ConsciousIdentity: React.FC<ConsciousIdentityProps> = ({
                   <div className="p-6 sm:p-10 bg-white/5 border border-white/5 rounded-[2rem] sm:rounded-[3rem] hover:bg-white/10 transition-all group shadow-xl">
                     <h4 className="text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-8 text-center sm:text-left">Verified Sovereignty</h4>
                     <div className="flex justify-center sm:justify-start gap-6">
-                      <a 
-                        href={formData.twitterUrl || '#'} 
-                        target={formData.twitterUrl ? "_blank" : "_self"}
-                        rel="noopener noreferrer"
-                        className={`p-5 rounded-[1.8rem] transition-all hover:-translate-y-2 shadow-xl ${formData.twitterUrl ? 'bg-blue-500/10 hover:bg-blue-600 text-blue-400 hover:text-white' : 'bg-white/5 text-slate-700 cursor-not-allowed'}`}
-                      >
-                        <Twitter className="w-7 h-7" />
-                      </a>
-                      <a 
-                        href={formData.githubUrl || '#'} 
-                        target={formData.githubUrl ? "_blank" : "_self"}
-                        rel="noopener noreferrer"
-                        className={`p-5 rounded-[1.8rem] transition-all hover:-translate-y-2 shadow-xl ${formData.githubUrl ? 'bg-slate-500/10 hover:bg-slate-500 text-slate-400 hover:text-white' : 'bg-white/5 text-slate-700 cursor-not-allowed'}`}
-                      >
-                        <Github className="w-7 h-7" />
-                      </a>
-                      <a 
-                        href={formData.websiteUrl || '#'} 
-                        target={formData.websiteUrl ? "_blank" : "_self"}
-                        rel="noopener noreferrer"
-                        className={`p-5 rounded-[1.8rem] transition-all hover:-translate-y-2 shadow-xl ${formData.websiteUrl ? 'bg-teal-500/10 hover:bg-teal-600 text-teal-400 hover:text-white' : 'bg-white/5 text-slate-700 cursor-not-allowed'}`}
-                      >
-                        <Globe className="w-7 h-7" />
-                      </a>
+                      {formData.twitterUrl ? (
+                        <a
+                          href={formData.twitterUrl}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="p-5 rounded-[1.8rem] transition-all hover:-translate-y-2 shadow-xl bg-blue-500/10 hover:bg-blue-600 text-blue-400 hover:text-white"
+                        >
+                          <Twitter className="w-7 h-7" />
+                        </a>
+                      ) : (
+                        <span className="p-5 rounded-[1.8rem] shadow-xl bg-white/5 text-slate-700 cursor-not-allowed">
+                          <Twitter className="w-7 h-7" />
+                        </span>
+                      )}
+                      {formData.githubUrl ? (
+                        <a
+                          href={formData.githubUrl}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="p-5 rounded-[1.8rem] transition-all hover:-translate-y-2 shadow-xl bg-slate-500/10 hover:bg-slate-500 text-slate-400 hover:text-white"
+                        >
+                          <Github className="w-7 h-7" />
+                        </a>
+                      ) : (
+                        <span className="p-5 rounded-[1.8rem] shadow-xl bg-white/5 text-slate-700 cursor-not-allowed">
+                          <Github className="w-7 h-7" />
+                        </span>
+                      )}
+                      {formData.websiteUrl ? (
+                        <a
+                          href={formData.websiteUrl}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="p-5 rounded-[1.8rem] transition-all hover:-translate-y-2 shadow-xl bg-teal-500/10 hover:bg-teal-600 text-teal-400 hover:text-white"
+                        >
+                          <Globe className="w-7 h-7" />
+                        </a>
+                      ) : (
+                        <span className="p-5 rounded-[1.8rem] shadow-xl bg-white/5 text-slate-700 cursor-not-allowed">
+                          <Globe className="w-7 h-7" />
+                        </span>
+                      )}
                     </div>
                   </div>
                   <div className="p-6 sm:p-10 bg-white/5 border border-white/5 rounded-[2rem] sm:rounded-[3rem] hover:bg-white/10 transition-all flex flex-col justify-between shadow-xl group">
@@ -738,7 +760,12 @@ export const ConsciousIdentity: React.FC<ConsciousIdentityProps> = ({
                       <div className="w-2 h-2 rounded-full bg-blue-400 group-hover/ref:scale-150 transition-transform" />
                       <span className="text-[10px] text-slate-500 uppercase font-bold tracking-widest">{r.date} Timestamp</span>
                     </div>
-                    <button className="text-[10px] text-slate-700 hover:text-red-400 font-bold uppercase tracking-widest transition-colors opacity-0 group-hover/ref:opacity-100">Prune Node</button>
+                    <button
+                      onClick={() => pruneReflection(r.id)}
+                      className="text-[10px] text-slate-700 hover:text-red-400 font-bold uppercase tracking-widest transition-colors opacity-0 group-hover/ref:opacity-100"
+                    >
+                      Prune Node
+                    </button>
                   </div>
                 </div>
               ))}

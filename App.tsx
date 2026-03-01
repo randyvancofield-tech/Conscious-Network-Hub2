@@ -10,6 +10,7 @@ import CommunityMembers from './components/CommunityMembers';
 import SocialLearningHub from './components/SocialLearningHub';
 import ConsciousMeetings from './components/ConsciousMeetings';
 import MusicBox from './components/MusicBox';
+import NotificationsCenter from './components/NotificationsCenter';
 import { ConsciousIdentity } from './components/community/CommunityLayout';
 import { AppView, UserProfile, Course } from './types';
 import { NAVIGATION_ITEMS } from './constants';
@@ -889,12 +890,26 @@ const App: React.FC = () => {
       );
     }
     if (user && !canTierAccessView(user.tier, currentView)) {
-      return <Dashboard user={user} onEnroll={enrollCourse} insightRef={insightRef} />;
+      return (
+        <Dashboard
+          user={user}
+          onEnroll={enrollCourse}
+          onManageReputation={() => setCurrentView(AppView.MY_CONSCIOUS_IDENTITY)}
+          insightRef={insightRef}
+        />
+      );
     }
 
     switch (currentView) {
       case AppView.DASHBOARD: 
-        return <Dashboard user={user} onEnroll={enrollCourse} insightRef={insightRef} />;
+        return (
+          <Dashboard
+            user={user}
+            onEnroll={enrollCourse}
+            onManageReputation={() => setCurrentView(AppView.MY_CONSCIOUS_IDENTITY)}
+            insightRef={insightRef}
+          />
+        );
       case AppView.CONSCIOUS_SOCIAL_LEARNING:
         return <SocialLearningHub user={user} />;
       case AppView.CONSCIOUS_MEETINGS:
@@ -921,6 +936,8 @@ const App: React.FC = () => {
         return <ProvidersMarket />;
       case AppView.MEMBERSHIP:
         return <CommunityMembers />;
+      case AppView.NOTIFICATIONS:
+        return <NotificationsCenter onBack={() => setCurrentView(AppView.DASHBOARD)} />;
       case AppView.KNOWLEDGE_PATHWAYS:
         return <KnowledgePathways onGoBack={() => setCurrentView(AppView.MY_COURSES)} onEnroll={enrollCourse} />;
       case AppView.PRIVACY_POLICY:
@@ -1036,7 +1053,12 @@ const App: React.FC = () => {
           </div>
         );
       default: 
-        return <Dashboard user={user} />;
+        return (
+          <Dashboard
+            user={user}
+            onManageReputation={() => setCurrentView(AppView.MY_CONSCIOUS_IDENTITY)}
+          />
+        );
     }
   };
 
@@ -1409,7 +1431,10 @@ const App: React.FC = () => {
                     }`} />
                     <span>{healthStatus === 'online' ? 'AI Live' : healthStatus === 'checking' ? 'Checking' : 'Offline'}</span>
                   </div>
-                  <button className="p-3 hover:bg-white/5 rounded-xl text-slate-500 relative transition-colors">
+                  <button
+                    onClick={() => setCurrentView(AppView.NOTIFICATIONS)}
+                    className="p-3 hover:bg-white/5 rounded-xl text-slate-500 relative transition-colors"
+                  >
                     <Bell className="w-5 h-5" />
                     <div className="absolute top-3 right-3 w-2 h-2 bg-blue-500 rounded-full ring-2 ring-black"></div>
                   </button>

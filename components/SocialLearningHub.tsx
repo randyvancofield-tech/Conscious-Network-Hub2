@@ -1,11 +1,12 @@
 
-import React, { useState, useRef, useEffect, useMemo } from 'react';
+import React, { useState, useRef, useEffect, useMemo, useCallback } from 'react';
 import { 
   MessageSquare, Heart,
   Send, Globe, Zap, Sparkles, Filter, 
   LayoutGrid, BookOpen, Layers, Users, ShieldCheck, 
   ArrowRight, FileText, ImageIcon, FileVideo, Cpu, X, Play,
-  Activity, Terminal, ChevronRight, Link as LinkIcon, Youtube, ExternalLink
+  Activity, Terminal, ChevronRight, Link as LinkIcon, Youtube, ExternalLink,
+  Pencil, Trash2, RefreshCw
 } from 'lucide-react';
 import { UserProfile } from '../types';
 import { buildAuthHeaders } from '../services/sessionService';
@@ -20,6 +21,7 @@ interface Comment {
 
 interface NodeContent {
   id: string;
+  authorId: string;
   author: string;
   avatar: string;
   type: 'text' | 'image' | 'video' | 'file';
@@ -29,6 +31,7 @@ interface NodeContent {
   resonances: number;
   links: number;
   hasResonated?: boolean;
+  visibility?: 'public' | 'private';
   comments: Comment[];
 }
 
@@ -42,9 +45,15 @@ interface SocialLearningHubProps {
   user: UserProfile | null;
 }
 
+interface SocialProfileView {
+  profile: any;
+  posts: any[];
+}
+
 const INITIAL_NODES: NodeContent[] = [
   {
     id: 'n1',
+    authorId: 'seed-aarav',
     author: 'Aarav Sharma',
     avatar: 'https://images.unsplash.com/photo-1506794778202-cad84cf45f1d?auto=format&fit=crop&q=80&w=200',
     type: 'text',
@@ -53,12 +62,14 @@ const INITIAL_NODES: NodeContent[] = [
     timestamp: '2h ago',
     resonances: 42,
     links: 12,
+    visibility: 'public',
     comments: [
       { id: 'c1', author: 'Dr. Amara Okafor', avatar: 'https://images.unsplash.com/photo-1531123897727-8f129e1688ce?auto=format&fit=crop&q=80&w=200', text: 'Incredible insight on neural plasticity!', timestamp: '1h ago' }
     ]
   },
   {
     id: 'n2',
+    authorId: 'seed-amara',
     author: 'Dr. Amara Okafor',
     avatar: 'https://images.unsplash.com/photo-1531123897727-8f129e1688ce?auto=format&fit=crop&q=80&w=200',
     type: 'image',
@@ -67,10 +78,12 @@ const INITIAL_NODES: NodeContent[] = [
     timestamp: '5h ago',
     resonances: 89,
     links: 24,
+    visibility: 'public',
     comments: []
   },
   {
     id: 'n3',
+    authorId: 'seed-elena',
     author: 'Elena Rossi',
     avatar: 'https://images.unsplash.com/photo-1544005313-94ddf0286df2?auto=format&fit=crop&q=80&w=200',
     type: 'text',
@@ -79,6 +92,7 @@ const INITIAL_NODES: NodeContent[] = [
     timestamp: '1d ago',
     resonances: 156,
     links: 45,
+    visibility: 'public',
     comments: []
   }
 ];
@@ -113,6 +127,7 @@ const mapSocialPostToNode = (post: any): NodeContent => {
   const type = media?.mediaType === 'video' ? 'video' : media?.mediaType === 'file' ? 'file' : media ? 'image' : 'text';
   return {
     id: String(post?.id || Date.now()),
+    authorId: String(post?.authorId || post?.author?.id || ''),
     author: String(post?.authorName || 'Node'),
     avatar:
       String(post?.authorAvatarUrl || '').trim() ||
@@ -123,6 +138,7 @@ const mapSocialPostToNode = (post: any): NodeContent => {
     timestamp: toRelativeTimestamp(String(post?.createdAt || '')),
     resonances: Number(post?.likeCount || 0),
     links: 0,
+    visibility: String(post?.visibility || '').trim().toLowerCase() === 'private' ? 'private' : 'public',
     comments: [],
   };
 };
@@ -133,11 +149,22 @@ const SocialLearningHub: React.FC<SocialLearningHubProps> = ({ user }) => {
   const [nodes, setNodes] = useState<NodeContent[]>(INITIAL_NODES);
   const [newPost, setNewPost] = useState('');
   const [isInjecting, setIsInjecting] = useState(false);
+  const [isRefreshingFeed, setRefreshingFeed] = useState(false);
   const [selectedFile, setSelectedFile] = useState<SelectedUpload | null>(null);
   const [injectError, setInjectError] = useState('');
+  const [postActionError, setPostActionError] = useState('');
   const [tilt, setTilt] = useState({ x: 0, y: 0 });
   const [expandedComments, setExpandedComments] = useState<string[]>([]);
   const [commentInput, setCommentInput] = useState<{[key: string]: string}>({});
+  const [showFilters, setShowFilters] = useState(false);
+  const [contentFilter, setContentFilter] = useState<'all' | 'text' | 'image' | 'video' | 'file'>('all');
+  const [showMineOnly, setShowMineOnly] = useState(false);
+  const [viewMode, setViewMode] = useState<'grid' | 'thread'>('grid');
+  const [editingNodeId, setEditingNodeId] = useState<string | null>(null);
+  const [editingText, setEditingText] = useState('');
+  const [selectedProfileView, setSelectedProfileView] = useState<SocialProfileView | null>(null);
+  const [profileViewLoading, setProfileViewLoading] = useState(false);
+  const [profileViewError, setProfileViewError] = useState('');
   
   const fileInputRef = useRef<HTMLInputElement>(null);
   const injectionPanelRef = useRef<HTMLDivElement>(null);
@@ -145,40 +172,43 @@ const SocialLearningHub: React.FC<SocialLearningHubProps> = ({ user }) => {
   const detectedUrl = useMemo(() => getFirstUrl(newPost), [newPost]);
   const detectedYoutubeId = useMemo(() => detectedUrl ? getYoutubeId(detectedUrl) : null, [detectedUrl]);
 
-  useEffect(() => {
+  const loadFeed = useCallback(async () => {
     if (!user) {
       setNodes(INITIAL_NODES);
       return;
     }
 
-    let cancelled = false;
-    const loadFeed = async () => {
-      try {
-        const response = await fetch(toApiUrl('/api/social/newsfeed?limit=100'), {
-          headers: buildAuthHeaders(),
-        });
-        const data = await response.json().catch(() => ({}));
-        if (!response.ok) {
-          throw new Error(data?.error || 'Failed to load social newsfeed');
-        }
-
-        const posts = Array.isArray(data?.posts) ? data.posts : [];
-        const mapped = posts.map(mapSocialPostToNode);
-        if (!cancelled) {
-          setNodes(mapped.length > 0 ? mapped : INITIAL_NODES);
-        }
-      } catch {
-        if (!cancelled) {
-          setNodes(INITIAL_NODES);
-        }
+    setRefreshingFeed(true);
+    try {
+      const response = await fetch(toApiUrl('/api/social/newsfeed?limit=100'), {
+        headers: buildAuthHeaders(),
+      });
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        throw new Error(data?.error || 'Failed to load social newsfeed');
       }
-    };
 
+      const posts = Array.isArray(data?.posts) ? data.posts : [];
+      const mapped = posts.map(mapSocialPostToNode);
+      setNodes(mapped.length > 0 ? mapped : INITIAL_NODES);
+    } catch {
+      setNodes(INITIAL_NODES);
+    } finally {
+      setRefreshingFeed(false);
+    }
+  }, [user, backendBaseUrl]);
+
+  useEffect(() => {
     void loadFeed();
-    return () => {
-      cancelled = true;
-    };
-  }, [user?.id, backendBaseUrl]);
+  }, [loadFeed]);
+
+  const visibleNodes = useMemo(() => {
+    return nodes.filter((node) => {
+      const matchesType = contentFilter === 'all' || node.type === contentFilter;
+      const matchesOwnership = !showMineOnly || (Boolean(user?.id) && node.authorId === user?.id);
+      return matchesType && matchesOwnership;
+    });
+  }, [nodes, contentFilter, showMineOnly, user?.id]);
 
   const handleMouseMove = (e: React.MouseEvent<HTMLDivElement>) => {
     if (!injectionPanelRef.current || window.innerWidth < 1024) return;
@@ -293,6 +323,7 @@ const SocialLearningHub: React.FC<SocialLearningHubProps> = ({ user }) => {
       } else {
         const newNode: NodeContent = {
           id: Date.now().toString(),
+          authorId: user?.id || 'guest',
           author: user?.name || 'Guest Node',
           avatar: user?.avatarUrl || `https://api.dicebear.com/7.x/avataaars/svg?seed=${user?.id || 'guest'}`,
           type: selectedFile?.type || 'text',
@@ -301,6 +332,7 @@ const SocialLearningHub: React.FC<SocialLearningHubProps> = ({ user }) => {
           timestamp: 'Just now',
           resonances: 0,
           links: 0,
+          visibility: 'public',
           comments: []
         };
         setNodes((prev) => [newNode, ...prev]);
@@ -389,6 +421,109 @@ const SocialLearningHub: React.FC<SocialLearningHubProps> = ({ user }) => {
     setCommentInput(prev => ({ ...prev, [nodeId]: '' }));
   };
 
+  const openProfileView = async (authorId: string) => {
+    if (!authorId || !user) return;
+    setProfileViewError('');
+    setProfileViewLoading(true);
+    try {
+      const response = await fetch(toApiUrl(`/api/social/profile/${authorId}?limit=20`), {
+        headers: buildAuthHeaders(),
+      });
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        throw new Error(data?.error || 'Unable to load profile');
+      }
+      setSelectedProfileView({
+        profile: data.profile || null,
+        posts: Array.isArray(data.posts) ? data.posts : [],
+      });
+    } catch (error) {
+      setProfileViewError(error instanceof Error ? error.message : 'Unable to load profile');
+    } finally {
+      setProfileViewLoading(false);
+    }
+  };
+
+  const beginEditNode = (node: NodeContent) => {
+    if (node.type !== 'text') {
+      setPostActionError('Only text posts can be edited inline right now.');
+      return;
+    }
+    setPostActionError('');
+    setEditingNodeId(node.id);
+    setEditingText(node.content);
+  };
+
+  const saveNodeEdit = async (nodeId: string) => {
+    const nextText = editingText.trim();
+    if (!nextText) {
+      setPostActionError('Edited post cannot be empty.');
+      return;
+    }
+    if (!user) return;
+
+    try {
+      const response = await fetch(toApiUrl(`/api/social/posts/${nodeId}`), {
+        method: 'PATCH',
+        headers: buildAuthHeaders({ 'Content-Type': 'application/json' }),
+        body: JSON.stringify({ text: nextText }),
+      });
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        throw new Error(data?.error || 'Failed to update post');
+      }
+      const mapped = mapSocialPostToNode(data.post);
+      setNodes((prev) => prev.map((node) => (node.id === nodeId ? mapped : node)));
+      setEditingNodeId(null);
+      setEditingText('');
+      setPostActionError('');
+    } catch (error) {
+      setPostActionError(error instanceof Error ? error.message : 'Failed to update post');
+    }
+  };
+
+  const deleteNode = async (nodeId: string) => {
+    if (!user) return;
+    const confirmed = window.confirm('Delete this post? This action cannot be undone.');
+    if (!confirmed) return;
+
+    try {
+      const response = await fetch(toApiUrl(`/api/social/posts/${nodeId}`), {
+        method: 'DELETE',
+        headers: buildAuthHeaders(),
+      });
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        throw new Error(data?.error || 'Failed to delete post');
+      }
+      setNodes((prev) => prev.filter((node) => node.id !== nodeId));
+      setPostActionError('');
+    } catch (error) {
+      setPostActionError(error instanceof Error ? error.message : 'Failed to delete post');
+    }
+  };
+
+  const resonateGlobally = async (node: NodeContent) => {
+    const shareUrl =
+      typeof window !== 'undefined'
+        ? `${window.location.origin}${window.location.pathname}?node=${encodeURIComponent(node.id)}`
+        : node.id;
+    try {
+      if (navigator.share) {
+        await navigator.share({
+          title: node.title,
+          text: node.type === 'text' ? node.content.slice(0, 140) : `Shared from Social Hub: ${node.title}`,
+          url: shareUrl,
+        });
+        return;
+      }
+      await navigator.clipboard.writeText(shareUrl);
+      alert('Share link copied to clipboard.');
+    } catch {
+      // no-op if share is canceled
+    }
+  };
+
   return (
     <div className="flex flex-col space-y-8 animate-in fade-in slide-in-from-bottom-6 duration-1000 relative">
       
@@ -408,11 +543,50 @@ const SocialLearningHub: React.FC<SocialLearningHubProps> = ({ user }) => {
               <Activity className="w-4 h-4 text-blue-400" />
               <span>Entropy: 0.042 Stable</span>
             </div>
-            <button className="p-3 sm:p-4 bg-blue-600 hover:bg-blue-500 text-white rounded-2xl shadow-xl shadow-blue-900/40 transition-all active:scale-95 group">
+            <button
+              onClick={() => setShowFilters((prev) => !prev)}
+              className="p-3 sm:p-4 bg-blue-600 hover:bg-blue-500 text-white rounded-2xl shadow-xl shadow-blue-900/40 transition-all active:scale-95 group"
+            >
               <Filter className="w-5 h-5 lg:group-hover:rotate-90 transition-transform" />
             </button>
           </div>
         </div>
+
+        {showFilters && (
+          <div className="mt-4 glass-panel p-4 rounded-2xl border border-white/10 flex flex-col lg:flex-row gap-3 lg:items-center">
+            <div className="flex flex-wrap gap-2">
+              {(['all', 'text', 'image', 'video', 'file'] as const).map((filter) => (
+                <button
+                  key={filter}
+                  onClick={() => setContentFilter(filter)}
+                  className={`px-3 py-1.5 rounded-lg text-[9px] font-black uppercase tracking-widest border transition-colors ${
+                    contentFilter === filter
+                      ? 'bg-blue-600 border-blue-500 text-white'
+                      : 'bg-white/5 border-white/10 text-slate-400 hover:text-white'
+                  }`}
+                >
+                  {filter}
+                </button>
+              ))}
+            </div>
+            <label className="flex items-center gap-2 text-[10px] text-slate-300 font-black uppercase tracking-widest">
+              <input
+                type="checkbox"
+                checked={showMineOnly}
+                onChange={(e) => setShowMineOnly(e.target.checked)}
+                className="w-4 h-4 accent-blue-500"
+              />
+              My nodes only
+            </label>
+            <button
+              onClick={() => void loadFeed()}
+              className="lg:ml-auto px-3 py-2 bg-white/5 hover:bg-white/10 rounded-lg border border-white/10 text-[10px] font-black uppercase tracking-widest text-slate-300 flex items-center gap-2"
+            >
+              <RefreshCw className={`w-3.5 h-3.5 ${isRefreshingFeed ? 'animate-spin' : ''}`} />
+              Refresh Feed
+            </button>
+          </div>
+        )}
         
         {/* Floating Background Element */}
         <div className="absolute -top-10 -right-20 w-64 sm:w-96 h-64 sm:h-96 bg-blue-500/5 blur-[100px] rounded-full pointer-events-none" />
@@ -603,7 +777,10 @@ const SocialLearningHub: React.FC<SocialLearningHubProps> = ({ user }) => {
                 </div>
               ))}
             </div>
-            <button className="mt-6 w-full py-4 bg-white/[0.03] hover:bg-white/10 rounded-xl border border-white/10 text-slate-400 text-[9px] font-black uppercase tracking-[0.2em] transition-all flex items-center justify-center gap-2">
+            <button
+              onClick={() => void loadFeed()}
+              className="mt-6 w-full py-4 bg-white/[0.03] hover:bg-white/10 rounded-xl border border-white/10 text-slate-400 text-[9px] font-black uppercase tracking-[0.2em] transition-all flex items-center justify-center gap-2"
+            >
               Deep Sync <Globe className="w-3 h-3" />
             </button>
           </div>
@@ -616,13 +793,28 @@ const SocialLearningHub: React.FC<SocialLearningHubProps> = ({ user }) => {
               <Layers className="w-4 h-4 text-blue-400" /> Algorithmic Stream
             </h3>
             <div className="flex items-center gap-2 bg-white/5 rounded-xl p-1 border border-white/5">
-              <button className="p-2.5 bg-blue-600 text-white rounded-lg shadow-xl transition-all"><LayoutGrid className="w-4 h-4" /></button>
-              <button className="p-2.5 text-slate-500 hover:text-white transition-all"><BookOpen className="w-4 h-4" /></button>
+              <button
+                onClick={() => setViewMode('grid')}
+                className={`p-2.5 rounded-lg shadow-xl transition-all ${viewMode === 'grid' ? 'bg-blue-600 text-white' : 'text-slate-500 hover:text-white'}`}
+              >
+                <LayoutGrid className="w-4 h-4" />
+              </button>
+              <button
+                onClick={() => setViewMode('thread')}
+                className={`p-2.5 rounded-lg shadow-xl transition-all ${viewMode === 'thread' ? 'bg-blue-600 text-white' : 'text-slate-500 hover:text-white'}`}
+              >
+                <BookOpen className="w-4 h-4" />
+              </button>
             </div>
           </div>
           
-          <div className="space-y-10">
-            {nodes.map((node, i) => {
+          <div className={viewMode === 'grid' ? 'grid grid-cols-1 xl:grid-cols-2 gap-8' : 'space-y-10'}>
+            {postActionError && (
+              <div className="xl:col-span-2 rounded-xl border border-red-500/40 bg-red-500/10 px-4 py-3 text-[10px] font-black uppercase tracking-widest text-red-200">
+                {postActionError}
+              </div>
+            )}
+            {visibleNodes.map((node, i) => {
               const nodeUrl = getFirstUrl(node.content);
               const nodeYoutubeId = nodeUrl ? getYoutubeId(nodeUrl) : null;
               const isCommentsExpanded = expandedComments.includes(node.id);
@@ -636,13 +828,17 @@ const SocialLearningHub: React.FC<SocialLearningHubProps> = ({ user }) => {
                   <div className="p-6 sm:p-12 flex flex-col gap-8 sm:gap-10">
                     <div className="flex-1 space-y-6 sm:space-y-8">
                       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-                        <div className="flex items-center gap-4 sm:gap-5">
+                        <button
+                          type="button"
+                          onClick={() => void openProfileView(node.authorId)}
+                          className="flex items-center gap-4 sm:gap-5 text-left group/author"
+                        >
                           <img src={node.avatar} className="w-12 h-12 sm:w-14 sm:h-14 rounded-2xl object-cover ring-4 ring-white/5 shadow-2xl" alt={node.author} />
                           <div>
-                            <h4 className="text-base sm:text-lg font-black text-white uppercase tracking-tighter leading-none">{node.author}</h4>
+                            <h4 className="text-base sm:text-lg font-black text-white uppercase tracking-tighter leading-none group-hover/author:text-blue-300 transition-colors">{node.author}</h4>
                             <p className="text-[9px] sm:text-[10px] text-blue-400/60 font-black uppercase tracking-widest mt-1.5">{node.timestamp}</p>
                           </div>
-                        </div>
+                        </button>
                         <div className="flex items-center gap-2 px-3 py-1.5 sm:px-4 bg-teal-400/5 border border-teal-400/20 rounded-full w-fit">
                           <ShieldCheck className="w-3.5 h-3.5 text-teal-400" />
                           <span className="text-[8px] sm:text-[9px] font-black text-teal-400 uppercase tracking-widest">NODE VERIFIED</span>
@@ -716,6 +912,52 @@ const SocialLearningHub: React.FC<SocialLearningHubProps> = ({ user }) => {
                         </div>
                       </div>
 
+                      {user?.id && node.authorId === user.id && (
+                        <div className="flex flex-wrap items-center gap-2">
+                          {editingNodeId === node.id ? (
+                            <div className="w-full space-y-3">
+                              <textarea
+                                value={editingText}
+                                onChange={(e) => setEditingText(e.target.value)}
+                                className="w-full min-h-[110px] bg-white/5 border border-white/10 rounded-2xl p-4 text-sm text-white focus:outline-none focus:ring-2 focus:ring-blue-500/30"
+                              />
+                              <div className="flex flex-wrap gap-2">
+                                <button
+                                  onClick={() => void saveNodeEdit(node.id)}
+                                  className="px-4 py-2 bg-blue-600 hover:bg-blue-500 text-white rounded-xl text-[10px] font-black uppercase tracking-widest"
+                                >
+                                  Save Edit
+                                </button>
+                                <button
+                                  onClick={() => {
+                                    setEditingNodeId(null);
+                                    setEditingText('');
+                                  }}
+                                  className="px-4 py-2 bg-white/5 hover:bg-white/10 border border-white/10 text-slate-300 rounded-xl text-[10px] font-black uppercase tracking-widest"
+                                >
+                                  Cancel
+                                </button>
+                              </div>
+                            </div>
+                          ) : (
+                            <>
+                              <button
+                                onClick={() => beginEditNode(node)}
+                                className="px-3 py-2 bg-white/5 hover:bg-white/10 border border-white/10 text-slate-300 rounded-xl text-[9px] font-black uppercase tracking-widest flex items-center gap-2"
+                              >
+                                <Pencil className="w-3.5 h-3.5" /> Edit
+                              </button>
+                              <button
+                                onClick={() => void deleteNode(node.id)}
+                                className="px-3 py-2 bg-red-500/10 hover:bg-red-500/20 border border-red-500/20 text-red-300 rounded-xl text-[9px] font-black uppercase tracking-widest flex items-center gap-2"
+                              >
+                                <Trash2 className="w-3.5 h-3.5" /> Delete
+                              </button>
+                            </>
+                          )}
+                        </div>
+                      )}
+
                       <div className="pt-6 sm:pt-8 border-t border-white/5 flex flex-wrap items-center justify-between gap-6 sm:gap-8">
                         <div className="flex items-center gap-6 sm:gap-8">
                           <button 
@@ -733,7 +975,10 @@ const SocialLearningHub: React.FC<SocialLearningHubProps> = ({ user }) => {
                             <span className="text-[9px] sm:text-[11px] font-black uppercase tracking-widest">{node.comments.length} Linkages</span>
                           </button>
                         </div>
-                        <button className="flex items-center gap-2 sm:gap-3 px-6 sm:px-8 py-3 sm:py-4 bg-blue-600/10 hover:bg-blue-600 text-blue-400 hover:text-white rounded-xl sm:rounded-2xl text-[9px] sm:text-[11px] font-black uppercase tracking-widest transition-all group shadow-xl w-full sm:w-auto justify-center active:scale-95">
+                        <button
+                          onClick={() => void resonateGlobally(node)}
+                          className="flex items-center gap-2 sm:gap-3 px-6 sm:px-8 py-3 sm:py-4 bg-blue-600/10 hover:bg-blue-600 text-blue-400 hover:text-white rounded-xl sm:rounded-2xl text-[9px] sm:text-[11px] font-black uppercase tracking-widest transition-all group shadow-xl w-full sm:w-auto justify-center active:scale-95"
+                        >
                           Resonate Globally <ArrowRight className="w-4 h-4 sm:w-5 sm:h-5 lg:group-hover:translate-x-1 transition-transform" />
                         </button>
                       </div>
@@ -789,6 +1034,82 @@ const SocialLearningHub: React.FC<SocialLearningHubProps> = ({ user }) => {
           </div>
         </div>
       </div>
+
+      {(profileViewLoading || profileViewError || selectedProfileView) && (
+        <div className="fixed inset-0 z-[190] bg-black/85 backdrop-blur-sm p-4 flex items-center justify-center">
+          <div className="glass-panel w-full max-w-4xl max-h-[90vh] overflow-y-auto rounded-[2rem] border border-white/10 shadow-2xl p-6 sm:p-8 animate-in zoom-in duration-300">
+            <div className="flex items-start justify-between gap-4 mb-6">
+              <h4 className="text-2xl sm:text-3xl font-black text-white tracking-tight">User Profile</h4>
+              <button
+                onClick={() => {
+                  setSelectedProfileView(null);
+                  setProfileViewError('');
+                }}
+                className="p-2 rounded-xl hover:bg-white/5 text-slate-500"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            {profileViewLoading && (
+              <div className="p-6 rounded-2xl bg-white/5 border border-white/10 text-slate-300 text-sm">
+                Loading profile...
+              </div>
+            )}
+
+            {profileViewError && !profileViewLoading && (
+              <div className="p-6 rounded-2xl bg-red-500/10 border border-red-500/30 text-red-200 text-sm">
+                {profileViewError}
+              </div>
+            )}
+
+            {selectedProfileView && !profileViewLoading && (
+              <div className="space-y-6">
+                <div className="flex flex-col sm:flex-row sm:items-center gap-4">
+                  <img
+                    src={selectedProfileView.profile?.avatarUrl || selectedProfileView.profile?.profileMedia?.avatar?.url || 'https://api.dicebear.com/7.x/avataaars/svg?seed=node'}
+                    alt={selectedProfileView.profile?.name || 'Node'}
+                    className="w-16 h-16 rounded-2xl object-cover ring-2 ring-white/10"
+                  />
+                  <div className="min-w-0">
+                    <h5 className="text-xl font-black text-white tracking-tight truncate">
+                      {selectedProfileView.profile?.name || 'Node'}
+                    </h5>
+                    <p className="text-[10px] uppercase tracking-widest text-blue-300 font-black mt-1">
+                      @{selectedProfileView.profile?.handle || 'node'}
+                    </p>
+                    <p className="text-sm text-slate-400 mt-2">
+                      {selectedProfileView.profile?.bio || 'No biography provided yet.'}
+                    </p>
+                  </div>
+                </div>
+
+                <div className="space-y-3">
+                  <h6 className="text-[10px] uppercase tracking-widest text-slate-500 font-black">Recent Social Posts</h6>
+                  {selectedProfileView.posts.length === 0 ? (
+                    <div className="p-4 rounded-xl bg-white/5 border border-white/10 text-sm text-slate-400">
+                      No public posts available.
+                    </div>
+                  ) : (
+                    <div className="space-y-3">
+                      {selectedProfileView.posts.slice(0, 8).map((post) => (
+                        <div key={post.id} className="p-4 rounded-xl bg-white/5 border border-white/10">
+                          <p className="text-[10px] uppercase tracking-widest text-slate-500 font-black mb-2">
+                            {toRelativeTimestamp(String(post.createdAt || ''))}
+                          </p>
+                          <p className="text-sm text-slate-200 break-words">
+                            {String(post.text || '').trim() || 'Media post'}
+                          </p>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
 
       <style>{`
         .perspective-1000 { perspective: 1000px; }

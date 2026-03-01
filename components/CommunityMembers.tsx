@@ -37,7 +37,10 @@ const CommunityMembers: React.FC = () => {
   const [messages, setMessages] = useState<{[key: string]: {text: string, sender: 'me' | 'them', time: string}[]}>({});
   const [input, setInput] = useState('');
   const [allMembers, setAllMembers] = useState<Member[]>(STATIC_MEMBERS);
+  const [selectedAttachment, setSelectedAttachment] = useState<File | null>(null);
+  const [isMemberInfoOpen, setMemberInfoOpen] = useState(false);
   const chatEndRef = useRef<HTMLDivElement>(null);
+  const attachmentInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     const loadDynamicMembers = async () => {
@@ -59,14 +62,24 @@ const CommunityMembers: React.FC = () => {
 
         const payload = await response.json();
         const directoryUsers = Array.isArray(payload?.users) ? payload.users : [];
+        const toAssetUrl = (value: unknown): string => {
+          const raw = String(value || '').trim();
+          if (!raw) return '';
+          if (/^https?:\/\//i.test(raw)) return raw;
+          const normalized = raw.startsWith('/') ? raw : `/${raw}`;
+          return `${backendBaseUrl}${normalized}`;
+        };
         const dynamicMembers: Member[] = directoryUsers.map((profile: any) => ({
           id: profile.id,
           name: profile.name || 'Node',
           role: `${profile.tier || 'Free / Community Tier'} Node`,
           age: 0,
-          location: 'Decentralized Hub',
-          bio: 'Mission statement established.',
-          image: `https://api.dicebear.com/7.x/avataaars/svg?seed=${profile.id}`,
+          location: profile.location || 'Decentralized Hub',
+          bio: profile.bio || 'Mission statement established.',
+          image:
+            toAssetUrl(profile?.profileMedia?.avatar?.url) ||
+            toAssetUrl(profile?.avatarUrl) ||
+            `https://api.dicebear.com/7.x/avataaars/svg?seed=${profile.id}`,
           status: activeUser?.id === profile.id ? 'online' : 'offline',
           verified: true,
         }));
@@ -100,8 +113,9 @@ const CommunityMembers: React.FC = () => {
     e.preventDefault();
     if (!selectedMember || !input.trim()) return;
 
+    const attachmentSuffix = selectedAttachment ? ` [Attachment: ${selectedAttachment.name}]` : '';
     const newMessage = { 
-      text: input, 
+      text: `${input}${attachmentSuffix}`, 
       sender: 'me' as const, 
       time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) 
     };
@@ -111,6 +125,7 @@ const CommunityMembers: React.FC = () => {
       [selectedMember.id]: [...(prev[selectedMember.id] || []), newMessage]
     }));
     setInput('');
+    setSelectedAttachment(null);
 
     setTimeout(() => {
       const reply = { 
@@ -219,7 +234,12 @@ const CommunityMembers: React.FC = () => {
                   </div>
                 </div>
                 <div className="flex items-center gap-2">
-                  <button className="hidden sm:flex p-2 hover:bg-white/5 rounded-xl text-slate-500"><Info className="w-5 h-5" /></button>
+                  <button
+                    onClick={() => setMemberInfoOpen(true)}
+                    className="hidden sm:flex p-2 hover:bg-white/5 rounded-xl text-slate-500"
+                  >
+                    <Info className="w-5 h-5" />
+                  </button>
                   <button 
                     onClick={() => setSelectedMember(null)}
                     className="p-2 hover:bg-red-500/10 hover:text-red-400 rounded-xl text-slate-500 transition-all"
@@ -259,8 +279,35 @@ const CommunityMembers: React.FC = () => {
 
               {/* Input Footer */}
               <form onSubmit={handleSendMessage} className="p-4 md:p-8 border-t border-white/5 bg-black/40">
+                {selectedAttachment && (
+                  <div className="mb-3 p-2.5 bg-blue-600/10 border border-blue-500/20 rounded-xl text-[10px] text-blue-300 font-black uppercase tracking-widest flex items-center justify-between gap-2">
+                    <span className="truncate">Attached: {selectedAttachment.name}</span>
+                    <button
+                      type="button"
+                      onClick={() => setSelectedAttachment(null)}
+                      className="p-1 hover:bg-blue-500/20 rounded-md"
+                    >
+                      <X className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
+                )}
                 <div className="flex items-center gap-3">
-                  <button type="button" className="hidden sm:flex p-3 text-slate-500 hover:text-white transition-colors bg-white/5 rounded-xl"><Paperclip className="w-5 h-5" /></button>
+                  <button
+                    type="button"
+                    onClick={() => attachmentInputRef.current?.click()}
+                    className="hidden sm:flex p-3 text-slate-500 hover:text-white transition-colors bg-white/5 rounded-xl"
+                  >
+                    <Paperclip className="w-5 h-5" />
+                  </button>
+                  <input
+                    ref={attachmentInputRef}
+                    type="file"
+                    className="hidden"
+                    onChange={(e) => {
+                      const file = e.target.files?.[0] || null;
+                      setSelectedAttachment(file);
+                    }}
+                  />
                   <input 
                     type="text" 
                     value={input}
@@ -294,6 +341,36 @@ const CommunityMembers: React.FC = () => {
           )}
         </div>
       </div>
+
+      {isMemberInfoOpen && selectedMember && (
+        <div className="fixed inset-0 z-[190] bg-black/85 backdrop-blur-sm p-4 flex items-center justify-center">
+          <div className="glass-panel w-full max-w-xl rounded-[2rem] border border-white/10 p-6 sm:p-8 shadow-2xl animate-in zoom-in duration-300">
+            <div className="flex items-start justify-between gap-4 mb-6">
+              <div className="flex items-center gap-4">
+                <img src={selectedMember.image} alt={selectedMember.name} className="w-14 h-14 rounded-2xl object-cover" />
+                <div>
+                  <h4 className="text-xl font-black text-white tracking-tight">{selectedMember.name}</h4>
+                  <p className="text-[10px] uppercase tracking-widest text-blue-300 font-black">{selectedMember.role}</p>
+                </div>
+              </div>
+              <button onClick={() => setMemberInfoOpen(false)} className="p-2 rounded-xl hover:bg-white/5 text-slate-500">
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+            <div className="space-y-3 text-sm text-slate-300">
+              <p><span className="text-slate-500 uppercase text-[10px] tracking-widest font-black">Location:</span> {selectedMember.location}</p>
+              <p><span className="text-slate-500 uppercase text-[10px] tracking-widest font-black">Status:</span> {selectedMember.status}</p>
+              <p className="leading-relaxed">{selectedMember.bio}</p>
+            </div>
+            <button
+              onClick={() => setMemberInfoOpen(false)}
+              className="mt-6 w-full py-3 bg-blue-600 hover:bg-blue-500 text-white rounded-xl font-black text-[11px] uppercase tracking-widest transition-colors"
+            >
+              Close
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

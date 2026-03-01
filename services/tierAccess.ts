@@ -29,6 +29,7 @@ const BASE_ACCESS_VIEWS = [
   AppView.VENDOR_API_GOVERNANCE_POLICY,
   AppView.NIST_MAPPING_SUMMARY,
   AppView.AI_SAFETY_GOVERNANCE,
+  AppView.NOTIFICATIONS,
 ] as const;
 
 const TIER_ACCESS_MAP: Record<FrontendTier, AppView[]> = {

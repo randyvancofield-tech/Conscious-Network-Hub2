@@ -1,6 +1,6 @@
 
-import React from 'react';
-import { BookOpen, PlayCircle, Clock, ChevronRight, Trophy, Search } from 'lucide-react';
+import React, { useState } from 'react';
+import { BookOpen, PlayCircle, Clock, ChevronRight, Trophy, Search, X, FileText } from 'lucide-react';
 import { Course } from '../types';
 
 interface MyCoursesProps {
@@ -9,6 +9,8 @@ interface MyCoursesProps {
 }
 
 const MyCourses: React.FC<MyCoursesProps> = ({ enrolledCourses, onNavigateToUniversity }) => {
+  const [activeCourse, setActiveCourse] = useState<{ course: Course; mode: 'resume' | 'details' } | null>(null);
+
   return (
     <div className="space-y-8 animate-in fade-in duration-500">
       <header className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
@@ -80,10 +82,16 @@ const MyCourses: React.FC<MyCoursesProps> = ({ enrolledCourses, onNavigateToUniv
                 </div>
                 
                 <div className="flex items-center gap-3">
-                  <button className="flex-1 py-3 bg-blue-600 hover:bg-blue-500 rounded-xl font-bold text-sm text-white flex items-center justify-center gap-2 transition-all">
+                  <button
+                    onClick={() => setActiveCourse({ course, mode: 'resume' })}
+                    className="flex-1 py-3 bg-blue-600 hover:bg-blue-500 rounded-xl font-bold text-sm text-white flex items-center justify-center gap-2 transition-all"
+                  >
                     <PlayCircle className="w-4 h-4" /> Resume Module
                   </button>
-                  <button className="p-3 bg-white/5 hover:bg-white/10 rounded-xl border border-white/10 transition-colors">
+                  <button
+                    onClick={() => setActiveCourse({ course, mode: 'details' })}
+                    className="p-3 bg-white/5 hover:bg-white/10 rounded-xl border border-white/10 transition-colors"
+                  >
                     <Search className="w-4 h-4 text-slate-400" />
                   </button>
                 </div>
@@ -111,6 +119,62 @@ const MyCourses: React.FC<MyCoursesProps> = ({ enrolledCourses, onNavigateToUniv
             ))}
           </div>
         </section>
+      )}
+
+      {activeCourse && (
+        <div className="fixed inset-0 z-[180] bg-black/80 backdrop-blur-sm p-4 flex items-center justify-center">
+          <div className="glass-panel w-full max-w-3xl rounded-[2rem] border border-white/10 overflow-hidden shadow-2xl animate-in zoom-in duration-300">
+            <div className="relative h-52 sm:h-64">
+              <img src={activeCourse.course.image} alt={activeCourse.course.title} className="w-full h-full object-cover" />
+              <div className="absolute inset-0 bg-gradient-to-t from-[#05070a] via-black/30 to-transparent" />
+              <button
+                onClick={() => setActiveCourse(null)}
+                className="absolute top-4 right-4 p-2 rounded-xl bg-black/50 hover:bg-black/70 text-white transition-colors"
+              >
+                <X className="w-5 h-5" />
+              </button>
+              <div className="absolute bottom-4 left-4 right-4">
+                <p className="text-[10px] uppercase tracking-widest text-blue-300 font-black">{activeCourse.course.provider}</p>
+                <h4 className="text-2xl font-black text-white tracking-tight mt-1">{activeCourse.course.title}</h4>
+              </div>
+            </div>
+            <div className="p-6 sm:p-8 space-y-6">
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                <div className="p-4 bg-white/5 rounded-xl border border-white/10">
+                  <p className="text-[9px] uppercase tracking-widest text-slate-500 font-black">Tier</p>
+                  <p className="text-white font-bold mt-1">{activeCourse.course.tier}</p>
+                </div>
+                <div className="p-4 bg-white/5 rounded-xl border border-white/10">
+                  <p className="text-[9px] uppercase tracking-widest text-slate-500 font-black">Progress</p>
+                  <p className="text-white font-bold mt-1">{activeCourse.course.progress || 0}% complete</p>
+                </div>
+                <div className="p-4 bg-white/5 rounded-xl border border-white/10">
+                  <p className="text-[9px] uppercase tracking-widest text-slate-500 font-black">Enrolled</p>
+                  <p className="text-white font-bold mt-1">{activeCourse.course.enrolled.toLocaleString()} members</p>
+                </div>
+              </div>
+              <div className="p-4 bg-blue-600/5 rounded-xl border border-blue-500/20 text-sm text-slate-300">
+                {activeCourse.mode === 'resume'
+                  ? 'Module resume path initialized. Continue where you left off from your latest checkpoint.'
+                  : 'Course detail view ready. Expand syllabus, sessions, and materials from this node.'}
+              </div>
+              <div className="flex flex-col sm:flex-row gap-3">
+                <button
+                  onClick={() => setActiveCourse((prev) => (prev ? { ...prev, mode: 'resume' } : prev))}
+                  className="flex-1 py-3 bg-blue-600 hover:bg-blue-500 text-white rounded-xl font-black text-[11px] uppercase tracking-widest transition-colors flex items-center justify-center gap-2"
+                >
+                  <PlayCircle className="w-4 h-4" /> Resume
+                </button>
+                <button
+                  onClick={() => setActiveCourse((prev) => (prev ? { ...prev, mode: 'details' } : prev))}
+                  className="flex-1 py-3 bg-white/5 hover:bg-white/10 border border-white/10 text-slate-200 rounded-xl font-black text-[11px] uppercase tracking-widest transition-colors flex items-center justify-center gap-2"
+                >
+                  <FileText className="w-4 h-4" /> Details
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );

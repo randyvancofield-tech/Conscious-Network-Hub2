@@ -8,10 +8,16 @@ import { UserProfile, Course } from '../types';
 interface DashboardProps {
   user?: UserProfile | null;
   onEnroll?: (course: Course) => void;
+  onManageReputation?: () => void;
   insightRef?: RefObject<HTMLDivElement>;
 }
 
-const Dashboard: React.FC<DashboardProps> = ({ user, onEnroll: _onEnroll, insightRef }) => {
+const Dashboard: React.FC<DashboardProps> = ({
+  user,
+  onEnroll: _onEnroll,
+  onManageReputation,
+  insightRef,
+}) => {
   return (
     <div className="space-y-12 animate-in fade-in duration-700 pb-20">
       {/* Welcome Hero - Ethical AI Insight */}
@@ -48,7 +54,10 @@ const Dashboard: React.FC<DashboardProps> = ({ user, onEnroll: _onEnroll, insigh
               ))}
             </div>
           </div>
-          <button className="mt-8 w-full py-4 bg-gradient-to-r from-blue-600/10 to-blue-600/20 hover:from-blue-600/30 hover:to-blue-600/40 border border-blue-500/30 text-blue-100 rounded-xl font-black transition-all shadow-xl text-[10px] uppercase tracking-[0.3em]">
+          <button
+            onClick={onManageReputation}
+            className="mt-8 w-full py-4 bg-gradient-to-r from-blue-600/10 to-blue-600/20 hover:from-blue-600/30 hover:to-blue-600/40 border border-blue-500/30 text-blue-100 rounded-xl font-black transition-all shadow-xl text-[10px] uppercase tracking-[0.3em]"
+          >
             Manage Reputation
           </button>
         </div>
