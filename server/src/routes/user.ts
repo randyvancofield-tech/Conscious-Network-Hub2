@@ -51,6 +51,7 @@ const MAX_FAILED_SIGN_IN_ATTEMPTS = 5;
 const LOCKOUT_WINDOW_MS = 15 * 60 * 1000;
 const PHONE_OTP_TTL_MS = 10 * 60 * 1000;
 const MAX_PHONE_OTP_ATTEMPTS = 5;
+const AUTOMATED_PROFILE_PATTERN = /\b(bot|agent|assistant|seed|system)\b/i;
 const PROFILE_STORE_UNAVAILABLE_RESPONSE = {
   error: 'Profile service is currently unavailable. Please retry shortly.',
   code: 'PROFILE_STORE_UNAVAILABLE',
@@ -74,6 +75,17 @@ const COMMON_PASSWORDS = new Set([
 ]);
 
 const DIAGNOSTICS_ADMIN_HEADER = 'x-admin-diagnostics-key';
+
+const isAutomatedDirectoryProfile = (profile: {
+  name?: string | null;
+  handle?: string | null;
+  email?: string | null;
+}): boolean => {
+  const fields = [profile.name, profile.handle, profile.email]
+    .map((value) => String(value || '').trim().toLowerCase())
+    .filter(Boolean);
+  return fields.some((field) => AUTOMATED_PROFILE_PATTERN.test(field));
+};
 
 const getRequestTraceId = (req: Request): string | null => {
   const raw = String(req.headers['x-cloud-trace-context'] || '').trim();
@@ -876,10 +888,11 @@ protectedRouter.get('/reconcile/:id', async (req: Request, res: Response): Promi
 protectedRouter.get('/directory', async (req: Request, res: Response): Promise<any> => {
   try {
     const users = await localStore.listUsers(250);
+    const visibleUsers = users.filter((user) => !isAutomatedDirectoryProfile(user));
 
     return res.json({
       success: true,
-      users: users.map((u) => ({
+      users: visibleUsers.map((u) => ({
         id: u.id,
         name: u.name || 'Node',
         handle: u.handle || null,

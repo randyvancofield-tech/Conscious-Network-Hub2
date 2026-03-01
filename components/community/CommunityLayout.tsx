@@ -508,12 +508,12 @@ export const ConsciousIdentity: React.FC<ConsciousIdentityProps> = ({
 
   return (
     <div
-      className="max-w-6xl mx-auto px-3 sm:px-4 md:px-6 pb-16 sm:pb-24 md:pb-32 space-y-8 sm:space-y-12 animate-in fade-in duration-1000"
+      className="max-w-6xl mx-auto px-3 sm:px-4 md:px-6 pb-16 sm:pb-24 md:pb-32 space-y-8 sm:space-y-12 animate-in fade-in duration-1000 overflow-x-hidden"
       style={platformContainerStyle}
     >
       <div className="relative group/header">
         <div className="glass-panel rounded-[2rem] sm:rounded-[4rem] overflow-hidden border-white/5 shadow-[0_50px_100px_-20px_rgba(0,0,0,0.5)] relative">
-          <div className="h-80 sm:h-[450px] relative overflow-hidden">
+          <div className="h-[260px] sm:h-[360px] lg:h-[450px] relative overflow-hidden">
             {bannerIsVideo ? (
               <video
                 src={formData.bannerUrl}
@@ -528,22 +528,22 @@ export const ConsciousIdentity: React.FC<ConsciousIdentityProps> = ({
             )}
             <div className="absolute inset-0 bg-gradient-to-t from-[#05070a] via-black/20 to-transparent" />
             
-            <div className="absolute top-4 sm:top-6 left-4 right-4 sm:left-auto sm:right-6 flex flex-col sm:flex-row gap-2 sm:gap-4 z-20 sm:justify-end">
-              <button onClick={onGoBack} className="flex items-center justify-center gap-2 px-4 sm:px-6 py-2.5 sm:py-3 bg-white/10 hover:bg-white/20 backdrop-blur-xl rounded-[1.2rem] sm:rounded-[1.5rem] border border-white/10 transition-all text-white text-xs sm:text-sm font-bold shadow-2xl hover:-translate-y-1">
+            <div className="absolute top-4 left-4 right-4 sm:top-6 sm:left-6 sm:right-6 lg:left-auto lg:right-6 flex flex-wrap gap-2 sm:gap-3 z-20 lg:justify-end">
+              <button onClick={onGoBack} className="w-full sm:w-auto flex items-center justify-center gap-2 px-4 sm:px-6 py-2.5 sm:py-3 bg-white/10 hover:bg-white/20 backdrop-blur-xl rounded-[1.2rem] sm:rounded-[1.5rem] border border-white/10 transition-all text-white text-xs sm:text-sm font-bold shadow-2xl hover:-translate-y-1">
                 <Layout className="w-5 h-5" /> Back to Portal
               </button>
-              <button onClick={() => setIsEditing(true)} className="flex items-center justify-center gap-2 px-4 sm:px-6 py-2.5 sm:py-3 bg-blue-600 hover:bg-blue-500 backdrop-blur-xl rounded-[1.2rem] sm:rounded-[1.5rem] border border-blue-500/20 transition-all text-white text-xs sm:text-sm font-bold shadow-2xl hover:-translate-y-1">
+              <button onClick={() => setIsEditing(true)} className="w-full sm:w-auto flex items-center justify-center gap-2 px-4 sm:px-6 py-2.5 sm:py-3 bg-blue-600 hover:bg-blue-500 backdrop-blur-xl rounded-[1.2rem] sm:rounded-[1.5rem] border border-blue-500/20 transition-all text-white text-xs sm:text-sm font-bold shadow-2xl hover:-translate-y-1">
                 <Edit3 className="w-5 h-5" /> Edit Profile
               </button>
-              <button onClick={onSignOut} className="flex items-center justify-center gap-2 px-4 sm:px-6 py-2.5 sm:py-3 bg-red-500/10 hover:bg-red-500/20 backdrop-blur-xl rounded-[1.2rem] sm:rounded-[1.5rem] border border-red-500/20 transition-all text-red-400 text-xs sm:text-sm font-bold hover:-translate-y-1">
+              <button onClick={onSignOut} className="w-full sm:w-auto flex items-center justify-center gap-2 px-4 sm:px-6 py-2.5 sm:py-3 bg-red-500/10 hover:bg-red-500/20 backdrop-blur-xl rounded-[1.2rem] sm:rounded-[1.5rem] border border-red-500/20 transition-all text-red-400 text-xs sm:text-sm font-bold hover:-translate-y-1">
                 <LogOut className="w-5 h-5" /> Sign Out
               </button>
             </div>
           </div>
 
           <div className="px-4 sm:px-8 lg:px-16 pb-10 sm:pb-16 relative">
-            <div className="flex flex-col sm:flex-row items-center sm:items-end justify-between gap-6 sm:gap-10 -mt-20 sm:-mt-36">
-              <div className="flex flex-col sm:flex-row items-center sm:items-end gap-5 sm:gap-8 text-center sm:text-left">
+            <div className="flex flex-col sm:flex-row items-center sm:items-end justify-between gap-6 sm:gap-10 -mt-16 sm:-mt-28 lg:-mt-36">
+              <div className="flex flex-col sm:flex-row items-center sm:items-end gap-5 sm:gap-8 text-center sm:text-left min-w-0">
                 <div className="relative group">
                   <div className="w-36 h-36 sm:w-48 sm:h-48 lg:w-64 lg:h-64 rounded-[3rem] sm:rounded-[4.5rem] p-2 bg-gradient-to-br from-blue-600 to-teal-400 shadow-[0_30px_60px_rgba(0,0,0,0.6)] ring-[6px] sm:ring-[10px] ring-[#05070a] transition-transform group-hover:scale-105 duration-700">
                     {avatarIsVideo ? (
@@ -565,21 +565,21 @@ export const ConsciousIdentity: React.FC<ConsciousIdentityProps> = ({
                     </div>
                   )}
                 </div>
-                <div className="pb-4 sm:pb-10">
-                  <h1 className="text-3xl sm:text-5xl lg:text-7xl font-bold text-white tracking-tight sm:tracking-tighter leading-none mb-4 group flex items-center justify-center sm:justify-start">
+                <div className="pb-4 sm:pb-10 min-w-0 max-w-full">
+                  <h1 className="text-3xl sm:text-5xl xl:text-7xl font-bold text-white tracking-tight sm:tracking-tighter leading-none mb-4 group flex items-center justify-center sm:justify-start break-words">
                     {user.name}
                     <span className="inline-block ml-4 opacity-0 group-hover:opacity-100 transition-all translate-x-4 group-hover:translate-x-0">
                       <Sparkles className="w-7 h-7 sm:w-10 sm:h-10 text-teal-400" />
                     </span>
                   </h1>
-                  <div className="flex flex-wrap items-center justify-center sm:justify-start gap-3 sm:gap-6">
-                    <span className="text-blue-400 font-bold uppercase tracking-[0.22em] sm:tracking-[0.4em] text-[11px] sm:text-sm flex items-center gap-2">
+                  <div className="flex flex-wrap items-center justify-center sm:justify-start gap-3 sm:gap-6 min-w-0">
+                    <span className="text-blue-400 font-bold uppercase tracking-[0.18em] sm:tracking-[0.3em] text-[11px] sm:text-sm flex items-center gap-2 min-w-0 max-w-full break-all">
                       <UserCircle className="w-4 h-4" /> @{formData.handle}
                     </span>
                     <div className="h-6 w-px bg-white/10 hidden sm:block" />
-                    <div className="flex items-center gap-3 px-5 py-2 bg-teal-400/10 rounded-full border border-teal-400/20 shadow-inner">
+                    <div className="flex items-center gap-3 px-5 py-2 bg-teal-400/10 rounded-full border border-teal-400/20 shadow-inner max-w-full">
                       <Award className="w-5 h-5 text-teal-400" />
-                      <span className="text-[11px] text-teal-400 rounded-lg font-bold uppercase tracking-widest">{user.tier} Access</span>
+                      <span className="text-[11px] text-teal-400 rounded-lg font-bold uppercase tracking-widest break-words">{user.tier} Access</span>
                     </div>
                   </div>
                 </div>
