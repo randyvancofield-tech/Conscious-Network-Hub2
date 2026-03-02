@@ -36,6 +36,7 @@ const TIER_ACCESS_MAP: Record<FrontendTier, AppView[]> = {
   [FRONTEND_TIERS.FREE]: [
     ...BASE_ACCESS_VIEWS,
     AppView.CONSCIOUS_SOCIAL_LEARNING,
+    AppView.CONSCIOUS_MEETINGS,
     AppView.MEMBERSHIP,
   ],
   [FRONTEND_TIERS.GUIDED]: [

@@ -184,3 +184,48 @@ export const userWalletEnrollSchema: JsonSchema = {
     walletDid: { type: 'string', minLength: 3, maxLength: 512 },
   },
 };
+
+export const immersiveSessionEventSchema: JsonSchema = {
+  type: 'object',
+  additionalProperties: false,
+  required: ['eventType'],
+  properties: {
+    eventType: { type: 'string', enum: ['start', 'end', 'error'] },
+    sessionMode: {
+      anyOf: [
+        { type: 'string', enum: ['immersive-ar', 'immersive-vr', 'unknown'] },
+        { type: 'null' },
+      ],
+    },
+    deviceProfile: {
+      anyOf: [
+        { type: 'string', maxLength: 128 },
+        { type: 'null' },
+      ],
+    },
+    durationMs: {
+      anyOf: [
+        { type: 'number', minimum: 0, maximum: 86_400_000 },
+        { type: 'null' },
+      ],
+    },
+    errorMessage: {
+      anyOf: [
+        { type: 'string', maxLength: 500 },
+        { type: 'null' },
+      ],
+    },
+    userAgent: {
+      anyOf: [
+        { type: 'string', maxLength: 512 },
+        { type: 'null' },
+      ],
+    },
+    timestamp: {
+      anyOf: [
+        { type: 'string', maxLength: 64 },
+        { type: 'null' },
+      ],
+    },
+  },
+};

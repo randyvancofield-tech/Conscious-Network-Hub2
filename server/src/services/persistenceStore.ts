@@ -4,6 +4,8 @@ import {
   type LocalMembershipRecord,
   type LocalPaymentRecord,
   type LocalProviderChallengeRecord,
+  type LocalProviderInviteGroupMemberRecord,
+  type LocalProviderInviteGroupRecord,
   type LocalProviderSessionRecord,
   type LocalReflectionRecord,
   type LocalStoreDiagnostics,
@@ -25,6 +27,7 @@ type CreatePaymentInput = Parameters<StoreApi['createPayment']>[0];
 type CreateReflectionInput = Parameters<StoreApi['createReflection']>[0];
 type CreateProviderChallengeInput = Parameters<StoreApi['createProviderChallenge']>[0];
 type CreateProviderSessionInput = Parameters<StoreApi['createProviderSession']>[0];
+type UpsertProviderInviteGroupInput = Parameters<StoreApi['upsertProviderInviteGroup']>[0];
 
 export const isUsingSharedPersistence = true;
 
@@ -224,6 +227,40 @@ const toLocalProviderSession = (row: any): LocalProviderSessionRecord => ({
   expiresAt: row.expiresAt,
   revokedAt: row.revokedAt || null,
   createdAt: row.createdAt,
+});
+
+const normalizeProviderInviteGroupMembers = (
+  value: unknown
+): LocalProviderInviteGroupMemberRecord[] => {
+  if (!Array.isArray(value)) return [];
+  return value
+    .map((entry) => {
+      const candidate =
+        entry && typeof entry === 'object' ? (entry as Record<string, unknown>) : {};
+      const username = String(candidate.username || '')
+        .trim()
+        .replace(/^@+/, '')
+        .toLowerCase();
+      if (!username) return null;
+
+      const displayName = String(candidate.displayName || '').trim() || username;
+      const userId = String(candidate.userId || '').trim() || null;
+      return {
+        userId,
+        username,
+        displayName,
+      };
+    })
+    .filter((entry): entry is LocalProviderInviteGroupMemberRecord => Boolean(entry));
+};
+
+const toLocalProviderInviteGroup = (row: any): LocalProviderInviteGroupRecord => ({
+  id: row.id,
+  did: row.did,
+  name: row.name,
+  members: normalizeProviderInviteGroupMembers(row.membersJson),
+  createdAt: row.createdAt,
+  updatedAt: row.updatedAt,
 });
 
 const ensurePrisma = (): PrismaClient => {
@@ -729,6 +766,71 @@ export const localStore = {
     }
   },
 
+  async listProviderInviteGroupsByDid(
+    did: string,
+    limit = 50
+  ): Promise<LocalProviderInviteGroupRecord[]> {
+    try {
+      const rows = await ensurePrisma().providerInviteGroup.findMany({
+        where: { did },
+        orderBy: { updatedAt: 'desc' },
+        take: Math.max(1, limit),
+      });
+      return rows.map(toLocalProviderInviteGroup);
+    } catch (error) {
+      return translatePrismaError(error);
+    }
+  },
+
+  async getProviderInviteGroupById(id: string): Promise<LocalProviderInviteGroupRecord | null> {
+    try {
+      const row = await ensurePrisma().providerInviteGroup.findUnique({ where: { id } });
+      return row ? toLocalProviderInviteGroup(row) : null;
+    } catch (error) {
+      return translatePrismaError(error);
+    }
+  },
+
+  async upsertProviderInviteGroup(
+    input: UpsertProviderInviteGroupInput
+  ): Promise<LocalProviderInviteGroupRecord> {
+    try {
+      const normalizedMembers = normalizeProviderInviteGroupMembers(input.members);
+      const row = await ensurePrisma().providerInviteGroup.upsert({
+        where: { id: input.id },
+        update: {
+          did: input.did,
+          name: input.name,
+          membersJson: normalizedMembers as unknown as Prisma.InputJsonValue,
+          createdAt: input.createdAt || new Date(),
+          updatedAt: input.updatedAt || new Date(),
+        },
+        create: {
+          id: input.id,
+          did: input.did,
+          name: input.name,
+          membersJson: normalizedMembers as unknown as Prisma.InputJsonValue,
+          createdAt: input.createdAt || new Date(),
+          updatedAt: input.updatedAt || new Date(),
+        },
+      });
+      return toLocalProviderInviteGroup(row);
+    } catch (error) {
+      return translatePrismaError(error);
+    }
+  },
+
+  async deleteProviderInviteGroup(id: string): Promise<boolean> {
+    try {
+      const deleted = await ensurePrisma().providerInviteGroup.deleteMany({
+        where: { id },
+      });
+      return deleted.count > 0;
+    } catch (error) {
+      return translatePrismaError(error);
+    }
+  },
+
   async getDiagnostics(): Promise<LocalStoreDiagnostics> {
     try {
       const db = ensurePrisma();
@@ -739,6 +841,7 @@ export const localStore = {
         reflections,
         providerChallenges,
         providerSessions,
+        providerInviteGroups,
       ] = await db.$transaction([
         db.user.count(),
         db.membership.count(),
@@ -746,6 +849,7 @@ export const localStore = {
         db.reflection.count(),
         db.providerChallenge.count(),
         db.providerSession.count(),
+        db.providerInviteGroup.count(),
       ]);
 
       return {
@@ -792,6 +896,7 @@ export const localStore = {
           reflections,
           providerChallenges,
           providerSessions,
+          providerInviteGroups,
         },
       };
     } catch (error) {
@@ -804,6 +909,8 @@ export type {
   LocalMembershipRecord,
   LocalPaymentRecord,
   LocalProviderChallengeRecord,
+  LocalProviderInviteGroupMemberRecord,
+  LocalProviderInviteGroupRecord,
   LocalProviderSessionRecord,
   LocalReflectionRecord,
   LocalStoreDiagnostics,

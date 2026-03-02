@@ -34,6 +34,22 @@ export interface MeetingSummary {
   }>;
 }
 
+export interface ImmersiveSessionEventInput {
+  eventType: 'start' | 'end' | 'error';
+  sessionMode?: 'immersive-ar' | 'immersive-vr' | 'unknown' | null;
+  deviceProfile?: string | null;
+  durationMs?: number | null;
+  errorMessage?: string | null;
+  userAgent?: string | null;
+  timestamp?: string | null;
+}
+
+export interface DirectoryUserEntry {
+  id: string;
+  name: string;
+  handle: string | null;
+}
+
 // Resolve backend URL:
 // - Use VITE_BACKEND_URL if set.
 // - Otherwise use same-origin (empty string), letting dev proxy or reverse proxy handle routing.
@@ -270,6 +286,63 @@ class BackendAPIService {
     } catch (error) {
       console.error('Meeting Summary Error:', error);
       return null;
+    }
+  }
+
+  async reportImmersiveSessionEvent(input: ImmersiveSessionEventInput): Promise<void> {
+    try {
+      const response = await fetch(`${this.baseUrl}/api/immersive/session-event`, {
+        method: 'POST',
+        headers: buildAuthHeaders({
+          'Content-Type': 'application/json',
+        }),
+        body: JSON.stringify({
+          eventType: input.eventType,
+          sessionMode: input.sessionMode || 'unknown',
+          deviceProfile: input.deviceProfile || null,
+          durationMs: typeof input.durationMs === 'number' ? input.durationMs : null,
+          errorMessage: input.errorMessage || null,
+          userAgent: input.userAgent || null,
+          timestamp: input.timestamp || new Date().toISOString(),
+        }),
+      });
+
+      if (!response.ok) {
+        const errorText = await response.text().catch(() => '');
+        console.warn(
+          `Immersive telemetry rejected ${response.status}${errorText ? `: ${errorText}` : ''}`
+        );
+      }
+    } catch (error) {
+      console.warn('Immersive telemetry unavailable:', error);
+    }
+  }
+
+  async getUserDirectory(): Promise<DirectoryUserEntry[]> {
+    try {
+      const response = await fetch(`${this.baseUrl}/api/user/directory`, {
+        method: 'GET',
+        headers: buildAuthHeaders(),
+      });
+
+      if (!response.ok) {
+        return [];
+      }
+
+      const data = await response.json().catch(() => null);
+      if (!data || !Array.isArray(data.users)) {
+        return [];
+      }
+
+      return data.users
+        .map((entry: any) => ({
+          id: String(entry?.id || '').trim(),
+          name: String(entry?.name || 'Node').trim() || 'Node',
+          handle: typeof entry?.handle === 'string' && entry.handle.trim() ? entry.handle.trim() : null,
+        }))
+        .filter((entry: DirectoryUserEntry) => entry.id.length > 0);
+    } catch {
+      return [];
     }
   }
 
@@ -531,4 +604,14 @@ export async function generateSuggestedQuestions(
   lastResponse: string
 ): Promise<string[]> {
   return backendAPI.generateSuggestedQuestions(lastQuestion, lastResponse);
+}
+
+export async function reportImmersiveSessionEvent(
+  input: ImmersiveSessionEventInput
+): Promise<void> {
+  return backendAPI.reportImmersiveSessionEvent(input);
+}
+
+export async function getUserDirectory(): Promise<DirectoryUserEntry[]> {
+  return backendAPI.getUserDirectory();
 }

@@ -117,6 +117,21 @@ interface ProviderSessionRow {
   createdAt: string;
 }
 
+interface ProviderInviteGroupMemberRow {
+  userId: string | null;
+  username: string;
+  displayName: string;
+}
+
+interface ProviderInviteGroupRow {
+  id: string;
+  did: string;
+  name: string;
+  membersJson: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
 interface StoreRow {
   version: number;
   users: UserRow[];
@@ -125,6 +140,7 @@ interface StoreRow {
   reflections: ReflectionRow[];
   providerChallenges: ProviderChallengeRow[];
   providerSessions: ProviderSessionRow[];
+  providerInviteGroups: ProviderInviteGroupRow[];
 }
 
 type RecoveryState =
@@ -169,6 +185,7 @@ export interface LocalStoreDiagnostics {
     reflections: number;
     providerChallenges: number;
     providerSessions: number;
+    providerInviteGroups: number;
   };
 }
 
@@ -259,6 +276,21 @@ export interface LocalProviderSessionRecord {
   expiresAt: Date;
   revokedAt: Date | null;
   createdAt: Date;
+}
+
+export interface LocalProviderInviteGroupMemberRecord {
+  userId: string | null;
+  username: string;
+  displayName: string;
+}
+
+export interface LocalProviderInviteGroupRecord {
+  id: string;
+  did: string;
+  name: string;
+  members: LocalProviderInviteGroupMemberRecord[];
+  createdAt: Date;
+  updatedAt: Date;
 }
 
 interface CreateUserInput {
@@ -358,6 +390,15 @@ interface CreateProviderSessionInput {
   createdAt?: Date;
 }
 
+interface UpsertProviderInviteGroupInput {
+  id: string;
+  did: string;
+  name: string;
+  members: LocalProviderInviteGroupMemberRecord[];
+  createdAt?: Date;
+  updatedAt?: Date;
+}
+
 const STORE_DIR = path.resolve(__dirname, '../../data');
 const STORE_FILE = path.join(STORE_DIR, 'runtime-store.json');
 const STORE_BACKUP_FILE = path.join(STORE_DIR, 'runtime-store.backup.json');
@@ -395,6 +436,7 @@ const createEmptyStore = (): StoreRow => ({
   reflections: [],
   providerChallenges: [],
   providerSessions: [],
+  providerInviteGroups: [],
 });
 
 const ensureStoreFile = (): void => {
@@ -450,6 +492,9 @@ const parseStore = (raw: string): StoreRow => {
       : [],
     providerSessions: Array.isArray(parsed.providerSessions)
       ? parsed.providerSessions
+      : [],
+    providerInviteGroups: Array.isArray(parsed.providerInviteGroups)
+      ? parsed.providerInviteGroups
       : [],
   };
 };
@@ -596,6 +641,31 @@ const revealSensitiveFieldSafe = (
   }
 };
 
+const normalizeProviderInviteGroupMembers = (
+  value: unknown
+): LocalProviderInviteGroupMemberRecord[] => {
+  if (!Array.isArray(value)) return [];
+  return value
+    .map((entry) => {
+      const candidate =
+        entry && typeof entry === 'object' ? (entry as Record<string, unknown>) : {};
+      const username = String(candidate.username || '')
+        .trim()
+        .replace(/^@+/, '')
+        .toLowerCase();
+      if (!username) return null;
+
+      const displayName = String(candidate.displayName || '').trim() || username;
+      const userId = String(candidate.userId || '').trim() || null;
+      return {
+        userId,
+        username,
+        displayName,
+      };
+    })
+    .filter((entry): entry is LocalProviderInviteGroupMemberRecord => Boolean(entry));
+};
+
 const rowToUser = (row: UserRow): LocalUserRecord => ({
   id: row.id,
   email: row.email,
@@ -676,6 +746,26 @@ const rowToProviderSession = (
   revokedAt: row.revokedAt ? toDate(row.revokedAt) : null,
   createdAt: toDate(row.createdAt),
 });
+
+const rowToProviderInviteGroup = (
+  row: ProviderInviteGroupRow
+): LocalProviderInviteGroupRecord => {
+  let parsedMembers: unknown = [];
+  try {
+    parsedMembers = JSON.parse(row.membersJson || '[]');
+  } catch {
+    parsedMembers = [];
+  }
+
+  return {
+    id: row.id,
+    did: row.did,
+    name: row.name,
+    members: normalizeProviderInviteGroupMembers(parsedMembers),
+    createdAt: toDate(row.createdAt),
+    updatedAt: toDate(row.updatedAt),
+  };
+};
 
 const uniqueId = (): string => crypto.randomUUID();
 
@@ -1087,6 +1177,63 @@ export const localStore = {
     saveStore(store);
   },
 
+  listProviderInviteGroupsByDid(did: string, limit = 50): LocalProviderInviteGroupRecord[] {
+    const normalizedDid = String(did || '').trim();
+    if (!normalizedDid) return [];
+
+    const store = loadStore();
+    return store.providerInviteGroups
+      .filter((group) => group.did === normalizedDid)
+      .slice()
+      .sort((a, b) => b.updatedAt.localeCompare(a.updatedAt))
+      .slice(0, Math.max(1, limit))
+      .map(rowToProviderInviteGroup);
+  },
+
+  getProviderInviteGroupById(id: string): LocalProviderInviteGroupRecord | null {
+    const normalizedId = String(id || '').trim();
+    if (!normalizedId) return null;
+
+    const store = loadStore();
+    const row = store.providerInviteGroups.find((group) => group.id === normalizedId);
+    return row ? rowToProviderInviteGroup(row) : null;
+  },
+
+  upsertProviderInviteGroup(input: UpsertProviderInviteGroupInput): LocalProviderInviteGroupRecord {
+    const store = loadStore();
+    const now = new Date();
+    const normalizedDid = String(input.did || '').trim();
+    const normalizedName = String(input.name || '').trim();
+    const normalizedMembers = normalizeProviderInviteGroupMembers(input.members);
+    const row: ProviderInviteGroupRow = {
+      id: input.id,
+      did: normalizedDid,
+      name: normalizedName,
+      membersJson: JSON.stringify(normalizedMembers),
+      createdAt: (input.createdAt || now).toISOString(),
+      updatedAt: (input.updatedAt || now).toISOString(),
+    };
+
+    store.providerInviteGroups = store.providerInviteGroups.filter((group) => group.id !== row.id);
+    store.providerInviteGroups.push(row);
+    saveStore(store);
+    return rowToProviderInviteGroup(row);
+  },
+
+  deleteProviderInviteGroup(id: string): boolean {
+    const normalizedId = String(id || '').trim();
+    if (!normalizedId) return false;
+
+    const store = loadStore();
+    const initialLength = store.providerInviteGroups.length;
+    store.providerInviteGroups = store.providerInviteGroups.filter((group) => group.id !== normalizedId);
+    const changed = store.providerInviteGroups.length !== initialLength;
+    if (changed) {
+      saveStore(store);
+    }
+    return changed;
+  },
+
   getDiagnostics(): LocalStoreDiagnostics {
     ensureStoreFile();
 
@@ -1121,6 +1268,7 @@ export const localStore = {
         reflections: active?.reflections.length ?? 0,
         providerChallenges: active?.providerChallenges.length ?? 0,
         providerSessions: active?.providerSessions.length ?? 0,
+        providerInviteGroups: active?.providerInviteGroups.length ?? 0,
       },
     };
   },

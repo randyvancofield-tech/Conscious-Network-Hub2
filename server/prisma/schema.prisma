@@ -143,6 +143,19 @@ model ProviderSession {
   @@index([revokedAt])
 }
 
+model ProviderInviteGroup {
+  id         String   @id
+  did        String
+  name       String
+  membersJson Json
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  @@unique([did, name])
+  @@index([did])
+  @@index([updatedAt])
+}
+
 model SocialPost {
   id         String          @id
   authorId   String

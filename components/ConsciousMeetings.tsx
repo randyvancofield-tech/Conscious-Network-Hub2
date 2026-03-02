@@ -5,16 +5,34 @@ import {
   Search, Filter, Clock, CreditCard, CheckCircle2, 
   Plus, X, Camera, Mic, MicOff, CameraOff, 
   Settings, Download, Share2, Info, Loader2, Play,
-  ChevronRight, Pause, Square, Image, Upload
+  ChevronRight, Pause, Square, Image, Upload, UserPlus, Layers
 } from 'lucide-react';
 import { SelfieSegmentation, Results as SelfieSegmentationResults } from '@mediapipe/selfie_segmentation';
 import * as THREE from 'three';
 import { UserProfile, Provider, Meeting } from '../types';
-import { summarizeMeeting } from '../services/backendApiService';
+import { getUserDirectory, reportImmersiveSessionEvent, summarizeMeeting } from '../services/backendApiService';
 
 interface ConsciousMeetingsProps {
   user: UserProfile | null;
   onUpdateUser?: (updated: UserProfile) => void;
+}
+
+interface MeetingDirectoryUser {
+  id: string;
+  name: string;
+  handle: string | null;
+}
+
+interface PendingInviteMember {
+  id: string;
+  username: string;
+  displayName: string;
+}
+
+interface InviteGroupTemplate {
+  id: string;
+  name: string;
+  usernames: string[];
 }
 
 const PROVIDERS: Provider[] = [
@@ -95,6 +113,14 @@ const ConsciousMeetings: React.FC<ConsciousMeetingsProps> = ({ user }) => {
   const [showFilterPanel, setShowFilterPanel] = useState(false);
   const [showIncludedOnly, setShowIncludedOnly] = useState(false);
   const [isJoining, setIsJoining] = useState(false);
+  const [directoryUsers, setDirectoryUsers] = useState<MeetingDirectoryUser[]>([]);
+  const [isDirectoryLoading, setIsDirectoryLoading] = useState(false);
+  const [inviteUsernameInput, setInviteUsernameInput] = useState('');
+  const [pendingInviteMembers, setPendingInviteMembers] = useState<PendingInviteMember[]>([]);
+  const [inviteGroupTemplates, setInviteGroupTemplates] = useState<InviteGroupTemplate[]>([]);
+  const [inviteGroupNameInput, setInviteGroupNameInput] = useState('');
+  const [selectedInviteGroupId, setSelectedInviteGroupId] = useState('');
+  const inviteGroupStorageKey = user?.id ? `hcn_meeting_invite_groups_${user.id}` : null;
 
   // Solo Session States
   const [isSoloSessionActive, setIsSoloSessionActive] = useState(false);
@@ -114,6 +140,9 @@ const ConsciousMeetings: React.FC<ConsciousMeetingsProps> = ({ user }) => {
   const [immersiveError, setImmersiveError] = useState<string | null>(null);
   const [isImmersiveSupported, setIsImmersiveSupported] = useState(false);
   const [hasCheckedImmersiveSupport, setHasCheckedImmersiveSupport] = useState(false);
+  const [immersiveDeviceProfile, setImmersiveDeviceProfile] = useState('unknown');
+  const [immersiveSupportedModes, setImmersiveSupportedModes] = useState<Array<'immersive-ar' | 'immersive-vr'>>([]);
+  const [immersiveActiveMode, setImmersiveActiveMode] = useState<'immersive-ar' | 'immersive-vr' | 'unknown'>('unknown');
 
   // Refs
   const videoRef = useRef<HTMLVideoElement>(null);
@@ -130,6 +159,10 @@ const ConsciousMeetings: React.FC<ConsciousMeetingsProps> = ({ user }) => {
   const liveStreamRef = useRef<MediaStream | null>(null);
   const selectedBackgroundRef = useRef<string | null>(null);
   const customBackgroundFileRef = useRef<File | null>(null);
+  const immersiveSessionStartedAtMsRef = useRef<number | null>(null);
+  const immersiveSessionModeRef = useRef<'immersive-ar' | 'immersive-vr' | 'unknown'>('unknown');
+  const immersiveDeviceProfileRef = useRef<string>('unknown');
+  const immersiveTelemetryOpenRef = useRef(false);
 
   const mockTranscript = [
     "Jordan: Welcome to our session. How are you feeling about your digital boundaries?",
@@ -138,6 +171,87 @@ const ConsciousMeetings: React.FC<ConsciousMeetingsProps> = ({ user }) => {
     "User: That sounds manageable. I'll start tomorrow.",
     "Jordan: Great, I will also provide you with the bio-hacking resource by Sven."
   ];
+
+  const normalizeUsername = (input: string): string => input.trim().replace(/^@+/, '').toLowerCase();
+
+  const resolveDirectoryUser = (usernameInput: string): MeetingDirectoryUser | null => {
+    const normalized = normalizeUsername(usernameInput);
+    if (!normalized) return null;
+
+    const byHandle = directoryUsers.find(
+      (entry) => entry.handle && normalizeUsername(entry.handle) === normalized
+    );
+    if (byHandle) return byHandle;
+
+    const byName = directoryUsers.find((entry) => normalizeUsername(entry.name) === normalized);
+    if (byName) return byName;
+
+    return null;
+  };
+
+  const addInviteMemberByUsername = (usernameInput: string) => {
+    const normalized = normalizeUsername(usernameInput);
+    if (!normalized) return;
+
+    setPendingInviteMembers((current) => {
+      if (current.some((entry) => entry.username === normalized)) {
+        return current;
+      }
+
+      const resolved = resolveDirectoryUser(normalized);
+      const displayName = resolved?.name || normalized;
+      const id = resolved?.id || `username:${normalized}`;
+      return [...current, { id, username: normalized, displayName }];
+    });
+
+    setInviteUsernameInput('');
+  };
+
+  const removeInviteMember = (username: string) => {
+    setPendingInviteMembers((current) =>
+      current.filter((entry) => entry.username !== normalizeUsername(username))
+    );
+  };
+
+  const applyInviteGroupTemplate = (groupId: string) => {
+    setSelectedInviteGroupId(groupId);
+    const selectedGroup = inviteGroupTemplates.find((entry) => entry.id === groupId);
+    if (!selectedGroup) return;
+
+    const loadedMembers = selectedGroup.usernames.map((username) => {
+      const resolved = resolveDirectoryUser(username);
+      return {
+        id: resolved?.id || `username:${username}`,
+        username,
+        displayName: resolved?.name || username,
+      };
+    });
+    setPendingInviteMembers(loadedMembers);
+  };
+
+  const saveInviteGroupTemplate = () => {
+    const normalizedName = inviteGroupNameInput.trim();
+    if (!normalizedName || pendingInviteMembers.length === 0) return;
+
+    const usernames = [...new Set(pendingInviteMembers.map((entry) => entry.username))];
+    const template: InviteGroupTemplate = {
+      id: `grp_${Date.now()}`,
+      name: normalizedName,
+      usernames,
+    };
+
+    setInviteGroupTemplates((current) => [template, ...current].slice(0, 25));
+    setSelectedInviteGroupId(template.id);
+    setInviteGroupNameInput('');
+  };
+
+  const resetSchedulingComposer = () => {
+    setSelectedSlot(null);
+    setInviteUsernameInput('');
+    setPendingInviteMembers([]);
+    setInviteGroupNameInput('');
+    setSelectedInviteGroupId('');
+  };
 
   const checkPermissions = async () => {
     setPermissionState('pending');
@@ -151,21 +265,13 @@ const ConsciousMeetings: React.FC<ConsciousMeetingsProps> = ({ user }) => {
 
   const handleSchedule = (provider: Provider) => {
     setSelectedProvider(provider);
+    resetSchedulingComposer();
     setSelectedSlot(provider.availabilitySlots?.[0] || null);
     setSchedulingModalOpen(true);
   };
 
   const confirmBooking = async () => {
     if (!selectedProvider || !user) return;
-
-    const isIncluded =
-      user.tier === 'Accelerated Tier' ||
-      (user.tier === 'Guided Tier' && selectedProvider.tierIncludedMin === 'Guided Tier');
-
-    if (!isIncluded) {
-      alert('This provider requires Guided or Accelerated tier access.');
-      return;
-    }
 
     const newMeeting: Meeting = {
       id: Date.now().toString(),
@@ -176,14 +282,19 @@ const ConsciousMeetings: React.FC<ConsciousMeetingsProps> = ({ user }) => {
       endTime: selectedSlot ? `${selectedSlot} + 60m` : 'Next Available + 60m',
       participants: [
         { id: user.id, name: user.name, role: 'User' },
-        { id: selectedProvider.id, name: selectedProvider.name, role: 'Provider' }
+        { id: selectedProvider.id, name: selectedProvider.name, role: 'Provider' },
+        ...pendingInviteMembers.map((member) => ({
+          id: member.id,
+          name: member.displayName,
+          role: 'User' as const,
+        })),
       ],
       status: 'Upcoming',
       accessType: 'tier'
     };
 
     setMeetings([newMeeting, ...meetings]);
-    setSelectedSlot(null);
+    resetSchedulingComposer();
     setSchedulingModalOpen(false);
     setActiveTab('calendar');
   };
@@ -204,11 +315,8 @@ const ConsciousMeetings: React.FC<ConsciousMeetingsProps> = ({ user }) => {
     const matchesSearch =
       p.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
       p.specialty.toLowerCase().includes(searchQuery.toLowerCase());
-    const matchesTier =
-      !showIncludedOnly ||
-      user?.tier === 'Accelerated Tier' ||
-      (user?.tier === 'Guided Tier' && p.tierIncludedMin === 'Guided Tier');
-    return matchesSearch && matchesTier;
+    const matchesAvailability = !showIncludedOnly || (p.availabilitySlots?.length || 0) > 0;
+    return matchesSearch && matchesAvailability;
   });
 
   const hasLiveTracks = (candidate: MediaStream | null): candidate is MediaStream =>
@@ -279,6 +387,56 @@ const ConsciousMeetings: React.FC<ConsciousMeetingsProps> = ({ user }) => {
     }
   };
 
+  const getImmersiveDeviceProfile = (): string => {
+    if (typeof navigator === 'undefined') return 'unknown';
+    const userAgent = navigator.userAgent.toLowerCase();
+    if (userAgent.includes('quest') || userAgent.includes('oculus')) return 'meta-quest';
+    if (userAgent.includes('vision') || userAgent.includes('xros')) return 'apple-vision-pro';
+    if (
+      userAgent.includes('android') ||
+      userAgent.includes('iphone') ||
+      userAgent.includes('ipad')
+    ) {
+      return 'mobile-ar';
+    }
+    return 'desktop-xr';
+  };
+
+  const getPreferredSessionModes = (
+    deviceProfile: string
+  ): Array<'immersive-ar' | 'immersive-vr'> => {
+    if (deviceProfile === 'meta-quest') {
+      return ['immersive-vr', 'immersive-ar'];
+    }
+    if (deviceProfile === 'apple-vision-pro' || deviceProfile === 'mobile-ar') {
+      return ['immersive-ar', 'immersive-vr'];
+    }
+    return ['immersive-ar', 'immersive-vr'];
+  };
+
+  const closeImmersiveTelemetry = () => {
+    if (!immersiveTelemetryOpenRef.current) return;
+
+    const startedAt = immersiveSessionStartedAtMsRef.current;
+    const durationMs = typeof startedAt === 'number' ? Math.max(Date.now() - startedAt, 0) : null;
+    const userAgent = typeof navigator !== 'undefined' ? navigator.userAgent : null;
+
+    void reportImmersiveSessionEvent({
+      eventType: 'end',
+      sessionMode: immersiveSessionModeRef.current,
+      deviceProfile: immersiveDeviceProfileRef.current,
+      durationMs,
+      userAgent,
+      timestamp: new Date().toISOString(),
+    });
+
+    immersiveTelemetryOpenRef.current = false;
+    immersiveSessionStartedAtMsRef.current = null;
+    immersiveSessionModeRef.current = 'unknown';
+    immersiveDeviceProfileRef.current = 'unknown';
+    setImmersiveActiveMode('unknown');
+  };
+
   const exitImmersiveView = async () => {
     const session = xrSessionRef.current;
     if (session) {
@@ -295,7 +453,16 @@ const ConsciousMeetings: React.FC<ConsciousMeetingsProps> = ({ user }) => {
   const enterImmersiveView = async () => {
     if (isImmersiveStarting || isImmersiveActive) return;
     if (!isImmersiveSupported || !hasCheckedImmersiveSupport) {
-      setImmersiveError('Immersive mode is not supported on this browser/device.');
+      const unsupportedMessage = 'Immersive mode is not supported on this browser/device.';
+      setImmersiveError(unsupportedMessage);
+      void reportImmersiveSessionEvent({
+        eventType: 'error',
+        sessionMode: 'unknown',
+        deviceProfile: getImmersiveDeviceProfile(),
+        errorMessage: unsupportedMessage,
+        userAgent: typeof navigator !== 'undefined' ? navigator.userAgent : null,
+        timestamp: new Date().toISOString(),
+      });
       return;
     }
 
@@ -304,6 +471,8 @@ const ConsciousMeetings: React.FC<ConsciousMeetingsProps> = ({ user }) => {
 
     let cleanedUp = false;
     let session: any = null;
+    let selectedSessionMode: 'immersive-ar' | 'immersive-vr' | 'unknown' = 'unknown';
+    let selectedDeviceProfile = 'unknown';
     let handleSessionEnd: (() => void) | null = null;
     let mount: HTMLElement | null = null;
     let scene: THREE.Scene | null = null;
@@ -314,6 +483,13 @@ const ConsciousMeetings: React.FC<ConsciousMeetingsProps> = ({ user }) => {
     let material: THREE.MeshBasicMaterial | null = null;
     let borderGeometry: THREE.RingGeometry | null = null;
     let borderMaterial: THREE.MeshBasicMaterial | null = null;
+    let particlesGeometry: THREE.BufferGeometry | null = null;
+    let particlesMaterial: THREE.PointsMaterial | null = null;
+    let particlesPositionAttribute: THREE.BufferAttribute | null = null;
+    let particleBasePositions: Float32Array | null = null;
+    let particlePhases: Float32Array | null = null;
+    let particleSpeeds: Float32Array | null = null;
+    let particleDrifts: Float32Array | null = null;
     let handleResize: (() => void) | null = null;
     let audioContext: AudioContext | null = null;
     let streamSource: MediaStreamAudioSourceNode | null = null;
@@ -354,6 +530,8 @@ const ConsciousMeetings: React.FC<ConsciousMeetingsProps> = ({ user }) => {
       material?.dispose();
       borderGeometry?.dispose();
       borderMaterial?.dispose();
+      particlesGeometry?.dispose();
+      particlesMaterial?.dispose();
       renderer?.dispose();
 
       if (renderer && mount && renderer.domElement.parentNode === mount) {
@@ -366,6 +544,7 @@ const ConsciousMeetings: React.FC<ConsciousMeetingsProps> = ({ user }) => {
       if (xrCleanupRef.current === cleanup) {
         xrCleanupRef.current = null;
       }
+      closeImmersiveTelemetry();
 
       setIsImmersiveActive(false);
       setIsImmersiveStarting(false);
@@ -397,19 +576,48 @@ const ConsciousMeetings: React.FC<ConsciousMeetingsProps> = ({ user }) => {
         // Keep going; VideoTexture can still bind when the stream starts.
       }
 
-      const arSupported = await xrSystem.isSessionSupported('immersive-ar');
-      const vrSupported = await xrSystem.isSessionSupported('immersive-vr');
+      selectedDeviceProfile = getImmersiveDeviceProfile();
+      const sessionModePreference = getPreferredSessionModes(selectedDeviceProfile);
+      const supportEntries = await Promise.all(
+        sessionModePreference.map(async (mode) => ({
+          mode,
+          supported: await xrSystem.isSessionSupported(mode),
+        }))
+      );
 
-      let sessionMode: 'immersive-ar' | 'immersive-vr' | null = null;
-      if (arSupported) sessionMode = 'immersive-ar';
-      if (!sessionMode && vrSupported) sessionMode = 'immersive-vr';
-      if (!sessionMode) {
+      const supportedModes = supportEntries.filter((entry) => entry.supported).map((entry) => entry.mode);
+      if (supportedModes.length === 0) {
         throw new Error('No immersive-ar or immersive-vr session is supported on this device.');
       }
 
-      session = await xrSystem.requestSession(sessionMode, {
-        optionalFeatures: ['local-floor', 'bounded-floor', 'hand-tracking'],
-      });
+      let requestError: Error | null = null;
+      for (const mode of supportedModes) {
+        try {
+          session = await xrSystem.requestSession(mode, {
+            optionalFeatures: ['local-floor', 'bounded-floor', 'hand-tracking'],
+          });
+          selectedSessionMode = mode;
+          break;
+        } catch (primaryError) {
+          try {
+            session = await xrSystem.requestSession(mode);
+            selectedSessionMode = mode;
+            break;
+          } catch (fallbackError) {
+            requestError =
+              fallbackError instanceof Error
+                ? fallbackError
+                : primaryError instanceof Error
+                ? primaryError
+                : new Error('Unable to establish immersive session for this device.');
+          }
+        }
+      }
+
+      if (!session || selectedSessionMode === 'unknown') {
+        throw requestError || new Error('Unable to establish immersive session for this device.');
+      }
+
       xrSessionRef.current = session;
 
       mount = xrMountRef.current || document.body;
@@ -465,6 +673,49 @@ const ConsciousMeetings: React.FC<ConsciousMeetingsProps> = ({ user }) => {
       const light = new THREE.AmbientLight(0xffffff, 1);
       scene.add(light);
 
+      const particleCount = 280;
+      particleBasePositions = new Float32Array(particleCount * 3);
+      particlePhases = new Float32Array(particleCount);
+      particleSpeeds = new Float32Array(particleCount);
+      particleDrifts = new Float32Array(particleCount);
+      const particlePositions = new Float32Array(particleCount * 3);
+
+      for (let i = 0; i < particleCount; i += 1) {
+        const index = i * 3;
+        const radius = 1.5 + Math.random() * 3.2;
+        const theta = Math.random() * Math.PI * 2;
+        const phi = Math.random() * Math.PI;
+        const x = radius * Math.sin(phi) * Math.cos(theta);
+        const y = (Math.random() - 0.5) * 2.8;
+        const z = radius * Math.cos(phi) - 1.2;
+
+        particleBasePositions[index] = x;
+        particleBasePositions[index + 1] = y;
+        particleBasePositions[index + 2] = z;
+
+        particlePositions[index] = x;
+        particlePositions[index + 1] = y;
+        particlePositions[index + 2] = z;
+
+        particlePhases[i] = Math.random() * Math.PI * 2;
+        particleSpeeds[i] = 0.18 + Math.random() * 0.35;
+        particleDrifts[i] = 0.015 + Math.random() * 0.06;
+      }
+
+      particlesGeometry = new THREE.BufferGeometry();
+      particlesPositionAttribute = new THREE.BufferAttribute(particlePositions, 3);
+      particlesGeometry.setAttribute('position', particlesPositionAttribute);
+      particlesMaterial = new THREE.PointsMaterial({
+        color: 0x8ec5ff,
+        size: 0.035,
+        transparent: true,
+        opacity: 0.32,
+        depthWrite: false,
+        blending: THREE.AdditiveBlending,
+      });
+      const particleField = new THREE.Points(particlesGeometry, particlesMaterial);
+      scene.add(particleField);
+
       const AudioContextCtor =
         window.AudioContext || (window as Window & { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
 
@@ -492,8 +743,32 @@ const ConsciousMeetings: React.FC<ConsciousMeetingsProps> = ({ user }) => {
       const worldQuaternion = new THREE.Quaternion();
       const forward = new THREE.Vector3();
       const up = new THREE.Vector3();
+      const xrClock = new THREE.Clock();
 
       renderer.setAnimationLoop(() => {
+        if (
+          particlesPositionAttribute &&
+          particleBasePositions &&
+          particlePhases &&
+          particleSpeeds &&
+          particleDrifts
+        ) {
+          const elapsed = xrClock.getElapsedTime();
+          const positions = particlesPositionAttribute.array as Float32Array;
+          const total = particlePhases.length;
+          for (let i = 0; i < total; i += 1) {
+            const index = i * 3;
+            const phase = particlePhases[i] + elapsed * particleSpeeds[i];
+            const drift = particleDrifts[i];
+            positions[index] = particleBasePositions[index] + Math.sin(phase) * drift;
+            positions[index + 1] =
+              particleBasePositions[index + 1] + Math.cos(phase * 0.7) * drift * 0.45;
+            positions[index + 2] =
+              particleBasePositions[index + 2] + Math.sin(phase * 0.5) * drift * 0.35;
+          }
+          particlesPositionAttribute.needsUpdate = true;
+        }
+
         if (audioContext && panner) {
           const xrCamera = renderer.xr.getCamera();
           xrCamera.getWorldPosition(worldPosition);
@@ -520,11 +795,32 @@ const ConsciousMeetings: React.FC<ConsciousMeetingsProps> = ({ user }) => {
       session.addEventListener('end', handleSessionEnd);
 
       await renderer.xr.setSession(session);
+      immersiveSessionModeRef.current = selectedSessionMode;
+      immersiveDeviceProfileRef.current = selectedDeviceProfile;
+      immersiveSessionStartedAtMsRef.current = Date.now();
+      immersiveTelemetryOpenRef.current = true;
+      setImmersiveActiveMode(selectedSessionMode);
+      void reportImmersiveSessionEvent({
+        eventType: 'start',
+        sessionMode: selectedSessionMode,
+        deviceProfile: selectedDeviceProfile,
+        userAgent: typeof navigator !== 'undefined' ? navigator.userAgent : null,
+        timestamp: new Date().toISOString(),
+      });
+
       setIsImmersiveActive(true);
       setIsImmersiveStarting(false);
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Unable to start immersive session.';
       setImmersiveError(message);
+      void reportImmersiveSessionEvent({
+        eventType: 'error',
+        sessionMode: selectedSessionMode,
+        deviceProfile: selectedDeviceProfile,
+        errorMessage: message,
+        userAgent: typeof navigator !== 'undefined' ? navigator.userAgent : null,
+        timestamp: new Date().toISOString(),
+      });
       cleanup();
     }
   };
@@ -739,6 +1035,7 @@ const ConsciousMeetings: React.FC<ConsciousMeetingsProps> = ({ user }) => {
     const provider = PROVIDERS.find((entry) => entry.id === meeting.providerId) || null;
     if (provider) {
       setSelectedProvider(provider);
+      resetSchedulingComposer();
       setSelectedSlot(meeting.startTime);
       setSchedulingModalOpen(true);
       return;
@@ -788,36 +1085,143 @@ const ConsciousMeetings: React.FC<ConsciousMeetingsProps> = ({ user }) => {
   useEffect(() => {
     let cancelled = false;
 
+    const loadDirectory = async () => {
+      if (!user?.id) {
+        setDirectoryUsers([]);
+        setIsDirectoryLoading(false);
+        return;
+      }
+
+      setIsDirectoryLoading(true);
+      const entries = await getUserDirectory();
+      if (!cancelled) {
+        setDirectoryUsers(entries);
+        setIsDirectoryLoading(false);
+      }
+    };
+
+    void loadDirectory();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [user?.id]);
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    if (!inviteGroupStorageKey) {
+      setInviteGroupTemplates([]);
+      setSelectedInviteGroupId('');
+      return;
+    }
+
+    try {
+      const rawValue = window.localStorage.getItem(inviteGroupStorageKey);
+      if (!rawValue) {
+        setInviteGroupTemplates([]);
+        setSelectedInviteGroupId('');
+        return;
+      }
+
+      const parsed = JSON.parse(rawValue);
+      if (!Array.isArray(parsed)) {
+        setInviteGroupTemplates([]);
+        setSelectedInviteGroupId('');
+        return;
+      }
+
+      const loadedTemplates = parsed
+        .map((entry: any) => ({
+          id: String(entry?.id || '').trim(),
+          name: String(entry?.name || '').trim(),
+          usernames: Array.isArray(entry?.usernames)
+            ? entry.usernames
+                .map((username: any) => normalizeUsername(String(username || '')))
+                .filter((username: string) => username.length > 0)
+            : [],
+        }))
+        .filter(
+          (entry: InviteGroupTemplate) =>
+            entry.id.length > 0 && entry.name.length > 0 && entry.usernames.length > 0
+        )
+        .slice(0, 25);
+
+      setInviteGroupTemplates(loadedTemplates);
+      setSelectedInviteGroupId((current) =>
+        loadedTemplates.some((group) => group.id === current) ? current : ''
+      );
+    } catch {
+      setInviteGroupTemplates([]);
+      setSelectedInviteGroupId('');
+    }
+  }, [inviteGroupStorageKey]);
+
+  useEffect(() => {
+    if (typeof window === 'undefined' || !inviteGroupStorageKey) return;
+
+    try {
+      if (inviteGroupTemplates.length === 0) {
+        window.localStorage.removeItem(inviteGroupStorageKey);
+        return;
+      }
+
+      window.localStorage.setItem(
+        inviteGroupStorageKey,
+        JSON.stringify(inviteGroupTemplates.slice(0, 25))
+      );
+    } catch {
+      // Ignore storage exceptions in constrained browser contexts.
+    }
+  }, [inviteGroupStorageKey, inviteGroupTemplates]);
+
+  useEffect(() => {
+    let cancelled = false;
+
     const checkImmersiveSupport = async () => {
       if (typeof navigator === 'undefined') {
         if (!cancelled) {
           setIsImmersiveSupported(false);
+          setImmersiveDeviceProfile('unknown');
+          setImmersiveSupportedModes([]);
           setHasCheckedImmersiveSupport(true);
         }
         return;
       }
 
       const xrSystem = (navigator as Navigator & { xr?: any }).xr;
+      const deviceProfile = getImmersiveDeviceProfile();
       if (!xrSystem) {
         if (!cancelled) {
           setIsImmersiveSupported(false);
+          setImmersiveDeviceProfile(deviceProfile);
+          setImmersiveSupportedModes([]);
           setHasCheckedImmersiveSupport(true);
         }
         return;
       }
 
       try {
-        const [arSupported, vrSupported] = await Promise.all([
-          xrSystem.isSessionSupported('immersive-ar'),
-          xrSystem.isSessionSupported('immersive-vr'),
-        ]);
+        const preferredModes = getPreferredSessionModes(deviceProfile);
+        const supportEntries = await Promise.all(
+          preferredModes.map(async (mode) => ({
+            mode,
+            supported: await xrSystem.isSessionSupported(mode),
+          }))
+        );
+        const supportedModes = supportEntries
+          .filter((entry) => entry.supported)
+          .map((entry) => entry.mode);
 
         if (!cancelled) {
-          setIsImmersiveSupported(Boolean(arSupported || vrSupported));
+          setIsImmersiveSupported(supportedModes.length > 0);
+          setImmersiveDeviceProfile(deviceProfile);
+          setImmersiveSupportedModes(supportedModes);
         }
       } catch {
         if (!cancelled) {
           setIsImmersiveSupported(false);
+          setImmersiveDeviceProfile(deviceProfile);
+          setImmersiveSupportedModes([]);
         }
       } finally {
         if (!cancelled) {
@@ -1202,7 +1606,7 @@ const ConsciousMeetings: React.FC<ConsciousMeetingsProps> = ({ user }) => {
                     onChange={(e) => setShowIncludedOnly(e.target.checked)}
                     className="w-4 h-4 accent-blue-500"
                   />
-                  Show only providers included in my tier
+                  Show only providers with open availability
                 </label>
                 <button
                   onClick={() => {
@@ -1219,10 +1623,6 @@ const ConsciousMeetings: React.FC<ConsciousMeetingsProps> = ({ user }) => {
             {/* Providers Grid */}
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6 md:gap-8 pb-10 sm:pb-16 md:pb-20">
               {filteredProviders.map(provider => {
-                const isIncluded =
-                  user?.tier === 'Accelerated Tier' ||
-                  (user?.tier === 'Guided Tier' && provider.tierIncludedMin === 'Guided Tier');
-
                 return (
                   <div
                     key={provider.id}
@@ -1256,19 +1656,12 @@ const ConsciousMeetings: React.FC<ConsciousMeetingsProps> = ({ user }) => {
                           <div className="flex items-center gap-2 sm:gap-3">
                             <CreditCard className="w-3 h-3 sm:w-4 sm:h-4 text-slate-400" />
                             <span className="text-[9px] sm:text-[10px] font-black text-white uppercase tracking-widest">
-                              Access Layer
+                              Session Access
                             </span>
                           </div>
-
-                          {isIncluded ? (
-                            <span className="px-2 sm:px-3 py-1 bg-teal-500/20 text-teal-400 rounded-full text-[8px] sm:text-[9px] font-black uppercase">
-                              Tier Included
-                            </span>
-                          ) : (
-                            <span className="px-2 sm:px-3 py-1 bg-blue-500/20 text-blue-400 rounded-full text-[8px] sm:text-[9px] font-black uppercase">
-                              {provider.tierIncludedMin || 'Guided Tier'}+
-                            </span>
-                          )}
+                          <span className="px-2 sm:px-3 py-1 bg-teal-500/20 text-teal-400 rounded-full text-[8px] sm:text-[9px] font-black uppercase">
+                            Open To All Tiers
+                          </span>
                         </div>
                       </div>
 
@@ -1398,6 +1791,40 @@ const ConsciousMeetings: React.FC<ConsciousMeetingsProps> = ({ user }) => {
                           {hasCheckedImmersiveSupport ? '5D Immersive View Unavailable' : 'Checking 5D Device Support'}
                         </button>
                       )}
+
+                      <p className="text-[9px] sm:text-[10px] text-slate-500 uppercase tracking-widest text-center">
+                        Auto-optimized for Meta Quest, Apple Vision Pro, and mobile AR goggles
+                      </p>
+
+                      <div className="p-4 sm:p-5 rounded-xl sm:rounded-2xl border border-white/10 bg-white/5 space-y-3">
+                        <h5 className="text-[9px] sm:text-[10px] font-black text-blue-400 uppercase tracking-widest">
+                          XR Device Diagnostics
+                        </h5>
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 sm:gap-3 text-[9px] sm:text-[10px] font-black uppercase tracking-widest">
+                          <div className="flex justify-between items-center p-2.5 rounded-lg bg-black/20">
+                            <span className="text-slate-500">Device Profile</span>
+                            <span className="text-white">{immersiveDeviceProfile}</span>
+                          </div>
+                          <div className="flex justify-between items-center p-2.5 rounded-lg bg-black/20">
+                            <span className="text-slate-500">XR Ready</span>
+                            <span className={canEnterImmersiveView ? 'text-teal-400' : 'text-rose-300'}>
+                              {canEnterImmersiveView ? 'Yes' : 'No'}
+                            </span>
+                          </div>
+                          <div className="flex justify-between items-center p-2.5 rounded-lg bg-black/20">
+                            <span className="text-slate-500">Supported Modes</span>
+                            <span className="text-white">
+                              {immersiveSupportedModes.length > 0 ? immersiveSupportedModes.join(', ') : 'None'}
+                            </span>
+                          </div>
+                          <div className="flex justify-between items-center p-2.5 rounded-lg bg-black/20">
+                            <span className="text-slate-500">Active Mode</span>
+                            <span className={immersiveActiveMode === 'unknown' ? 'text-slate-300' : 'text-teal-300'}>
+                              {immersiveActiveMode}
+                            </span>
+                          </div>
+                        </div>
+                      </div>
 
                       {immersiveError && (
                         <p className="text-[10px] sm:text-xs font-bold text-rose-300 bg-rose-500/10 border border-rose-400/20 rounded-xl px-4 py-3">
@@ -1694,7 +2121,7 @@ const ConsciousMeetings: React.FC<ConsciousMeetingsProps> = ({ user }) => {
                             {meeting.status}
                           </span>
                           <span className="text-[8px] sm:text-[9px] text-slate-500 font-bold uppercase tracking-widest">
-                            {meeting.accessType === 'tier' ? 'Tier Access' : 'Restricted'}
+                            {meeting.accessType === 'tier' ? 'Open Access' : 'Restricted'}
                           </span>
                         </div>
 
@@ -1825,7 +2252,7 @@ const ConsciousMeetings: React.FC<ConsciousMeetingsProps> = ({ user }) => {
             <button
               onClick={() => {
                 setSchedulingModalOpen(false);
-                setSelectedSlot(null);
+                resetSchedulingComposer();
               }}
               className="absolute top-4 sm:top-6 md:top-8 lg:top-10 right-4 sm:right-6 md:right-8 lg:right-10 p-2 sm:p-3 hover:bg-white/5 rounded-full transition-colors text-slate-500"
             >
@@ -1866,23 +2293,98 @@ const ConsciousMeetings: React.FC<ConsciousMeetingsProps> = ({ user }) => {
 
               <div className="space-y-3 sm:space-y-4">
                 <h4 className="text-[9px] sm:text-[10px] font-black text-slate-500 uppercase tracking-widest ml-0.5 sm:ml-1">Invite Participants</h4>
-                <div className="relative">
-                  <Plus className="absolute left-4 sm:left-5 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-600" />
-                  <input
-                    type="text"
-                    placeholder="Add users by node ID or handle..."
-                    className="w-full pl-12 sm:pl-14 pr-4 sm:pr-6 py-3 sm:py-4 bg-white/5 border border-white/10 rounded-lg sm:rounded-2xl text-xs text-white focus:outline-none focus:ring-2 focus:ring-blue-500/30 transition-all font-medium"
-                  />
+                <div className="flex flex-col sm:flex-row gap-3">
+                  <div className="relative flex-1">
+                    <UserPlus className="absolute left-4 sm:left-5 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-600" />
+                    <input
+                      type="text"
+                      value={inviteUsernameInput}
+                      onChange={(event) => setInviteUsernameInput(event.target.value)}
+                      onKeyDown={(event) => {
+                        if (event.key === 'Enter') {
+                          event.preventDefault();
+                          addInviteMemberByUsername(inviteUsernameInput);
+                        }
+                      }}
+                      placeholder="Add by username or handle"
+                      className="w-full pl-12 sm:pl-14 pr-4 sm:pr-6 py-3 sm:py-4 bg-white/5 border border-white/10 rounded-lg sm:rounded-2xl text-xs text-white focus:outline-none focus:ring-2 focus:ring-blue-500/30 transition-all font-medium"
+                    />
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => addInviteMemberByUsername(inviteUsernameInput)}
+                    className="px-4 sm:px-6 py-3 sm:py-4 bg-blue-600 hover:bg-blue-500 text-white rounded-lg sm:rounded-2xl text-[9px] sm:text-[10px] font-black uppercase tracking-widest transition-all"
+                  >
+                    Add
+                  </button>
                 </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <div className="relative">
+                    <Layers className="absolute left-4 sm:left-5 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-600" />
+                    <input
+                      type="text"
+                      value={inviteGroupNameInput}
+                      onChange={(event) => setInviteGroupNameInput(event.target.value)}
+                      placeholder="Save current group as..."
+                      className="w-full pl-12 sm:pl-14 pr-4 sm:pr-6 py-3 sm:py-4 bg-white/5 border border-white/10 rounded-lg sm:rounded-2xl text-xs text-white focus:outline-none focus:ring-2 focus:ring-blue-500/30 transition-all font-medium"
+                    />
+                  </div>
+                  <button
+                    type="button"
+                    onClick={saveInviteGroupTemplate}
+                    disabled={pendingInviteMembers.length === 0 || !inviteGroupNameInput.trim()}
+                    className="px-4 sm:px-6 py-3 sm:py-4 bg-teal-600 hover:bg-teal-500 disabled:bg-slate-700 disabled:text-slate-500 text-white rounded-lg sm:rounded-2xl text-[9px] sm:text-[10px] font-black uppercase tracking-widest transition-all"
+                  >
+                    Save Group
+                  </button>
+                </div>
+
+                {inviteGroupTemplates.length > 0 && (
+                  <select
+                    value={selectedInviteGroupId}
+                    onChange={(event) => applyInviteGroupTemplate(event.target.value)}
+                    className="w-full px-4 sm:px-5 py-3 sm:py-4 bg-white/5 border border-white/10 rounded-lg sm:rounded-2xl text-xs text-white focus:outline-none focus:ring-2 focus:ring-blue-500/30 transition-all font-medium"
+                  >
+                    <option value="">Load saved participant group</option>
+                    {inviteGroupTemplates.map((group) => (
+                      <option key={group.id} value={group.id}>
+                        {group.name} ({group.usernames.length})
+                      </option>
+                    ))}
+                  </select>
+                )}
+
+                <div className="flex flex-wrap gap-2">
+                  {pendingInviteMembers.map((member) => (
+                    <button
+                      key={member.username}
+                      type="button"
+                      onClick={() => removeInviteMember(member.username)}
+                      className="px-3 py-1.5 bg-white/10 hover:bg-white/15 border border-white/10 rounded-full text-[8px] sm:text-[9px] text-white font-bold uppercase tracking-widest"
+                    >
+                      {member.displayName} @{member.username} <span className="text-slate-400">x</span>
+                    </button>
+                  ))}
+                  {pendingInviteMembers.length === 0 && (
+                    <span className="text-[9px] sm:text-[10px] text-slate-500 uppercase tracking-widest">
+                      Add usernames to build provider groups quickly.
+                    </span>
+                  )}
+                </div>
+
+                {isDirectoryLoading && (
+                  <p className="text-[9px] sm:text-[10px] text-slate-500 uppercase tracking-widest">
+                    Syncing user directory...
+                  </p>
+                )}
               </div>
 
               <div className="p-4 sm:p-6 bg-blue-600/10 border border-blue-500/20 rounded-lg sm:rounded-xl md:rounded-[1.5rem] lg:rounded-[2rem] flex flex-col sm:flex-row items-center justify-between gap-4 sm:gap-6">
                 <div className="text-center sm:text-left w-full sm:w-auto">
                   <h5 className="text-[9px] sm:text-[10px] font-black text-blue-400 uppercase tracking-widest mb-1">Access Protocol</h5>
                   <p className="text-white font-bold text-sm sm:text-base md:text-lg uppercase tracking-tighter">
-                    {user?.tier === 'Accelerated Tier' || (user?.tier === 'Guided Tier' && selectedProvider.tierIncludedMin === 'Guided Tier')
-                      ? 'Included with Membership'
-                      : `${selectedProvider.tierIncludedMin || 'Guided Tier'}+ Required`}
+                    Open To All Tiers
                   </p>
                 </div>
                 <button

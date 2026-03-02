@@ -26,6 +26,7 @@ import providerAuthRoutes from './routes/providerAuth';
 import providerSessionRoutes from './routes/providerSession';
 import identitySecurityRoutes from './routes/identitySecurity';
 import integrityRoutes from './routes/integrity';
+import immersiveRoutes from './routes/immersive';
 import { initializeVertexAI } from './services/vertexAiService';
 import { hasOpenAiApiKey, logStripeEnvironmentLoaded, validateRequiredEnv } from './requiredEnv';
 
@@ -200,6 +201,7 @@ app.use('/api/upload', uploadProtectedRoutes);
 app.use('/api/reflection', reflectionRoutes);
 app.use('/api/social', socialRoutes);
 app.use('/api/provider/session', providerSessionRoutes);
+app.use('/api/immersive', immersiveRoutes);
 app.use('/uploads', uploadPublicRoutes);
 
 // Catch-all 404 handler
