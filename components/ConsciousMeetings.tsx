@@ -7,6 +7,7 @@ import {
   Settings, Download, Share2, Info, Loader2, Play,
   ChevronRight, Pause, Square, Image, Upload
 } from 'lucide-react';
+import * as THREE from 'three';
 import { UserProfile, Provider, Meeting } from '../types';
 import { summarizeMeeting } from '../services/backendApiService';
 
@@ -106,13 +107,22 @@ const ConsciousMeetings: React.FC<ConsciousMeetingsProps> = ({ user }) => {
   const [micLevel, setMicLevel] = useState(0);
   const [customBackgroundFile, setCustomBackgroundFile] = useState<File | null>(null);
   const [selectedSlot, setSelectedSlot] = useState<string | null>(null);
+  const [isImmersiveStarting, setIsImmersiveStarting] = useState(false);
+  const [isImmersiveActive, setIsImmersiveActive] = useState(false);
+  const [immersiveError, setImmersiveError] = useState<string | null>(null);
+  const [isImmersiveSupported, setIsImmersiveSupported] = useState(false);
+  const [hasCheckedImmersiveSupport, setHasCheckedImmersiveSupport] = useState(false);
 
   // Refs
   const videoRef = useRef<HTMLVideoElement>(null);
+  const providerVideoRef = useRef<HTMLVideoElement>(null);
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const recordingIntervalRef = useRef<NodeJS.Timeout | null>(null);
   const analyserRef = useRef<AnalyserNode | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const xrMountRef = useRef<HTMLDivElement>(null);
+  const xrSessionRef = useRef<any>(null);
+  const xrCleanupRef = useRef<(() => void) | null>(null);
 
   const mockTranscript = [
     "Jordan: Welcome to our session. How are you feeling about your digital boundaries?",
@@ -193,6 +203,320 @@ const ConsciousMeetings: React.FC<ConsciousMeetingsProps> = ({ user }) => {
       (user?.tier === 'Guided Tier' && p.tierIncludedMin === 'Guided Tier');
     return matchesSearch && matchesTier;
   });
+
+  const hasLiveTracks = (candidate: MediaStream | null): candidate is MediaStream =>
+    candidate instanceof MediaStream && candidate.getTracks().some((track) => track.readyState === 'live');
+
+  const hasLiveVideoTracks = (candidate: MediaStream | null): candidate is MediaStream =>
+    candidate instanceof MediaStream && candidate.getVideoTracks().some((track) => track.readyState === 'live');
+
+  const getProviderMediaStream = (): MediaStream | null => {
+    if (hasLiveTracks(stream)) {
+      return stream;
+    }
+
+    const userVideoStream =
+      videoRef.current?.srcObject instanceof MediaStream ? videoRef.current.srcObject : null;
+    if (hasLiveTracks(userVideoStream)) {
+      return userVideoStream;
+    }
+
+    const providerVideoStream =
+      providerVideoRef.current?.srcObject instanceof MediaStream ? providerVideoRef.current.srcObject : null;
+    if (hasLiveTracks(providerVideoStream)) {
+      return providerVideoStream;
+    }
+
+    return null;
+  };
+
+  const setPannerPosition = (panner: PannerNode, x: number, y: number, z: number) => {
+    const currentTime = panner.context.currentTime;
+    if (panner.positionX) {
+      panner.positionX.setValueAtTime(x, currentTime);
+      panner.positionY.setValueAtTime(y, currentTime);
+      panner.positionZ.setValueAtTime(z, currentTime);
+      return;
+    }
+    panner.setPosition(x, y, z);
+  };
+
+  const setListenerPose = (
+    listener: AudioListener,
+    position: THREE.Vector3,
+    forward: THREE.Vector3,
+    up: THREE.Vector3
+  ) => {
+    const currentTime = (listener as any).context?.currentTime ?? 0;
+    if (listener.positionX) {
+      listener.positionX.setValueAtTime(position.x, currentTime);
+      listener.positionY.setValueAtTime(position.y, currentTime);
+      listener.positionZ.setValueAtTime(position.z, currentTime);
+    } else {
+      listener.setPosition(position.x, position.y, position.z);
+    }
+
+    if ((listener as any).forwardX) {
+      (listener as any).forwardX.setValueAtTime(forward.x, currentTime);
+      (listener as any).forwardY.setValueAtTime(forward.y, currentTime);
+      (listener as any).forwardZ.setValueAtTime(forward.z, currentTime);
+      (listener as any).upX.setValueAtTime(up.x, currentTime);
+      (listener as any).upY.setValueAtTime(up.y, currentTime);
+      (listener as any).upZ.setValueAtTime(up.z, currentTime);
+    } else {
+      listener.setOrientation(forward.x, forward.y, forward.z, up.x, up.y, up.z);
+    }
+  };
+
+  const exitImmersiveView = async () => {
+    const session = xrSessionRef.current;
+    if (session) {
+      try {
+        await session.end();
+      } catch {
+        xrCleanupRef.current?.();
+      }
+      return;
+    }
+    xrCleanupRef.current?.();
+  };
+
+  const enterImmersiveView = async () => {
+    if (isImmersiveStarting || isImmersiveActive) return;
+    if (!isImmersiveSupported || !hasCheckedImmersiveSupport) {
+      setImmersiveError('Immersive mode is not supported on this browser/device.');
+      return;
+    }
+
+    setImmersiveError(null);
+    setIsImmersiveStarting(true);
+
+    let cleanedUp = false;
+    let session: any = null;
+    let handleSessionEnd: (() => void) | null = null;
+    let mount: HTMLElement | null = null;
+    let scene: THREE.Scene | null = null;
+    let camera: THREE.PerspectiveCamera | null = null;
+    let renderer: THREE.WebGLRenderer | null = null;
+    let videoTexture: THREE.VideoTexture | null = null;
+    let geometry: THREE.PlaneGeometry | null = null;
+    let material: THREE.MeshBasicMaterial | null = null;
+    let borderGeometry: THREE.RingGeometry | null = null;
+    let borderMaterial: THREE.MeshBasicMaterial | null = null;
+    let handleResize: (() => void) | null = null;
+    let audioContext: AudioContext | null = null;
+    let streamSource: MediaStreamAudioSourceNode | null = null;
+    let panner: PannerNode | null = null;
+
+    const cleanup = (options?: { skipSessionEnd?: boolean }) => {
+      if (cleanedUp) return;
+      cleanedUp = true;
+
+      if (renderer) {
+        renderer.setAnimationLoop(null);
+      }
+
+      if (handleResize) {
+        window.removeEventListener('resize', handleResize);
+      }
+
+      if (session && handleSessionEnd) {
+        session.removeEventListener('end', handleSessionEnd);
+      }
+
+      if (!options?.skipSessionEnd && session && xrSessionRef.current === session) {
+        session.end().catch(() => undefined);
+      }
+
+      if (streamSource) {
+        streamSource.disconnect();
+      }
+      if (panner) {
+        panner.disconnect();
+      }
+      if (audioContext && audioContext.state !== 'closed') {
+        audioContext.close().catch(() => undefined);
+      }
+
+      videoTexture?.dispose();
+      geometry?.dispose();
+      material?.dispose();
+      borderGeometry?.dispose();
+      borderMaterial?.dispose();
+      renderer?.dispose();
+
+      if (renderer && mount && renderer.domElement.parentNode === mount) {
+        mount.removeChild(renderer.domElement);
+      }
+
+      if (xrSessionRef.current === session) {
+        xrSessionRef.current = null;
+      }
+      if (xrCleanupRef.current === cleanup) {
+        xrCleanupRef.current = null;
+      }
+
+      setIsImmersiveActive(false);
+      setIsImmersiveStarting(false);
+    };
+
+    try {
+      const xrSystem = (navigator as Navigator & { xr?: any }).xr;
+      if (!xrSystem) {
+        throw new Error('WebXR is unavailable on this browser/device.');
+      }
+
+      const providerStream = getProviderMediaStream();
+      if (!providerStream || !hasLiveTracks(providerStream) || !hasLiveVideoTracks(providerStream)) {
+        throw new Error('No provider media stream is available for immersive mapping.');
+      }
+
+      const providerVideo = providerVideoRef.current;
+      if (!providerVideo) {
+        throw new Error('Provider video element is unavailable.');
+      }
+
+      providerVideo.srcObject = providerStream;
+      providerVideo.muted = true;
+      providerVideo.playsInline = true;
+      providerVideo.autoplay = true;
+      try {
+        await providerVideo.play();
+      } catch {
+        // Keep going; VideoTexture can still bind when the stream starts.
+      }
+
+      const arSupported = await xrSystem.isSessionSupported('immersive-ar');
+      const vrSupported = await xrSystem.isSessionSupported('immersive-vr');
+
+      let sessionMode: 'immersive-ar' | 'immersive-vr' | null = null;
+      if (arSupported) sessionMode = 'immersive-ar';
+      if (!sessionMode && vrSupported) sessionMode = 'immersive-vr';
+      if (!sessionMode) {
+        throw new Error('No immersive-ar or immersive-vr session is supported on this device.');
+      }
+
+      session = await xrSystem.requestSession(sessionMode, {
+        optionalFeatures: ['local-floor', 'bounded-floor', 'hand-tracking'],
+      });
+      xrSessionRef.current = session;
+
+      mount = xrMountRef.current || document.body;
+      scene = new THREE.Scene();
+      camera = new THREE.PerspectiveCamera(70, window.innerWidth / window.innerHeight, 0.01, 100);
+      camera.position.set(0, 0, 0);
+
+      renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+      xrCleanupRef.current = cleanup;
+      renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+      renderer.setSize(window.innerWidth, window.innerHeight);
+      renderer.xr.enabled = true;
+      renderer.xr.setReferenceSpaceType('local');
+      renderer.setClearColor(0x000000, 0);
+      mount.appendChild(renderer.domElement);
+
+      const curvedWidth = 2.2;
+      const curvedHeight = 1.25;
+      const curvatureDepth = 0.2;
+      geometry = new THREE.PlaneGeometry(curvedWidth, curvedHeight, 56, 1);
+      const positionAttr = geometry.attributes.position;
+      for (let i = 0; i < positionAttr.count; i += 1) {
+        const x = positionAttr.getX(i);
+        const normalized = x / (curvedWidth * 0.5);
+        const zOffset = -Math.pow(normalized, 2) * curvatureDepth;
+        positionAttr.setZ(i, zOffset);
+      }
+      positionAttr.needsUpdate = true;
+      geometry.computeVertexNormals();
+
+      videoTexture = new THREE.VideoTexture(providerVideo);
+      videoTexture.colorSpace = THREE.SRGBColorSpace;
+      videoTexture.minFilter = THREE.LinearFilter;
+      videoTexture.magFilter = THREE.LinearFilter;
+      videoTexture.generateMipmaps = false;
+
+      material = new THREE.MeshBasicMaterial({
+        map: videoTexture,
+        side: THREE.DoubleSide,
+        transparent: true,
+      });
+
+      const curvedScreen = new THREE.Mesh(geometry, material);
+      curvedScreen.position.set(0, 0, -2);
+      scene.add(curvedScreen);
+
+      borderGeometry = new THREE.RingGeometry(0.94, 0.97, 64);
+      borderMaterial = new THREE.MeshBasicMaterial({ color: 0x6ea6ff, opacity: 0.18, transparent: true });
+      const border = new THREE.Mesh(borderGeometry, borderMaterial);
+      border.position.set(0, 0, -1.99);
+      scene.add(border);
+
+      const light = new THREE.AmbientLight(0xffffff, 1);
+      scene.add(light);
+
+      const AudioContextCtor =
+        window.AudioContext || (window as Window & { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
+
+      if (AudioContextCtor && providerStream.getAudioTracks().some((track) => track.readyState === 'live')) {
+        audioContext = new AudioContextCtor();
+        await audioContext.resume();
+
+        streamSource = audioContext.createMediaStreamSource(providerStream);
+        panner = audioContext.createPanner();
+        panner.panningModel = 'HRTF';
+        panner.distanceModel = 'inverse';
+        panner.refDistance = 1;
+        panner.maxDistance = 20;
+        panner.rolloffFactor = 1;
+        panner.coneInnerAngle = 360;
+        panner.coneOuterAngle = 0;
+        panner.coneOuterGain = 0;
+        setPannerPosition(panner, 0, 0, -2);
+
+        streamSource.connect(panner);
+        panner.connect(audioContext.destination);
+      }
+
+      const worldPosition = new THREE.Vector3();
+      const worldQuaternion = new THREE.Quaternion();
+      const forward = new THREE.Vector3();
+      const up = new THREE.Vector3();
+
+      renderer.setAnimationLoop(() => {
+        if (audioContext && panner) {
+          const xrCamera = renderer.xr.getCamera();
+          xrCamera.getWorldPosition(worldPosition);
+          xrCamera.getWorldQuaternion(worldQuaternion);
+          forward.set(0, 0, -1).applyQuaternion(worldQuaternion).normalize();
+          up.set(0, 1, 0).applyQuaternion(worldQuaternion).normalize();
+          setListenerPose(audioContext.listener, worldPosition, forward, up);
+        }
+
+        renderer.render(scene, camera);
+      });
+
+      handleResize = () => {
+        camera.aspect = window.innerWidth / window.innerHeight;
+        camera.updateProjectionMatrix();
+        renderer.setSize(window.innerWidth, window.innerHeight);
+      };
+      window.addEventListener('resize', handleResize);
+
+      handleSessionEnd = () => {
+        cleanup({ skipSessionEnd: true });
+      };
+
+      session.addEventListener('end', handleSessionEnd);
+
+      await renderer.xr.setSession(session);
+      setIsImmersiveActive(true);
+      setIsImmersiveStarting(false);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Unable to start immersive session.';
+      setImmersiveError(message);
+      cleanup();
+    }
+  };
 
   // Solo Session Functions
   const startSoloSession = async () => {
@@ -415,6 +739,54 @@ const ConsciousMeetings: React.FC<ConsciousMeetingsProps> = ({ user }) => {
     }
   };
 
+  useEffect(() => {
+    let cancelled = false;
+
+    const checkImmersiveSupport = async () => {
+      if (typeof navigator === 'undefined') {
+        if (!cancelled) {
+          setIsImmersiveSupported(false);
+          setHasCheckedImmersiveSupport(true);
+        }
+        return;
+      }
+
+      const xrSystem = (navigator as Navigator & { xr?: any }).xr;
+      if (!xrSystem) {
+        if (!cancelled) {
+          setIsImmersiveSupported(false);
+          setHasCheckedImmersiveSupport(true);
+        }
+        return;
+      }
+
+      try {
+        const [arSupported, vrSupported] = await Promise.all([
+          xrSystem.isSessionSupported('immersive-ar'),
+          xrSystem.isSessionSupported('immersive-vr'),
+        ]);
+
+        if (!cancelled) {
+          setIsImmersiveSupported(Boolean(arSupported || vrSupported));
+        }
+      } catch {
+        if (!cancelled) {
+          setIsImmersiveSupported(false);
+        }
+      } finally {
+        if (!cancelled) {
+          setHasCheckedImmersiveSupport(true);
+        }
+      }
+    };
+
+    checkImmersiveSupport();
+
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
   // Cleanup effect
   useEffect(() => {
     return () => {
@@ -431,6 +803,17 @@ const ConsciousMeetings: React.FC<ConsciousMeetingsProps> = ({ user }) => {
     };
   }, [stream, customBackgroundFile, selectedBackground]);
 
+  useEffect(() => {
+    return () => {
+      const session = xrSessionRef.current;
+      if (session) {
+        session.end().catch(() => undefined);
+        xrSessionRef.current = null;
+      }
+      xrCleanupRef.current?.();
+    };
+  }, []);
+
   // Set video srcObject when stream is available
   useEffect(() => {
     if (stream && videoRef.current) {
@@ -438,8 +821,50 @@ const ConsciousMeetings: React.FC<ConsciousMeetingsProps> = ({ user }) => {
     }
   }, [stream]);
 
+  // Keep a dedicated provider video element synced for WebXR texture mapping.
+  useEffect(() => {
+    const providerVideo = providerVideoRef.current;
+    if (!providerVideo) return;
+
+    const providerStream = getProviderMediaStream();
+    if (!providerStream || !hasLiveTracks(providerStream)) {
+      providerVideo.srcObject = null;
+      return;
+    }
+
+    providerVideo.srcObject = providerStream;
+    providerVideo.muted = true;
+    providerVideo.playsInline = true;
+    providerVideo.autoplay = true;
+    providerVideo.play().catch(() => undefined);
+
+    const clearWhenInactive = () => {
+      if (
+        providerVideoRef.current?.srcObject === providerStream &&
+        !providerStream.getTracks().some((track) => track.readyState === 'live')
+      ) {
+        providerVideoRef.current.srcObject = null;
+      }
+    };
+
+    const tracks = providerStream.getTracks();
+    tracks.forEach((track) => track.addEventListener('ended', clearWhenInactive));
+    providerStream.addEventListener('inactive', clearWhenInactive);
+
+    return () => {
+      tracks.forEach((track) => track.removeEventListener('ended', clearWhenInactive));
+      providerStream.removeEventListener('inactive', clearWhenInactive);
+      clearWhenInactive();
+    };
+  }, [stream, isSoloSessionActive]);
+
+  const canEnterImmersiveView = hasCheckedImmersiveSupport && isImmersiveSupported;
+
   return (
     <div className="min-h-0 flex flex-col gap-4 sm:gap-6 md:gap-8 animate-in fade-in duration-700 relative">
+      <div ref={xrMountRef} className="fixed inset-0 z-[250] pointer-events-none" />
+      <video ref={providerVideoRef} className="hidden" autoPlay playsInline muted />
+
       {/* Page Header */}
       <header className="flex flex-col sm:flex-row sm:items-end justify-between gap-3 sm:gap-4 md:gap-6 relative z-10">
         <div className="space-y-2">
@@ -688,6 +1113,35 @@ const ConsciousMeetings: React.FC<ConsciousMeetingsProps> = ({ user }) => {
                           Start Solo Session
                         </button>
                       </div>
+
+                      {canEnterImmersiveView ? (
+                        <button
+                          onClick={isImmersiveActive ? exitImmersiveView : enterImmersiveView}
+                          disabled={isImmersiveStarting}
+                          className="w-full py-4 sm:py-5 md:py-6 bg-indigo-600 hover:bg-indigo-500 disabled:bg-slate-800 disabled:text-slate-600 text-white rounded-xl sm:rounded-2xl md:rounded-3xl font-black text-sm sm:text-base md:text-lg lg:text-xl uppercase tracking-widest shadow-2xl transition-all hover:-translate-y-1 active:scale-95 flex items-center justify-center gap-3 sm:gap-4"
+                        >
+                          {isImmersiveStarting ? (
+                            <Loader2 className="w-5 h-5 sm:w-6 sm:h-6 animate-spin" />
+                          ) : (
+                            <Video className="w-5 h-5 sm:w-6 sm:h-6" />
+                          )}
+                          {isImmersiveActive ? 'Exit 5D Immersive View' : 'Enter 5D Immersive View'}
+                        </button>
+                      ) : (
+                        <button
+                          disabled
+                          className="w-full py-4 sm:py-5 md:py-6 bg-slate-800 text-slate-500 rounded-xl sm:rounded-2xl md:rounded-3xl font-black text-sm sm:text-base md:text-lg lg:text-xl uppercase tracking-widest shadow-2xl flex items-center justify-center gap-3 sm:gap-4 cursor-not-allowed"
+                        >
+                          <Video className="w-5 h-5 sm:w-6 sm:h-6" />
+                          {hasCheckedImmersiveSupport ? '5D Immersive View Unavailable' : 'Checking 5D Device Support'}
+                        </button>
+                      )}
+
+                      {immersiveError && (
+                        <p className="text-[10px] sm:text-xs font-bold text-rose-300 bg-rose-500/10 border border-rose-400/20 rounded-xl px-4 py-3">
+                          {immersiveError}
+                        </p>
+                      )}
                     </div>
                   </div>
                 </div>
@@ -707,17 +1161,35 @@ const ConsciousMeetings: React.FC<ConsciousMeetingsProps> = ({ user }) => {
                 )}
 
                 <div className="relative z-10 space-y-6 sm:space-y-8">
-                  <div className="flex items-center justify-between">
+                  <div className="flex items-center justify-between gap-3">
                     <div className="flex items-center gap-3 sm:gap-4">
                       <div className="w-1.5 h-1.5 rounded-full bg-red-400 animate-pulse" />
                       <span className="text-[9px] sm:text-[10px] font-black text-red-400 uppercase tracking-[0.4em]">Solo Session Active</span>
                     </div>
-                    <button
-                      onClick={stopSoloSession}
-                      className="px-4 sm:px-6 py-2 sm:py-3 bg-red-600 hover:bg-red-500 text-white rounded-lg sm:rounded-xl font-black text-[8px] sm:text-[9px] uppercase tracking-widest transition-all"
-                    >
-                      End Session
-                    </button>
+                    <div className="flex items-center gap-2">
+                      {canEnterImmersiveView ? (
+                        <button
+                          onClick={isImmersiveActive ? exitImmersiveView : enterImmersiveView}
+                          disabled={isImmersiveStarting}
+                          className="px-4 sm:px-6 py-2 sm:py-3 bg-indigo-600 hover:bg-indigo-500 disabled:bg-slate-700 disabled:text-slate-500 text-white rounded-lg sm:rounded-xl font-black text-[8px] sm:text-[9px] uppercase tracking-widest transition-all"
+                        >
+                          {isImmersiveActive ? 'Exit 5D View' : 'Enter 5D View'}
+                        </button>
+                      ) : (
+                        <button
+                          disabled
+                          className="px-4 sm:px-6 py-2 sm:py-3 bg-slate-700 text-slate-500 rounded-lg sm:rounded-xl font-black text-[8px] sm:text-[9px] uppercase tracking-widest cursor-not-allowed"
+                        >
+                          5D Unavailable
+                        </button>
+                      )}
+                      <button
+                        onClick={stopSoloSession}
+                        className="px-4 sm:px-6 py-2 sm:py-3 bg-red-600 hover:bg-red-500 text-white rounded-lg sm:rounded-xl font-black text-[8px] sm:text-[9px] uppercase tracking-widest transition-all"
+                      >
+                        End Session
+                      </button>
+                    </div>
                   </div>
 
                   {/* Video Preview */}
