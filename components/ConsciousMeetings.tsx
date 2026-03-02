@@ -7,6 +7,7 @@ import {
   Settings, Download, Share2, Info, Loader2, Play,
   ChevronRight, Pause, Square, Image, Upload
 } from 'lucide-react';
+import { SelfieSegmentation, Results as SelfieSegmentationResults } from '@mediapipe/selfie_segmentation';
 import * as THREE from 'three';
 import { UserProfile, Provider, Meeting } from '../types';
 import { summarizeMeeting } from '../services/backendApiService';
@@ -98,12 +99,13 @@ const ConsciousMeetings: React.FC<ConsciousMeetingsProps> = ({ user }) => {
   // Solo Session States
   const [isSoloSessionActive, setIsSoloSessionActive] = useState(false);
   const [stream, setStream] = useState<MediaStream | null>(null);
+  const [processedStream, setProcessedStream] = useState<MediaStream | null>(null);
   const [, setIsRecording] = useState(false);
   const [recordingState, setRecordingState] = useState<'idle' | 'recording' | 'paused'>('idle');
   const [recordedChunks, setRecordedChunks] = useState<Blob[]>([]);
   const [recordingDuration, setRecordingDuration] = useState(0);
   const [selectedBackground, setSelectedBackground] = useState<string | null>(null);
-  const [backgroundType, setBackgroundType] = useState<'image' | 'video'>('image');
+  const [backgroundType, setBackgroundType] = useState<'none' | 'blur' | 'image' | 'video'>('none');
   const [micLevel, setMicLevel] = useState(0);
   const [customBackgroundFile, setCustomBackgroundFile] = useState<File | null>(null);
   const [selectedSlot, setSelectedSlot] = useState<string | null>(null);
@@ -123,6 +125,11 @@ const ConsciousMeetings: React.FC<ConsciousMeetingsProps> = ({ user }) => {
   const xrMountRef = useRef<HTMLDivElement>(null);
   const xrSessionRef = useRef<any>(null);
   const xrCleanupRef = useRef<(() => void) | null>(null);
+  const segmentationRef = useRef<SelfieSegmentation | null>(null);
+  const processedStreamCleanupRef = useRef<(() => void) | null>(null);
+  const liveStreamRef = useRef<MediaStream | null>(null);
+  const selectedBackgroundRef = useRef<string | null>(null);
+  const customBackgroundFileRef = useRef<File | null>(null);
 
   const mockTranscript = [
     "Jordan: Welcome to our session. How are you feeling about your digital boundaries?",
@@ -211,6 +218,10 @@ const ConsciousMeetings: React.FC<ConsciousMeetingsProps> = ({ user }) => {
     candidate instanceof MediaStream && candidate.getVideoTracks().some((track) => track.readyState === 'live');
 
   const getProviderMediaStream = (): MediaStream | null => {
+    if (hasLiveTracks(processedStream)) {
+      return processedStream;
+    }
+
     if (hasLiveTracks(stream)) {
       return stream;
     }
@@ -560,6 +571,9 @@ const ConsciousMeetings: React.FC<ConsciousMeetingsProps> = ({ user }) => {
   };
 
   const stopSoloSession = () => {
+    processedStreamCleanupRef.current?.();
+    setProcessedStream(null);
+
     if (stream) {
       stream.getTracks().forEach(track => track.stop());
       setStream(null);
@@ -578,7 +592,15 @@ const ConsciousMeetings: React.FC<ConsciousMeetingsProps> = ({ user }) => {
   };
 
   const startRecording = () => {
-    if (!stream) return;
+    const activeMeeting = meetings[0];
+    const canSaveRecording = Boolean(user?.id && activeMeeting && user.id === activeMeeting.hostUserId);
+    if (!canSaveRecording) {
+      alert('Only the session initiator can record or download the meeting video.');
+      return;
+    }
+
+    const recordingStream = hasLiveTracks(processedStream) ? processedStream : stream;
+    if (!recordingStream) return;
 
     // Check supported mime types
     let mimeType = 'video/webm;codecs=vp9,opus';
@@ -592,7 +614,7 @@ const ConsciousMeetings: React.FC<ConsciousMeetingsProps> = ({ user }) => {
       }
     }
 
-    const mediaRecorder = new MediaRecorder(stream, mimeType ? { mimeType } : {});
+    const mediaRecorder = new MediaRecorder(recordingStream, mimeType ? { mimeType } : {});
 
     mediaRecorderRef.current = mediaRecorder;
     const chunks: Blob[] = [];
@@ -649,6 +671,13 @@ const ConsciousMeetings: React.FC<ConsciousMeetingsProps> = ({ user }) => {
   };
 
   const downloadRecording = () => {
+    const activeMeeting = meetings[0];
+    const canSaveRecording = Boolean(user?.id && activeMeeting && user.id === activeMeeting.hostUserId);
+    if (!canSaveRecording) {
+      alert('Only the session initiator can download the meeting video.');
+      return;
+    }
+
     if (recordedChunks.length === 0) return;
 
     const blob = new Blob(recordedChunks, { type: 'video/webm' });
@@ -662,6 +691,18 @@ const ConsciousMeetings: React.FC<ConsciousMeetingsProps> = ({ user }) => {
     URL.revokeObjectURL(url);
   };
 
+  const clearBackgroundEffect = () => {
+    setSelectedBackground(null);
+    setBackgroundType('none');
+    setCustomBackgroundFile(null);
+  };
+
+  const selectBlurBackground = () => {
+    setSelectedBackground(null);
+    setBackgroundType('blur');
+    setCustomBackgroundFile(null);
+  };
+
   const selectBackground = (background: string, type: 'image' | 'video') => {
     setSelectedBackground(background);
     setBackgroundType(type);
@@ -671,6 +712,11 @@ const ConsciousMeetings: React.FC<ConsciousMeetingsProps> = ({ user }) => {
   const handleCustomBackgroundUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     if (file) {
+      if (!file.type.startsWith('image/') && !file.type.startsWith('video/')) {
+        alert('Please upload an image or MP4/video file for virtual background use.');
+        return;
+      }
+
       // Clean up previous custom background URL
       if (customBackgroundFile && selectedBackground) {
         URL.revokeObjectURL(selectedBackground);
@@ -787,21 +833,230 @@ const ConsciousMeetings: React.FC<ConsciousMeetingsProps> = ({ user }) => {
     };
   }, []);
 
+  useEffect(() => {
+    processedStreamCleanupRef.current?.();
+    processedStreamCleanupRef.current = null;
+
+    if (!stream || !hasLiveVideoTracks(stream)) {
+      setProcessedStream(null);
+      return;
+    }
+
+    const shouldProcessStream =
+      backgroundType === 'blur' || ((backgroundType === 'image' || backgroundType === 'video') && Boolean(selectedBackground));
+    if (!shouldProcessStream) {
+      setProcessedStream(null);
+      return;
+    }
+
+    let cancelled = false;
+    let rafId: number | null = null;
+    let compositedStream: MediaStream | null = null;
+    let compositedVideoTrack: MediaStreamTrack | null = null;
+    let cameraInputVideo: HTMLVideoElement | null = null;
+    let backgroundVideo: HTMLVideoElement | null = null;
+    let backgroundImage: HTMLImageElement | null = null;
+    let renderCanvas: HTMLCanvasElement | null = null;
+    let renderContext: CanvasRenderingContext2D | null = null;
+    let localSegmentation: SelfieSegmentation | null = null;
+    let cleaningUp = false;
+
+    const cleanupProcessing = () => {
+      if (cleaningUp) return;
+      cleaningUp = true;
+      cancelled = true;
+
+      if (rafId !== null) {
+        cancelAnimationFrame(rafId);
+        rafId = null;
+      }
+
+      if (backgroundVideo) {
+        backgroundVideo.pause();
+        backgroundVideo.src = '';
+        backgroundVideo.load();
+        backgroundVideo = null;
+      }
+
+      if (cameraInputVideo) {
+        cameraInputVideo.pause();
+        cameraInputVideo.srcObject = null;
+        cameraInputVideo = null;
+      }
+
+      if (compositedVideoTrack) {
+        compositedVideoTrack.stop();
+        compositedVideoTrack = null;
+      }
+
+      if (localSegmentation) {
+        localSegmentation.close().catch(() => undefined);
+        localSegmentation = null;
+      }
+      if (segmentationRef.current) {
+        segmentationRef.current = null;
+      }
+
+      if (processedStreamCleanupRef.current === cleanupProcessing) {
+        processedStreamCleanupRef.current = null;
+      }
+
+      setProcessedStream((currentStream) => (currentStream === compositedStream ? null : currentStream));
+    };
+
+    processedStreamCleanupRef.current = cleanupProcessing;
+
+    const initializeProcessing = async () => {
+      try {
+        cameraInputVideo = document.createElement('video');
+        cameraInputVideo.autoplay = true;
+        cameraInputVideo.muted = true;
+        cameraInputVideo.playsInline = true;
+        cameraInputVideo.srcObject = stream;
+        await cameraInputVideo.play();
+
+        if (cancelled) return;
+
+        const videoTrack = stream.getVideoTracks()[0] ?? null;
+        const trackSettings = videoTrack?.getSettings?.();
+        const width = typeof trackSettings?.width === 'number' && trackSettings.width > 0 ? trackSettings.width : 1280;
+        const height = typeof trackSettings?.height === 'number' && trackSettings.height > 0 ? trackSettings.height : 720;
+
+        renderCanvas = document.createElement('canvas');
+        renderCanvas.width = width;
+        renderCanvas.height = height;
+
+        renderContext = renderCanvas.getContext('2d', { alpha: true });
+        if (!renderContext) {
+          throw new Error('Unable to initialize background compositor.');
+        }
+
+        if (backgroundType === 'image' && selectedBackground) {
+          backgroundImage = await new Promise<HTMLImageElement>((resolve, reject) => {
+            const image = new Image();
+            image.crossOrigin = 'anonymous';
+            image.onload = () => resolve(image);
+            image.onerror = () => reject(new Error('Background image failed to load.'));
+            image.src = selectedBackground;
+          });
+        } else if (backgroundType === 'video' && selectedBackground) {
+          backgroundVideo = document.createElement('video');
+          backgroundVideo.src = selectedBackground;
+          backgroundVideo.loop = true;
+          backgroundVideo.muted = true;
+          backgroundVideo.playsInline = true;
+          backgroundVideo.crossOrigin = 'anonymous';
+          backgroundVideo.preload = 'auto';
+          try {
+            await backgroundVideo.play();
+          } catch {
+            // Keep rendering; once user interacts again, video background can resume.
+          }
+        }
+
+        localSegmentation = new SelfieSegmentation({
+          locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/selfie_segmentation/${file}`,
+        });
+        segmentationRef.current = localSegmentation;
+        localSegmentation.setOptions({ modelSelection: 1, selfieMode: true });
+        localSegmentation.onResults((results: SelfieSegmentationResults) => {
+          if (cancelled || !renderContext || !renderCanvas) return;
+
+          const canvasWidth = renderCanvas.width;
+          const canvasHeight = renderCanvas.height;
+          renderContext.clearRect(0, 0, canvasWidth, canvasHeight);
+
+          renderContext.save();
+          renderContext.drawImage(results.image as CanvasImageSource, 0, 0, canvasWidth, canvasHeight);
+          renderContext.globalCompositeOperation = 'destination-in';
+          renderContext.drawImage(results.segmentationMask as CanvasImageSource, 0, 0, canvasWidth, canvasHeight);
+          renderContext.restore();
+
+          renderContext.globalCompositeOperation = 'destination-over';
+
+          if (backgroundType === 'blur') {
+            renderContext.save();
+            renderContext.filter = 'blur(18px)';
+            renderContext.drawImage(results.image as CanvasImageSource, 0, 0, canvasWidth, canvasHeight);
+            renderContext.restore();
+          } else if (backgroundType === 'video' && backgroundVideo && backgroundVideo.readyState >= 2) {
+            renderContext.drawImage(backgroundVideo, 0, 0, canvasWidth, canvasHeight);
+          } else if (backgroundType === 'image' && backgroundImage) {
+            renderContext.drawImage(backgroundImage, 0, 0, canvasWidth, canvasHeight);
+          } else {
+            renderContext.fillStyle = '#0f172a';
+            renderContext.fillRect(0, 0, canvasWidth, canvasHeight);
+          }
+
+          renderContext.globalCompositeOperation = 'source-over';
+        });
+
+        await localSegmentation.initialize();
+        if (cancelled) return;
+
+        compositedStream = renderCanvas.captureStream(30);
+        stream.getAudioTracks().forEach((audioTrack) => compositedStream?.addTrack(audioTrack));
+        compositedVideoTrack = compositedStream.getVideoTracks()[0] ?? null;
+        setProcessedStream(compositedStream);
+
+        const processFrame = async () => {
+          if (cancelled || !localSegmentation || !cameraInputVideo) return;
+
+          if (cameraInputVideo.readyState >= HTMLMediaElement.HAVE_CURRENT_DATA) {
+            try {
+              await localSegmentation.send({ image: cameraInputVideo });
+            } catch {
+              // Ignore intermittent model frame errors and continue.
+            }
+          }
+
+          if (!cancelled) {
+            rafId = requestAnimationFrame(() => {
+              void processFrame();
+            });
+          }
+        };
+
+        void processFrame();
+      } catch {
+        cleanupProcessing();
+      }
+    };
+
+    void initializeProcessing();
+
+    return () => {
+      cleanupProcessing();
+    };
+  }, [stream, backgroundType, selectedBackground]);
+
+  useEffect(() => {
+    liveStreamRef.current = stream;
+  }, [stream]);
+
+  useEffect(() => {
+    selectedBackgroundRef.current = selectedBackground;
+    customBackgroundFileRef.current = customBackgroundFile;
+  }, [selectedBackground, customBackgroundFile]);
+
   // Cleanup effect
   useEffect(() => {
     return () => {
-      if (stream) {
-        stream.getTracks().forEach(track => track.stop());
+      processedStreamCleanupRef.current?.();
+
+      const activeStream = liveStreamRef.current;
+      if (activeStream) {
+        activeStream.getTracks().forEach(track => track.stop());
       }
       if (recordingIntervalRef.current) {
         clearInterval(recordingIntervalRef.current);
       }
       // Clean up custom background URL
-      if (customBackgroundFile && selectedBackground) {
-        URL.revokeObjectURL(selectedBackground);
+      if (customBackgroundFileRef.current && selectedBackgroundRef.current) {
+        URL.revokeObjectURL(selectedBackgroundRef.current);
       }
     };
-  }, [stream, customBackgroundFile, selectedBackground]);
+  }, []);
 
   useEffect(() => {
     return () => {
@@ -816,10 +1071,15 @@ const ConsciousMeetings: React.FC<ConsciousMeetingsProps> = ({ user }) => {
 
   // Set video srcObject when stream is available
   useEffect(() => {
-    if (stream && videoRef.current) {
-      videoRef.current.srcObject = stream;
+    if (!videoRef.current) return;
+
+    const displayStream = hasLiveTracks(processedStream) ? processedStream : stream;
+    videoRef.current.srcObject = displayStream || null;
+
+    if (displayStream) {
+      videoRef.current.play().catch(() => undefined);
     }
-  }, [stream]);
+  }, [stream, processedStream]);
 
   // Keep a dedicated provider video element synced for WebXR texture mapping.
   useEffect(() => {
@@ -856,9 +1116,11 @@ const ConsciousMeetings: React.FC<ConsciousMeetingsProps> = ({ user }) => {
       providerStream.removeEventListener('inactive', clearWhenInactive);
       clearWhenInactive();
     };
-  }, [stream, isSoloSessionActive]);
+  }, [stream, processedStream, isSoloSessionActive]);
 
   const canEnterImmersiveView = hasCheckedImmersiveSupport && isImmersiveSupported;
+  const activeMeeting = meetings[0] || null;
+  const canSaveRecording = Boolean(user?.id && activeMeeting && user.id === activeMeeting.hostUserId);
 
   return (
     <div className="min-h-0 flex flex-col gap-4 sm:gap-6 md:gap-8 animate-in fade-in duration-700 relative">
@@ -1149,17 +1411,6 @@ const ConsciousMeetings: React.FC<ConsciousMeetingsProps> = ({ user }) => {
             ) : (
               // Solo Session Active UI
               <div className="glass-panel p-6 sm:p-8 md:p-10 rounded-2xl sm:rounded-[2.25rem] md:rounded-[2.5rem] lg:rounded-[3rem] border-white/5 shadow-2xl relative overflow-hidden">
-                {/* Background */}
-                {selectedBackground && (
-                  <div className="absolute inset-0 -z-10">
-                    {backgroundType === 'image' ? (
-                      <img src={selectedBackground} className="w-full h-full object-cover opacity-30" alt="Background" />
-                    ) : (
-                      <video src={selectedBackground} className="w-full h-full object-cover opacity-30" autoPlay loop muted playsInline />
-                    )}
-                  </div>
-                )}
-
                 <div className="relative z-10 space-y-6 sm:space-y-8">
                   <div className="flex items-center justify-between gap-3">
                     <div className="flex items-center gap-3 sm:gap-4">
@@ -1226,11 +1477,19 @@ const ConsciousMeetings: React.FC<ConsciousMeetingsProps> = ({ user }) => {
 
                   {/* Recording Controls */}
                   <div className="space-y-4">
+                    {!canSaveRecording && (
+                      <div className="flex items-center justify-center gap-2 text-[10px] sm:text-xs text-slate-400 uppercase tracking-widest">
+                        <ShieldCheck className="w-4 h-4 text-blue-400" />
+                        Only session initiator can record/download video
+                      </div>
+                    )}
+
                     <div className="flex items-center justify-center gap-4">
                       {recordingState === 'idle' && (
                         <button
                           onClick={startRecording}
-                          className="px-6 sm:px-8 py-3 sm:py-4 bg-red-600 hover:bg-red-500 text-white rounded-lg sm:rounded-xl font-black text-sm uppercase tracking-widest flex items-center gap-2 transition-all"
+                          disabled={!canSaveRecording}
+                          className="px-6 sm:px-8 py-3 sm:py-4 bg-red-600 hover:bg-red-500 disabled:bg-slate-700 disabled:text-slate-500 text-white rounded-lg sm:rounded-xl font-black text-sm uppercase tracking-widest flex items-center gap-2 transition-all"
                         >
                           <Play className="w-5 h-5" />
                           Start Recording
@@ -1280,7 +1539,8 @@ const ConsciousMeetings: React.FC<ConsciousMeetingsProps> = ({ user }) => {
                       <div className="flex items-center justify-center gap-4">
                         <button
                           onClick={downloadRecording}
-                          className="px-6 sm:px-8 py-3 sm:py-4 bg-blue-600 hover:bg-blue-500 text-white rounded-lg sm:rounded-xl font-black text-sm uppercase tracking-widest flex items-center gap-2 transition-all"
+                          disabled={!canSaveRecording}
+                          className="px-6 sm:px-8 py-3 sm:py-4 bg-blue-600 hover:bg-blue-500 disabled:bg-slate-700 disabled:text-slate-500 text-white rounded-lg sm:rounded-xl font-black text-sm uppercase tracking-widest flex items-center gap-2 transition-all"
                         >
                           <Download className="w-5 h-5" />
                           Download ({formatDuration(recordingDuration)})
@@ -1294,9 +1554,9 @@ const ConsciousMeetings: React.FC<ConsciousMeetingsProps> = ({ user }) => {
                     <h4 className="text-[9px] sm:text-[10px] font-black text-slate-500 uppercase tracking-widest">Meeting Background</h4>
                     <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 sm:gap-4">
                       <button
-                        onClick={() => selectBackground(null, 'image')}
+                        onClick={clearBackgroundEffect}
                         className={`p-3 sm:p-4 rounded-lg sm:rounded-xl border transition-all ${
-                          !selectedBackground ? 'bg-blue-600 border-blue-500 text-white' : 'bg-white/5 border-white/10 text-slate-400 hover:bg-white/10'
+                          backgroundType === 'none' ? 'bg-blue-600 border-blue-500 text-white' : 'bg-white/5 border-white/10 text-slate-400 hover:bg-white/10'
                         }`}
                       >
                         <div className="text-center">
@@ -1307,11 +1567,23 @@ const ConsciousMeetings: React.FC<ConsciousMeetingsProps> = ({ user }) => {
                         </div>
                       </button>
 
+                      <button
+                        onClick={selectBlurBackground}
+                        className={`p-3 sm:p-4 rounded-lg sm:rounded-xl border transition-all ${
+                          backgroundType === 'blur' ? 'bg-blue-600 border-blue-500 text-white' : 'bg-white/5 border-white/10 text-slate-400 hover:bg-white/10'
+                        }`}
+                      >
+                        <div className="text-center">
+                          <Camera className="w-8 h-8 sm:w-10 sm:h-10 mx-auto mb-2" />
+                          <span className="text-[8px] sm:text-[9px] font-black uppercase tracking-widest">Blur</span>
+                        </div>
+                      </button>
+
                       {/* Sample backgrounds - in real app, these would be user-uploaded */}
                       <button
                         onClick={() => selectBackground('https://images.unsplash.com/photo-1441974231531-c6227db76b6e?auto=format&fit=crop&q=80&w=1000', 'image')}
                         className={`p-3 sm:p-4 rounded-lg sm:rounded-xl border transition-all ${
-                          selectedBackground === 'https://images.unsplash.com/photo-1441974231531-c6227db76b6e?auto=format&fit=crop&q=80&w=1000' && !customBackgroundFile ? 'bg-blue-600 border-blue-500 text-white' : 'bg-white/5 border-white/10 text-slate-400 hover:bg-white/10'
+                          selectedBackground === 'https://images.unsplash.com/photo-1441974231531-c6227db76b6e?auto=format&fit=crop&q=80&w=1000' && backgroundType === 'image' && !customBackgroundFile ? 'bg-blue-600 border-blue-500 text-white' : 'bg-white/5 border-white/10 text-slate-400 hover:bg-white/10'
                         }`}
                       >
                         <div className="text-center">
@@ -1323,7 +1595,7 @@ const ConsciousMeetings: React.FC<ConsciousMeetingsProps> = ({ user }) => {
                       <button
                         onClick={() => selectBackground('https://images.unsplash.com/photo-1506905925346-21bda4d32df4?auto=format&fit=crop&q=80&w=1000', 'image')}
                         className={`p-3 sm:p-4 rounded-lg sm:rounded-xl border transition-all ${
-                          selectedBackground === 'https://images.unsplash.com/photo-1506905925346-21bda4d32df4?auto=format&fit=crop&q=80&w=1000' && !customBackgroundFile ? 'bg-blue-600 border-blue-500 text-white' : 'bg-white/5 border-white/10 text-slate-400 hover:bg-white/10'
+                          selectedBackground === 'https://images.unsplash.com/photo-1506905925346-21bda4d32df4?auto=format&fit=crop&q=80&w=1000' && backgroundType === 'image' && !customBackgroundFile ? 'bg-blue-600 border-blue-500 text-white' : 'bg-white/5 border-white/10 text-slate-400 hover:bg-white/10'
                         }`}
                       >
                         <div className="text-center">
@@ -1335,7 +1607,7 @@ const ConsciousMeetings: React.FC<ConsciousMeetingsProps> = ({ user }) => {
                       <button
                         onClick={() => selectBackground('https://images.unsplash.com/photo-1559827260-dc66d52bef19?auto=format&fit=crop&q=80&w=1000', 'image')}
                         className={`p-3 sm:p-4 rounded-lg sm:rounded-xl border transition-all ${
-                          selectedBackground === 'https://images.unsplash.com/photo-1559827260-dc66d52bef19?auto=format&fit=crop&q=80&w=1000' && !customBackgroundFile ? 'bg-blue-600 border-blue-500 text-white' : 'bg-white/5 border-white/10 text-slate-400 hover:bg-white/10'
+                          selectedBackground === 'https://images.unsplash.com/photo-1559827260-dc66d52bef19?auto=format&fit=crop&q=80&w=1000' && backgroundType === 'image' && !customBackgroundFile ? 'bg-blue-600 border-blue-500 text-white' : 'bg-white/5 border-white/10 text-slate-400 hover:bg-white/10'
                         }`}
                       >
                         <div className="text-center">
@@ -1348,7 +1620,9 @@ const ConsciousMeetings: React.FC<ConsciousMeetingsProps> = ({ user }) => {
                       <button
                         onClick={() => fileInputRef.current?.click()}
                         className={`p-3 sm:p-4 rounded-lg sm:rounded-xl border transition-all ${
-                          customBackgroundFile ? 'bg-blue-600 border-blue-500 text-white' : 'bg-white/5 border-white/10 text-slate-400 hover:bg-white/10'
+                          customBackgroundFile && (backgroundType === 'image' || backgroundType === 'video')
+                            ? 'bg-blue-600 border-blue-500 text-white'
+                            : 'bg-white/5 border-white/10 text-slate-400 hover:bg-white/10'
                         }`}
                       >
                         <div className="text-center">
