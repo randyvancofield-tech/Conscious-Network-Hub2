@@ -1312,11 +1312,19 @@ const App: React.FC = () => {
               />
             )}
 
-            <aside className={`fixed inset-y-0 left-0 z-[110] w-80 glass-panel border-r border-white/5 transition-transform duration-500 ease-in-out ${isSidebarOpen ? 'translate-x-0' : '-translate-x-full'} lg:relative lg:translate-x-0`}>
+            <aside
+              className={`fixed inset-y-0 left-0 z-[110] w-80 glass-panel border-r border-white/5 transition-all duration-500 ease-in-out overflow-hidden ${
+                isSidebarOpen ? 'translate-x-0' : '-translate-x-full'
+              } ${
+                isSidebarOpen
+                  ? 'lg:static lg:translate-x-0 lg:w-80 lg:opacity-100'
+                  : 'lg:static lg:translate-x-0 lg:w-0 lg:opacity-0 lg:border-r-0 lg:pointer-events-none'
+              }`}
+            >
               <div className="h-full flex flex-col p-10">
                 <button 
                   onClick={() => setSidebarOpen(false)} 
-                  className="lg:hidden absolute top-8 right-8 p-3 hover:bg-white/5 rounded-2xl text-slate-500"
+                  className="absolute top-8 right-8 p-3 hover:bg-white/5 rounded-2xl text-slate-500"
                 >
                   <X className="w-6 h-6" />
                 </button>
@@ -1391,7 +1399,7 @@ const App: React.FC = () => {
               <header className="h-20 sm:h-24 flex items-center justify-between px-4 sm:px-6 md:px-8 lg:px-12 border-b border-white/5 z-20 backdrop-blur-3xl bg-black/20">
                 <div className="flex items-center gap-6">
                   {!isSidebarOpen && (
-                    <button onClick={toggleSidebar} className="lg:hidden p-3 bg-white/5 hover:bg-white/10 rounded-xl text-slate-400 border border-white/10 shadow-lg">
+                    <button onClick={toggleSidebar} className="p-3 bg-white/5 hover:bg-white/10 rounded-xl text-slate-400 border border-white/10 shadow-lg">
                       <Menu className="w-5 h-5" />
                     </button>
                   )}

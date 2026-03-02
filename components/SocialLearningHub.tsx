@@ -122,6 +122,15 @@ const toRelativeTimestamp = (value: string): string => {
   return `${deltaDays}d ago`;
 };
 
+const isLikelyVideoUrl = (value: string): boolean =>
+  /\.(mp4|webm|mov|m4v|ogg)([?#].*)?$/i.test(String(value || '').trim());
+
+const toDateLabel = (value: string | null | undefined): string => {
+  const parsed = new Date(String(value || ''));
+  if (Number.isNaN(parsed.getTime())) return 'N/A';
+  return parsed.toLocaleDateString();
+};
+
 const mapSocialPostToNode = (post: any): NodeContent => {
   const media = Array.isArray(post?.media) ? post.media[0] : null;
   const type = media?.mediaType === 'video' ? 'video' : media?.mediaType === 'file' ? 'file' : media ? 'image' : 'text';
@@ -426,16 +435,37 @@ const SocialLearningHub: React.FC<SocialLearningHubProps> = ({ user }) => {
     setProfileViewError('');
     setProfileViewLoading(true);
     try {
-      const response = await fetch(toApiUrl(`/api/social/profile/${authorId}?limit=20`), {
-        headers: buildAuthHeaders(),
-      });
-      const data = await response.json().catch(() => ({}));
-      if (!response.ok) {
-        throw new Error(data?.error || 'Unable to load profile');
+      let profile: any = null;
+      let cursor: string | null = null;
+      const allPosts: any[] = [];
+      const seen = new Set<string>();
+
+      for (let page = 0; page < 10; page += 1) {
+        const params = new URLSearchParams({ limit: '50' });
+        if (cursor) params.set('cursor', cursor);
+        const response = await fetch(toApiUrl(`/api/social/profile/${authorId}?${params.toString()}`), {
+          headers: buildAuthHeaders(),
+        });
+        const data = await response.json().catch(() => ({}));
+        if (!response.ok) {
+          throw new Error(data?.error || 'Unable to load profile');
+        }
+        if (!profile) profile = data?.profile || null;
+        const pagePosts = Array.isArray(data?.posts) ? data.posts : [];
+        for (const post of pagePosts) {
+          const id = String(post?.id || '').trim();
+          if (!id || seen.has(id)) continue;
+          seen.add(id);
+          allPosts.push(post);
+        }
+        const nextCursor = String(data?.nextCursor || '').trim();
+        if (!nextCursor || pagePosts.length === 0) break;
+        cursor = nextCursor;
       }
+
       setSelectedProfileView({
-        profile: data.profile || null,
-        posts: Array.isArray(data.posts) ? data.posts : [],
+        profile,
+        posts: allPosts,
       });
     } catch (error) {
       setProfileViewError(error instanceof Error ? error.message : 'Unable to load profile');
@@ -1065,41 +1095,137 @@ const SocialLearningHub: React.FC<SocialLearningHubProps> = ({ user }) => {
 
             {selectedProfileView && !profileViewLoading && (
               <div className="space-y-6">
-                <div className="flex flex-col sm:flex-row sm:items-center gap-4">
-                  <img
-                    src={selectedProfileView.profile?.avatarUrl || selectedProfileView.profile?.profileMedia?.avatar?.url || 'https://api.dicebear.com/7.x/avataaars/svg?seed=node'}
-                    alt={selectedProfileView.profile?.name || 'Node'}
-                    className="w-16 h-16 rounded-2xl object-cover ring-2 ring-white/10"
-                  />
-                  <div className="min-w-0">
-                    <h5 className="text-xl font-black text-white tracking-tight truncate">
-                      {selectedProfileView.profile?.name || 'Node'}
-                    </h5>
-                    <p className="text-[10px] uppercase tracking-widest text-blue-300 font-black mt-1">
-                      @{selectedProfileView.profile?.handle || 'node'}
-                    </p>
-                    <p className="text-sm text-slate-400 mt-2">
+                <div className="rounded-[1.5rem] overflow-hidden border border-white/10 bg-white/5">
+                  {selectedProfileView.profile?.bannerUrl || selectedProfileView.profile?.profileMedia?.cover?.url ? (
+                    isLikelyVideoUrl(selectedProfileView.profile?.bannerUrl || selectedProfileView.profile?.profileMedia?.cover?.url) ? (
+                      <video
+                        src={selectedProfileView.profile?.bannerUrl || selectedProfileView.profile?.profileMedia?.cover?.url}
+                        className="w-full h-44 sm:h-56 object-cover"
+                        controls
+                        playsInline
+                      />
+                    ) : (
+                      <img
+                        src={selectedProfileView.profile?.bannerUrl || selectedProfileView.profile?.profileMedia?.cover?.url}
+                        alt={selectedProfileView.profile?.name || 'Node'}
+                        className="w-full h-44 sm:h-56 object-cover"
+                      />
+                    )
+                  ) : (
+                    <div className="w-full h-44 sm:h-56 bg-gradient-to-r from-blue-900/40 to-teal-900/20" />
+                  )}
+                  <div className="p-4 sm:p-6 flex flex-col sm:flex-row sm:items-center gap-4">
+                    <img
+                      src={
+                        selectedProfileView.profile?.avatarUrl ||
+                        selectedProfileView.profile?.profileMedia?.avatar?.url ||
+                        'https://api.dicebear.com/7.x/avataaars/svg?seed=node'
+                      }
+                      alt={selectedProfileView.profile?.name || 'Node'}
+                      className="w-16 h-16 sm:w-20 sm:h-20 rounded-2xl object-cover ring-2 ring-white/10"
+                    />
+                    <div className="min-w-0">
+                      <h5 className="text-xl sm:text-2xl font-black text-white tracking-tight break-words">
+                        {selectedProfileView.profile?.name || 'Node'}
+                      </h5>
+                      <p className="text-[10px] uppercase tracking-widest text-blue-300 font-black mt-1 break-all">
+                        @{selectedProfileView.profile?.handle || 'node'}
+                      </p>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <div className="p-4 rounded-xl bg-white/5 border border-white/10">
+                    <p className="text-[10px] uppercase tracking-widest text-slate-500 font-black">Location</p>
+                    <p className="text-sm text-slate-200 mt-1 break-words">{selectedProfileView.profile?.location || 'Not specified'}</p>
+                  </div>
+                  <div className="p-4 rounded-xl bg-white/5 border border-white/10">
+                    <p className="text-[10px] uppercase tracking-widest text-slate-500 font-black">Joined</p>
+                    <p className="text-sm text-slate-200 mt-1">{toDateLabel(selectedProfileView.profile?.createdAt)}</p>
+                  </div>
+                  <div className="p-4 rounded-xl bg-white/5 border border-white/10 sm:col-span-2">
+                    <p className="text-[10px] uppercase tracking-widest text-slate-500 font-black">Bio</p>
+                    <p className="text-sm text-slate-200 mt-1 whitespace-pre-wrap break-words">
                       {selectedProfileView.profile?.bio || 'No biography provided yet.'}
                     </p>
+                  </div>
+                  <div className="p-4 rounded-xl bg-white/5 border border-white/10 sm:col-span-2">
+                    <p className="text-[10px] uppercase tracking-widest text-slate-500 font-black">Links</p>
+                    <div className="mt-2 flex flex-wrap gap-2">
+                      {[selectedProfileView.profile?.twitterUrl, selectedProfileView.profile?.githubUrl, selectedProfileView.profile?.websiteUrl]
+                        .filter((value) => String(value || '').trim().length > 0)
+                        .map((link) => (
+                          <a
+                            key={link}
+                            href={link}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="px-3 py-2 rounded-lg bg-blue-600/10 hover:bg-blue-600/20 border border-blue-500/20 text-blue-300 text-xs font-bold break-all"
+                          >
+                            {link}
+                          </a>
+                        ))}
+                      {!selectedProfileView.profile?.twitterUrl &&
+                        !selectedProfileView.profile?.githubUrl &&
+                        !selectedProfileView.profile?.websiteUrl && (
+                          <p className="text-sm text-slate-400">No public links.</p>
+                        )}
+                    </div>
                   </div>
                 </div>
 
                 <div className="space-y-3">
-                  <h6 className="text-[10px] uppercase tracking-widest text-slate-500 font-black">Recent Social Posts</h6>
+                  <h6 className="text-[10px] uppercase tracking-widest text-slate-500 font-black">
+                    Social Posts ({selectedProfileView.posts.length})
+                  </h6>
                   {selectedProfileView.posts.length === 0 ? (
                     <div className="p-4 rounded-xl bg-white/5 border border-white/10 text-sm text-slate-400">
                       No public posts available.
                     </div>
                   ) : (
                     <div className="space-y-3">
-                      {selectedProfileView.posts.slice(0, 8).map((post) => (
+                      {selectedProfileView.posts.map((post) => (
                         <div key={post.id} className="p-4 rounded-xl bg-white/5 border border-white/10">
-                          <p className="text-[10px] uppercase tracking-widest text-slate-500 font-black mb-2">
-                            {toRelativeTimestamp(String(post.createdAt || ''))}
-                          </p>
-                          <p className="text-sm text-slate-200 break-words">
+                          <div className="flex flex-wrap items-center gap-2 mb-2">
+                            <p className="text-[10px] uppercase tracking-widest text-slate-500 font-black">
+                              {toRelativeTimestamp(String(post.createdAt || ''))}
+                            </p>
+                            <span className="text-[9px] uppercase tracking-widest text-slate-400 bg-white/5 px-2 py-1 rounded-md border border-white/10">
+                              {String(post.visibility || 'public')}
+                            </span>
+                          </div>
+                          <p className="text-sm text-slate-200 break-words whitespace-pre-wrap">
                             {String(post.text || '').trim() || 'Media post'}
                           </p>
+                          {Array.isArray(post.media) && post.media.length > 0 && (
+                            <div className="mt-3 grid grid-cols-1 sm:grid-cols-2 gap-3">
+                              {post.media.map((entry: any) => {
+                                const mediaUrl = String(entry?.url || '').trim();
+                                if (!mediaUrl) return null;
+                                const mediaType = String(entry?.mediaType || '').toLowerCase();
+                                if (mediaType === 'video' || isLikelyVideoUrl(mediaUrl)) {
+                                  return (
+                                    <video
+                                      key={String(entry?.id || mediaUrl)}
+                                      src={mediaUrl}
+                                      className="w-full rounded-xl border border-white/10 bg-black"
+                                      controls
+                                      playsInline
+                                    />
+                                  );
+                                }
+                                return (
+                                  <img
+                                    key={String(entry?.id || mediaUrl)}
+                                    src={mediaUrl}
+                                    alt="Post media"
+                                    className="w-full rounded-xl border border-white/10 object-cover"
+                                  />
+                                );
+                              })}
+                            </div>
+                          )}
                         </div>
                       ))}
                     </div>
