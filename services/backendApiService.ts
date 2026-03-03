@@ -50,6 +50,92 @@ export interface DirectoryUserEntry {
   handle: string | null;
 }
 
+export interface ProviderInviteGroupMember {
+  userId: string | null;
+  username: string;
+  displayName: string;
+}
+
+export interface ProviderInviteGroup {
+  id: string;
+  name: string;
+  members: ProviderInviteGroupMember[];
+  createdAt: string;
+  updatedAt: string;
+}
+
+export type MeetingSessionMode = 'virtual' | 'solo' | 'immersive-5d';
+export type MeetingSessionStatus = 'scheduled' | 'live' | 'ended';
+
+export interface MeetingSessionParticipant {
+  id: string;
+  kind: 'provider' | 'user' | 'guest';
+  displayName: string;
+  joinedAtMs: number;
+}
+
+export interface MeetingSessionInvite {
+  key: string;
+  userId: string | null;
+  username: string;
+  displayName: string;
+  source: 'direct' | 'group';
+  groupId: string | null;
+  invitedAtMs: number;
+}
+
+export interface MeetingSessionSummary {
+  id: string;
+  title: string;
+  mode: MeetingSessionMode;
+  status: MeetingSessionStatus;
+  providerDid: string;
+  maxViewers: number;
+  participants: MeetingSessionParticipant[];
+  invitedMembers: MeetingSessionInvite[];
+  createdAtMs: number;
+  updatedAtMs: number;
+  startedAtMs: number | null;
+  endedAtMs: number | null;
+}
+
+export interface MeetingExternalLink {
+  id: string;
+  inviteToken: string;
+  joinUrl: string;
+  expiresAtMs: number;
+  maxUses: number;
+  uses: number;
+}
+
+export interface ExternalMeetingPreview {
+  session: {
+    id: string;
+    title: string;
+    mode: MeetingSessionMode;
+    status: MeetingSessionStatus;
+    maxViewers: number;
+    participantCount: number;
+    remainingCapacity: number;
+  };
+  link: {
+    id: string;
+    expiresAtMs: number;
+    uses: number;
+    maxUses: number;
+  };
+}
+
+export interface ExternalMeetingJoinResult {
+  guest: {
+    participantId: string;
+    name: string;
+    email: string;
+  };
+  guestSessionToken: string;
+  session: MeetingSessionSummary;
+}
+
 // Resolve backend URL:
 // - Use VITE_BACKEND_URL if set.
 // - Otherwise use same-origin (empty string), letting dev proxy or reverse proxy handle routing.
@@ -346,6 +432,346 @@ class BackendAPIService {
     }
   }
 
+  async listProviderInviteGroups(providerToken: string): Promise<ProviderInviteGroup[]> {
+    const token = String(providerToken || '').trim();
+    if (!token) return [];
+    try {
+      const response = await fetch(`${this.baseUrl}/api/provider/session/groups`, {
+        method: 'GET',
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      });
+      if (!response.ok) return [];
+      const data = await response.json().catch(() => null);
+      if (!data || !Array.isArray(data.groups)) return [];
+      return data.groups as ProviderInviteGroup[];
+    } catch {
+      return [];
+    }
+  }
+
+  async createProviderInviteGroup(
+    providerToken: string,
+    groupName: string
+  ): Promise<ProviderInviteGroup | null> {
+    const token = String(providerToken || '').trim();
+    const normalizedName = String(groupName || '').trim();
+    if (!token || !normalizedName) return null;
+    try {
+      const response = await fetch(`${this.baseUrl}/api/provider/session/groups`, {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${token}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ name: normalizedName }),
+      });
+      if (!response.ok) return null;
+      const data = await response.json().catch(() => null);
+      if (!data?.group) return null;
+      return data.group as ProviderInviteGroup;
+    } catch {
+      return null;
+    }
+  }
+
+  async addProviderInviteGroupMember(
+    providerToken: string,
+    groupId: string,
+    username: string
+  ): Promise<ProviderInviteGroup | null> {
+    const token = String(providerToken || '').trim();
+    const normalizedGroupId = String(groupId || '').trim();
+    const normalizedUsername = String(username || '').trim();
+    if (!token || !normalizedGroupId || !normalizedUsername) return null;
+    try {
+      const response = await fetch(`${this.baseUrl}/api/provider/session/groups/${encodeURIComponent(normalizedGroupId)}/members`, {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${token}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ username: normalizedUsername }),
+      });
+      if (!response.ok) return null;
+      const data = await response.json().catch(() => null);
+      if (!data?.group) return null;
+      return data.group as ProviderInviteGroup;
+    } catch {
+      return null;
+    }
+  }
+
+  async listProviderMeetingSessions(providerToken: string): Promise<MeetingSessionSummary[]> {
+    const token = String(providerToken || '').trim();
+    if (!token) return [];
+    try {
+      const response = await fetch(`${this.baseUrl}/api/meeting/provider/sessions`, {
+        method: 'GET',
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      });
+      if (!response.ok) return [];
+      const data = await response.json().catch(() => null);
+      if (!data || !Array.isArray(data.sessions)) return [];
+      return data.sessions as MeetingSessionSummary[];
+    } catch {
+      return [];
+    }
+  }
+
+  async createProviderMeetingSession(
+    providerToken: string,
+    input: { title: string; mode: MeetingSessionMode; maxViewers: number }
+  ): Promise<MeetingSessionSummary | null> {
+    const token = String(providerToken || '').trim();
+    if (!token) return null;
+    try {
+      const response = await fetch(`${this.baseUrl}/api/meeting/provider/sessions`, {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${token}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          title: input.title,
+          mode: input.mode,
+          maxViewers: input.maxViewers,
+        }),
+      });
+      if (!response.ok) return null;
+      const data = await response.json().catch(() => null);
+      if (!data?.session) return null;
+      return data.session as MeetingSessionSummary;
+    } catch {
+      return null;
+    }
+  }
+
+  async startProviderMeetingSession(
+    providerToken: string,
+    sessionId: string
+  ): Promise<MeetingSessionSummary | null> {
+    const token = String(providerToken || '').trim();
+    const id = String(sessionId || '').trim();
+    if (!token || !id) return null;
+    try {
+      const response = await fetch(`${this.baseUrl}/api/meeting/provider/sessions/${encodeURIComponent(id)}/start`, {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      });
+      if (!response.ok) return null;
+      const data = await response.json().catch(() => null);
+      if (!data?.session) return null;
+      return data.session as MeetingSessionSummary;
+    } catch {
+      return null;
+    }
+  }
+
+  async endProviderMeetingSession(
+    providerToken: string,
+    sessionId: string
+  ): Promise<boolean> {
+    const token = String(providerToken || '').trim();
+    const id = String(sessionId || '').trim();
+    if (!token || !id) return false;
+    try {
+      const response = await fetch(`${this.baseUrl}/api/meeting/provider/sessions/${encodeURIComponent(id)}/end`, {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      });
+      return response.ok;
+    } catch {
+      return false;
+    }
+  }
+
+  async inviteUsersToProviderMeetingSession(
+    providerToken: string,
+    sessionId: string,
+    input: { usernames?: string[]; groupIds?: string[] }
+  ): Promise<MeetingSessionSummary | null> {
+    const token = String(providerToken || '').trim();
+    const id = String(sessionId || '').trim();
+    if (!token || !id) return null;
+    try {
+      const response = await fetch(`${this.baseUrl}/api/meeting/provider/sessions/${encodeURIComponent(id)}/invite-users`, {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${token}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          usernames: Array.isArray(input.usernames) ? input.usernames : [],
+          groupIds: Array.isArray(input.groupIds) ? input.groupIds : [],
+        }),
+      });
+      if (!response.ok) return null;
+      const data = await response.json().catch(() => null);
+      if (!data?.session) return null;
+      return data.session as MeetingSessionSummary;
+    } catch {
+      return null;
+    }
+  }
+
+  async createProviderMeetingExternalLink(
+    providerToken: string,
+    sessionId: string,
+    input: { expiresInMinutes: number; maxUses: number }
+  ): Promise<MeetingExternalLink | null> {
+    const token = String(providerToken || '').trim();
+    const id = String(sessionId || '').trim();
+    if (!token || !id) return null;
+    try {
+      const response = await fetch(`${this.baseUrl}/api/meeting/provider/sessions/${encodeURIComponent(id)}/external-links`, {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${token}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          expiresInMinutes: input.expiresInMinutes,
+          maxUses: input.maxUses,
+        }),
+      });
+      if (!response.ok) return null;
+      const data = await response.json().catch(() => null);
+      if (!data?.link) return null;
+      return data.link as MeetingExternalLink;
+    } catch {
+      return null;
+    }
+  }
+
+  async listJoinableMeetingSessions(): Promise<MeetingSessionSummary[]> {
+    try {
+      const response = await fetch(`${this.baseUrl}/api/meeting/user/sessions/joinable`, {
+        method: 'GET',
+        headers: buildAuthHeaders(),
+      });
+      if (!response.ok) return [];
+      const data = await response.json().catch(() => null);
+      if (!data || !Array.isArray(data.sessions)) return [];
+      return data.sessions as MeetingSessionSummary[];
+    } catch {
+      return [];
+    }
+  }
+
+  async joinMeetingSession(
+    sessionId: string,
+    displayName?: string
+  ): Promise<MeetingSessionSummary | null> {
+    const id = String(sessionId || '').trim();
+    if (!id) return null;
+    try {
+      const response = await fetch(`${this.baseUrl}/api/meeting/user/sessions/${encodeURIComponent(id)}/join`, {
+        method: 'POST',
+        headers: buildAuthHeaders({
+          'Content-Type': 'application/json',
+        }),
+        body: JSON.stringify({
+          displayName: displayName || null,
+        }),
+      });
+      if (!response.ok) return null;
+      const data = await response.json().catch(() => null);
+      if (!data?.session) return null;
+      return data.session as MeetingSessionSummary;
+    } catch {
+      return null;
+    }
+  }
+
+  async leaveMeetingSession(sessionId: string): Promise<boolean> {
+    const id = String(sessionId || '').trim();
+    if (!id) return false;
+    try {
+      const response = await fetch(`${this.baseUrl}/api/meeting/user/sessions/${encodeURIComponent(id)}/leave`, {
+        method: 'POST',
+        headers: buildAuthHeaders(),
+      });
+      return response.ok;
+    } catch {
+      return false;
+    }
+  }
+
+  async previewExternalMeetingInvite(inviteToken: string): Promise<ExternalMeetingPreview | null> {
+    const token = String(inviteToken || '').trim();
+    if (!token) return null;
+    try {
+      const response = await fetch(`${this.baseUrl}/api/meeting/guest/preview`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ inviteToken: token }),
+      });
+      if (!response.ok) return null;
+      const data = await response.json().catch(() => null);
+      if (!data?.session || !data?.link) return null;
+      return data as ExternalMeetingPreview;
+    } catch {
+      return null;
+    }
+  }
+
+  async joinExternalMeetingInvite(
+    inviteToken: string,
+    name: string,
+    email: string
+  ): Promise<ExternalMeetingJoinResult | null> {
+    const token = String(inviteToken || '').trim();
+    const normalizedName = String(name || '').trim();
+    const normalizedEmail = String(email || '').trim().toLowerCase();
+    if (!token || !normalizedName || !normalizedEmail) return null;
+    try {
+      const response = await fetch(`${this.baseUrl}/api/meeting/guest/join`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          inviteToken: token,
+          name: normalizedName,
+          email: normalizedEmail,
+        }),
+      });
+      if (!response.ok) return null;
+      const data = await response.json().catch(() => null);
+      if (!data?.guest || !data?.guestSessionToken || !data?.session) return null;
+      return data as ExternalMeetingJoinResult;
+    } catch {
+      return null;
+    }
+  }
+
+  async leaveExternalMeetingInvite(guestSessionToken: string): Promise<boolean> {
+    const token = String(guestSessionToken || '').trim();
+    if (!token) return false;
+    try {
+      const response = await fetch(`${this.baseUrl}/api/meeting/guest/leave`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ guestSessionToken: token }),
+      });
+      return response.ok;
+    } catch {
+      return false;
+    }
+  }
+
   /**
    * Process a platform issue report
    */
@@ -614,4 +1040,103 @@ export async function reportImmersiveSessionEvent(
 
 export async function getUserDirectory(): Promise<DirectoryUserEntry[]> {
   return backendAPI.getUserDirectory();
+}
+
+export async function listProviderInviteGroups(
+  providerToken: string
+): Promise<ProviderInviteGroup[]> {
+  return backendAPI.listProviderInviteGroups(providerToken);
+}
+
+export async function createProviderInviteGroup(
+  providerToken: string,
+  groupName: string
+): Promise<ProviderInviteGroup | null> {
+  return backendAPI.createProviderInviteGroup(providerToken, groupName);
+}
+
+export async function addProviderInviteGroupMember(
+  providerToken: string,
+  groupId: string,
+  username: string
+): Promise<ProviderInviteGroup | null> {
+  return backendAPI.addProviderInviteGroupMember(providerToken, groupId, username);
+}
+
+export async function listProviderMeetingSessions(
+  providerToken: string
+): Promise<MeetingSessionSummary[]> {
+  return backendAPI.listProviderMeetingSessions(providerToken);
+}
+
+export async function createProviderMeetingSession(
+  providerToken: string,
+  input: { title: string; mode: MeetingSessionMode; maxViewers: number }
+): Promise<MeetingSessionSummary | null> {
+  return backendAPI.createProviderMeetingSession(providerToken, input);
+}
+
+export async function startProviderMeetingSession(
+  providerToken: string,
+  sessionId: string
+): Promise<MeetingSessionSummary | null> {
+  return backendAPI.startProviderMeetingSession(providerToken, sessionId);
+}
+
+export async function endProviderMeetingSession(
+  providerToken: string,
+  sessionId: string
+): Promise<boolean> {
+  return backendAPI.endProviderMeetingSession(providerToken, sessionId);
+}
+
+export async function inviteUsersToProviderMeetingSession(
+  providerToken: string,
+  sessionId: string,
+  input: { usernames?: string[]; groupIds?: string[] }
+): Promise<MeetingSessionSummary | null> {
+  return backendAPI.inviteUsersToProviderMeetingSession(providerToken, sessionId, input);
+}
+
+export async function createProviderMeetingExternalLink(
+  providerToken: string,
+  sessionId: string,
+  input: { expiresInMinutes: number; maxUses: number }
+): Promise<MeetingExternalLink | null> {
+  return backendAPI.createProviderMeetingExternalLink(providerToken, sessionId, input);
+}
+
+export async function listJoinableMeetingSessions(): Promise<MeetingSessionSummary[]> {
+  return backendAPI.listJoinableMeetingSessions();
+}
+
+export async function joinMeetingSession(
+  sessionId: string,
+  displayName?: string
+): Promise<MeetingSessionSummary | null> {
+  return backendAPI.joinMeetingSession(sessionId, displayName);
+}
+
+export async function leaveMeetingSession(sessionId: string): Promise<boolean> {
+  return backendAPI.leaveMeetingSession(sessionId);
+}
+
+export async function previewExternalMeetingInvite(
+  inviteToken: string
+): Promise<ExternalMeetingPreview | null> {
+  return backendAPI.previewExternalMeetingInvite(inviteToken);
+}
+
+export async function joinExternalMeetingInvite(
+  inviteToken: string,
+  name: string,
+  email: string
+): Promise<ExternalMeetingJoinResult | null> {
+  return backendAPI.joinExternalMeetingInvite(inviteToken, name, email);
+}
+
+export async function leaveExternalMeetingInvite(
+  guestSessionToken: string
+): Promise<boolean> {
+  return backendAPI.leaveExternalMeetingInvite(guestSessionToken);
 }

@@ -296,6 +296,10 @@ const App: React.FC = () => {
     if (window.innerWidth >= 1024) setSidebarOpen(true);
     const savedCourses = localStorage.getItem('hcn_enrolled_courses');
     if (savedCourses) setEnrolledCourses(JSON.parse(savedCourses));
+    const initialParams = new URLSearchParams(window.location.search);
+    if (initialParams.get('externalMeetingInvite')) {
+      setCurrentView(AppView.CONSCIOUS_MEETINGS);
+    }
 
     const initializeSession = async () => {
       const token = getAuthToken();

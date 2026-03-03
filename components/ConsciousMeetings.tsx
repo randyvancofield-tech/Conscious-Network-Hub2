@@ -10,8 +10,33 @@ import {
 import { SelfieSegmentation, Results as SelfieSegmentationResults } from '@mediapipe/selfie_segmentation';
 import * as THREE from 'three';
 import { UserProfile, Provider, Meeting } from '../types';
-import { getUserDirectory, reportImmersiveSessionEvent, summarizeMeeting } from '../services/backendApiService';
-import type { MeetingSummary } from '../services/backendApiService';
+import {
+  addProviderInviteGroupMember,
+  createProviderInviteGroup,
+  createProviderMeetingExternalLink,
+  createProviderMeetingSession,
+  endProviderMeetingSession,
+  getUserDirectory,
+  inviteUsersToProviderMeetingSession,
+  joinExternalMeetingInvite,
+  joinMeetingSession,
+  leaveExternalMeetingInvite,
+  leaveMeetingSession,
+  listJoinableMeetingSessions,
+  listProviderInviteGroups,
+  listProviderMeetingSessions,
+  previewExternalMeetingInvite,
+  reportImmersiveSessionEvent,
+  startProviderMeetingSession,
+  summarizeMeeting,
+} from '../services/backendApiService';
+import type {
+  ExternalMeetingPreview,
+  MeetingSessionMode,
+  MeetingSessionSummary,
+  MeetingSummary,
+  ProviderInviteGroup,
+} from '../services/backendApiService';
 
 interface ConsciousMeetingsProps {
   user: UserProfile | null;
@@ -207,6 +232,30 @@ const ConsciousMeetings: React.FC<ConsciousMeetingsProps> = ({ user }) => {
   const [inviteGroupNameInput, setInviteGroupNameInput] = useState('');
   const [selectedInviteGroupId, setSelectedInviteGroupId] = useState('');
   const inviteGroupStorageKey = user?.id ? `hcn_meeting_invite_groups_${user.id}` : null;
+  const [providerSessionTokenInput, setProviderSessionTokenInput] = useState('');
+  const [providerSessionToken, setProviderSessionToken] = useState('');
+  const [providerInviteGroups, setProviderInviteGroups] = useState<ProviderInviteGroup[]>([]);
+  const [hostedMeetingSessions, setHostedMeetingSessions] = useState<MeetingSessionSummary[]>([]);
+  const [joinableMeetingSessions, setJoinableMeetingSessions] = useState<MeetingSessionSummary[]>([]);
+  const [selectedHostedSessionId, setSelectedHostedSessionId] = useState('');
+  const [hostSessionTitleInput, setHostSessionTitleInput] = useState('Provider-Led Session');
+  const [hostSessionMode, setHostSessionMode] = useState<MeetingSessionMode>('virtual');
+  const [hostSessionMaxViewersInput, setHostSessionMaxViewersInput] = useState(120);
+  const [providerGroupNameInput, setProviderGroupNameInput] = useState('');
+  const [providerGroupMemberUsernameInput, setProviderGroupMemberUsernameInput] = useState('');
+  const [inviteUsernamesBatchInput, setInviteUsernamesBatchInput] = useState('');
+  const [selectedProviderGroupIds, setSelectedProviderGroupIds] = useState<string[]>([]);
+  const [externalLinkTtlMinutesInput, setExternalLinkTtlMinutesInput] = useState(120);
+  const [externalLinkMaxUsesInput, setExternalLinkMaxUsesInput] = useState(250);
+  const [latestExternalJoinLink, setLatestExternalJoinLink] = useState('');
+  const [meetingOpsStatus, setMeetingOpsStatus] = useState('');
+  const [isMeetingOpsBusy, setIsMeetingOpsBusy] = useState(false);
+  const [activeJoinedSessionId, setActiveJoinedSessionId] = useState<string | null>(null);
+  const [externalInviteTokenInput, setExternalInviteTokenInput] = useState('');
+  const [externalInvitePreview, setExternalInvitePreview] = useState<ExternalMeetingPreview | null>(null);
+  const [externalGuestNameInput, setExternalGuestNameInput] = useState('');
+  const [externalGuestEmailInput, setExternalGuestEmailInput] = useState('');
+  const [externalGuestSessionToken, setExternalGuestSessionToken] = useState('');
 
   // Solo Session States
   const [isSoloSessionActive, setIsSoloSessionActive] = useState(false);
@@ -258,6 +307,9 @@ const ConsciousMeetings: React.FC<ConsciousMeetingsProps> = ({ user }) => {
     "User: That sounds manageable. I'll start tomorrow.",
     "Jordan: Great, I will also provide you with the bio-hacking resource by Sven."
   ];
+
+  const providerTokenStorageKey = 'hcn_provider_session_token';
+  const externalGuestSessionStorageKey = 'hcn_external_guest_session_token';
 
   const normalizeUsername = (input: string): string => input.trim().replace(/^@+/, '').toLowerCase();
 
@@ -529,6 +581,437 @@ const ConsciousMeetings: React.FC<ConsciousMeetingsProps> = ({ user }) => {
     setShowSynthesisConsentModal(false);
   };
 
+  const parseBatchUsernames = (rawValue: string): string[] => {
+    return Array.from(
+      new Set(
+        String(rawValue || '')
+          .split(/[\s,;\n\r\t]+/)
+          .map((entry) => normalizeUsername(entry))
+          .filter((entry) => entry.length > 0)
+      )
+    );
+  };
+
+  const refreshProviderMeetingData = async (tokenOverride?: string) => {
+    const token = String(tokenOverride ?? providerSessionToken).trim();
+    if (!token) {
+      setProviderInviteGroups([]);
+      setHostedMeetingSessions([]);
+      setSelectedHostedSessionId('');
+      return;
+    }
+
+    const [groups, sessions] = await Promise.all([
+      listProviderInviteGroups(token),
+      listProviderMeetingSessions(token),
+    ]);
+
+    setProviderInviteGroups(groups);
+    setHostedMeetingSessions(sessions);
+    setSelectedHostedSessionId((current) => {
+      if (sessions.length === 0) return '';
+      if (current && sessions.some((entry) => entry.id === current)) return current;
+      return sessions[0].id;
+    });
+  };
+
+  const refreshJoinableSessions = async () => {
+    const sessions = await listJoinableMeetingSessions();
+    setJoinableMeetingSessions(sessions);
+  };
+
+  const connectProviderSessionToken = async () => {
+    const normalized = providerSessionTokenInput.trim();
+    if (!normalized) {
+      setMeetingOpsStatus('Provider session token is required.');
+      return;
+    }
+    setIsMeetingOpsBusy(true);
+    setMeetingOpsStatus('Validating provider session token...');
+    try {
+      const sessions = await listProviderMeetingSessions(normalized);
+      setProviderSessionToken(normalized);
+      setProviderSessionTokenInput(normalized);
+      try {
+        window.sessionStorage.setItem(providerTokenStorageKey, normalized);
+      } catch {
+        // Ignore storage exceptions.
+      }
+      setHostedMeetingSessions(sessions);
+      setSelectedHostedSessionId((current) => {
+        if (current && sessions.some((entry) => entry.id === current)) return current;
+        return sessions[0]?.id || '';
+      });
+      await refreshProviderMeetingData(normalized);
+      setMeetingOpsStatus('Provider session connected. Host controls unlocked.');
+    } finally {
+      setIsMeetingOpsBusy(false);
+    }
+  };
+
+  const disconnectProviderSessionToken = () => {
+    setProviderSessionToken('');
+    setProviderSessionTokenInput('');
+    setProviderInviteGroups([]);
+    setHostedMeetingSessions([]);
+    setSelectedHostedSessionId('');
+    setSelectedProviderGroupIds([]);
+    setLatestExternalJoinLink('');
+    try {
+      window.sessionStorage.removeItem(providerTokenStorageKey);
+    } catch {
+      // Ignore storage exceptions.
+    }
+    setMeetingOpsStatus('Provider session disconnected.');
+  };
+
+  const createHostedSession = async () => {
+    const token = providerSessionToken.trim();
+    if (!token) {
+      setMeetingOpsStatus('Connect a provider session token first.');
+      return;
+    }
+
+    setIsMeetingOpsBusy(true);
+    setMeetingOpsStatus('Creating provider-hosted session...');
+    try {
+      const created = await createProviderMeetingSession(token, {
+        title: hostSessionTitleInput,
+        mode: hostSessionMode,
+        maxViewers: hostSessionMaxViewersInput,
+      });
+      if (!created) {
+        setMeetingOpsStatus('Unable to create provider session.');
+        return;
+      }
+      await refreshProviderMeetingData(token);
+      setSelectedHostedSessionId(created.id);
+      setMeetingOpsStatus(`Session created: ${created.title}`);
+    } finally {
+      setIsMeetingOpsBusy(false);
+    }
+  };
+
+  const createProviderGroupFromProfile = async () => {
+    const token = providerSessionToken.trim();
+    const groupName = providerGroupNameInput.trim();
+    if (!token) {
+      setMeetingOpsStatus('Connect a provider session token first.');
+      return;
+    }
+    if (!groupName) {
+      setMeetingOpsStatus('Provider group name is required.');
+      return;
+    }
+
+    setIsMeetingOpsBusy(true);
+    setMeetingOpsStatus('Creating provider profile group...');
+    try {
+      const created = await createProviderInviteGroup(token, groupName);
+      if (!created) {
+        setMeetingOpsStatus('Unable to create provider group.');
+        return;
+      }
+      setProviderGroupNameInput('');
+      await refreshProviderMeetingData(token);
+      setMeetingOpsStatus(`Provider group created: ${created.name}`);
+    } finally {
+      setIsMeetingOpsBusy(false);
+    }
+  };
+
+  const addMemberToProviderProfileGroup = async () => {
+    const token = providerSessionToken.trim();
+    const normalizedUsername = normalizeUsername(providerGroupMemberUsernameInput);
+    const targetGroupId = selectedProviderGroupIds[0] || providerInviteGroups[0]?.id || '';
+    if (!token) {
+      setMeetingOpsStatus('Connect a provider session token first.');
+      return;
+    }
+    if (!targetGroupId) {
+      setMeetingOpsStatus('Select at least one provider group first.');
+      return;
+    }
+    if (!normalizedUsername) {
+      setMeetingOpsStatus('Username is required to add group member.');
+      return;
+    }
+
+    setIsMeetingOpsBusy(true);
+    setMeetingOpsStatus('Adding member to provider group...');
+    try {
+      const updated = await addProviderInviteGroupMember(token, targetGroupId, normalizedUsername);
+      if (!updated) {
+        setMeetingOpsStatus('Unable to add member to provider group.');
+        return;
+      }
+      setProviderGroupMemberUsernameInput('');
+      await refreshProviderMeetingData(token);
+      setMeetingOpsStatus(`Added @${normalizedUsername} to ${updated.name}.`);
+    } finally {
+      setIsMeetingOpsBusy(false);
+    }
+  };
+
+  const startHostedSession = async () => {
+    const token = providerSessionToken.trim();
+    const sessionId = selectedHostedSessionId.trim();
+    if (!token || !sessionId) {
+      setMeetingOpsStatus('Select a provider-hosted session first.');
+      return;
+    }
+
+    setIsMeetingOpsBusy(true);
+    setMeetingOpsStatus('Starting hosted session...');
+    try {
+      const started = await startProviderMeetingSession(token, sessionId);
+      if (!started) {
+        setMeetingOpsStatus('Unable to start hosted session.');
+        return;
+      }
+      await refreshProviderMeetingData(token);
+      setActiveJoinedSessionId(started.id);
+      setIsJoining(true);
+      setMeetingOpsStatus(`Hosted session is live: ${started.title}`);
+    } finally {
+      setIsMeetingOpsBusy(false);
+    }
+  };
+
+  const endHostedSession = async () => {
+    const token = providerSessionToken.trim();
+    const sessionId = selectedHostedSessionId.trim();
+    if (!token || !sessionId) {
+      setMeetingOpsStatus('Select a provider-hosted session first.');
+      return;
+    }
+
+    setIsMeetingOpsBusy(true);
+    setMeetingOpsStatus('Ending hosted session...');
+    try {
+      const ended = await endProviderMeetingSession(token, sessionId);
+      if (!ended) {
+        setMeetingOpsStatus('Unable to end hosted session.');
+        return;
+      }
+      await refreshProviderMeetingData(token);
+      setActiveJoinedSessionId((current) => (current === sessionId ? null : current));
+      setLatestExternalJoinLink('');
+      setMeetingOpsStatus('Hosted session ended and removed.');
+    } finally {
+      setIsMeetingOpsBusy(false);
+    }
+  };
+
+  const inviteUsersIntoHostedSession = async () => {
+    const token = providerSessionToken.trim();
+    const sessionId = selectedHostedSessionId.trim();
+    if (!token || !sessionId) {
+      setMeetingOpsStatus('Select a provider-hosted session first.');
+      return;
+    }
+
+    const usernames = parseBatchUsernames(inviteUsernamesBatchInput);
+    if (usernames.length === 0 && selectedProviderGroupIds.length === 0) {
+      setMeetingOpsStatus('Add usernames or select provider groups to invite.');
+      return;
+    }
+
+    setIsMeetingOpsBusy(true);
+    setMeetingOpsStatus('Sending invites to users/groups...');
+    try {
+      const updated = await inviteUsersToProviderMeetingSession(token, sessionId, {
+        usernames,
+        groupIds: selectedProviderGroupIds,
+      });
+      if (!updated) {
+        setMeetingOpsStatus('Unable to send invites for hosted session.');
+        return;
+      }
+      setInviteUsernamesBatchInput('');
+      setSelectedProviderGroupIds([]);
+      await refreshProviderMeetingData(token);
+      await refreshJoinableSessions();
+      setMeetingOpsStatus('Invites sent to selected users/groups.');
+    } finally {
+      setIsMeetingOpsBusy(false);
+    }
+  };
+
+  const generateHostedSessionExternalLink = async () => {
+    const token = providerSessionToken.trim();
+    const sessionId = selectedHostedSessionId.trim();
+    if (!token || !sessionId) {
+      setMeetingOpsStatus('Select a provider-hosted session first.');
+      return;
+    }
+
+    setIsMeetingOpsBusy(true);
+    setMeetingOpsStatus('Generating external guest join link...');
+    try {
+      const link = await createProviderMeetingExternalLink(token, sessionId, {
+        expiresInMinutes: externalLinkTtlMinutesInput,
+        maxUses: externalLinkMaxUsesInput,
+      });
+      if (!link) {
+        setMeetingOpsStatus('Unable to create external guest link.');
+        return;
+      }
+      setLatestExternalJoinLink(link.joinUrl);
+      try {
+        await navigator.clipboard.writeText(link.joinUrl);
+        setMeetingOpsStatus('External guest link copied to clipboard.');
+      } catch {
+        setMeetingOpsStatus('External guest link generated.');
+      }
+    } finally {
+      setIsMeetingOpsBusy(false);
+    }
+  };
+
+  const joinInvitedSession = async (sessionId: string) => {
+    const normalizedId = String(sessionId || '').trim();
+    if (!normalizedId) return;
+
+    setIsMeetingOpsBusy(true);
+    setMeetingOpsStatus('Joining invited meeting session...');
+    try {
+      const joined = await joinMeetingSession(normalizedId, user?.name || undefined);
+      if (!joined) {
+        setMeetingOpsStatus('Unable to join invited session.');
+        return;
+      }
+      setActiveJoinedSessionId(joined.id);
+      setIsJoining(true);
+      await refreshJoinableSessions();
+      setMeetingOpsStatus(`Joined session: ${joined.title}`);
+    } finally {
+      setIsMeetingOpsBusy(false);
+    }
+  };
+
+  const leaveActiveJoinedSession = async () => {
+    if (!activeJoinedSessionId) return;
+    setIsMeetingOpsBusy(true);
+    setMeetingOpsStatus('Leaving active joined session...');
+    try {
+      const left = await leaveMeetingSession(activeJoinedSessionId);
+      if (!left) {
+        setMeetingOpsStatus('Unable to leave active session.');
+        return;
+      }
+      setActiveJoinedSessionId(null);
+      setIsJoining(false);
+      await refreshJoinableSessions();
+      setMeetingOpsStatus('You left the active meeting session.');
+    } finally {
+      setIsMeetingOpsBusy(false);
+    }
+  };
+
+  const previewExternalInvite = async (tokenInput?: string) => {
+    const token = String(tokenInput ?? externalInviteTokenInput).trim();
+    if (!token) {
+      setMeetingOpsStatus('External invite token is required.');
+      return;
+    }
+    setIsMeetingOpsBusy(true);
+    setMeetingOpsStatus('Validating external invite token...');
+    try {
+      const preview = await previewExternalMeetingInvite(token);
+      if (!preview) {
+        setExternalInvitePreview(null);
+        setMeetingOpsStatus('External invite token is invalid or expired.');
+        return;
+      }
+      setExternalInvitePreview(preview);
+      setMeetingOpsStatus('External invite is valid. Complete guest sign-in to join.');
+    } finally {
+      setIsMeetingOpsBusy(false);
+    }
+  };
+
+  const joinAsExternalGuest = async () => {
+    const token = externalInviteTokenInput.trim();
+    if (!token) {
+      setMeetingOpsStatus('External invite token is required.');
+      return;
+    }
+    if (!externalGuestNameInput.trim() || !externalGuestEmailInput.trim()) {
+      setMeetingOpsStatus('Guest name and email are required.');
+      return;
+    }
+
+    setIsMeetingOpsBusy(true);
+    setMeetingOpsStatus('Joining as external guest...');
+    try {
+      const joined = await joinExternalMeetingInvite(
+        token,
+        externalGuestNameInput,
+        externalGuestEmailInput
+      );
+      if (!joined) {
+        setMeetingOpsStatus('Unable to join as external guest.');
+        return;
+      }
+      setExternalInvitePreview({
+        session: {
+          id: joined.session.id,
+          title: joined.session.title,
+          mode: joined.session.mode,
+          status: joined.session.status,
+          maxViewers: joined.session.maxViewers,
+          participantCount: joined.session.participants.length,
+          remainingCapacity: Math.max(joined.session.maxViewers - joined.session.participants.length, 0),
+        },
+        link: {
+          id: 'active',
+          expiresAtMs: Date.now() + 12 * 60 * 60 * 1000,
+          uses: 0,
+          maxUses: 0,
+        },
+      });
+      setExternalGuestSessionToken(joined.guestSessionToken);
+      try {
+        window.sessionStorage.setItem(externalGuestSessionStorageKey, joined.guestSessionToken);
+      } catch {
+        // Ignore storage exceptions.
+      }
+      setActiveJoinedSessionId(joined.session.id);
+      setIsJoining(true);
+      setMeetingOpsStatus('External guest joined. Platform features remain restricted.');
+    } finally {
+      setIsMeetingOpsBusy(false);
+    }
+  };
+
+  const leaveExternalGuestSession = async () => {
+    const token = externalGuestSessionToken.trim();
+    if (!token) return;
+
+    setIsMeetingOpsBusy(true);
+    setMeetingOpsStatus('Leaving external guest session...');
+    try {
+      const left = await leaveExternalMeetingInvite(token);
+      if (left) {
+        setExternalGuestSessionToken('');
+        setExternalInvitePreview(null);
+        setActiveJoinedSessionId(null);
+        setIsJoining(false);
+        try {
+          window.sessionStorage.removeItem(externalGuestSessionStorageKey);
+        } catch {
+          // Ignore storage exceptions.
+        }
+        setMeetingOpsStatus('External guest session closed.');
+      } else {
+        setMeetingOpsStatus('Unable to close external guest session.');
+      }
+    } finally {
+      setIsMeetingOpsBusy(false);
+    }
+  };
+
   const filteredProviders = PROVIDERS.filter((p) => {
     const matchesSearch =
       p.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
@@ -670,6 +1153,11 @@ const ConsciousMeetings: React.FC<ConsciousMeetingsProps> = ({ user }) => {
 
   const enterImmersiveView = async () => {
     if (isImmersiveStarting || isImmersiveActive) return;
+    if (!providerSessionToken.trim()) {
+      const message = 'Only authenticated providers can start immersive sessions.';
+      setImmersiveError(message);
+      return;
+    }
     if (!isImmersiveSupported || !hasCheckedImmersiveSupport) {
       const unsupportedMessage = 'Immersive mode is not supported on this browser/device.';
       setImmersiveError(unsupportedMessage);
@@ -1045,6 +1533,10 @@ const ConsciousMeetings: React.FC<ConsciousMeetingsProps> = ({ user }) => {
 
   // Solo Session Functions
   const startSoloSession = async () => {
+    if (!providerSessionToken.trim()) {
+      alert('Only authenticated providers can start sessions. Connect a provider session token first.');
+      return;
+    }
     try {
       setPermissionState('pending');
       const mediaStream = await navigator.mediaDevices.getUserMedia({ 
@@ -1085,6 +1577,22 @@ const ConsciousMeetings: React.FC<ConsciousMeetingsProps> = ({ user }) => {
   };
 
   const stopSoloSession = () => {
+    if (providerSessionToken.trim() && selectedHostedSessionId.trim()) {
+      void endProviderMeetingSession(providerSessionToken.trim(), selectedHostedSessionId.trim());
+    }
+
+    if (externalGuestSessionToken.trim()) {
+      void leaveExternalMeetingInvite(externalGuestSessionToken.trim());
+      setExternalGuestSessionToken('');
+      try {
+        window.sessionStorage.removeItem(externalGuestSessionStorageKey);
+      } catch {
+        // Ignore storage exceptions.
+      }
+    } else if (activeJoinedSessionId) {
+      void leaveMeetingSession(activeJoinedSessionId);
+    }
+
     processedStreamCleanupRef.current?.();
     setProcessedStream(null);
 
@@ -1104,6 +1612,7 @@ const ConsciousMeetings: React.FC<ConsciousMeetingsProps> = ({ user }) => {
     setShowBackgroundUploadPolicyModal(false);
     clearSessionScopedSynthesis();
     setIsJoining(false);
+    setActiveJoinedSessionId(null);
     setIsSoloSessionActive(false);
     setPermissionState('idle');
     setRecordingState('idle');
@@ -1343,6 +1852,56 @@ const ConsciousMeetings: React.FC<ConsciousMeetingsProps> = ({ user }) => {
       cancelled = true;
     };
   }, [user?.id]);
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const savedProviderToken = String(window.sessionStorage.getItem(providerTokenStorageKey) || '').trim();
+    if (savedProviderToken) {
+      setProviderSessionToken(savedProviderToken);
+      setProviderSessionTokenInput(savedProviderToken);
+      void refreshProviderMeetingData(savedProviderToken);
+    }
+
+    const savedGuestToken = String(window.sessionStorage.getItem(externalGuestSessionStorageKey) || '').trim();
+    if (savedGuestToken) {
+      setExternalGuestSessionToken(savedGuestToken);
+    }
+
+    const params = new URLSearchParams(window.location.search);
+    const externalInviteToken = String(params.get('externalMeetingInvite') || '').trim();
+    if (externalInviteToken) {
+      setExternalInviteTokenInput(externalInviteToken);
+      void previewExternalInvite(externalInviteToken);
+    }
+  }, []);
+
+  useEffect(() => {
+    void refreshJoinableSessions();
+  }, [user?.id]);
+
+  useEffect(() => {
+    if (!providerSessionToken.trim()) return;
+    void refreshProviderMeetingData(providerSessionToken);
+  }, [providerSessionToken]);
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const handleBeforeUnload = () => {
+      if (providerSessionToken.trim() && selectedHostedSessionId.trim()) {
+        void endProviderMeetingSession(providerSessionToken.trim(), selectedHostedSessionId.trim());
+      }
+      if (externalGuestSessionToken.trim()) {
+        void leaveExternalMeetingInvite(externalGuestSessionToken.trim());
+      } else if (activeJoinedSessionId) {
+        void leaveMeetingSession(activeJoinedSessionId);
+      }
+    };
+
+    window.addEventListener('beforeunload', handleBeforeUnload);
+    return () => {
+      window.removeEventListener('beforeunload', handleBeforeUnload);
+    };
+  }, [externalGuestSessionToken, activeJoinedSessionId, providerSessionToken, selectedHostedSessionId]);
 
   useEffect(() => {
     if (typeof window === 'undefined') return;
@@ -1988,7 +2547,16 @@ const ConsciousMeetings: React.FC<ConsciousMeetingsProps> = ({ user }) => {
                       <div className="flex flex-col sm:flex-row gap-3 sm:gap-4">
                         <button
                           disabled={permissionState !== 'granted'}
-                          onClick={() => setIsJoining(true)}
+                          onClick={async () => {
+                            if (joinableMeetingSessions.length === 0) {
+                              setMeetingOpsStatus('No invited platform session available to join.');
+                              return;
+                            }
+                            const liveSession =
+                              joinableMeetingSessions.find((entry) => entry.status === 'live') ||
+                              joinableMeetingSessions[0];
+                            await joinInvitedSession(liveSession.id);
+                          }}
                           className="flex-1 py-4 sm:py-5 md:py-6 bg-blue-600 hover:bg-blue-500 disabled:bg-slate-800 disabled:text-slate-600 text-white rounded-xl sm:rounded-2xl md:rounded-3xl font-black text-sm sm:text-base md:text-lg lg:text-xl uppercase tracking-widest shadow-2xl transition-all hover:-translate-y-1 active:scale-95 flex items-center justify-center gap-3 sm:gap-4"
                         >
                           {isJoining ? <Loader2 className="w-5 h-5 sm:w-6 sm:h-6 animate-spin" /> : <Video className="w-5 h-5 sm:w-6 sm:h-6" />}
@@ -1997,12 +2565,19 @@ const ConsciousMeetings: React.FC<ConsciousMeetingsProps> = ({ user }) => {
 
                         <button
                           onClick={startSoloSession}
-                          className="flex-1 py-4 sm:py-5 md:py-6 bg-teal-600 hover:bg-teal-500 text-white rounded-xl sm:rounded-2xl md:rounded-3xl font-black text-sm sm:text-base md:text-lg lg:text-xl uppercase tracking-widest shadow-2xl transition-all hover:-translate-y-1 active:scale-95 flex items-center justify-center gap-3 sm:gap-4"
+                          disabled={!providerSessionToken.trim()}
+                          className="flex-1 py-4 sm:py-5 md:py-6 bg-teal-600 hover:bg-teal-500 disabled:bg-slate-800 disabled:text-slate-600 text-white rounded-xl sm:rounded-2xl md:rounded-3xl font-black text-sm sm:text-base md:text-lg lg:text-xl uppercase tracking-widest shadow-2xl transition-all hover:-translate-y-1 active:scale-95 flex items-center justify-center gap-3 sm:gap-4"
                         >
                           <Play className="w-5 h-5 sm:w-6 sm:h-6" />
                           Start Solo Session
                         </button>
                       </div>
+
+                      {!providerSessionToken.trim() && (
+                        <p className="text-[9px] sm:text-[10px] text-amber-300 uppercase tracking-widest text-center">
+                          Provider session token required to start host sessions (virtual, solo, and 5D immersive).
+                        </p>
+                      )}
 
                       {canEnterImmersiveView ? (
                         <button
@@ -2361,6 +2936,382 @@ const ConsciousMeetings: React.FC<ConsciousMeetingsProps> = ({ user }) => {
                       <Download className="w-4 h-4" /> Download Session Notes
                     </button>
                   </div>
+                </div>
+              )}
+            </div>
+
+            <div className="glass-panel p-6 sm:p-8 rounded-lg sm:rounded-2xl md:rounded-[2.5rem] border-blue-500/10 shadow-xl space-y-5">
+              <div className="flex items-center justify-between gap-3 flex-wrap">
+                <h4 className="text-xs sm:text-sm font-black text-white uppercase tracking-widest">
+                  Provider Session Orchestration
+                </h4>
+                <span className="text-[8px] sm:text-[9px] text-slate-400 uppercase tracking-widest">
+                  Provider-only host controls
+                </span>
+              </div>
+
+              <p className="text-[9px] sm:text-[10px] text-slate-400 uppercase tracking-widest">
+                Providers create/start sessions, invite platform users/groups, and issue external guest links.
+              </p>
+
+              <div className="grid grid-cols-1 lg:grid-cols-3 gap-3">
+                <input
+                  type="password"
+                  value={providerSessionTokenInput}
+                  onChange={(event) => setProviderSessionTokenInput(event.target.value)}
+                  placeholder="Paste provider session token"
+                  className="lg:col-span-2 w-full px-4 py-3 bg-white/5 border border-white/10 rounded-xl text-xs text-white focus:outline-none focus:ring-2 focus:ring-blue-500/30 transition-all font-medium"
+                />
+                <div className="flex gap-2">
+                  <button
+                    onClick={connectProviderSessionToken}
+                    disabled={isMeetingOpsBusy}
+                    className="flex-1 px-4 py-3 bg-blue-600 hover:bg-blue-500 disabled:bg-slate-700 disabled:text-slate-500 text-white rounded-xl text-[9px] sm:text-[10px] font-black uppercase tracking-widest transition-all"
+                  >
+                    Connect
+                  </button>
+                  <button
+                    onClick={disconnectProviderSessionToken}
+                    disabled={isMeetingOpsBusy}
+                    className="flex-1 px-4 py-3 bg-white/5 hover:bg-white/10 disabled:bg-slate-800 disabled:text-slate-600 border border-white/10 text-slate-300 rounded-xl text-[9px] sm:text-[10px] font-black uppercase tracking-widest transition-all"
+                  >
+                    Reset
+                  </button>
+                </div>
+              </div>
+
+              {providerSessionToken.trim() && (
+                <div className="space-y-5 border-t border-white/10 pt-5">
+                  <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
+                    <input
+                      type="text"
+                      value={hostSessionTitleInput}
+                      onChange={(event) => setHostSessionTitleInput(event.target.value)}
+                      placeholder="Session title"
+                      className="md:col-span-2 w-full px-4 py-3 bg-white/5 border border-white/10 rounded-xl text-xs text-white focus:outline-none focus:ring-2 focus:ring-blue-500/30 transition-all font-medium"
+                    />
+                    <select
+                      value={hostSessionMode}
+                      onChange={(event) => setHostSessionMode(event.target.value as MeetingSessionMode)}
+                      className="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-xl text-xs text-white focus:outline-none focus:ring-2 focus:ring-blue-500/30 transition-all font-medium"
+                    >
+                      <option value="virtual">Virtual</option>
+                      <option value="solo">Solo</option>
+                      <option value="immersive-5d">5D Immersive</option>
+                    </select>
+                    <input
+                      type="number"
+                      min={2}
+                      max={500}
+                      value={hostSessionMaxViewersInput}
+                      onChange={(event) => setHostSessionMaxViewersInput(Number(event.target.value || 120))}
+                      placeholder="Max viewers"
+                      className="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-xl text-xs text-white focus:outline-none focus:ring-2 focus:ring-blue-500/30 transition-all font-medium"
+                    />
+                  </div>
+
+                  <div className="flex flex-wrap gap-2">
+                    <button
+                      onClick={createHostedSession}
+                      disabled={isMeetingOpsBusy}
+                      className="px-4 py-3 bg-blue-600 hover:bg-blue-500 disabled:bg-slate-700 disabled:text-slate-500 text-white rounded-xl text-[9px] sm:text-[10px] font-black uppercase tracking-widest transition-all"
+                    >
+                      Create Session
+                    </button>
+                    <button
+                      onClick={startHostedSession}
+                      disabled={isMeetingOpsBusy || !selectedHostedSessionId}
+                      className="px-4 py-3 bg-teal-600 hover:bg-teal-500 disabled:bg-slate-700 disabled:text-slate-500 text-white rounded-xl text-[9px] sm:text-[10px] font-black uppercase tracking-widest transition-all"
+                    >
+                      Start Session
+                    </button>
+                    <button
+                      onClick={endHostedSession}
+                      disabled={isMeetingOpsBusy || !selectedHostedSessionId}
+                      className="px-4 py-3 bg-red-600 hover:bg-red-500 disabled:bg-slate-700 disabled:text-slate-500 text-white rounded-xl text-[9px] sm:text-[10px] font-black uppercase tracking-widest transition-all"
+                    >
+                      End Session
+                    </button>
+                    <button
+                      onClick={() => void refreshProviderMeetingData()}
+                      disabled={isMeetingOpsBusy}
+                      className="px-4 py-3 bg-white/5 hover:bg-white/10 disabled:bg-slate-800 disabled:text-slate-600 border border-white/10 text-slate-300 rounded-xl text-[9px] sm:text-[10px] font-black uppercase tracking-widest transition-all"
+                    >
+                      Refresh Host Data
+                    </button>
+                  </div>
+
+                  <select
+                    value={selectedHostedSessionId}
+                    onChange={(event) => setSelectedHostedSessionId(event.target.value)}
+                    className="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-xl text-xs text-white focus:outline-none focus:ring-2 focus:ring-blue-500/30 transition-all font-medium"
+                  >
+                    <option value="">Select hosted session</option>
+                    {hostedMeetingSessions.map((session) => (
+                      <option key={session.id} value={session.id}>
+                        {session.title} [{session.mode}] ({session.status}) - {session.participants.length}/{session.maxViewers}
+                      </option>
+                    ))}
+                  </select>
+
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                    <input
+                      type="text"
+                      value={providerGroupNameInput}
+                      onChange={(event) => setProviderGroupNameInput(event.target.value)}
+                      placeholder="Create provider group name"
+                      className="md:col-span-2 w-full px-4 py-3 bg-white/5 border border-white/10 rounded-xl text-xs text-white focus:outline-none focus:ring-2 focus:ring-blue-500/30 transition-all font-medium"
+                    />
+                    <button
+                      onClick={() => void createProviderGroupFromProfile()}
+                      disabled={isMeetingOpsBusy}
+                      className="w-full px-4 py-3 bg-indigo-600 hover:bg-indigo-500 disabled:bg-slate-700 disabled:text-slate-500 text-white rounded-xl text-[9px] sm:text-[10px] font-black uppercase tracking-widest transition-all"
+                    >
+                      Create Group
+                    </button>
+                  </div>
+
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                    <input
+                      type="text"
+                      value={providerGroupMemberUsernameInput}
+                      onChange={(event) => setProviderGroupMemberUsernameInput(event.target.value)}
+                      placeholder="Add username to first selected group"
+                      className="md:col-span-2 w-full px-4 py-3 bg-white/5 border border-white/10 rounded-xl text-xs text-white focus:outline-none focus:ring-2 focus:ring-blue-500/30 transition-all font-medium"
+                    />
+                    <button
+                      onClick={() => void addMemberToProviderProfileGroup()}
+                      disabled={isMeetingOpsBusy}
+                      className="w-full px-4 py-3 bg-white/5 hover:bg-white/10 disabled:bg-slate-800 disabled:text-slate-600 border border-white/10 text-slate-300 rounded-xl text-[9px] sm:text-[10px] font-black uppercase tracking-widest transition-all"
+                    >
+                      Add To Group
+                    </button>
+                  </div>
+
+                  <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
+                    <textarea
+                      value={inviteUsernamesBatchInput}
+                      onChange={(event) => setInviteUsernamesBatchInput(event.target.value)}
+                      placeholder="Invite usernames (comma, space, or newline separated)"
+                      className="w-full min-h-[100px] px-4 py-3 bg-white/5 border border-white/10 rounded-xl text-xs text-white focus:outline-none focus:ring-2 focus:ring-blue-500/30 transition-all font-medium"
+                    />
+                    <div className="p-3 bg-white/5 border border-white/10 rounded-xl space-y-2 max-h-[160px] overflow-y-auto no-scrollbar">
+                      <p className="text-[8px] sm:text-[9px] text-slate-400 uppercase tracking-widest">
+                        Provider Profile Groups
+                      </p>
+                      {providerInviteGroups.length === 0 && (
+                        <p className="text-[9px] text-slate-500">No provider groups found.</p>
+                      )}
+                      {providerInviteGroups.map((group) => {
+                        const checked = selectedProviderGroupIds.includes(group.id);
+                        return (
+                          <label
+                            key={group.id}
+                            className="flex items-center justify-between gap-3 p-2 rounded-lg bg-black/20 border border-white/10 text-xs text-slate-300"
+                          >
+                            <span className="truncate">{group.name} ({group.members.length})</span>
+                            <input
+                              type="checkbox"
+                              checked={checked}
+                              onChange={(event) => {
+                                setSelectedProviderGroupIds((current) => {
+                                  if (event.target.checked) return [...current, group.id];
+                                  return current.filter((entry) => entry !== group.id);
+                                });
+                              }}
+                              className="w-4 h-4 accent-blue-500"
+                            />
+                          </label>
+                        );
+                      })}
+                    </div>
+                  </div>
+
+                  <button
+                    onClick={inviteUsersIntoHostedSession}
+                    disabled={isMeetingOpsBusy || !selectedHostedSessionId}
+                    className="w-full px-4 py-3 bg-indigo-600 hover:bg-indigo-500 disabled:bg-slate-700 disabled:text-slate-500 text-white rounded-xl text-[9px] sm:text-[10px] font-black uppercase tracking-widest transition-all"
+                  >
+                    Send Platform Invites (Users + Groups)
+                  </button>
+
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                    <input
+                      type="number"
+                      min={5}
+                      max={1440}
+                      value={externalLinkTtlMinutesInput}
+                      onChange={(event) => setExternalLinkTtlMinutesInput(Number(event.target.value || 120))}
+                      placeholder="Link TTL (minutes)"
+                      className="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-xl text-xs text-white focus:outline-none focus:ring-2 focus:ring-blue-500/30 transition-all font-medium"
+                    />
+                    <input
+                      type="number"
+                      min={1}
+                      max={1000}
+                      value={externalLinkMaxUsesInput}
+                      onChange={(event) => setExternalLinkMaxUsesInput(Number(event.target.value || 250))}
+                      placeholder="Max external joins"
+                      className="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-xl text-xs text-white focus:outline-none focus:ring-2 focus:ring-blue-500/30 transition-all font-medium"
+                    />
+                    <button
+                      onClick={generateHostedSessionExternalLink}
+                      disabled={isMeetingOpsBusy || !selectedHostedSessionId}
+                      className="w-full px-4 py-3 bg-teal-600 hover:bg-teal-500 disabled:bg-slate-700 disabled:text-slate-500 text-white rounded-xl text-[9px] sm:text-[10px] font-black uppercase tracking-widest transition-all"
+                    >
+                      Create External Link
+                    </button>
+                  </div>
+
+                  {latestExternalJoinLink && (
+                    <div className="space-y-2">
+                      <input
+                        type="text"
+                        value={latestExternalJoinLink}
+                        readOnly
+                        className="w-full px-4 py-3 bg-black/30 border border-white/10 rounded-xl text-[10px] text-slate-300"
+                      />
+                      <button
+                        onClick={async () => {
+                          try {
+                            await navigator.clipboard.writeText(latestExternalJoinLink);
+                            setMeetingOpsStatus('External invite link copied.');
+                          } catch {
+                            setMeetingOpsStatus('Copy failed. You can manually share the link.');
+                          }
+                        }}
+                        className="w-full px-4 py-3 bg-white/5 hover:bg-white/10 border border-white/10 text-slate-300 rounded-xl text-[9px] sm:text-[10px] font-black uppercase tracking-widest transition-all"
+                      >
+                        Copy External Link
+                      </button>
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {meetingOpsStatus && (
+                <p className="text-[9px] sm:text-[10px] text-blue-300 uppercase tracking-widest">
+                  {meetingOpsStatus}
+                </p>
+              )}
+            </div>
+
+            <div className="glass-panel p-6 sm:p-8 rounded-lg sm:rounded-2xl md:rounded-[2.5rem] border-white/10 shadow-xl space-y-4">
+              <div className="flex items-center justify-between gap-3 flex-wrap">
+                <h4 className="text-xs sm:text-sm font-black text-white uppercase tracking-widest">
+                  Invited Platform Sessions
+                </h4>
+                <button
+                  onClick={() => void refreshJoinableSessions()}
+                  disabled={isMeetingOpsBusy}
+                  className="px-4 py-2 bg-white/5 hover:bg-white/10 disabled:bg-slate-800 disabled:text-slate-600 border border-white/10 text-slate-300 rounded-lg text-[8px] sm:text-[9px] font-black uppercase tracking-widest transition-all"
+                >
+                  Refresh
+                </button>
+              </div>
+              <div className="space-y-2">
+                {joinableMeetingSessions.length === 0 && (
+                  <p className="text-[10px] sm:text-xs text-slate-500">No joinable meeting invites found.</p>
+                )}
+                {joinableMeetingSessions.map((session) => (
+                  <div
+                    key={session.id}
+                    className="p-3 rounded-xl bg-white/5 border border-white/10 flex flex-col sm:flex-row sm:items-center justify-between gap-3"
+                  >
+                    <div>
+                      <p className="text-[10px] sm:text-xs font-black uppercase tracking-widest text-white">
+                        {session.title}
+                      </p>
+                      <p className="text-[9px] sm:text-[10px] text-slate-400 uppercase tracking-widest mt-1">
+                        {session.mode} | {session.status} | {session.participants.length}/{session.maxViewers}
+                      </p>
+                    </div>
+                    <button
+                      onClick={() => void joinInvitedSession(session.id)}
+                      disabled={isMeetingOpsBusy || session.status === 'ended'}
+                      className="px-4 py-2 bg-blue-600 hover:bg-blue-500 disabled:bg-slate-700 disabled:text-slate-500 text-white rounded-lg text-[8px] sm:text-[9px] font-black uppercase tracking-widest transition-all"
+                    >
+                      Join Session
+                    </button>
+                  </div>
+                ))}
+              </div>
+              {activeJoinedSessionId && (
+                <button
+                  onClick={() => void leaveActiveJoinedSession()}
+                  disabled={isMeetingOpsBusy}
+                  className="w-full px-4 py-3 bg-red-600 hover:bg-red-500 disabled:bg-slate-700 disabled:text-slate-500 text-white rounded-xl text-[9px] sm:text-[10px] font-black uppercase tracking-widest transition-all"
+                >
+                  Leave Active Session
+                </button>
+              )}
+            </div>
+
+            <div className="glass-panel p-6 sm:p-8 rounded-lg sm:rounded-2xl md:rounded-[2.5rem] border-white/10 shadow-xl space-y-4">
+              <h4 className="text-xs sm:text-sm font-black text-white uppercase tracking-widest">
+                External Guest Join (Restricted Access)
+              </h4>
+              <p className="text-[9px] sm:text-[10px] text-slate-400 uppercase tracking-widest">
+                Guests provide email + name for this session only and do not gain platform feature access.
+              </p>
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                <input
+                  type="text"
+                  value={externalInviteTokenInput}
+                  onChange={(event) => setExternalInviteTokenInput(event.target.value)}
+                  placeholder="External invite token"
+                  className="md:col-span-2 w-full px-4 py-3 bg-white/5 border border-white/10 rounded-xl text-xs text-white focus:outline-none focus:ring-2 focus:ring-blue-500/30 transition-all font-medium"
+                />
+                <button
+                  onClick={() => void previewExternalInvite()}
+                  disabled={isMeetingOpsBusy}
+                  className="w-full px-4 py-3 bg-indigo-600 hover:bg-indigo-500 disabled:bg-slate-700 disabled:text-slate-500 text-white rounded-xl text-[9px] sm:text-[10px] font-black uppercase tracking-widest transition-all"
+                >
+                  Validate Link
+                </button>
+              </div>
+
+              {externalInvitePreview && (
+                <div className="space-y-3 p-3 rounded-xl bg-white/5 border border-white/10">
+                  <p className="text-[10px] sm:text-xs font-black uppercase tracking-widest text-white">
+                    {externalInvitePreview.session.title}
+                  </p>
+                  <p className="text-[9px] sm:text-[10px] text-slate-400 uppercase tracking-widest">
+                    {externalInvitePreview.session.mode} | {externalInvitePreview.session.status} | Capacity {externalInvitePreview.session.participantCount}/{externalInvitePreview.session.maxViewers}
+                  </p>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                    <input
+                      type="text"
+                      value={externalGuestNameInput}
+                      onChange={(event) => setExternalGuestNameInput(event.target.value)}
+                      placeholder="Guest full name"
+                      className="w-full px-4 py-3 bg-black/30 border border-white/10 rounded-xl text-xs text-white focus:outline-none focus:ring-2 focus:ring-blue-500/30 transition-all font-medium"
+                    />
+                    <input
+                      type="email"
+                      value={externalGuestEmailInput}
+                      onChange={(event) => setExternalGuestEmailInput(event.target.value)}
+                      placeholder="Guest email"
+                      className="w-full px-4 py-3 bg-black/30 border border-white/10 rounded-xl text-xs text-white focus:outline-none focus:ring-2 focus:ring-blue-500/30 transition-all font-medium"
+                    />
+                  </div>
+                  {!externalGuestSessionToken ? (
+                    <button
+                      onClick={() => void joinAsExternalGuest()}
+                      disabled={isMeetingOpsBusy}
+                      className="w-full px-4 py-3 bg-blue-600 hover:bg-blue-500 disabled:bg-slate-700 disabled:text-slate-500 text-white rounded-xl text-[9px] sm:text-[10px] font-black uppercase tracking-widest transition-all"
+                    >
+                      Join as External Guest
+                    </button>
+                  ) : (
+                    <button
+                      onClick={() => void leaveExternalGuestSession()}
+                      disabled={isMeetingOpsBusy}
+                      className="w-full px-4 py-3 bg-red-600 hover:bg-red-500 disabled:bg-slate-700 disabled:text-slate-500 text-white rounded-xl text-[9px] sm:text-[10px] font-black uppercase tracking-widest transition-all"
+                    >
+                      Exit External Guest Session
+                    </button>
+                  )}
                 </div>
               )}
             </div>
