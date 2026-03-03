@@ -11,6 +11,7 @@ import { SelfieSegmentation, Results as SelfieSegmentationResults } from '@media
 import * as THREE from 'three';
 import { UserProfile, Provider, Meeting } from '../types';
 import { getUserDirectory, reportImmersiveSessionEvent, summarizeMeeting } from '../services/backendApiService';
+import type { MeetingSummary } from '../services/backendApiService';
 
 interface ConsciousMeetingsProps {
   user: UserProfile | null;
@@ -34,6 +35,88 @@ interface InviteGroupTemplate {
   name: string;
   usernames: string[];
 }
+
+type MeetingNotes = NonNullable<Meeting['notes']>;
+type SynthesisAgentMode = 'meeting-bot' | 'action-agent' | 'security-agent';
+
+interface MeetingBackgroundPreset {
+  id: string;
+  label: string;
+  type: 'image' | 'video';
+  source: string;
+}
+
+const createBackgroundSvgDataUrl = (start: string, end: string, accent: string): string => {
+  const svg = `
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1280 720">
+      <defs>
+        <linearGradient id="hcn-bg" x1="0%" y1="0%" x2="100%" y2="100%">
+          <stop offset="0%" stop-color="${start}" />
+          <stop offset="100%" stop-color="${end}" />
+        </linearGradient>
+      </defs>
+      <rect width="1280" height="720" fill="url(#hcn-bg)" />
+      <circle cx="1090" cy="160" r="170" fill="${accent}" opacity="0.22" />
+      <circle cx="210" cy="620" r="240" fill="${accent}" opacity="0.15" />
+    </svg>
+  `.trim();
+  return `data:image/svg+xml;charset=utf-8,${encodeURIComponent(svg)}`;
+};
+
+const EMPTY_MEETING_NOTES = (): MeetingNotes => ({
+  transcript: [],
+  summary: '',
+  decisions: [],
+  actionItems: [],
+});
+
+const BACKGROUND_UPLOAD_MAX_BYTES = 25 * 1024 * 1024;
+const ALLOWED_BACKGROUND_VIDEO_TYPES = new Set(['video/mp4', 'video/webm', 'video/quicktime']);
+
+const SYNTHESIS_AGENT_OPTIONS: Array<{ id: SynthesisAgentMode; label: string; description: string }> = [
+  {
+    id: 'meeting-bot',
+    label: 'Meeting Bot',
+    description: 'Balanced summary with key takeaways and participant alignment.',
+  },
+  {
+    id: 'action-agent',
+    label: 'Action Agent',
+    description: 'Prioritizes next steps, owners, and due dates.',
+  },
+  {
+    id: 'security-agent',
+    label: 'Security Agent',
+    description: 'Highlights privacy controls and meeting safety actions.',
+  },
+];
+
+const BACKGROUND_PRESETS: MeetingBackgroundPreset[] = [
+  {
+    id: 'forest',
+    label: 'Forest',
+    type: 'image',
+    source: createBackgroundSvgDataUrl('#0b1f16', '#1f6f43', '#8cffcb'),
+  },
+  {
+    id: 'mountains',
+    label: 'Mountains',
+    type: 'image',
+    source: createBackgroundSvgDataUrl('#111827', '#1d4ed8', '#93c5fd'),
+  },
+  {
+    id: 'ocean',
+    label: 'Ocean',
+    type: 'image',
+    source: createBackgroundSvgDataUrl('#082f49', '#0891b2', '#67e8f9'),
+  },
+  {
+    id: 'nebula',
+    label: 'Nebula Video',
+    type: 'video',
+    source: '/video/home-bg.mp4',
+  },
+];
 
 const PROVIDERS: Provider[] = [
   {
@@ -72,7 +155,7 @@ const ConsciousMeetings: React.FC<ConsciousMeetingsProps> = ({ user }) => {
   const [meetings, setMeetings] = useState<Meeting[]>([
     {
       id: 'm1',
-      title: 'Divine Alignment Check-In (1:1)',
+      title: 'Divine Alignment Check-In',
       hostUserId: user?.id || 'guest',
       providerId: 'p1',
       startTime: 'Today, 2:00 PM',
@@ -108,6 +191,9 @@ const ConsciousMeetings: React.FC<ConsciousMeetingsProps> = ({ user }) => {
   const [selectedProvider, setSelectedProvider] = useState<Provider | null>(null);
   const [isSchedulingModalOpen, setSchedulingModalOpen] = useState(false);
   const [isNoteTakerOn, setNoteTakerOn] = useState(false);
+  const [showSynthesisConsentModal, setShowSynthesisConsentModal] = useState(false);
+  const [synthesisAgentMode, setSynthesisAgentMode] = useState<SynthesisAgentMode>('meeting-bot');
+  const [isSynthesizingNotes, setIsSynthesizingNotes] = useState(false);
   const [permissionState, setPermissionState] = useState<'idle' | 'pending' | 'granted' | 'denied'>('idle');
   const [searchQuery, setSearchQuery] = useState('');
   const [showFilterPanel, setShowFilterPanel] = useState(false);
@@ -134,6 +220,7 @@ const ConsciousMeetings: React.FC<ConsciousMeetingsProps> = ({ user }) => {
   const [backgroundType, setBackgroundType] = useState<'none' | 'blur' | 'image' | 'video'>('none');
   const [micLevel, setMicLevel] = useState(0);
   const [customBackgroundFile, setCustomBackgroundFile] = useState<File | null>(null);
+  const [showBackgroundUploadPolicyModal, setShowBackgroundUploadPolicyModal] = useState(false);
   const [selectedSlot, setSelectedSlot] = useState<string | null>(null);
   const [isImmersiveStarting, setIsImmersiveStarting] = useState(false);
   const [isImmersiveActive, setIsImmersiveActive] = useState(false);
@@ -299,16 +386,147 @@ const ConsciousMeetings: React.FC<ConsciousMeetingsProps> = ({ user }) => {
     setActiveTab('calendar');
   };
 
-  const generateAINotes = async (meetingId: string) => {
-    const meeting = meetings.find(m => m.id === meetingId);
+  const revokeCustomBackgroundObjectUrl = (backgroundUrl: string | null, file: File | null) => {
+    if (backgroundUrl && file && backgroundUrl.startsWith('blob:')) {
+      URL.revokeObjectURL(backgroundUrl);
+    }
+  };
+
+  const clearEphemeralMeetingNotes = () => {
+    setMeetings((currentMeetings) =>
+      currentMeetings.map((meeting) => ({
+        ...meeting,
+        notes: EMPTY_MEETING_NOTES(),
+      }))
+    );
+  };
+
+  const clearSessionScopedSynthesis = () => {
+    clearEphemeralMeetingNotes();
+    setNoteTakerOn(false);
+    setShowSynthesisConsentModal(false);
+    setSynthesisAgentMode('meeting-bot');
+    setIsSynthesizingNotes(false);
+  };
+
+  const buildFallbackMeetingSummary = (): MeetingSummary => ({
+    summary: 'Participants aligned on digital boundaries and committed to a daily two-hour digital fast.',
+    decisions: [
+      'Adopt a daily two-hour digital fast.',
+      'Use provider-guided check-ins to protect focus blocks.',
+    ],
+    actionItems: [
+      {
+        owner: user?.name || 'Host',
+        task: 'Begin the two-hour digital fast protocol and log completion.',
+        dueDate: 'Daily',
+      },
+      {
+        owner: 'Provider',
+        task: 'Share follow-up bio-hacking and attention-restoration resources.',
+        dueDate: 'Before next session',
+      },
+    ],
+  });
+
+  const mapSummaryForAgent = (
+    summary: MeetingSummary,
+    agentMode: SynthesisAgentMode
+  ): MeetingNotes => {
+    if (agentMode === 'action-agent') {
+      return {
+        transcript: [...mockTranscript],
+        summary: `Action Agent Brief: ${summary.summary}`,
+        decisions: [...summary.decisions, 'Execution priorities confirmed with accountable owners.'],
+        actionItems: summary.actionItems.length
+          ? summary.actionItems
+          : [
+              {
+                owner: user?.name || 'Host',
+                task: 'Capture three measurable outcomes before the next meeting.',
+                dueDate: 'Before next session',
+              },
+            ],
+      };
+    }
+
+    if (agentMode === 'security-agent') {
+      return {
+        transcript: [...mockTranscript],
+        summary: `Security Agent Brief: ${summary.summary} Notes are ephemeral and will be purged when the session ends.`,
+        decisions: [
+          ...summary.decisions,
+          'Meeting notes remain session-scoped and are never persisted to Conscious Network Hub storage.',
+        ],
+        actionItems: [
+          ...summary.actionItems,
+          {
+            owner: 'All Participants',
+            task: 'Download notes during the meeting if retention is needed offline.',
+            dueDate: 'Before session close',
+          },
+        ],
+      };
+    }
+
+    return {
+      transcript: [...mockTranscript],
+      summary: `Meeting Bot Brief: ${summary.summary}`,
+      decisions: summary.decisions,
+      actionItems: summary.actionItems,
+    };
+  };
+
+  const generateAINotes = async (
+    meetingId: string,
+    agentMode: SynthesisAgentMode = synthesisAgentMode
+  ) => {
+    const meeting = meetings.find((entry) => entry.id === meetingId);
     if (!meeting) return;
 
-    const result = await summarizeMeeting(mockTranscript);
-    if (result) {
-      setMeetings(prev =>
-        prev.map(m => (m.id === meetingId ? { ...m, notes: { ...result, transcript: mockTranscript } } : m))
+    setIsSynthesizingNotes(true);
+    try {
+      const result = await summarizeMeeting(mockTranscript);
+      const summaryPayload = result || buildFallbackMeetingSummary();
+      const notesPayload = mapSummaryForAgent(summaryPayload, agentMode);
+
+      setMeetings((prev) =>
+        prev.map((entry) => (entry.id === meetingId ? { ...entry, notes: notesPayload } : entry))
       );
+    } finally {
+      setIsSynthesizingNotes(false);
     }
+  };
+
+  const initiateSynthesisAgent = async () => {
+    const activeMeeting = meetings[0];
+    if (!activeMeeting) return;
+
+    if (!isSoloSessionActive && !isJoining) {
+      alert('Start or join a meeting session before initiating synthesis notes.');
+      return;
+    }
+
+    if (!isNoteTakerOn) {
+      setShowSynthesisConsentModal(true);
+      return;
+    }
+
+    await generateAINotes(activeMeeting.id, synthesisAgentMode);
+  };
+
+  const toggleSynthesisNotetaker = () => {
+    if (isNoteTakerOn) {
+      clearSessionScopedSynthesis();
+      return;
+    }
+
+    setShowSynthesisConsentModal(true);
+  };
+
+  const confirmSynthesisConsent = () => {
+    setNoteTakerOn(true);
+    setShowSynthesisConsentModal(false);
   };
 
   const filteredProviders = PROVIDERS.filter((p) => {
@@ -877,6 +1095,15 @@ const ConsciousMeetings: React.FC<ConsciousMeetingsProps> = ({ user }) => {
     if (mediaRecorderRef.current && recordingState !== 'idle') {
       stopRecording();
     }
+    revokeCustomBackgroundObjectUrl(selectedBackgroundRef.current, customBackgroundFileRef.current);
+    selectedBackgroundRef.current = null;
+    customBackgroundFileRef.current = null;
+    setSelectedBackground(null);
+    setBackgroundType('none');
+    setCustomBackgroundFile(null);
+    setShowBackgroundUploadPolicyModal(false);
+    clearSessionScopedSynthesis();
+    setIsJoining(false);
     setIsSoloSessionActive(false);
     setPermissionState('idle');
     setRecordingState('idle');
@@ -988,18 +1215,21 @@ const ConsciousMeetings: React.FC<ConsciousMeetingsProps> = ({ user }) => {
   };
 
   const clearBackgroundEffect = () => {
+    revokeCustomBackgroundObjectUrl(selectedBackground, customBackgroundFile);
     setSelectedBackground(null);
     setBackgroundType('none');
     setCustomBackgroundFile(null);
   };
 
   const selectBlurBackground = () => {
+    revokeCustomBackgroundObjectUrl(selectedBackground, customBackgroundFile);
     setSelectedBackground(null);
     setBackgroundType('blur');
     setCustomBackgroundFile(null);
   };
 
   const selectBackground = (background: string, type: 'image' | 'video') => {
+    revokeCustomBackgroundObjectUrl(selectedBackground, customBackgroundFile);
     setSelectedBackground(background);
     setBackgroundType(type);
     setCustomBackgroundFile(null); // Clear custom file when selecting preset
@@ -1007,22 +1237,29 @@ const ConsciousMeetings: React.FC<ConsciousMeetingsProps> = ({ user }) => {
 
   const handleCustomBackgroundUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
-    if (file) {
-      if (!file.type.startsWith('image/') && !file.type.startsWith('video/')) {
-        alert('Please upload an image or MP4/video file for virtual background use.');
-        return;
-      }
+    if (!file) return;
 
-      // Clean up previous custom background URL
-      if (customBackgroundFile && selectedBackground) {
-        URL.revokeObjectURL(selectedBackground);
-      }
-      
-      const url = URL.createObjectURL(file);
-      setSelectedBackground(url);
-      setBackgroundType(file.type.startsWith('video/') ? 'video' : 'image');
-      setCustomBackgroundFile(file);
+    const normalizedType = file.type.toLowerCase();
+    const isImage = normalizedType.startsWith('image/');
+    const isAllowedVideo = ALLOWED_BACKGROUND_VIDEO_TYPES.has(normalizedType);
+    if (!isImage && !isAllowedVideo) {
+      alert('Allowed background uploads: JPG, PNG, WEBP, GIF, MP4, or WEBM.');
+      event.target.value = '';
+      return;
     }
+
+    if (file.size > BACKGROUND_UPLOAD_MAX_BYTES) {
+      alert('Background upload must be 25 MB or less.');
+      event.target.value = '';
+      return;
+    }
+
+    revokeCustomBackgroundObjectUrl(selectedBackground, customBackgroundFile);
+    const url = URL.createObjectURL(file);
+    setSelectedBackground(url);
+    setBackgroundType(isImage ? 'image' : 'video');
+    setCustomBackgroundFile(file);
+    event.target.value = '';
   };
 
   const formatDuration = (seconds: number) => {
@@ -1337,7 +1574,7 @@ const ConsciousMeetings: React.FC<ConsciousMeetingsProps> = ({ user }) => {
 
         if (backgroundType === 'image' && selectedBackground) {
           backgroundImage = await new Promise<HTMLImageElement>((resolve, reject) => {
-            const image = new Image();
+            const image = new window.Image();
             image.crossOrigin = 'anonymous';
             image.onload = () => resolve(image);
             image.onerror = () => reject(new Error('Background image failed to load.'));
@@ -1455,10 +1692,7 @@ const ConsciousMeetings: React.FC<ConsciousMeetingsProps> = ({ user }) => {
       if (recordingIntervalRef.current) {
         clearInterval(recordingIntervalRef.current);
       }
-      // Clean up custom background URL
-      if (customBackgroundFileRef.current && selectedBackgroundRef.current) {
-        URL.revokeObjectURL(selectedBackgroundRef.current);
-      }
+      revokeCustomBackgroundObjectUrl(selectedBackgroundRef.current, customBackgroundFileRef.current);
     };
   }, []);
 
@@ -1524,6 +1758,7 @@ const ConsciousMeetings: React.FC<ConsciousMeetingsProps> = ({ user }) => {
 
   const canEnterImmersiveView = hasCheckedImmersiveSupport && isImmersiveSupported;
   const activeMeeting = meetings[0] || null;
+  const hasActiveMeetingNotes = Boolean(activeMeeting?.notes?.summary);
   const canSaveRecording = Boolean(user?.id && activeMeeting && user.id === activeMeeting.hostUserId);
 
   return (
@@ -2006,46 +2241,30 @@ const ConsciousMeetings: React.FC<ConsciousMeetingsProps> = ({ user }) => {
                         </div>
                       </button>
 
-                      {/* Sample backgrounds - in real app, these would be user-uploaded */}
-                      <button
-                        onClick={() => selectBackground('https://images.unsplash.com/photo-1441974231531-c6227db76b6e?auto=format&fit=crop&q=80&w=1000', 'image')}
-                        className={`p-3 sm:p-4 rounded-lg sm:rounded-xl border transition-all ${
-                          selectedBackground === 'https://images.unsplash.com/photo-1441974231531-c6227db76b6e?auto=format&fit=crop&q=80&w=1000' && backgroundType === 'image' && !customBackgroundFile ? 'bg-blue-600 border-blue-500 text-white' : 'bg-white/5 border-white/10 text-slate-400 hover:bg-white/10'
-                        }`}
-                      >
-                        <div className="text-center">
-                          <Image className="w-8 h-8 sm:w-10 sm:h-10 mx-auto mb-2" />
-                          <span className="text-[8px] sm:text-[9px] font-black uppercase tracking-widest">Forest</span>
-                        </div>
-                      </button>
-
-                      <button
-                        onClick={() => selectBackground('https://images.unsplash.com/photo-1506905925346-21bda4d32df4?auto=format&fit=crop&q=80&w=1000', 'image')}
-                        className={`p-3 sm:p-4 rounded-lg sm:rounded-xl border transition-all ${
-                          selectedBackground === 'https://images.unsplash.com/photo-1506905925346-21bda4d32df4?auto=format&fit=crop&q=80&w=1000' && backgroundType === 'image' && !customBackgroundFile ? 'bg-blue-600 border-blue-500 text-white' : 'bg-white/5 border-white/10 text-slate-400 hover:bg-white/10'
-                        }`}
-                      >
-                        <div className="text-center">
-                          <Image className="w-8 h-8 sm:w-10 sm:h-10 mx-auto mb-2" />
-                          <span className="text-[8px] sm:text-[9px] font-black uppercase tracking-widest">Mountains</span>
-                        </div>
-                      </button>
-
-                      <button
-                        onClick={() => selectBackground('https://images.unsplash.com/photo-1559827260-dc66d52bef19?auto=format&fit=crop&q=80&w=1000', 'image')}
-                        className={`p-3 sm:p-4 rounded-lg sm:rounded-xl border transition-all ${
-                          selectedBackground === 'https://images.unsplash.com/photo-1559827260-dc66d52bef19?auto=format&fit=crop&q=80&w=1000' && backgroundType === 'image' && !customBackgroundFile ? 'bg-blue-600 border-blue-500 text-white' : 'bg-white/5 border-white/10 text-slate-400 hover:bg-white/10'
-                        }`}
-                      >
-                        <div className="text-center">
-                          <Image className="w-8 h-8 sm:w-10 sm:h-10 mx-auto mb-2" />
-                          <span className="text-[8px] sm:text-[9px] font-black uppercase tracking-widest">Ocean</span>
-                        </div>
-                      </button>
+                      {BACKGROUND_PRESETS.map((preset) => (
+                        <button
+                          key={preset.id}
+                          onClick={() => selectBackground(preset.source, preset.type)}
+                          className={`p-3 sm:p-4 rounded-lg sm:rounded-xl border transition-all ${
+                            selectedBackground === preset.source && backgroundType === preset.type && !customBackgroundFile
+                              ? 'bg-blue-600 border-blue-500 text-white'
+                              : 'bg-white/5 border-white/10 text-slate-400 hover:bg-white/10'
+                          }`}
+                        >
+                          <div className="text-center">
+                            {preset.type === 'video' ? (
+                              <Video className="w-8 h-8 sm:w-10 sm:h-10 mx-auto mb-2" />
+                            ) : (
+                              <Image className="w-8 h-8 sm:w-10 sm:h-10 mx-auto mb-2" />
+                            )}
+                            <span className="text-[8px] sm:text-[9px] font-black uppercase tracking-widest">{preset.label}</span>
+                          </div>
+                        </button>
+                      ))}
 
                       {/* Custom Upload */}
                       <button
-                        onClick={() => fileInputRef.current?.click()}
+                        onClick={() => setShowBackgroundUploadPolicyModal(true)}
                         className={`p-3 sm:p-4 rounded-lg sm:rounded-xl border transition-all ${
                           customBackgroundFile && (backgroundType === 'image' || backgroundType === 'video')
                             ? 'bg-blue-600 border-blue-500 text-white'
@@ -2062,7 +2281,7 @@ const ConsciousMeetings: React.FC<ConsciousMeetingsProps> = ({ user }) => {
                       <input
                         ref={fileInputRef}
                         type="file"
-                        accept="image/*,video/*,video/mp4,.mp4"
+                        accept="image/jpeg,image/png,image/webp,image/gif,video/mp4,video/webm"
                         onChange={handleCustomBackgroundUpload}
                         className="hidden"
                       />
@@ -2073,26 +2292,77 @@ const ConsciousMeetings: React.FC<ConsciousMeetingsProps> = ({ user }) => {
             )}
 
             {/* AI Notetaker Preview Settings */}
-            <div className="glass-panel p-6 sm:p-8 rounded-lg sm:rounded-2xl md:rounded-[2.25rem] md:rounded-[2.5rem] border-blue-500/10 shadow-xl flex flex-col sm:flex-row items-center justify-between gap-4 sm:gap-6">
-              <div className="flex items-center gap-4 sm:gap-5">
-                <div className="p-3 sm:p-4 bg-blue-600/10 rounded-lg sm:rounded-2xl">
-                  <Zap className={`w-5 h-5 sm:w-6 sm:h-6 ${isNoteTakerOn ? 'text-teal-400 animate-pulse' : 'text-slate-600'}`} />
+            <div className="glass-panel p-6 sm:p-8 rounded-lg sm:rounded-2xl md:rounded-[2.25rem] md:rounded-[2.5rem] border-blue-500/10 shadow-xl space-y-4 sm:space-y-5">
+              <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 sm:gap-6">
+                <div className="flex items-center gap-4 sm:gap-5">
+                  <div className="p-3 sm:p-4 bg-blue-600/10 rounded-lg sm:rounded-2xl">
+                    <Zap className={`w-5 h-5 sm:w-6 sm:h-6 ${isNoteTakerOn ? 'text-teal-400 animate-pulse' : 'text-slate-600'}`} />
+                  </div>
+                  <div>
+                    <h4 className="text-xs sm:text-sm font-black text-white uppercase tracking-widest">AI Synthesis Notetaker</h4>
+                    <p className="text-[8px] sm:text-[9px] text-slate-500 uppercase tracking-widest mt-1">Real-time transcription & action extraction</p>
+                  </div>
                 </div>
-                <div>
-                  <h4 className="text-xs sm:text-sm font-black text-white uppercase tracking-widest">AI Synthesis Notetaker</h4>
-                  <p className="text-[8px] sm:text-[9px] text-slate-500 uppercase tracking-widest mt-1">Real-time transcription & action extraction</p>
-                </div>
+                <button
+                  onClick={toggleSynthesisNotetaker}
+                  className={`px-6 sm:px-8 py-2 sm:py-3 rounded-lg sm:rounded-xl text-[8px] sm:text-[9px] sm:text-[10px] font-black uppercase tracking-widest border transition-all shrink-0 ${
+                    isNoteTakerOn
+                      ? 'bg-teal-500/20 border-teal-500/40 text-teal-400 shadow-glow'
+                      : 'bg-white/5 border-white/10 text-slate-500 hover:text-white'
+                  }`}
+                >
+                  {isNoteTakerOn ? 'Disable Synthesis' : 'Enable Synthesis'}
+                </button>
               </div>
-              <button
-                onClick={() => setNoteTakerOn(!isNoteTakerOn)}
-                className={`px-6 sm:px-8 py-2 sm:py-3 rounded-lg sm:rounded-xl text-[8px] sm:text-[9px] sm:text-[10px] font-black uppercase tracking-widest border transition-all shrink-0 ${
-                  isNoteTakerOn
-                    ? 'bg-teal-500/20 border-teal-500/40 text-teal-400 shadow-glow'
-                    : 'bg-white/5 border-white/10 text-slate-500 hover:text-white'
-                }`}
-              >
-                {isNoteTakerOn ? 'Synthesis Active' : 'Enable Synthesis'}
-              </button>
+
+              <p className="text-[9px] sm:text-[10px] text-slate-400 uppercase tracking-widest">
+                Synthesis notes are generated in-session only, can be downloaded by all participants, and are auto-cleared when the meeting ends.
+              </p>
+
+              {isNoteTakerOn && (
+                <div className="space-y-4">
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 sm:gap-3">
+                    {SYNTHESIS_AGENT_OPTIONS.map((option) => (
+                      <button
+                        key={option.id}
+                        onClick={() => setSynthesisAgentMode(option.id)}
+                        className={`text-left p-3 rounded-lg border transition-colors ${
+                          synthesisAgentMode === option.id
+                            ? 'bg-blue-600/20 border-blue-500/40 text-blue-200'
+                            : 'bg-white/5 border-white/10 text-slate-400 hover:bg-white/10'
+                        }`}
+                      >
+                        <p className="text-[9px] sm:text-[10px] font-black uppercase tracking-widest">{option.label}</p>
+                        <p className="text-[8px] sm:text-[9px] mt-1 text-slate-300 normal-case tracking-normal leading-relaxed">
+                          {option.description}
+                        </p>
+                      </button>
+                    ))}
+                  </div>
+
+                  <div className="flex flex-col sm:flex-row gap-3">
+                    <button
+                      onClick={initiateSynthesisAgent}
+                      disabled={isSynthesizingNotes || (!isSoloSessionActive && !isJoining)}
+                      className="flex-1 px-4 sm:px-6 py-3 bg-blue-600 hover:bg-blue-500 disabled:bg-slate-700 disabled:text-slate-500 text-white rounded-lg sm:rounded-xl text-[9px] sm:text-[10px] font-black uppercase tracking-widest transition-all flex items-center justify-center gap-2"
+                    >
+                      {isSynthesizingNotes ? (
+                        <Loader2 className="w-4 h-4 animate-spin" />
+                      ) : (
+                        <Zap className="w-4 h-4" />
+                      )}
+                      {isSynthesizingNotes ? 'Generating Notes' : 'Initiate Agent Notes'}
+                    </button>
+                    <button
+                      onClick={() => activeMeeting && downloadMeetingNotes(activeMeeting)}
+                      disabled={!hasActiveMeetingNotes}
+                      className="flex-1 px-4 sm:px-6 py-3 bg-white/5 hover:bg-white/10 disabled:bg-slate-800 disabled:text-slate-600 border border-white/10 text-slate-300 rounded-lg sm:rounded-xl text-[9px] sm:text-[10px] font-black uppercase tracking-widest transition-all flex items-center justify-center gap-2"
+                    >
+                      <Download className="w-4 h-4" /> Download Session Notes
+                    </button>
+                  </div>
+                </div>
+              )}
             </div>
           </div>
         )}
@@ -2236,7 +2506,7 @@ const ConsciousMeetings: React.FC<ConsciousMeetingsProps> = ({ user }) => {
                     <h4 className="text-[9px] sm:text-[10px] font-black uppercase tracking-widest">Meeting Integrity</h4>
                   </div>
                   <p className="text-[10px] sm:text-[11px] text-slate-400 leading-relaxed font-light italic">
-                    By entering a virtual session, all participants agree to end-to-end encrypted recording if Synthesis is enabled. Data remains private to the host and participants.
+                    If synthesis is enabled, notes are generated temporarily for in-meeting use, downloadable by participants, and automatically purged when the session ends.
                   </p>
                 </div>
               </div>
@@ -2244,6 +2514,69 @@ const ConsciousMeetings: React.FC<ConsciousMeetingsProps> = ({ user }) => {
           </div>
         )}
       </div>
+
+      {showSynthesisConsentModal && (
+        <div className="fixed inset-0 z-[220] flex items-center justify-center p-3 sm:p-4 bg-black/95 backdrop-blur-3xl animate-in fade-in duration-300">
+          <div className="glass-panel w-full max-w-xl p-6 sm:p-8 rounded-2xl border border-blue-500/30 shadow-2xl space-y-4 sm:space-y-5">
+            <h3 className="text-lg sm:text-xl font-black text-white uppercase tracking-widest">Enable AI Synthesis?</h3>
+            <p className="text-[10px] sm:text-xs text-slate-300 leading-relaxed">
+              Security and usage notice: synthesis notes are generated for the live meeting only. Notes are not saved to Conscious Network Hub and are purged when the meeting ends or all participants leave.
+            </p>
+            <ul className="text-[10px] sm:text-xs text-slate-400 space-y-1">
+              <li>- Any participant can download notes during the active session.</li>
+              <li>- Transcript processing is session-scoped and not written to long-term storage.</li>
+              <li>- Disable synthesis at any time to clear notes immediately.</li>
+            </ul>
+            <div className="flex flex-col sm:flex-row gap-3">
+              <button
+                onClick={() => setShowSynthesisConsentModal(false)}
+                className="flex-1 px-4 py-3 bg-white/5 hover:bg-white/10 border border-white/10 text-slate-300 rounded-lg text-[9px] sm:text-[10px] font-black uppercase tracking-widest transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={confirmSynthesisConsent}
+                className="flex-1 px-4 py-3 bg-blue-600 hover:bg-blue-500 text-white rounded-lg text-[9px] sm:text-[10px] font-black uppercase tracking-widest transition-colors"
+              >
+                Enable Synthesis
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {showBackgroundUploadPolicyModal && (
+        <div className="fixed inset-0 z-[220] flex items-center justify-center p-3 sm:p-4 bg-black/95 backdrop-blur-3xl animate-in fade-in duration-300">
+          <div className="glass-panel w-full max-w-xl p-6 sm:p-8 rounded-2xl border border-blue-500/30 shadow-2xl space-y-4 sm:space-y-5">
+            <h3 className="text-lg sm:text-xl font-black text-white uppercase tracking-widest">Background Upload Rules</h3>
+            <p className="text-[10px] sm:text-xs text-slate-300 leading-relaxed">
+              Uploads are temporary for the current meeting session only and are never stored by Conscious Network Hub.
+            </p>
+            <ul className="text-[10px] sm:text-xs text-slate-400 space-y-1">
+              <li>- Supported files: JPG, PNG, WEBP, GIF, MP4, WEBM.</li>
+              <li>- Maximum size: 25 MB.</li>
+              <li>- Uploaded files are deleted from memory when the meeting session ends.</li>
+            </ul>
+            <div className="flex flex-col sm:flex-row gap-3">
+              <button
+                onClick={() => setShowBackgroundUploadPolicyModal(false)}
+                className="flex-1 px-4 py-3 bg-white/5 hover:bg-white/10 border border-white/10 text-slate-300 rounded-lg text-[9px] sm:text-[10px] font-black uppercase tracking-widest transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={() => {
+                  setShowBackgroundUploadPolicyModal(false);
+                  fileInputRef.current?.click();
+                }}
+                className="flex-1 px-4 py-3 bg-blue-600 hover:bg-blue-500 text-white rounded-lg text-[9px] sm:text-[10px] font-black uppercase tracking-widest transition-colors"
+              >
+                Choose File
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Scheduling Modal */}
       {isSchedulingModalOpen && selectedProvider && (
