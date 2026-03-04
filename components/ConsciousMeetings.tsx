@@ -97,6 +97,7 @@ const EMPTY_MEETING_NOTES = (): MeetingNotes => ({
 
 const BACKGROUND_UPLOAD_MAX_BYTES = 25 * 1024 * 1024;
 const ALLOWED_BACKGROUND_VIDEO_TYPES = new Set(['video/mp4', 'video/webm', 'video/quicktime']);
+const PROVIDER_SESSION_TOKEN_EVENT = 'hcn:provider-session-token-updated';
 
 const SYNTHESIS_AGENT_OPTIONS: Array<{ id: SynthesisAgentMode; label: string; description: string }> = [
   {
@@ -620,14 +621,25 @@ const ConsciousMeetings: React.FC<ConsciousMeetingsProps> = ({ user }) => {
     setJoinableMeetingSessions(sessions);
   };
 
-  const connectProviderSessionToken = async () => {
-    const normalized = providerSessionTokenInput.trim();
+  const connectProviderSessionToken = async (
+    tokenOverride?: string,
+    source: 'manual' | 'identity' = 'manual'
+  ) => {
+    const normalized = String(tokenOverride ?? providerSessionTokenInput).trim();
     if (!normalized) {
-      setMeetingOpsStatus('Provider session token is required.');
+      setMeetingOpsStatus(
+        source === 'identity'
+          ? 'Identity verification must finish before provider controls can unlock.'
+          : 'Provider session token is required.'
+      );
       return;
     }
     setIsMeetingOpsBusy(true);
-    setMeetingOpsStatus('Validating provider session token...');
+    setMeetingOpsStatus(
+      source === 'identity'
+        ? 'Connecting provider controls from Identity Security...'
+        : 'Validating provider session token...'
+    );
     try {
       const sessions = await listProviderMeetingSessions(normalized);
       setProviderSessionToken(normalized);
@@ -643,13 +655,17 @@ const ConsciousMeetings: React.FC<ConsciousMeetingsProps> = ({ user }) => {
         return sessions[0]?.id || '';
       });
       await refreshProviderMeetingData(normalized);
-      setMeetingOpsStatus('Provider session connected. Host controls unlocked.');
+      setMeetingOpsStatus(
+        source === 'identity'
+          ? 'Provider controls connected from Identity Security. You can start hosting now.'
+          : 'Provider session connected. Host controls unlocked.'
+      );
     } finally {
       setIsMeetingOpsBusy(false);
     }
   };
 
-  const disconnectProviderSessionToken = () => {
+  const disconnectProviderSessionToken = (statusMessage = 'Provider session disconnected.') => {
     setProviderSessionToken('');
     setProviderSessionTokenInput('');
     setProviderInviteGroups([]);
@@ -662,7 +678,7 @@ const ConsciousMeetings: React.FC<ConsciousMeetingsProps> = ({ user }) => {
     } catch {
       // Ignore storage exceptions.
     }
-    setMeetingOpsStatus('Provider session disconnected.');
+    setMeetingOpsStatus(statusMessage);
   };
 
   const createHostedSession = async () => {
@@ -1857,9 +1873,7 @@ const ConsciousMeetings: React.FC<ConsciousMeetingsProps> = ({ user }) => {
     if (typeof window === 'undefined') return;
     const savedProviderToken = String(window.sessionStorage.getItem(providerTokenStorageKey) || '').trim();
     if (savedProviderToken) {
-      setProviderSessionToken(savedProviderToken);
-      setProviderSessionTokenInput(savedProviderToken);
-      void refreshProviderMeetingData(savedProviderToken);
+      void connectProviderSessionToken(savedProviderToken, 'identity');
     }
 
     const savedGuestToken = String(window.sessionStorage.getItem(externalGuestSessionStorageKey) || '').trim();
@@ -1873,6 +1887,43 @@ const ConsciousMeetings: React.FC<ConsciousMeetingsProps> = ({ user }) => {
       setExternalInviteTokenInput(externalInviteToken);
       void previewExternalInvite(externalInviteToken);
     }
+  }, []);
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+
+    const handleProviderTokenUpdate = (event: Event) => {
+      const customEvent = event as CustomEvent<{ token?: string }>;
+      const nextToken = String(customEvent.detail?.token || '').trim();
+      if (!nextToken) {
+        disconnectProviderSessionToken(
+          'Provider controls disconnected because Identity Security session was cleared.'
+        );
+        return;
+      }
+      void connectProviderSessionToken(nextToken, 'identity');
+    };
+
+    const handleStorageUpdate = (event: StorageEvent) => {
+      if (event.storageArea !== window.sessionStorage) return;
+      if (event.key !== providerTokenStorageKey) return;
+      const nextToken = String(event.newValue || '').trim();
+      if (!nextToken) {
+        disconnectProviderSessionToken('Provider session token removed.');
+        return;
+      }
+      void connectProviderSessionToken(nextToken, 'identity');
+    };
+
+    window.addEventListener(PROVIDER_SESSION_TOKEN_EVENT, handleProviderTokenUpdate as EventListener);
+    window.addEventListener('storage', handleStorageUpdate);
+    return () => {
+      window.removeEventListener(
+        PROVIDER_SESSION_TOKEN_EVENT,
+        handleProviderTokenUpdate as EventListener
+      );
+      window.removeEventListener('storage', handleStorageUpdate);
+    };
   }, []);
 
   useEffect(() => {
@@ -2952,6 +3003,7 @@ const ConsciousMeetings: React.FC<ConsciousMeetingsProps> = ({ user }) => {
 
               <p className="text-[9px] sm:text-[10px] text-slate-400 uppercase tracking-widest">
                 Providers create/start sessions, invite platform users/groups, and issue external guest links.
+                Identity Security verification now auto-connects host controls. Manual token paste is backup only.
               </p>
 
               <div className="grid grid-cols-1 lg:grid-cols-3 gap-3">
@@ -2959,19 +3011,19 @@ const ConsciousMeetings: React.FC<ConsciousMeetingsProps> = ({ user }) => {
                   type="password"
                   value={providerSessionTokenInput}
                   onChange={(event) => setProviderSessionTokenInput(event.target.value)}
-                  placeholder="Paste provider session token"
+                  placeholder="Auto-filled after Identity Security Verify (manual paste optional)"
                   className="lg:col-span-2 w-full px-4 py-3 bg-white/5 border border-white/10 rounded-xl text-xs text-white focus:outline-none focus:ring-2 focus:ring-blue-500/30 transition-all font-medium"
                 />
                 <div className="flex gap-2">
                   <button
-                    onClick={connectProviderSessionToken}
+                    onClick={() => void connectProviderSessionToken()}
                     disabled={isMeetingOpsBusy}
                     className="flex-1 px-4 py-3 bg-blue-600 hover:bg-blue-500 disabled:bg-slate-700 disabled:text-slate-500 text-white rounded-xl text-[9px] sm:text-[10px] font-black uppercase tracking-widest transition-all"
                   >
                     Connect
                   </button>
                   <button
-                    onClick={disconnectProviderSessionToken}
+                    onClick={() => disconnectProviderSessionToken()}
                     disabled={isMeetingOpsBusy}
                     className="flex-1 px-4 py-3 bg-white/5 hover:bg-white/10 disabled:bg-slate-800 disabled:text-slate-600 border border-white/10 text-slate-300 rounded-xl text-[9px] sm:text-[10px] font-black uppercase tracking-widest transition-all"
                   >
