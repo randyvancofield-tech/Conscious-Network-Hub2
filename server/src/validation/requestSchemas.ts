@@ -229,3 +229,31 @@ export const immersiveSessionEventSchema: JsonSchema = {
     },
   },
 };
+
+export const providerBridgeIssueLaunchCodeSchema: JsonSchema = {
+  type: 'object',
+  additionalProperties: false,
+  required: ['providerExternalId', 'email', 'name', 'jti', 'aud'],
+  properties: {
+    providerExternalId: { type: 'string', minLength: 1, maxLength: 256 },
+    email: { type: 'string', minLength: 3, maxLength: 320 },
+    name: { type: 'string', minLength: 1, maxLength: 200 },
+    jti: { type: 'string', minLength: 8, maxLength: 256 },
+    aud: { type: 'string', minLength: 1, maxLength: 256 },
+    scopes: {
+      type: 'array',
+      maxItems: 24,
+      items: { type: 'string', minLength: 1, maxLength: 128 },
+      uniqueItems: true,
+    },
+  },
+};
+
+export const providerBridgeConsumeLaunchCodeSchema: JsonSchema = {
+  type: 'object',
+  additionalProperties: false,
+  required: ['code'],
+  properties: {
+    code: { type: 'string', minLength: 8, maxLength: 256 },
+  },
+};

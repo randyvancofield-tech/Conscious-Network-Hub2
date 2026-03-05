@@ -15,10 +15,18 @@ enum SocialPostVisibility {
   private
 }
 
+enum UserRole {
+  user
+  provider
+  admin
+}
+
 model User {
   id            String     @id @default(uuid())
   email         String     @unique
   name          String?
+  role          UserRole   @default(user)
+  providerExternalId String? @unique
   handle        String?
   bio           String?
   location      String?
@@ -63,6 +71,23 @@ model User {
   followers     SocialFollow[] @relation("SocialFollowFollowing")
 
   @@index([createdAt])
+}
+
+model ProviderBridgeLaunch {
+  id                 String   @id
+  providerExternalId String
+  email              String
+  name               String
+  issuedAt           DateTime
+  expiresAt          DateTime
+  consumedAt         DateTime?
+  jti                String   @unique
+  scopes             Json
+  createdAt          DateTime @default(now())
+
+  @@index([providerExternalId])
+  @@index([expiresAt])
+  @@index([consumedAt])
 }
 
 model Reflection {

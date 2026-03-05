@@ -26,6 +26,9 @@ export const REQUIRED_SECRETS = [
   'STRIPE_PRICE_GUIDED',
   'STRIPE_PRICE_ACCELERATED',
   'FRONTEND_BASE_URL',
+  'BRIDGE_PROVIDER_SECRET',
+  'BRIDGE_PROVIDER_ISSUER',
+  'BRIDGE_PROVIDER_AUDIENCE',
 ] as const;
 
 const hasSensitiveDataKey = (): boolean => hasNonEmptyEnv('SENSITIVE_DATA_KEY');
@@ -40,6 +43,24 @@ export const resolveAuthTokenSecret = (): string => {
   throw new Error(
     '[STARTUP][FATAL] Missing required auth signing secret. Set AUTH_TOKEN_SECRET (preferred) or SESSION_SECRET.'
   );
+};
+
+export const resolveBridgeProviderSecret = (): string => {
+  const value = trimEnv('BRIDGE_PROVIDER_SECRET');
+  if (value) return value;
+  throw new Error('[STARTUP][FATAL] Missing BRIDGE_PROVIDER_SECRET.');
+};
+
+export const resolveBridgeProviderIssuer = (): string => {
+  const value = trimEnv('BRIDGE_PROVIDER_ISSUER');
+  if (value) return value;
+  throw new Error('[STARTUP][FATAL] Missing BRIDGE_PROVIDER_ISSUER.');
+};
+
+export const resolveBridgeProviderAudience = (): string => {
+  const value = trimEnv('BRIDGE_PROVIDER_AUDIENCE');
+  if (value) return value;
+  throw new Error('[STARTUP][FATAL] Missing BRIDGE_PROVIDER_AUDIENCE.');
 };
 
 export const validateRequiredEnv = (): void => {
@@ -84,6 +105,18 @@ export const validateRequiredEnv = (): void => {
 
   if (!hasNonEmptyEnv('FRONTEND_BASE_URL')) {
     missing.push('FRONTEND_BASE_URL');
+  }
+
+  if (!hasNonEmptyEnv('BRIDGE_PROVIDER_SECRET')) {
+    missing.push('BRIDGE_PROVIDER_SECRET');
+  }
+
+  if (!hasNonEmptyEnv('BRIDGE_PROVIDER_ISSUER')) {
+    missing.push('BRIDGE_PROVIDER_ISSUER');
+  }
+
+  if (!hasNonEmptyEnv('BRIDGE_PROVIDER_AUDIENCE')) {
+    missing.push('BRIDGE_PROVIDER_AUDIENCE');
   }
 
   if (missing.length > 0) {

@@ -3,6 +3,7 @@ import { Prisma, PrismaClient } from '@prisma/client';
 import {
   type LocalMembershipRecord,
   type LocalPaymentRecord,
+  type LocalProviderBridgeLaunchRecord,
   type LocalProviderChallengeRecord,
   type LocalProviderInviteGroupMemberRecord,
   type LocalProviderInviteGroupRecord,
@@ -28,6 +29,7 @@ type CreateReflectionInput = Parameters<StoreApi['createReflection']>[0];
 type CreateProviderChallengeInput = Parameters<StoreApi['createProviderChallenge']>[0];
 type CreateProviderSessionInput = Parameters<StoreApi['createProviderSession']>[0];
 type UpsertProviderInviteGroupInput = Parameters<StoreApi['upsertProviderInviteGroup']>[0];
+type CreateProviderBridgeLaunchInput = Parameters<StoreApi['createProviderBridgeLaunch']>[0];
 
 export const isUsingSharedPersistence = true;
 
@@ -134,6 +136,8 @@ const toLocalUser = (row: any): LocalUserRecord => ({
   id: row.id,
   email: row.email,
   name: row.name,
+  role: (String(row.role || 'user').trim().toLowerCase() || 'user') as LocalUserRecord['role'],
+  providerExternalId: toNullableString(row.providerExternalId),
   handle: toNullableString(row.handle),
   bio: toNullableString(row.bio),
   location: toNullableString(row.location),
@@ -263,6 +267,24 @@ const toLocalProviderInviteGroup = (row: any): LocalProviderInviteGroupRecord =>
   updatedAt: row.updatedAt,
 });
 
+const toLocalProviderBridgeLaunch = (row: any): LocalProviderBridgeLaunchRecord => ({
+  id: row.id,
+  providerExternalId: row.providerExternalId,
+  email: row.email,
+  name: row.name,
+  issuedAt: row.issuedAt,
+  expiresAt: row.expiresAt,
+  consumedAt: row.consumedAt || null,
+  jti: row.jti,
+  scopes: Array.isArray(row.scopes)
+    ? row.scopes
+        .filter((entry: unknown): entry is string => typeof entry === 'string')
+        .map((entry: string) => entry.trim())
+        .filter((entry: string) => entry.length > 0)
+    : [],
+  createdAt: row.createdAt,
+});
+
 const ensurePrisma = (): PrismaClient => {
   if (!prisma) {
     prisma = new PrismaClient();
@@ -310,6 +332,20 @@ export const localStore = {
     }
   },
 
+  async getUserByProviderExternalId(providerExternalId: string): Promise<LocalUserRecord | null> {
+    try {
+      const normalized = String(providerExternalId || '').trim();
+      if (!normalized) return null;
+      const db = ensurePrisma() as any;
+      const row = await db.user.findFirst({
+        where: { providerExternalId: normalized } as any,
+      });
+      return row ? toLocalUser(row) : null;
+    } catch (error) {
+      return translatePrismaError(error);
+    }
+  },
+
   async listUsers(limit = 250): Promise<LocalUserRecord[]> {
     try {
       const rows = await ensurePrisma().user.findMany({
@@ -342,6 +378,8 @@ export const localStore = {
           id: crypto.randomUUID(),
           email: input.email.trim().toLowerCase(),
           name: toNullableString(input.name),
+          role: (String(input.role || 'user').trim().toLowerCase() || 'user') as any,
+          providerExternalId: toNullableString(input.providerExternalId),
           handle: toNullableString(input.handle),
           bio: toNullableString(input.bio),
           location: toNullableString(input.location),
@@ -386,6 +424,12 @@ export const localStore = {
       const db = ensurePrisma();
       const data: Record<string, unknown> = {};
       if (updates.name !== undefined) data.name = updates.name;
+      if (updates.role !== undefined) {
+        data.role = (String(updates.role || '').trim().toLowerCase() || 'user') as any;
+      }
+      if (updates.providerExternalId !== undefined) {
+        data.providerExternalId = toNullableString(updates.providerExternalId);
+      }
       if (updates.handle !== undefined) data.handle = updates.handle;
       if (updates.bio !== undefined) data.bio = updates.bio;
       if (updates.location !== undefined) data.location = updates.location;
@@ -831,9 +875,85 @@ export const localStore = {
     }
   },
 
+  async createProviderBridgeLaunch(
+    input: CreateProviderBridgeLaunchInput
+  ): Promise<LocalProviderBridgeLaunchRecord> {
+    try {
+      const db = ensurePrisma() as any;
+      const scopes = Array.isArray(input.scopes)
+        ? input.scopes
+            .filter((entry): entry is string => typeof entry === 'string')
+            .map((entry) => entry.trim())
+            .filter((entry) => entry.length > 0)
+            .slice(0, 24)
+        : [];
+      const row = await db.providerBridgeLaunch.create({
+        data: {
+          id: input.id,
+          providerExternalId: input.providerExternalId,
+          email: input.email.trim().toLowerCase(),
+          name: input.name.trim() || 'Provider',
+          issuedAt: input.issuedAt,
+          expiresAt: input.expiresAt,
+          consumedAt: null,
+          jti: input.jti,
+          scopes: scopes as unknown as Prisma.InputJsonValue,
+          createdAt: input.createdAt || new Date(),
+        },
+      });
+      return toLocalProviderBridgeLaunch(row);
+    } catch (error) {
+      return translatePrismaError(error);
+    }
+  },
+
+  async getProviderBridgeLaunchById(id: string): Promise<LocalProviderBridgeLaunchRecord | null> {
+    try {
+      const db = ensurePrisma() as any;
+      const row = await db.providerBridgeLaunch.findUnique({ where: { id } });
+      return row ? toLocalProviderBridgeLaunch(row) : null;
+    } catch (error) {
+      return translatePrismaError(error);
+    }
+  },
+
+  async getProviderBridgeLaunchByJti(jti: string): Promise<LocalProviderBridgeLaunchRecord | null> {
+    try {
+      const db = ensurePrisma() as any;
+      const row = await db.providerBridgeLaunch.findUnique({ where: { jti } });
+      return row ? toLocalProviderBridgeLaunch(row) : null;
+    } catch (error) {
+      return translatePrismaError(error);
+    }
+  },
+
+  async consumeProviderBridgeLaunch(
+    id: string,
+    consumedAt = new Date()
+  ): Promise<LocalProviderBridgeLaunchRecord | null> {
+    try {
+      const db = ensurePrisma() as any;
+      const existing = await db.providerBridgeLaunch.findUnique({ where: { id } });
+      if (!existing) return null;
+      if (existing.consumedAt) {
+        return toLocalProviderBridgeLaunch(existing);
+      }
+      const row = await db.providerBridgeLaunch.update({
+        where: { id },
+        data: { consumedAt },
+      });
+      return toLocalProviderBridgeLaunch(row);
+    } catch (error) {
+      if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2025') {
+        return null;
+      }
+      return translatePrismaError(error);
+    }
+  },
+
   async getDiagnostics(): Promise<LocalStoreDiagnostics> {
     try {
-      const db = ensurePrisma();
+      const db = ensurePrisma() as any;
       const [
         users,
         memberships,
@@ -842,6 +962,7 @@ export const localStore = {
         providerChallenges,
         providerSessions,
         providerInviteGroups,
+        providerBridgeLaunches,
       ] = await db.$transaction([
         db.user.count(),
         db.membership.count(),
@@ -850,7 +971,8 @@ export const localStore = {
         db.providerChallenge.count(),
         db.providerSession.count(),
         db.providerInviteGroup.count(),
-      ]);
+        db.providerBridgeLaunch.count(),
+      ]) as number[];
 
       return {
         generatedAt: new Date().toISOString(),
@@ -897,6 +1019,7 @@ export const localStore = {
           providerChallenges,
           providerSessions,
           providerInviteGroups,
+          providerBridgeLaunches,
         },
       };
     } catch (error) {
@@ -908,6 +1031,7 @@ export const localStore = {
 export type {
   LocalMembershipRecord,
   LocalPaymentRecord,
+  LocalProviderBridgeLaunchRecord,
   LocalProviderChallengeRecord,
   LocalProviderInviteGroupMemberRecord,
   LocalProviderInviteGroupRecord,

@@ -136,6 +136,32 @@ export interface ExternalMeetingJoinResult {
   session: MeetingSessionSummary;
 }
 
+export interface ProviderBridgeConsumeResult {
+  session: {
+    token: string;
+    expiresAt: number;
+  };
+  providerSession: {
+    token: string;
+    expiresAt: number;
+  };
+  user: {
+    id: string;
+    email: string;
+    name: string;
+    role: 'user' | 'provider' | 'admin';
+    providerExternalId: string | null;
+    tier: string | null;
+    subscriptionStatus: string | null;
+    createdAt: string;
+    updatedAt: string;
+    twoFactorEnabled: boolean;
+    twoFactorMethod: 'none' | 'phone' | 'wallet';
+    phoneNumberMasked: string | null;
+    walletDid: string | null;
+  };
+}
+
 // Resolve backend URL:
 // - Use VITE_BACKEND_URL if set.
 // - Otherwise use same-origin (empty string), letting dev proxy or reverse proxy handle routing.
@@ -429,6 +455,28 @@ class BackendAPIService {
         .filter((entry: DirectoryUserEntry) => entry.id.length > 0);
     } catch {
       return [];
+    }
+  }
+
+  async consumeProviderLaunchCode(code: string): Promise<ProviderBridgeConsumeResult | null> {
+    const normalized = String(code || '').trim();
+    if (!normalized) return null;
+    try {
+      const response = await fetch(`${this.baseUrl}/api/bridge/provider/consume-launch-code`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ code: normalized }),
+      });
+      if (!response.ok) return null;
+      const data = await response.json().catch(() => null);
+      if (!data?.session?.token || !data?.providerSession?.token || !data?.user?.id) {
+        return null;
+      }
+      return data as ProviderBridgeConsumeResult;
+    } catch {
+      return null;
     }
   }
 
@@ -1040,6 +1088,12 @@ export async function reportImmersiveSessionEvent(
 
 export async function getUserDirectory(): Promise<DirectoryUserEntry[]> {
   return backendAPI.getUserDirectory();
+}
+
+export async function consumeProviderLaunchCode(
+  code: string
+): Promise<ProviderBridgeConsumeResult | null> {
+  return backendAPI.consumeProviderLaunchCode(code);
 }
 
 export async function listProviderInviteGroups(

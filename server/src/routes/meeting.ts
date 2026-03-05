@@ -240,16 +240,17 @@ const sessionToResponse = (session: MeetingSessionRecord) => ({
 const findProviderSessionOrDeny = (
   req: Request,
   res: Response
-): { providerDid: string; session: MeetingSessionRecord } | null => {
+): { providerDid: string; providerUserId: string; session: MeetingSessionRecord } | null => {
   const providerReq = req as ProviderAuthenticatedRequest;
   const providerDid = String(providerReq.providerDid || '').trim();
+  const providerUserId = String(providerReq.providerUserId || '').trim();
   const sessionId = String(req.params.sessionId || '').trim();
   const session = meetingSessions.get(sessionId);
-  if (!providerDid || !session || session.providerDid !== providerDid) {
+  if (!providerDid || !providerUserId || !session || session.providerDid !== providerDid) {
     res.status(404).json({ error: 'Meeting session not found' });
     return null;
   }
-  return { providerDid, session };
+  return { providerDid, providerUserId, session };
 };
 
 const ensureSessionCapacity = (session: MeetingSessionRecord): boolean =>
@@ -326,7 +327,8 @@ providerRouter.get('/sessions', (req: Request, res: Response): void => {
 providerRouter.post('/sessions', async (req: Request, res: Response): Promise<void> => {
   const providerReq = req as ProviderAuthenticatedRequest;
   const providerDid = String(providerReq.providerDid || '').trim();
-  if (!providerDid) {
+  const providerUserId = String(providerReq.providerUserId || '').trim();
+  if (!providerDid || !providerUserId) {
     res.status(400).json({ error: 'Missing provider identity context' });
     return;
   }
@@ -364,8 +366,8 @@ providerRouter.post('/sessions', async (req: Request, res: Response): Promise<vo
     domain: 'social',
     action: 'provider_session_create',
     outcome: 'success',
-    actorUserId: providerDid,
-    targetUserId: providerDid,
+    actorUserId: providerUserId,
+    targetUserId: providerUserId,
     statusCode: 201,
     metadata: { sessionId: record.id, mode: record.mode, maxViewers: record.maxViewers },
   });
@@ -376,7 +378,7 @@ providerRouter.post('/sessions', async (req: Request, res: Response): Promise<vo
 providerRouter.post('/sessions/:sessionId/start', (req: Request, res: Response): void => {
   const resolved = findProviderSessionOrDeny(req, res);
   if (!resolved) return;
-  const { providerDid, session } = resolved;
+  const { providerDid, providerUserId, session } = resolved;
 
   if (session.status === 'ended') {
     res.status(409).json({ error: 'Meeting session already ended' });
@@ -404,8 +406,8 @@ providerRouter.post('/sessions/:sessionId/start', (req: Request, res: Response):
     domain: 'social',
     action: 'provider_session_start',
     outcome: 'success',
-    actorUserId: providerDid,
-    targetUserId: providerDid,
+    actorUserId: providerUserId,
+    targetUserId: providerUserId,
     statusCode: 200,
     metadata: { sessionId: session.id },
   });
@@ -416,7 +418,7 @@ providerRouter.post('/sessions/:sessionId/start', (req: Request, res: Response):
 providerRouter.post('/sessions/:sessionId/end', (req: Request, res: Response): void => {
   const resolved = findProviderSessionOrDeny(req, res);
   if (!resolved) return;
-  const { providerDid, session } = resolved;
+  const { providerUserId, session } = resolved;
 
   session.status = 'ended';
   session.endedAtMs = Date.now();
@@ -429,8 +431,8 @@ providerRouter.post('/sessions/:sessionId/end', (req: Request, res: Response): v
     domain: 'social',
     action: 'provider_session_end',
     outcome: 'success',
-    actorUserId: providerDid,
-    targetUserId: providerDid,
+    actorUserId: providerUserId,
+    targetUserId: providerUserId,
     statusCode: 200,
     metadata: { sessionId: session.id },
   });
@@ -442,7 +444,7 @@ providerRouter.post('/sessions/:sessionId/end', (req: Request, res: Response): v
 providerRouter.post('/sessions/:sessionId/invite-users', async (req: Request, res: Response): Promise<void> => {
   const resolved = findProviderSessionOrDeny(req, res);
   if (!resolved) return;
-  const { providerDid, session } = resolved;
+  const { providerDid, providerUserId, session } = resolved;
 
   const directUsernames: string[] = Array.isArray(req.body?.usernames)
     ? req.body.usernames.slice(0, MAX_BATCH_USERNAMES).map((entry: unknown) => normalizeUsername(entry))
@@ -498,8 +500,8 @@ providerRouter.post('/sessions/:sessionId/invite-users', async (req: Request, re
     domain: 'social',
     action: 'provider_session_invite_users',
     outcome: 'success',
-    actorUserId: providerDid,
-    targetUserId: providerDid,
+    actorUserId: providerUserId,
+    targetUserId: providerUserId,
     statusCode: 200,
     metadata: {
       sessionId: session.id,
@@ -520,7 +522,7 @@ providerRouter.post('/sessions/:sessionId/invite-users', async (req: Request, re
 providerRouter.post('/sessions/:sessionId/external-links', (req: Request, res: Response): void => {
   const resolved = findProviderSessionOrDeny(req, res);
   if (!resolved) return;
-  const { providerDid, session } = resolved;
+  const { providerUserId, session } = resolved;
 
   const ttlMinutes = normalizePositiveInteger(
     req.body?.expiresInMinutes,
@@ -561,8 +563,8 @@ providerRouter.post('/sessions/:sessionId/external-links', (req: Request, res: R
     domain: 'social',
     action: 'provider_session_external_link_create',
     outcome: 'success',
-    actorUserId: providerDid,
-    targetUserId: providerDid,
+    actorUserId: providerUserId,
+    targetUserId: providerUserId,
     statusCode: 201,
     metadata: {
       sessionId: session.id,

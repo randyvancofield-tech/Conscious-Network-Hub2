@@ -73,6 +73,8 @@ export interface UserProfile {
   name: string;
   handle?: string;
   email: string;
+  role?: 'user' | 'provider' | 'admin';
+  providerExternalId?: string | null;
   passwordHash?: string;
   tier: string | null;
   subscriptionStatus?: string | null;

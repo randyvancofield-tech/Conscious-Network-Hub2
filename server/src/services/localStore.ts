@@ -7,6 +7,7 @@ import {
 } from './sensitiveDataPolicy';
 
 export type TwoFactorMethod = 'none' | 'phone' | 'wallet';
+export type UserRole = 'user' | 'provider' | 'admin';
 
 type NullableIso = string | null;
 
@@ -32,6 +33,8 @@ interface UserRow {
   id: string;
   email: string;
   name: string | null;
+  role: UserRole;
+  providerExternalId: string | null;
   handle: string | null;
   bio: string | null;
   location: string | null;
@@ -132,6 +135,19 @@ interface ProviderInviteGroupRow {
   updatedAt: string;
 }
 
+interface ProviderBridgeLaunchRow {
+  id: string;
+  providerExternalId: string;
+  email: string;
+  name: string;
+  issuedAt: string;
+  expiresAt: string;
+  consumedAt: NullableIso;
+  jti: string;
+  scopesJson: string;
+  createdAt: string;
+}
+
 interface StoreRow {
   version: number;
   users: UserRow[];
@@ -141,6 +157,7 @@ interface StoreRow {
   providerChallenges: ProviderChallengeRow[];
   providerSessions: ProviderSessionRow[];
   providerInviteGroups: ProviderInviteGroupRow[];
+  providerBridgeLaunches: ProviderBridgeLaunchRow[];
 }
 
 type RecoveryState =
@@ -186,6 +203,7 @@ export interface LocalStoreDiagnostics {
     providerChallenges: number;
     providerSessions: number;
     providerInviteGroups: number;
+    providerBridgeLaunches: number;
   };
 }
 
@@ -193,6 +211,8 @@ export interface LocalUserRecord {
   id: string;
   email: string;
   name: string | null;
+  role: UserRole;
+  providerExternalId: string | null;
   handle: string | null;
   bio: string | null;
   location: string | null;
@@ -293,9 +313,24 @@ export interface LocalProviderInviteGroupRecord {
   updatedAt: Date;
 }
 
+export interface LocalProviderBridgeLaunchRecord {
+  id: string;
+  providerExternalId: string;
+  email: string;
+  name: string;
+  issuedAt: Date;
+  expiresAt: Date;
+  consumedAt: Date | null;
+  jti: string;
+  scopes: string[];
+  createdAt: Date;
+}
+
 interface CreateUserInput {
   email: string;
   name: string;
+  role?: UserRole;
+  providerExternalId?: string | null;
   handle?: string | null;
   bio?: string | null;
   location?: string | null;
@@ -318,6 +353,8 @@ interface CreateUserInput {
 
 interface UpdateUserInput {
   name?: string | null;
+  role?: UserRole;
+  providerExternalId?: string | null;
   handle?: string | null;
   bio?: string | null;
   location?: string | null;
@@ -399,6 +436,18 @@ interface UpsertProviderInviteGroupInput {
   updatedAt?: Date;
 }
 
+interface CreateProviderBridgeLaunchInput {
+  id: string;
+  providerExternalId: string;
+  email: string;
+  name: string;
+  issuedAt: Date;
+  expiresAt: Date;
+  jti: string;
+  scopes: string[];
+  createdAt?: Date;
+}
+
 const STORE_DIR = path.resolve(__dirname, '../../data');
 const STORE_FILE = path.join(STORE_DIR, 'runtime-store.json');
 const STORE_BACKUP_FILE = path.join(STORE_DIR, 'runtime-store.backup.json');
@@ -437,6 +486,7 @@ const createEmptyStore = (): StoreRow => ({
   providerChallenges: [],
   providerSessions: [],
   providerInviteGroups: [],
+  providerBridgeLaunches: [],
 });
 
 const ensureStoreFile = (): void => {
@@ -495,6 +545,9 @@ const parseStore = (raw: string): StoreRow => {
       : [],
     providerInviteGroups: Array.isArray(parsed.providerInviteGroups)
       ? parsed.providerInviteGroups
+      : [],
+    providerBridgeLaunches: Array.isArray(parsed.providerBridgeLaunches)
+      ? parsed.providerBridgeLaunches
       : [],
   };
 };
@@ -670,6 +723,8 @@ const rowToUser = (row: UserRow): LocalUserRecord => ({
   id: row.id,
   email: row.email,
   name: row.name,
+  role: row.role || 'user',
+  providerExternalId: row.providerExternalId || null,
   handle: row.handle || null,
   bio: row.bio || null,
   location: row.location || null,
@@ -767,6 +822,35 @@ const rowToProviderInviteGroup = (
   };
 };
 
+const rowToProviderBridgeLaunch = (
+  row: ProviderBridgeLaunchRow
+): LocalProviderBridgeLaunchRecord => {
+  let parsedScopes: unknown = [];
+  try {
+    parsedScopes = JSON.parse(row.scopesJson || '[]');
+  } catch {
+    parsedScopes = [];
+  }
+
+  return {
+    id: row.id,
+    providerExternalId: row.providerExternalId,
+    email: row.email,
+    name: row.name,
+    issuedAt: toDate(row.issuedAt),
+    expiresAt: toDate(row.expiresAt),
+    consumedAt: row.consumedAt ? toDate(row.consumedAt) : null,
+    jti: row.jti,
+    scopes: Array.isArray(parsedScopes)
+      ? parsedScopes
+          .filter((entry): entry is string => typeof entry === 'string')
+          .map((entry) => entry.trim())
+          .filter((entry) => entry.length > 0)
+      : [],
+    createdAt: toDate(row.createdAt),
+  };
+};
+
 const uniqueId = (): string => crypto.randomUUID();
 
 const inspectStoreFile = (filePath: string): StoreFileHealth => {
@@ -834,6 +918,14 @@ export const localStore = {
     return row ? rowToUser(row) : null;
   },
 
+  getUserByProviderExternalId(providerExternalId: string): LocalUserRecord | null {
+    const normalized = String(providerExternalId || '').trim();
+    if (!normalized) return null;
+    const store = loadStore();
+    const row = store.users.find((user) => String(user.providerExternalId || '').trim() === normalized);
+    return row ? rowToUser(row) : null;
+  },
+
   listUsers(limit = 250): LocalUserRecord[] {
     const store = loadStore();
     return store.users
@@ -866,6 +958,8 @@ export const localStore = {
       id: uniqueId(),
       email,
       name: input.name || null,
+      role: input.role || 'user',
+      providerExternalId: input.providerExternalId?.trim() || null,
       handle: input.handle?.trim() || null,
       bio: input.bio?.trim() || null,
       location: input.location?.trim() || null,
@@ -914,6 +1008,10 @@ export const localStore = {
     const row = store.users[index];
 
     if (updates.name !== undefined) row.name = updates.name;
+    if (updates.role !== undefined) row.role = updates.role;
+    if (updates.providerExternalId !== undefined) {
+      row.providerExternalId = updates.providerExternalId?.trim() || null;
+    }
     if (updates.handle !== undefined) row.handle = updates.handle;
     if (updates.bio !== undefined) row.bio = updates.bio;
     if (updates.location !== undefined) row.location = updates.location;
@@ -1234,6 +1332,72 @@ export const localStore = {
     return changed;
   },
 
+  createProviderBridgeLaunch(input: CreateProviderBridgeLaunchInput): LocalProviderBridgeLaunchRecord {
+    const store = loadStore();
+    const row: ProviderBridgeLaunchRow = {
+      id: String(input.id || '').trim(),
+      providerExternalId: String(input.providerExternalId || '').trim(),
+      email: normalizeEmail(input.email),
+      name: String(input.name || '').trim() || 'Provider',
+      issuedAt: input.issuedAt.toISOString(),
+      expiresAt: input.expiresAt.toISOString(),
+      consumedAt: null,
+      jti: String(input.jti || '').trim(),
+      scopesJson: JSON.stringify(
+        (Array.isArray(input.scopes) ? input.scopes : [])
+          .filter((entry): entry is string => typeof entry === 'string')
+          .map((entry) => entry.trim())
+          .filter((entry) => entry.length > 0)
+          .slice(0, 24)
+      ),
+      createdAt: (input.createdAt || new Date()).toISOString(),
+    };
+
+    const duplicateJti = store.providerBridgeLaunches.find((entry) => entry.jti === row.jti);
+    if (duplicateJti) {
+      const duplicateError = new Error('Duplicate provider bridge jti');
+      (duplicateError as Error & { code?: string }).code = 'DUPLICATE_BRIDGE_JTI';
+      throw duplicateError;
+    }
+
+    store.providerBridgeLaunches = store.providerBridgeLaunches.filter((entry) => entry.id !== row.id);
+    store.providerBridgeLaunches.push(row);
+    saveStore(store);
+    return rowToProviderBridgeLaunch(row);
+  },
+
+  getProviderBridgeLaunchById(id: string): LocalProviderBridgeLaunchRecord | null {
+    const normalizedId = String(id || '').trim();
+    if (!normalizedId) return null;
+    const store = loadStore();
+    const row = store.providerBridgeLaunches.find((entry) => entry.id === normalizedId);
+    return row ? rowToProviderBridgeLaunch(row) : null;
+  },
+
+  getProviderBridgeLaunchByJti(jti: string): LocalProviderBridgeLaunchRecord | null {
+    const normalizedJti = String(jti || '').trim();
+    if (!normalizedJti) return null;
+    const store = loadStore();
+    const row = store.providerBridgeLaunches.find((entry) => entry.jti === normalizedJti);
+    return row ? rowToProviderBridgeLaunch(row) : null;
+  },
+
+  consumeProviderBridgeLaunch(id: string, consumedAt = new Date()): LocalProviderBridgeLaunchRecord | null {
+    const normalizedId = String(id || '').trim();
+    if (!normalizedId) return null;
+
+    const store = loadStore();
+    const row = store.providerBridgeLaunches.find((entry) => entry.id === normalizedId);
+    if (!row) return null;
+    if (row.consumedAt) {
+      return rowToProviderBridgeLaunch(row);
+    }
+
+    row.consumedAt = consumedAt.toISOString();
+    saveStore(store);
+    return rowToProviderBridgeLaunch(row);
+  },
+
   getDiagnostics(): LocalStoreDiagnostics {
     ensureStoreFile();
 
@@ -1269,6 +1433,7 @@ export const localStore = {
         providerChallenges: active?.providerChallenges.length ?? 0,
         providerSessions: active?.providerSessions.length ?? 0,
         providerInviteGroups: active?.providerInviteGroups.length ?? 0,
+        providerBridgeLaunches: active?.providerBridgeLaunches.length ?? 0,
       },
     };
   },

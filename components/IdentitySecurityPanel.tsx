@@ -20,8 +20,6 @@ declare global {
 }
 
 const LS_KEY = 'hcn_identity_security_session_v1';
-const PROVIDER_SESSION_TOKEN_STORAGE_KEY = 'hcn_provider_session_token';
-const PROVIDER_SESSION_TOKEN_EVENT = 'hcn:provider-session-token-updated';
 const DEFAULT_CHAIN_ID = 1;
 
 function safeParseJSON<T>(value: string | null): T | null {
@@ -51,22 +49,6 @@ const normalizeChainId = (value: unknown): number => {
   const parsed = Number(value);
   if (!Number.isFinite(parsed) || parsed <= 0) return DEFAULT_CHAIN_ID;
   return Math.floor(parsed);
-};
-
-const emitProviderSessionTokenUpdate = (token: string, expiresAt: string): void => {
-  if (typeof window === 'undefined') return;
-  try {
-    window.dispatchEvent(
-      new CustomEvent(PROVIDER_SESSION_TOKEN_EVENT, {
-        detail: {
-          token,
-          expiresAt,
-        },
-      })
-    );
-  } catch {
-    // Ignore dispatch issues for environments without CustomEvent support.
-  }
 };
 
 const IdentitySecurityPanel: React.FC<IdentitySecurityPanelProps> = ({ isOpen, onClose, user }) => {
@@ -119,8 +101,6 @@ const IdentitySecurityPanel: React.FC<IdentitySecurityPanelProps> = ({ isOpen, o
   const [verifiedAt, setVerifiedAt] = useState<string>(persisted?.verifiedAt || '');
   const [busyAction, setBusyAction] = useState<IdentityAction>(null);
   const [toast, setToast] = useState<string>('');
-  const [providerSessionToken, setProviderSessionToken] = useState<string>('');
-  const [providerSessionTokenExpiresAt, setProviderSessionTokenExpiresAt] = useState<string>('');
 
   const fallbackDid = useMemo(() => {
     if (!user) return 'did:hcn:node_guest';
@@ -135,19 +115,6 @@ const IdentitySecurityPanel: React.FC<IdentitySecurityPanelProps> = ({ isOpen, o
     const payload = { address: connectedAddress, chainId, did, verifyStatus, verifiedAt };
     localStorage.setItem(LS_KEY, JSON.stringify(payload));
   }, [connectedAddress, chainId, did, verifyStatus, verifiedAt]);
-
-  useEffect(() => {
-    try {
-      const savedProviderToken = String(
-        window.sessionStorage.getItem(PROVIDER_SESSION_TOKEN_STORAGE_KEY) || ''
-      ).trim();
-      if (savedProviderToken) {
-        setProviderSessionToken(savedProviderToken);
-      }
-    } catch {
-      // Ignore storage access issues.
-    }
-  }, []);
 
   useEffect(() => {
     if (!toast) return;
@@ -272,15 +239,7 @@ const IdentitySecurityPanel: React.FC<IdentitySecurityPanelProps> = ({ isOpen, o
     setDid('');
     setVerifyStatus('unverified');
     setVerifiedAt('');
-    setProviderSessionToken('');
-    setProviderSessionTokenExpiresAt('');
     localStorage.removeItem(LS_KEY);
-    try {
-      window.sessionStorage.removeItem(PROVIDER_SESSION_TOKEN_STORAGE_KEY);
-    } catch {
-      // Ignore storage access issues.
-    }
-    emitProviderSessionTokenUpdate('', '');
     try {
       await fetch(identityLogoutEndpoint, {
         method: 'POST',
@@ -351,23 +310,7 @@ const IdentitySecurityPanel: React.FC<IdentitySecurityPanelProps> = ({ isOpen, o
       setDid(String(session.did || identityDid));
       setVerifyStatus('verified');
       setVerifiedAt(new Date().toLocaleString());
-      const nextProviderToken = String(session.providerToken || '').trim();
-      const nextProviderTokenExpiresAt = String(session.providerTokenExpiresAt || '').trim();
-      if (nextProviderToken) {
-        setProviderSessionToken(nextProviderToken);
-        setProviderSessionTokenExpiresAt(nextProviderTokenExpiresAt);
-        try {
-          window.sessionStorage.setItem(PROVIDER_SESSION_TOKEN_STORAGE_KEY, nextProviderToken);
-        } catch {
-          // Ignore storage access issues.
-        }
-        emitProviderSessionTokenUpdate(nextProviderToken, nextProviderTokenExpiresAt);
-      }
-      setToast(
-        nextProviderToken
-          ? 'Identity verification complete. Provider session token issued.'
-          : 'Identity verification complete'
-      );
+      setToast('Identity verification complete');
     } catch (error: any) {
       setVerifyStatus('error');
       setToast(error?.message || 'Verification failed');
@@ -499,36 +442,12 @@ const IdentitySecurityPanel: React.FC<IdentitySecurityPanelProps> = ({ isOpen, o
 
             <div className="mt-4 bg-black/30 p-3 rounded-xl border border-white/10">
               <div className="text-[10px] text-slate-500 uppercase tracking-widest font-bold mb-2">
-                Provider Session Token
+                Provider Host Access
               </div>
-              {providerSessionToken ? (
-                <>
-                  <div className="flex items-center justify-between bg-black/40 p-3 rounded-xl border border-white/5">
-                    <span className="font-mono text-xs text-slate-300 truncate mr-2">
-                      {providerSessionToken}
-                    </span>
-                    <button
-                      className="text-slate-500 hover:text-blue-400 transition-colors"
-                      onClick={() => copyText(providerSessionToken)}
-                      aria-label="Copy provider session token"
-                    >
-                      <Copy className="w-4 h-4" />
-                    </button>
-                  </div>
-                  <div className="text-[10px] text-slate-500 mt-2">
-                    {providerSessionTokenExpiresAt
-                      ? `Expires: ${new Date(providerSessionTokenExpiresAt).toLocaleString()}`
-                      : 'Expires based on provider session policy'}
-                  </div>
-                  <div className="text-[10px] text-slate-400 mt-1 uppercase tracking-wider">
-                    Conscious Meetings will auto-use this after verification.
-                  </div>
-                </>
-              ) : (
-                <div className="text-[10px] text-slate-400 uppercase tracking-wider">
-                  No token yet. Connect wallet and select Verify to generate one.
-                </div>
-              )}
+              <div className="text-[10px] text-slate-400 uppercase tracking-wider leading-relaxed">
+                Provider hosting is granted through secure bridge launch from the Provider Gateway.
+                This panel does not issue provider login tokens.
+              </div>
             </div>
 
             <div className="mt-4 grid grid-cols-3 gap-2">

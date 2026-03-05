@@ -9,6 +9,7 @@ import KnowledgePathways from './components/KnowledgePathways';
 import CommunityMembers from './components/CommunityMembers';
 import SocialLearningHub from './components/SocialLearningHub';
 import ConsciousMeetings from './components/ConsciousMeetings';
+import ProviderLaunchGate from './components/ProviderLaunchGate';
 import MusicBox from './components/MusicBox';
 import NotificationsCenter from './components/NotificationsCenter';
 import { ConsciousIdentity } from './components/community/CommunityLayout';
@@ -226,6 +227,10 @@ const App: React.FC = () => {
       name: rawUser.name || (rawUser.email ? rawUser.email.split('@')[0] : 'Node'),
       handle: rawUser.handle,
       email: rawUser.email,
+      role: ['user', 'provider', 'admin'].includes(String(rawUser?.role || '').toLowerCase())
+        ? String(rawUser.role).toLowerCase() as 'user' | 'provider' | 'admin'
+        : 'user',
+      providerExternalId: toNullableTrimmedString(rawUser?.providerExternalId),
       tier: canonicalTier,
       subscriptionStatus,
       createdAt: rawUser.createdAt || new Date().toISOString(),
@@ -251,6 +256,11 @@ const App: React.FC = () => {
       walletDid: rawUser.walletDid || null,
     };
   };
+
+  const isProviderLaunchPath = useMemo(() => {
+    if (typeof window === 'undefined') return false;
+    return window.location.pathname.replace(/\/+$/, '') === '/provider-launch';
+  }, []);
 
   const hasConfirmedMembership = (profile: UserProfile | null | undefined): boolean =>
     Boolean(profile && typeof profile.tier === 'string' && profile.tier.trim().length > 0);
@@ -1065,6 +1075,27 @@ const App: React.FC = () => {
         );
     }
   };
+
+  if (isProviderLaunchPath) {
+    return (
+      <ProviderLaunchGate
+        onAuthenticated={(authenticatedUser) => {
+          setUser(authenticatedUser);
+          setSelectedTier(authenticatedUser.tier || 'Accelerated Tier');
+          setMembershipNotice('');
+          setIsSelectingTier(false);
+          setPendingCheckoutSessionId(null);
+          setPendingTwoFactorMethod(null);
+          setTwoFactorCodeInput('');
+          setProviderTokenInput('');
+          setCurrentView(AppView.DASHBOARD);
+          if (window.innerWidth >= 1024) {
+            setSidebarOpen(true);
+          }
+        }}
+      />
+    );
+  }
 
   return (
     <div className="min-h-screen bg-[#05070a] text-slate-200 selection:bg-blue-500/30 flex relative">
