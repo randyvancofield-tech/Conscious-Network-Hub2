@@ -2,7 +2,7 @@ param(
   [string]$ProjectId = "gen-lang-client-0656716269",
   [string]$Region = "us-central1",
   [string]$Service = "conscious-network-backend",
-  [string]$AllowedOrigins = "https://conscious-network.org,https://higherconscious.network,http://localhost:5173",
+  [string]$AllowedOrigins = "https://consciousnetwork1.wordpress.com,https://higherconscious.network,http://localhost:5173",
   [string]$OpenAIApiKey = "",
   [string]$AuthTokenSecret = "",
   [string]$DatabaseUrl = "",
@@ -167,7 +167,7 @@ if (-not $SkipChecks) {
   Write-Host "Running post-deploy checks..."
   $checkArgs = @{
     BackendUrl = $url
-    Origin = "https://conscious-network.org"
+    Origin = "https://consciousnetwork1.wordpress.com"
   }
   if ($AdminDiagnosticsKey) {
     $checkArgs["DiagnosticsKey"] = $AdminDiagnosticsKey

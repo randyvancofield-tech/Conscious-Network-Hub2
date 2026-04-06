@@ -1,7 +1,7 @@
 param(
   [Parameter(Mandatory = $true)]
   [string]$BackendUrl,
-  [string]$Origin = "https://conscious-network.org",
+  [string]$Origin = "https://consciousnetwork1.wordpress.com",
   [string]$ProbeMessage = "Post-deploy smoke test",
   [string]$DiagnosticsKey = "",
   [switch]$RequireSharedStore,
