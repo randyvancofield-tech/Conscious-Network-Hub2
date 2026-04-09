@@ -3,6 +3,7 @@ param(
   [string]$Region = "us-central1",
   [string]$Service = "conscious-network-backend",
   [string]$AllowedOrigins = "https://conscious-network.org,https://higherconscious.network,http://localhost:5173",
+  [string]$FrontendBaseUrl = "https://conscious-network.org",
   [string]$OpenAIApiKey = "",
   [string]$AuthTokenSecret = "",
   [string]$DatabaseUrl = "",
@@ -85,6 +86,14 @@ if (-not $AdminDiagnosticsKey) {
   $AdminDiagnosticsKey = Get-ValueFromLocalEnv -Name "ADMIN_DIAGNOSTICS_KEY"
 }
 
+if (-not $FrontendBaseUrl) {
+  $FrontendBaseUrl = Get-ValueFromLocalEnv -Name "FRONTEND_BASE_URL"
+}
+
+if (-not $FrontendBaseUrl) {
+  throw "FRONTEND_BASE_URL is required for email links, provider bridge, and Stripe redirects. Set -FrontendBaseUrl, FRONTEND_BASE_URL env var, or server/.env.local."
+}
+
 if ($DatabaseUrl -match "^\s*file:") {
   throw "DATABASE_URL points to a local file. Cloud Run requires a shared Postgres URL (postgresql://...) for durable auth/profile persistence."
 }
@@ -113,6 +122,7 @@ $envUpdates = @(
   "GOOGLE_CLOUD_PROJECT=$ProjectId",
   "GOOGLE_CLOUD_REGION=$Region",
   "VERTEX_AI_MODEL=$VertexAiModel",
+  "FRONTEND_BASE_URL=$FrontendBaseUrl",
   "AUTH_PERSISTENCE_BACKEND=shared_db",
   "DATABASE_PROVIDER=postgresql"
 )

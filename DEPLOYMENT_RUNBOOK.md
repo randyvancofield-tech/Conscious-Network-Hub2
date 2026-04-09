@@ -14,6 +14,7 @@ This script:
 2. Updates env vars with `--update-env-vars` (does not clear unrelated vars).
 3. Ensures:
    - `CORS_ORIGINS=https://conscious-network.org,http://localhost:5173`
+   - `FRONTEND_BASE_URL=https://conscious-network.org` (used for redirects, emails, provider bridge)
    - `AUTH_TOKEN_SECRET` is set
    - `DATABASE_URL` is a shared Postgres URL (not `file:`)
    - `SENSITIVE_DATA_KEY` is set for sensitive-field encryption
