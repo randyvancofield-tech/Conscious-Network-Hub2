@@ -15,7 +15,7 @@ This script:
 1. Deploys current backend source to `conscious-network-backend`.
 2. Updates env vars with `--update-env-vars` (does not clear unrelated vars).
 3. Ensures:
-   - `CORS_ORIGINS=https://conscious-network.org,http://localhost:5173`
+   - `CORS_ORIGINS=https://conscious-network.org,https://higherconscious.network,https://consciousnetwork1.wordpress.com,http://localhost:5173`
    - `FRONTEND_BASE_URL=https://conscious-network.org` (used for redirects, emails, provider bridge)
    - `AUTH_TOKEN_SECRET` is set
    - `DATABASE_URL` is a shared Postgres URL (not `file:`)
@@ -65,7 +65,7 @@ npm run check:cloudrun
 
 Expected:
 
-- `GET /health` with `Origin: https://conscious-network.org` returns `200`.
+- `GET /health` with `Origin: https://consciousnetwork1.wordpress.com` returns `200`.
 - `POST /api/ai/chat` without `Authorization` returns `401` (auth enforcement).
 - `GET /api/membership/tiers` returns `200` (public route still accessible).
 - `POST /api/user/create` with empty JSON returns `400` (profile creation validation active).
@@ -86,11 +86,11 @@ Confirm production backend target before deployment:
 - `.env.production` must contain:
   - `VITE_BACKEND_URL=https://conscious-network-backend-181936518282.us-central1.run.app`
 
-Deploy `dist/` to the hosting provider for `conscious-network.org` using that provider's release workflow.
+Deploy `dist/` to the hosting provider for `consciousnetwork1.wordpress.com` using that provider's release workflow.
 
 ## Post-release verification
 
-1. Open `https://conscious-network.org` in a browser.
+1. Open `https://consciousnetwork1.wordpress.com` in a browser.
 2. In AI Insight, submit a test prompt.
 3. Confirm network request goes to:
    - `https://conscious-network-backend-181936518282.us-central1.run.app/api/ai/chat`
@@ -98,4 +98,4 @@ Deploy `dist/` to the hosting provider for `conscious-network.org` using that pr
 5. Check Cloud Run logs for latest revision and verify absence of:
    - `OPENAI_API_KEY is not set` (when AI routes are expected to be enabled)
    - `Unexpected token` JSON parse errors
-   - CORS denials for origin `https://conscious-network.org`
+   - CORS denials for origin `https://consciousnetwork1.wordpress.com`
