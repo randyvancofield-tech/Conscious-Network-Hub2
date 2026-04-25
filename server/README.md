@@ -1,464 +1,189 @@
-# Conscious Network Hub - Backend API
+# Conscious Network Hub Backend
 
-Secure backend API for Conscious Network Hub providing server-side integration with Google Cloud Vertex AI / Gemini. This ensures API keys are never exposed to the frontend.
+This package contains the Express API for Conscious Network Hub. It owns authentication, persisted user sessions, Prisma/PostgreSQL persistence, profile and social writes, membership/payment state, uploads, AI routes, provider sessions, and integrity/security routes.
 
-## 🎯 Overview
+## Stack
 
-This backend provides REST API endpoints that handle all communication with Google Cloud services, protecting sensitive credentials and implementing security best practices:
+- Runtime: Node.js + Express
+- Language: TypeScript
+- Database: PostgreSQL through Prisma
+- Auth: custom HMAC-signed session tokens plus persisted session records
+- Security middleware: Helmet, CORS allowlist, request size limits, rate limiting, route validation
+- Integrations: OpenAI, Google Cloud Vertex AI, Stripe, email, blockchain RPC
+- Tests: Jest integration tests
 
-- **Secure Authentication**: Uses Application Default Credentials (dev) or service accounts (prod)
-- **No Frontend Exposure**: API keys stay on the backend only
-- **Rate Limiting**: Prevents abuse with configurable rate limits
-- **CORS Protection**: Restricted to whitelisted origins
-- **Input Validation**: Sanitization and length checks on all inputs
-- **Error Handling**: Secure error messages that don't expose internals
+## Install
 
-## 📋 Requirements
+From the repository root:
 
-- Node.js 18+
-- npm or yarn
-- PostgreSQL 14+ (local or managed)
-- `AUTH_PERSISTENCE_BACKEND=shared_db`
-- `AUTH_TOKEN_SECRET` configured
-- `SENSITIVE_DATA_KEY` configured
-- Google Cloud Project with Vertex AI API enabled (required only for AI endpoints)
-- Service account or Application Default Credentials configured (required only for AI endpoints)
+```powershell
+npm --prefix server install
+```
 
-## 🚀 Quick Start
+Or from this directory:
 
-### 1. Install Dependencies
-
-```bash
-cd server
+```powershell
 npm install
 ```
 
-### 2. Configure Environment Variables
+## Required Environment
 
-```bash
-# Copy the example file
-cp .env.example .env.local
+Create `server/.env.local` from `server/.env.example`.
 
-# Edit .env.local with required values
-# DATABASE_URL=postgresql://...
-# AUTH_PERSISTENCE_BACKEND=shared_db
-# AUTH_TOKEN_SECRET=...
-# SENSITIVE_DATA_KEY=...
-# CORS_ORIGINS=http://localhost:5173,http://localhost:3000
+Minimum local runtime values:
+
+```env
+DATABASE_URL=postgresql://postgres:postgres@localhost:5432/conscious_network_hub
+AUTH_PERSISTENCE_BACKEND=shared_db
+DATABASE_PROVIDER=postgresql
+AUTH_TOKEN_SECRET=replace-with-strong-random-secret
+SENSITIVE_DATA_KEY=replace-with-32-byte-key-or-long-passphrase
+PORT=3001
+NODE_ENV=development
+CORS_ORIGINS=http://localhost:5173,http://localhost:3000
 ```
 
-Apply schema to Postgres:
+Optional integration values:
 
-```bash
+- `OPENAI_API_KEY`: enables OpenAI-backed AI route responses.
+- `GOOGLE_CLOUD_PROJECT`, `GOOGLE_CLOUD_REGION`, `VERTEX_AI_MODEL`: enable Vertex AI service initialization.
+- `STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET`, `STRIPE_PRICE_*`: enable membership checkout and webhooks.
+- `SMTP_*` / email secrets: enable email delivery.
+- `HCN_PROFILE_ANCHOR_CONTRACT_ADDRESS`, `HCN_PROFILE_ANCHOR_CHAIN_ID`, RPC keys: enable integrity anchoring.
+
+The canonical environment reference is [docs/ENVIRONMENT_MATRIX.md](../docs/ENVIRONMENT_MATRIX.md).
+
+## Database
+
+Apply the Prisma schema to PostgreSQL:
+
+```powershell
 npm run db:push
 ```
 
-### 3. Set Up Google Cloud Authentication
+Schema source:
 
-#### For Local Development (Easiest)
+- `server/prisma/schema.prisma`
 
-```bash
-# Install Google Cloud CLI
-# https://cloud.google.com/sdk/docs/install
+Primary data access:
 
-# Authenticate
-gcloud auth application-default login
+- `src/services/persistenceStore.ts`
+- `src/services/socialStore.ts`
+- `src/services/uploadBlobStore.ts`
+- `src/services/userSessionStore.ts`
+- `src/services/providerSessionStore.ts`
 
-# Select your project
-gcloud config set project YOUR_PROJECT_ID
-```
+## Local Development
 
-This creates credentials that the backend will automatically use via Application Default Credentials.
-
-#### For Production (Cloud Run / Compute Engine)
-
-Service account credentials are automatically provided by the Google Cloud platform. No additional setup needed.
-
-#### For Development with Service Account (Not Recommended)
-
-```bash
-# Create service account
-gcloud iam service-accounts create cnh-backend \
-  --display-name="Conscious Network Hub Backend"
-
-# Grant required roles
-gcloud projects add-iam-policy-binding YOUR_PROJECT_ID \
-  --member="serviceAccount:cnh-backend@YOUR_PROJECT_ID.iam.gserviceaccount.com" \
-  --role="roles/aiplatform.user"
-
-# Create key
-gcloud iam service-accounts keys create key.json \
-  --iam-account=cnh-backend@YOUR_PROJECT_ID.iam.gserviceaccount.com
-
-# Add to .env.local (DO NOT commit this file!)
-# GOOGLE_APPLICATION_CREDENTIALS=/path/to/key.json
-```
-
-### 4. Enable Vertex AI API
-
-```bash
-gcloud services enable aiplatform.googleapis.com
-```
-
-### 5. Start Development Server
-
-```bash
+```powershell
 npm run dev
 ```
 
-Server will start on `http://localhost:3001`
+The backend listens on `http://localhost:3001` by default.
 
-## Canonical Setup References
+Health check:
 
-- Root setup: `../SETUP_GUIDE.md`
-- Environment key matrix: `../docs/ENVIRONMENT_MATRIX.md`
-- Deployment checks: `../DEPLOYMENT_RUNBOOK.md`
-
-## 📚 API Endpoints
-
-### POST /api/ai/chat
-
-Send a message to the AI and get a response.
-
-**Request:**
-```json
-{
-  "message": "What is ethical AI?",
-  "conversationId": "optional-id",
-  "conversationHistory": [
-    {"role": "user", "content": "Previous message"},
-    {"role": "assistant", "content": "Previous response"}
-  ],
-  "context": {
-    "category": "general",
-    "userId": "user-123"
-  }
-}
+```powershell
+curl.exe -sS http://localhost:3001/health
 ```
 
-**Response:**
-```json
-{
-  "reply": "Ethical AI refers to...",
-  "citations": [
-    {
-      "title": "Example Citation",
-      "url": "https://example.com",
-      "relevance": 0.95
-    }
-  ],
-  "usage": {
-    "promptTokens": 150,
-    "responseTokens": 200,
-    "totalTokens": 350
-  },
-  "confidenceScore": 92,
-  "processingTimeMs": 1250,
-  "conversationId": "conv_1234567890"
-}
+## Scripts
+
+| Script | Purpose |
+|---|---|
+| `npm run dev` | Start Express with nodemon + ts-node. |
+| `npm run build` | Compile TypeScript to `dist/`. |
+| `npm run start` | Build then run `dist/index.js`. |
+| `npm run db:push` | Push Prisma schema to the configured database. |
+| `npm test` | Run Jest tests. |
+| `npm run test:required-secrets` | Build and verify required startup secrets. |
+| `npm run test:smoke` | Run local backend smoke checks against a running backend. |
+| `npm run test:curl` | Backwards-compatible alias for `test:smoke`. |
+| `npm run deploy:cloudrun` | Deploy backend to Google Cloud Run through the Node PowerShell launcher. |
+| `npm run check:cloudrun` | Run post-deploy Cloud Run smoke checks through the Node PowerShell launcher. |
+
+## Route Map
+
+Routes are mounted in `src/index.ts`.
+
+| Mount | Module | Access |
+|---|---|---|
+| `GET /health` | `src/middleware.ts` | Public |
+| `/api/user` | `src/routes/user.ts` | Public signup/signin plus protected user routes |
+| `/api/membership` | `src/routes/membership.ts` | Public tiers/webhook plus protected membership routes |
+| `/api/provider/auth` | `src/routes/providerAuth.ts` | Public provider auth |
+| `/api/identity-security` | `src/routes/identitySecurity.ts` | Mixed route-level auth |
+| `/api/integrity` | `src/routes/integrity.ts` | Mixed route-level auth |
+| `/api/ai` | `src/routes/ai.ts` | Protected |
+| `/api/upload` | `src/routes/upload.ts` | Protected |
+| `/api/reflection` | `src/routes/reflection.ts` | Protected |
+| `/api/social` | `src/routes/social.ts` | Protected |
+| `/api/provider/session` | `src/routes/providerSession.ts` | Provider-session protected |
+| `/api/bridge` | `src/routes/providerBridge.ts` | Provider/user bridge |
+| `/api/immersive` | `src/routes/immersive.ts` | Protected |
+| `/api/meeting` | `src/routes/meeting.ts` | Mixed user/provider/guest routers |
+| `/uploads` | `src/routes/upload.ts` | Public upload retrieval |
+
+## Authentication Flow
+
+Signup:
+
+1. Frontend calls `POST /api/user/create`.
+2. `src/routes/user.ts` validates payload, password policy, and requested profile fields.
+3. User/profile data is written through `persistenceStore`.
+4. The route verifies persistence read-back.
+5. `userSessionStore` creates a persisted session.
+6. `src/auth.ts` returns a signed token containing `userId`, `sessionId`, `issuedAt`, and `expiresAt`.
+
+Signin:
+
+1. Frontend calls `POST /api/user/signin`.
+2. Backend resolves user by email.
+3. `src/auth.ts` verifies password hash.
+4. User route enforces lockout and optional 2FA/provider policy.
+5. A persisted session and signed token are returned.
+
+Protected requests:
+
+1. Frontend sends `Authorization: Bearer <token>`.
+2. `requireCanonicalIdentity` in `src/middleware.ts` verifies token signature/expiry.
+3. Middleware verifies the persisted session exists, belongs to the token user, is not revoked, and is not expired.
+4. Route handlers use the canonical user identity from the request.
+
+Logout:
+
+- `POST /api/user/logout` revokes the persisted session.
+
+## Testing
+
+Run the standard backend checks:
+
+```powershell
+npm run build
+npm test
 ```
 
-### POST /api/ai/wisdom
+Current core suites cover signin logic, auth/user persistence loops, and phase 4 privacy/social behavior.
 
-Get daily ethical wisdom.
+## Deployment
 
-**Request:**
-```json
-{}
+Cloud Run is the current backend deployment path:
+
+```powershell
+npm run deploy:cloudrun
+npm run check:cloudrun
 ```
 
-**Response:**
-```json
-{
-  "wisdom": "Wisdom text about ethical AI...",
-  "confidenceScore": 85,
-  "processingTimeMs": 800
-}
-```
+These scripts use `scripts/run-powershell-script.js`, which looks for `pwsh` first and falls back to Windows PowerShell when available.
 
-### POST /api/ai/report-issue
+See [DEPLOYMENT_RUNBOOK.md](../DEPLOYMENT_RUNBOOK.md) for required secrets, shared DB schema sync, and post-release verification.
 
-Submit a platform issue for analysis.
+## Adding Backend Work
 
-**Request:**
-```json
-{
-  "title": "Bug in authentication",
-  "message": "Users cannot login with OAuth",
-  "category": "bug"
-}
-```
+When adding or changing routes:
 
-**Response:**
-```json
-{
-  "analysis": "Issue analysis and recommendations...",
-  "priority": "HIGH",
-  "suggestedActions": [
-    "Check OAuth provider settings",
-    "Review browser console for errors",
-    "Test with different browsers"
-  ],
-  "confidenceScore": 88,
-  "processingTimeMs": 1100
-}
-```
-
-### GET /api/ai/trending
-
-Get trending topics in AI, blockchain, and wellness.
-
-**Response:**
-```json
-{
-  "topics": [
-    "AI Safety",
-    "Decentralized Identity",
-    "Digital Wellness",
-    "Privacy-First Architecture"
-  ],
-  "insights": "Current trends and detailed analysis..."
-}
-```
-
-### GET /health
-
-Health check endpoint.
-
-**Response:**
-```json
-{
-  "status": "healthy",
-  "timestamp": "2024-01-20T12:00:00Z",
-  "uptime": 3600
-}
-```
-
-## 🧪 Testing
-
-### Test All Endpoints
-
-```bash
-npm run test:curl
-```
-
-Or with verbose output:
-
-```bash
-VERBOSE=true npm run test:curl
-```
-
-### Manual Testing with curl
-
-```bash
-# Health check
-curl http://localhost:3001/health
-
-# Chat message
-curl -X POST http://localhost:3001/api/ai/chat \
-  -H "Content-Type: application/json" \
-  -d '{"message":"Hello, how are you?"}'
-
-# Daily wisdom
-curl -X POST http://localhost:3001/api/ai/wisdom \
-  -H "Content-Type: application/json"
-
-# Report issue
-curl -X POST http://localhost:3001/api/ai/report-issue \
-  -H "Content-Type: application/json" \
-  -d '{
-    "title":"Slow performance",
-    "message":"App takes 10 seconds to load",
-    "category":"performance"
-  }'
-
-# Trending topics
-curl http://localhost:3001/api/ai/trending
-```
-
-## 🔐 Security Features
-
-### Rate Limiting
-- 100 requests per 15 minutes per IP (configurable)
-- Health check endpoint excluded from rate limiting
-- Returns `429 Too Many Requests` when exceeded
-
-### Input Validation
-- Message length: 1-5000 characters
-- Automatic XSS sanitization (HTML tag removal)
-- Type checking for all inputs
-- Context validation for object types
-
-### CORS Configuration
-- Whitelist specific origins (default: localhost)
-- Options: `/server/.env.local` - `CORS_ORIGINS`
-- Prevents unauthorized cross-origin requests
-
-### Environment Variables
-- All secrets via `.env.local` (never committed)
-- Example file: `.env.example`
-- Required vars validated on startup
-
-### Error Handling
-- Secure error messages (no internals in production)
-- Console logging in development
-- Helmet security headers
-- Request size limits (10KB)
-
-## 📁 Project Structure
-
-```
-server/
-├── src/
-│   ├── index.ts              # Express app entry point
-│   ├── middleware.ts         # Validation, logging, error handling
-│   ├── services/
-│   │   └── vertexAiService.ts    # Vertex AI integration
-│   └── routes/
-│       └── ai.ts             # API endpoints
-├── scripts/
-│   └── test.sh              # Test suite
-├── package.json             # Dependencies
-├── tsconfig.json            # TypeScript config
-├── .env.example             # Example environment variables
-├── .env.local               # Local development env (not committed)
-└── README.md               # This file
-```
-
-## 🌐 Environment Variables
-
-| Variable | Required | Default | Description |
-|----------|----------|---------|-------------|
-| `GOOGLE_CLOUD_PROJECT` | ✅ Yes | - | GCP Project ID |
-| `GOOGLE_CLOUD_REGION` | ✅ Yes | - | Vertex AI region |
-| `PORT` | ❌ No | `3001` | Server port |
-| `NODE_ENV` | ❌ No | `development` | Environment |
-| `CORS_ORIGINS` | ❌ No | `http://localhost:5173,http://localhost:3000` | Allowed origins |
-| `RATE_LIMIT_MAX` | ❌ No | `100` | Rate limit per window |
-| `VERTEX_AI_MODEL` | ❌ No | `gemini-1.5-flash-001` | Vertex AI model |
-| `GOOGLE_APPLICATION_CREDENTIALS` | ❌ No | - | Path to service account JSON (dev only) |
-
-## 🔄 Frontend Integration
-
-The frontend (`EthicalAIInsight` component) calls this backend instead of direct Vertex AI:
-
-### Before (Direct API)
-```typescript
-// ❌ NOT SECURE - API key exposed to frontend
-const response = await askEthicalAI(message);
-```
-
-### After (Backend)
-```typescript
-// ✅ SECURE - All API calls go through backend
-const response = await fetch('http://localhost:3001/api/ai/chat', {
-  method: 'POST',
-  headers: { 'Content-Type': 'application/json' },
-  body: JSON.stringify({ message })
-});
-```
-
-## 📈 Deployment
-
-### Local Development
-
-```bash
-# Terminal 1 - Backend
-cd server
-npm install
-npm run dev
-
-# Terminal 2 - Frontend
-npm run dev
-```
-
-### Google Cloud Run (Recommended)
-
-```bash
-# Build Docker image
-docker build -t gcr.io/YOUR_PROJECT_ID/cnh-backend .
-
-# Push to Registry
-docker push gcr.io/YOUR_PROJECT_ID/cnh-backend
-
-# Deploy to Cloud Run
-gcloud run deploy cnh-backend \
-  --image gcr.io/YOUR_PROJECT_ID/cnh-backend \
-  --region us-central1 \
-  --set-env-vars GOOGLE_CLOUD_PROJECT=YOUR_PROJECT_ID,GOOGLE_CLOUD_REGION=us-central1 \
-  --allow-unauthenticated
-```
-
-### Environment Setup
-
-Update frontend `.env` with production backend URL:
-
-```env
-VITE_BACKEND_URL=https://cnh-backend-xxxxx.run.app
-```
-
-## 🐛 Troubleshooting
-
-### "Missing required environment variable"
-
-**Problem**: `GOOGLE_CLOUD_PROJECT` not set
-
-**Solution**:
-```bash
-# Add to .env.local
-GOOGLE_CLOUD_PROJECT=your-project-id
-```
-
-### "Permission denied" errors
-
-**Problem**: Service account lacks Vertex AI permissions
-
-**Solution**:
-```bash
-# Grant aiplatform.user role
-gcloud projects add-iam-policy-binding YOUR_PROJECT_ID \
-  --member="serviceAccount:cnh-backend@YOUR_PROJECT_ID.iam.gserviceaccount.com" \
-  --role="roles/aiplatform.user"
-```
-
-### "CORS error" from frontend
-
-**Problem**: Frontend origin not whitelisted
-
-**Solution**: Add to `server/.env.local`:
-```env
-CORS_ORIGINS=http://localhost:5173,http://localhost:3000,https://yourdomain.com
-```
-
-### "Rate limited" errors
-
-**Problem**: Too many requests from same IP
-
-**Solution**: Wait 15 minutes or adjust `RATE_LIMIT_MAX` in `.env.local`
-
-## 📚 Additional Resources
-
-- [Vertex AI Documentation](https://cloud.google.com/vertex-ai/docs)
-- [Gemini API Guide](https://cloud.google.com/vertex-ai/docs/generative-ai/model-reference/gemini)
-- [Application Default Credentials](https://cloud.google.com/docs/authentication/application-default-credentials)
-- [Express.js Documentation](https://expressjs.com/)
-- [Google Cloud SDK](https://cloud.google.com/sdk/docs)
-
-## 📝 Contributing
-
-When adding new endpoints:
-
-1. Add route handler in `src/routes/ai.ts`
-2. Implement service method in `src/services/vertexAiService.ts`
-3. Add input validation in middleware
-4. Test with `npm run test:curl`
-5. Update this README
-
-## 📄 License
-
-Part of Conscious Network Hub project.
-
----
-
-**Last Updated**: January 20, 2024  
-**Status**: ✅ Production Ready
+1. Add validation schemas under `src/validation/` when accepting request bodies.
+2. Keep persistence writes in service/data-layer modules rather than route-local ad hoc storage.
+3. Use `requireCanonicalIdentity` for user-protected routes.
+4. Add focused Jest coverage when behavior touches auth, persistence, privacy, payments, or user-facing API contracts.
+5. Update this README or the environment matrix if the route adds setup, env, or operational requirements.

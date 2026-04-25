@@ -1,0 +1,14 @@
+{
+  "name": "conscious-network-hub-contracts",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "scripts": {
+    "compile": "node tooling/compile-contracts.mjs",
+    "deploy": "node tooling/deploy-contracts.mjs"
+  },
+  "dependencies": {
+    "ethers": "^6.15.0",
+    "solc": "^0.8.34"
+  }
+}

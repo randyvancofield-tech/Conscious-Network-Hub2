@@ -1,222 +1,191 @@
-﻿<div align="center">
-<img width="1200" height="475" alt="GHBanner" src="https://github.com/user-attachments/assets/0aa67016-6eaf-458a-adb2-6e31a0763ed6" />
-</div>
+# Conscious Network Hub
 
-# Conscious Network Hub - Full Stack Platform
+Conscious Network Hub is a full-stack TypeScript application with a React/Vite frontend and an Express backend. The backend owns authentication, user/session persistence, profile data, social data, membership state, uploads, AI routes, and blockchain integrity helpers.
 
-A community-centered decentralized social learning infrastructure powered by ethical AI.
+## Tech Stack
 
-**âš¡ Now with Secure Backend API for Google Cloud Vertex AI Integration!**
+- Frontend: React, TypeScript, Vite
+- Backend: Node.js, Express, TypeScript
+- Database: PostgreSQL via Prisma
+- Authentication: custom signed session tokens plus persisted session records
+- Security: Helmet, CORS allowlist, request validation, rate limiting
+- AI integrations: OpenAI and Google Cloud Vertex AI, enabled by backend env configuration
+- Payments: Stripe membership checkout/webhooks
+- Contracts tooling: Solidity compiler and deployment scripts under `contracts/`
+- Testing: Jest integration tests for backend auth/persistence flows
+- Deployment: Google Cloud Run backend, static frontend hosting for `dist/`
 
-## ðŸš€ Quick Start
+## Start Here
 
 ### Prerequisites
-- Node.js 18+
-- PostgreSQL 14+ (local or managed)
-- Google Cloud Project with Vertex AI API enabled (only required for AI endpoints)
-- Google Cloud Application Default Credentials (only required for AI endpoints)
 
-### Setup (5 minutes)
+- Node.js 18+; Node.js 20+ is recommended
+- npm
+- PostgreSQL 14+ or a managed PostgreSQL instance
+- Optional for AI routes: OpenAI key and/or Google Cloud Vertex AI credentials
+- Optional for contract deployment: RPC URL and deployer private key
 
-**1. Frontend Setup**
-```bash
+### Install
+
+```powershell
 npm install
-cp .env.example .env.local
-# Edit .env.local with VITE_BACKEND_URL=http://localhost:3001
+npm --prefix server install
+npm --prefix contracts install
+```
+
+### Configure
+
+Create root `.env.local`:
+
+```env
+VITE_BACKEND_URL=http://localhost:3001
+VITE_ALLOW_REMOTE_BACKEND_IN_DEV=false
+VITE_ENABLE_SIGNUP_2FA=false
+```
+
+Create `server/.env.local` from `server/.env.example` and set at minimum:
+
+```env
+DATABASE_URL=postgresql://postgres:postgres@localhost:5432/conscious_network_hub
+AUTH_PERSISTENCE_BACKEND=shared_db
+DATABASE_PROVIDER=postgresql
+AUTH_TOKEN_SECRET=replace-with-strong-random-secret
+SENSITIVE_DATA_KEY=replace-with-32-byte-key-or-long-passphrase
+PORT=3001
+NODE_ENV=development
+CORS_ORIGINS=http://localhost:5173,http://localhost:3000
+```
+
+Keep backend secrets only in `server/.env.local`. Frontend env keys must be limited to `VITE_*` values.
+
+### Initialize Database
+
+```powershell
+npm --prefix server run db:push
+```
+
+### Run Locally
+
+Terminal A:
+
+```powershell
+npm --prefix server run dev
+```
+
+Terminal B:
+
+```powershell
 npm run dev
 ```
 
-**2. Backend Setup**
-```bash
+Local URLs:
+
+- Frontend: `http://localhost:5173`
+- Backend: `http://localhost:3001`
+- Health check: `http://localhost:3001/health`
+
+## Verification
+
+Run these from the repo root:
+
+```powershell
+npm run check
+```
+
+That command runs the full local verification sequence:
+
+```powershell
+npm run build
+npm --prefix server run build
+npm --prefix server test
+npm --prefix contracts run compile
+```
+
+Current known warning: the frontend production build emits a large chunk warning. It does not currently fail the build.
+
+## Architecture
+
+```text
+React/Vite frontend
+  -> /api/* requests with Authorization: Bearer <token>
+Express backend
+  -> validates signed token and persisted session
+Prisma data layer
+  -> PostgreSQL users, sessions, profiles, posts, memberships, uploads, provider state
+External services
+  -> OpenAI / Vertex AI, Stripe, email, blockchain RPC when configured
+```
+
+Authentication flow:
+
+1. Signup starts in `App.tsx` via `handleCreateProfile`, calling `POST /api/user/create`.
+2. Signin starts in `App.tsx` via `handleSignIn`, calling `POST /api/user/signin`.
+3. Backend user routes validate payloads, password policy, persistence, lockout, and optional 2FA/provider rules.
+4. Backend creates a persisted user session and returns a signed auth token.
+5. Frontend stores the token through `services/sessionService.ts`.
+6. Protected routes use `server/src/middleware.ts` `requireCanonicalIdentity` to validate both token and persisted session.
+7. Logout calls `POST /api/user/logout` and revokes the persisted session.
+
+## Project Structure
+
+```text
+.
+|-- App.tsx                         # Main frontend application
+|-- components/                     # React UI modules
+|-- services/                       # Frontend API/session/security helpers
+|-- contracts/
+|   |-- HCNProfileAnchor.sol
+|   |-- package.json                # Contract tooling dependencies
+|   `-- tooling/                    # Compile/deploy scripts
+|-- docs/
+|   |-- CLEANUP_BASELINE.md         # Cleanup inventory and log
+|   `-- ENVIRONMENT_MATRIX.md       # Canonical env reference
+|-- server/
+|   |-- prisma/schema.prisma
+|   |-- src/index.ts                # Express app entry
+|   |-- src/routes/                 # API route modules
+|   |-- src/services/               # Persistence/integration services
+|   `-- README.md                   # Backend-specific guide
+|-- SETUP_GUIDE.md
+|-- DEPLOYMENT_RUNBOOK.md
+`-- AGENTS.md
+```
+
+## Canonical Docs
+
+- [Setup Guide](./SETUP_GUIDE.md): full local setup path
+- [Environment Matrix](./docs/ENVIRONMENT_MATRIX.md): frontend/backend env keys
+- [Backend README](./server/README.md): backend routes, auth, persistence, and scripts
+- [Backend Testing](./server/TESTING.md): backend Jest and smoke-test examples
+- [Deployment Runbook](./DEPLOYMENT_RUNBOOK.md): Cloud Run release checks
+- [Cleanup Baseline](./docs/CLEANUP_BASELINE.md): cleanup inventory, decisions, and progress log
+- [AGENTS.md](./AGENTS.md): agent-facing project/auth guidance
+
+## Deployment
+
+Backend deployment is currently Google Cloud Run. Use the deployment runbook for exact checks:
+
+```powershell
 cd server
-npm install
-cp .env.example .env.local
-# Edit .env.local with required auth/persistence values:
-# DATABASE_URL=postgresql://...
-# AUTH_PERSISTENCE_BACKEND=shared_db
-# AUTH_TOKEN_SECRET=...
-# SENSITIVE_DATA_KEY=...
-# CORS_ORIGINS=http://localhost:5173,http://localhost:3000
-
-# Initialize DB schema
-npm run db:push
-
-# Setup Google Cloud authentication:
-gcloud auth application-default login
-gcloud services enable aiplatform.googleapis.com
-
-npm run dev
+npm run deploy:cloudrun
+npm run check:cloudrun
 ```
 
-**3. Access**
-- Frontend: http://localhost:5173
-- Backend API: http://localhost:3001
-- Health Check: http://localhost:3001/health
+Frontend deployment builds `dist/` from the repo root:
 
-## ðŸ“š Documentation
-
-- **[Full Setup Guide](./SETUP_GUIDE.md)** - Complete setup instructions for local development
-- **[Environment Matrix](./docs/ENVIRONMENT_MATRIX.md)** - Canonical frontend/backend env keys and defaults
-- **[Backend README](./server/README.md)** - Backend API documentation and architecture
-- **[API Testing Guide](./server/TESTING.md)** - Comprehensive testing guide with curl examples
-- **[Enhancement Proposal](./ETHICAL_AI_ENHANCEMENT_PROPOSAL.md)** - Feature roadmap
-- **[Implementation Details](./ETHICAL_AI_IMPLEMENTATION_COMPLETE.md)** - Technical implementation
-
-## ðŸ—ï¸ Architecture
-
-```
-Frontend (React/TypeScript)
-  â†“ HTTPS (secure, no API keys)
-Backend API (Express/Node)
-  â†“ (API keys stay on backend)
-Google Cloud Vertex AI / Gemini
+```powershell
+npm run build
 ```
 
-### Key Features
+Confirm `.env.production` points `VITE_BACKEND_URL` at the production backend before releasing frontend assets.
 
-**Frontend:**
-- âœ… EthicalAIInsight Component (4-view system)
-- âœ… Voice input support
-- âœ… Message reactions, favorites, ratings
-- âœ… Conversation history & search
-- âœ… Export conversations (MD/JSON)
+## Contracts
 
-**Backend:**
-- âœ… Secure Vertex AI integration
-- âœ… Rate limiting (100 req/15min)
-- âœ… Input validation & sanitization
-- âœ… CORS protection
-- âœ… Error handling & logging
-- âœ… Health checks
+Contract tooling is separated from daily frontend runtime:
 
-**API Endpoints:**
-- `POST /api/ai/chat` - Send chat message
-- `POST /api/ai/wisdom` - Get daily wisdom
-- `POST /api/ai/report-issue` - Report platform issues
-- `GET /api/ai/trending` - Get trending topics
-- `GET /health` - Health check
-
-## ðŸ” Security
-
-- âœ… **No API keys in frontend** - All auth server-side
-- âœ… **Application Default Credentials** - For development
-- âœ… **Service Accounts** - For production deployment
-- âœ… **CORS restricted** - Whitelist your origins
-- âœ… **Rate limiting** - Prevent abuse
-- âœ… **Input validation** - XSS/injection prevention
-- âœ… **Helmet headers** - Security headers enabled
-- âœ… **HTTPS-ready** - Deploy to Cloud Run
-
-## ðŸ§ª Testing
-
-```bash
-# Test backend with curl
-cd server
-npm run test:curl
-
-# Or manually:
-curl -X POST http://localhost:3001/api/ai/chat \
-  -H "Content-Type: application/json" \
-  -d '{"message":"Hello"}'
+```powershell
+npm --prefix contracts run compile
+npm run deploy:contracts
 ```
 
-See [TESTING.md](./server/TESTING.md) for more examples.
-
-## ðŸŒ Deployment
-
-### Google Cloud Run (Recommended)
-```bash
-cd server
-gcloud run deploy cnh-backend \
-  --source . \
-  --platform managed \
-  --region us-central1 \
-  --set-env-vars GOOGLE_CLOUD_PROJECT=YOUR_PROJECT_ID
-```
-
-### Update Frontend for Production
-```bash
-# .env.local or .env.production
-VITE_BACKEND_URL=https://cnh-backend-xxxxx.run.app
-```
-
-## ðŸ“ Project Structure
-
-```
-Conscious-Network-Hub2/
-â”œâ”€â”€ components/
-â”‚   â””â”€â”€ EthicalAIInsight.tsx    # Main UI component
-â”œâ”€â”€ services/
-â”‚   â”œâ”€â”€ backendApiService.ts    # Backend API client
-â”‚   â”œâ”€â”€ securityService.ts      # Input validation
-â”‚   â”œâ”€â”€ cacheService.ts         # Persistence
-â”‚   â””â”€â”€ analyticsService.ts     # Event tracking
-â”œâ”€â”€ server/                     # Backend API
-â”‚   â”œâ”€â”€ src/
-â”‚   â”‚   â”œâ”€â”€ index.ts            # Express app
-â”‚   â”‚   â”œâ”€â”€ services/vertexAiService.ts
-â”‚   â”‚   â””â”€â”€ routes/ai.ts        # API endpoints
-â”‚   â”œâ”€â”€ .env.example
-â”‚   â”œâ”€â”€ README.md
-â”‚   â””â”€â”€ TESTING.md
-â”œâ”€â”€ SETUP_GUIDE.md              # Complete setup guide
-â””â”€â”€ README.md                   # This file
-```
-
-## ðŸ“¦ Key Technologies
-
-**Frontend:**
-- React 17+
-- TypeScript
-- Tailwind CSS
-- Vite
-
-**Backend:**
-- Node.js + Express
-- TypeScript
-- Google Cloud Vertex AI
-- Application Default Credentials
-
-## ðŸŽ¯ Next Steps
-
-1. Follow [SETUP_GUIDE.md](./SETUP_GUIDE.md) for complete local setup
-2. Test endpoints using [TESTING.md](./server/TESTING.md)
-3. Deploy to Google Cloud Run
-4. Update frontend with production URL
-
-## ðŸ› Troubleshooting
-
-**"Cannot connect to backend"**
-- Ensure backend is running: `curl http://localhost:3001/health`
-- Check `VITE_BACKEND_URL` in frontend `.env.local`
-- Verify `CORS_ORIGINS` in backend `.env.local`
-
-**"Permission denied" from Vertex AI**
-- Run: `gcloud auth application-default login`
-- Verify: `gcloud config set project YOUR_PROJECT_ID`
-- Enable API: `gcloud services enable aiplatform.googleapis.com`
-
-See [SETUP_GUIDE.md](./SETUP_GUIDE.md) for more troubleshooting.
-
-## ðŸ“ž Support
-
-- Backend docs: [server/README.md](./server/README.md)
-- Testing guide: [server/TESTING.md](./server/TESTING.md)
-- Setup guide: [SETUP_GUIDE.md](./SETUP_GUIDE.md)
-
-## ðŸ“„ License
-
-Part of Conscious Network Hub project.
-
----
-
-**Status**: âœ… Production Ready  
-**Backend**: âœ… Vertex AI Integrated  
-**Frontend**: âœ… Backend API Client  
-**Last Updated**: January 20, 2024
-## Environment Setup
-
-- See **[Environment Matrix](./docs/ENVIRONMENT_MATRIX.md)** for the final frontend/backend environment values and safe defaults.
-- Keep secrets only in server/.env.local.
-- Never place provider keys in frontend env files.
-
+Deployment requires RPC and deployer secrets such as `DEPLOY_RPC_URL` and `DEPLOYER_PRIVATE_KEY`.

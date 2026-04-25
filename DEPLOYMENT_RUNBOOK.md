@@ -8,6 +8,8 @@ Run from `server/`:
 npm run deploy:cloudrun
 ```
 
+The npm script uses `scripts/run-powershell-script.js`, which launches `scripts/deploy-cloudrun.ps1` with `pwsh` when available and falls back to Windows PowerShell.
+
 This script:
 
 1. Deploys current backend source to `conscious-network-backend`.
