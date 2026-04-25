@@ -8,9 +8,9 @@ COPY package.json package-lock.json ./
 COPY prisma ./prisma
 COPY prisma.config.ts ./
 
-# Ensure Prisma generation has a datasource during image build.
-ENV DATABASE_URL=file:./prisma/dev.db
-ENV DATABASE_PROVIDER=sqlite
+# Ensure Prisma generation has a PostgreSQL datasource shape during image build.
+ENV DATABASE_URL=postgresql://postgres:postgres@localhost:5432/conscious_network_hub
+ENV DATABASE_PROVIDER=postgresql
 
 # Install dependencies and generate Prisma client.
 RUN npm ci

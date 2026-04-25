@@ -1,15 +1,11 @@
 import "dotenv/config";
 import { defineConfig } from "prisma/config";
 
-const databaseUrl = process.env.DATABASE_URL?.trim() || "file:./prisma/dev.db";
+const databaseUrl = process.env.DATABASE_URL?.trim();
 
-const databaseProvider = (() => {
-  const explicit = process.env.DATABASE_PROVIDER?.trim().toLowerCase();
-  if (explicit === "postgresql" || explicit === "sqlite") {
-    return explicit;
-  }
-  return databaseUrl.startsWith("file:") ? "sqlite" : "postgresql";
-})();
+if (!databaseUrl) {
+  throw new Error("DATABASE_URL is required for Prisma");
+}
 
 export default defineConfig({
   schema: "./prisma/schema.prisma",
@@ -18,7 +14,7 @@ export default defineConfig({
   },
   datasources: {
     db: {
-      provider: databaseProvider as "sqlite" | "postgresql",
+      provider: "postgresql",
       url: databaseUrl,
     },
   },
