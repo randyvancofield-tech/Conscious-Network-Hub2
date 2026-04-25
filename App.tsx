@@ -145,6 +145,52 @@ const App: React.FC = () => {
     return `Unable to ${actionLabel}. Cannot reach backend at ${backendUrl}.`;
   };
 
+  const normalizeCourse = (rawCourse: any): Course => ({
+    id: String(rawCourse?.id || ''),
+    title: String(rawCourse?.title || 'Untitled pathway'),
+    provider: String(rawCourse?.provider || 'Conscious Network'),
+    description: rawCourse?.description ? String(rawCourse.description) : undefined,
+    tier:
+      rawCourse?.tier === 'Elite' || rawCourse?.tier === 'Professional' || rawCourse?.tier === 'Basic'
+        ? rawCourse.tier
+        : 'Basic',
+    enrolled: Number(rawCourse?.enrolled || rawCourse?.enrolledCount || 0),
+    image: String(rawCourse?.image || ''),
+    progress: Number(rawCourse?.progress ?? rawCourse?.progressScore ?? 0),
+    progressScore: Number(rawCourse?.progressScore ?? rawCourse?.progress ?? 0),
+    status: rawCourse?.status ? String(rawCourse.status) : undefined,
+    enrollmentStatus: rawCourse?.enrollmentStatus || null,
+  });
+
+  const refreshUserCourses = async (): Promise<Course[]> => {
+    if (!getAuthToken()) {
+      setEnrolledCourses([]);
+      return [];
+    }
+
+    try {
+      const response = await fetch(`${resolveBackendUrl()}/api/user/courses`, {
+        headers: buildAuthHeaders(),
+      });
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        if (response.status === 401) {
+          clearAuthSession();
+          setUser(null);
+        }
+        setEnrolledCourses([]);
+        return [];
+      }
+      const courses = Array.isArray(data.courses) ? data.courses.map(normalizeCourse) : [];
+      setEnrolledCourses(courses);
+      return courses;
+    } catch (courseError) {
+      console.error('Course refresh error:', courseError);
+      setEnrolledCourses([]);
+      return [];
+    }
+  };
+
   const normalizePrivacySettings = (raw: any) => ({
     profileVisibility: raw?.profileVisibility === 'private' ? 'private' as const : 'public' as const,
     showEmail: Boolean(raw?.showEmail),
@@ -304,8 +350,6 @@ const App: React.FC = () => {
     checkApiKey();
 
     if (window.innerWidth >= 1024) setSidebarOpen(true);
-    const savedCourses = localStorage.getItem('hcn_enrolled_courses');
-    if (savedCourses) setEnrolledCourses(JSON.parse(savedCourses));
     const initialParams = new URLSearchParams(window.location.search);
     if (initialParams.get('externalMeetingInvite')) {
       setCurrentView(AppView.CONSCIOUS_MEETINGS);
@@ -331,6 +375,7 @@ const App: React.FC = () => {
         const canonicalUser = toCanonicalUser(data.user);
         setUser(canonicalUser);
         setAuthSession(token, canonicalUser);
+        void refreshUserCourses();
         if (hasConfirmedMembership(canonicalUser)) {
           setCurrentView(AppView.DASHBOARD);
           setIsSelectingTier(false);
@@ -439,6 +484,7 @@ const App: React.FC = () => {
   const handleExploreAsGuest = () => {
     clearAuthSession();
     setUser(null);
+    setEnrolledCourses([]);
     setCurrentView(AppView.DASHBOARD);
     if (window.innerWidth >= 1024) setSidebarOpen(true);
   };
@@ -579,6 +625,7 @@ const App: React.FC = () => {
       const canonicalUser = toCanonicalUser(data.user);
       setAuthSession(data.token, canonicalUser);
       setUser(canonicalUser);
+      void refreshUserCourses();
       setSelectedTier(canonicalUser.tier || 'Free / Community Tier');
       const confirmedMembership = hasConfirmedMembership(canonicalUser);
       setIsSelectingTier(!confirmedMembership);
@@ -678,6 +725,7 @@ const App: React.FC = () => {
       const canonicalUser = toCanonicalUser(data.user);
       setAuthSession(data.token, canonicalUser);
       setUser(canonicalUser);
+      void refreshUserCourses();
       setSelectedTier((currentTier) => currentTier || canonicalUser.tier || 'Free / Community Tier');
       setMembershipCheckoutPending(false);
       setMembershipNotice('');
@@ -745,6 +793,7 @@ const App: React.FC = () => {
     const finalizeSignOut = () => {
       clearAuthSession();
       setUser(null);
+      setEnrolledCourses([]);
       setIsSelectingTier(false);
       setMembershipCheckoutPending(false);
       setMembershipNotice('');
@@ -814,12 +863,36 @@ const App: React.FC = () => {
   };
 
   const enrollCourse = (course: Course) => {
-    if (!enrolledCourses.find(c => c.id === course.id)) {
-      const updated = [...enrolledCourses, { ...course, progress: 12 }];
-      setEnrolledCourses(updated);
-      localStorage.setItem('hcn_enrolled_courses', JSON.stringify(updated));
+    if (!user || !getAuthToken()) {
+      setSigninModalOpen(true);
+      return;
     }
-    setCurrentView(AppView.MY_COURSES);
+
+    void (async () => {
+      try {
+        const response = await fetch(`${resolveBackendUrl()}/api/courses/${course.id}/enroll`, {
+          method: 'POST',
+          headers: buildAuthHeaders({ 'Content-Type': 'application/json' }),
+          body: JSON.stringify({}),
+        });
+        const data = await response.json().catch(() => ({}));
+        if (!response.ok) {
+          throw new Error(data?.error || 'Failed to enroll in course');
+        }
+        const enrolledCourse = normalizeCourse(data.course || course);
+        setEnrolledCourses((current) => {
+          const exists = current.some((item) => item.id === enrolledCourse.id);
+          return exists
+            ? current.map((item) => (item.id === enrolledCourse.id ? { ...item, ...enrolledCourse } : item))
+            : [...current, enrolledCourse];
+        });
+        void refreshUserCourses();
+        setCurrentView(AppView.MY_COURSES);
+      } catch (enrollError) {
+        console.error('Course enrollment error:', enrollError);
+        setError(enrollError instanceof Error ? enrollError.message : 'Failed to enroll in course');
+      }
+    })();
   };
 
   const updateActiveUser = (updated: UserProfile) => {
@@ -947,13 +1020,13 @@ const App: React.FC = () => {
       case AppView.MY_COURSES: 
         return <MyCourses enrolledCourses={enrolledCourses} onNavigateToUniversity={() => setCurrentView(AppView.KNOWLEDGE_PATHWAYS)} />;
       case AppView.PROVIDERS:
-        return <ProvidersMarket />;
+        return <ProvidersMarket backendUrl={resolveBackendUrl()} />;
       case AppView.MEMBERSHIP:
         return <CommunityMembers />;
       case AppView.NOTIFICATIONS:
         return <NotificationsCenter onBack={() => setCurrentView(AppView.DASHBOARD)} />;
       case AppView.KNOWLEDGE_PATHWAYS:
-        return <KnowledgePathways onGoBack={() => setCurrentView(AppView.MY_COURSES)} onEnroll={enrollCourse} />;
+        return <KnowledgePathways onGoBack={() => setCurrentView(AppView.MY_COURSES)} onEnroll={enrollCourse} backendUrl={resolveBackendUrl()} />;
       case AppView.PRIVACY_POLICY:
         return (
           <div className="p-8 max-w-4xl mx-auto">

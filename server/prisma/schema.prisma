@@ -70,7 +70,100 @@ model User {
   socialLikes   SocialPostLike[]
   following     SocialFollow[] @relation("SocialFollowFollower")
   followers     SocialFollow[] @relation("SocialFollowFollowing")
+  ownedCourses  Course[] @relation("CourseOwner")
+  courseEnrollments UserCourse[]
+  anchorLinkRequests AnchorLinkRequest[] @relation("AnchorLinkRequester")
+  providerAnchorRequests AnchorLinkRequest[] @relation("AnchorLinkProvider")
 
+  @@index([createdAt])
+}
+
+model Course {
+  id             String   @id
+  ownerId        String?
+  ownerType      String
+  title          String
+  provider       String
+  description    String
+  image          String?
+  tier           String
+  enrolledCount  Int      @default(0)
+  syllabus       Json?
+  status         String   @default("published")
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  owner          User?    @relation("CourseOwner", fields: [ownerId], references: [id], onDelete: SetNull)
+  enrollments    UserCourse[]
+
+  @@index([ownerId])
+  @@index([status])
+  @@index([createdAt])
+}
+
+model UserCourse {
+  id            String   @id @default(uuid())
+  userId        String
+  courseId      String
+  progressScore Int      @default(0)
+  status        String   @default("enrolled")
+  enrolledAt    DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  user          User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  course        Course   @relation(fields: [courseId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, courseId])
+  @@index([userId])
+  @@index([courseId])
+}
+
+model AnchorLinkRequest {
+  id         String   @id @default(uuid())
+  userId     String
+  providerId String
+  note       String?
+  status     String   @default("pending")
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  user       User     @relation("AnchorLinkRequester", fields: [userId], references: [id], onDelete: Cascade)
+  provider   User     @relation("AnchorLinkProvider", fields: [providerId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([providerId])
+  @@index([status])
+  @@index([createdAt])
+}
+
+model MeetingSession {
+  id           String   @id @default(uuid())
+  providerId   String
+  title        String
+  participants Json
+  status       String   @default("scheduled")
+  scheduledAt  DateTime?
+  startedAt    DateTime?
+  endedAt      DateTime?
+  metadata     Json?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  @@index([providerId])
+  @@index([status])
+  @@index([scheduledAt])
+  @@index([createdAt])
+}
+
+model AiInteraction {
+  id        String   @id @default(uuid())
+  userId    String
+  prompt    String
+  response  String
+  context   Json?
+  createdAt DateTime @default(now())
+
+  @@index([userId])
   @@index([createdAt])
 }
 

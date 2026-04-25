@@ -54,10 +54,14 @@ export interface Course {
   id: string;
   title: string;
   provider: string;
+  description?: string;
   tier: 'Basic' | 'Elite' | 'Professional';
   enrolled: number;
   image: string;
   progress?: number;
+  progressScore?: number;
+  status?: string;
+  enrollmentStatus?: string | null;
 }
 
 export interface CalendarEvent {

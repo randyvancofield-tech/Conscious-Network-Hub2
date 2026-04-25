@@ -29,6 +29,9 @@ import integrityRoutes from './routes/integrity';
 import immersiveRoutes from './routes/immersive';
 import meetingRoutes from './routes/meeting';
 import providerBridgeRoutes from './routes/providerBridge';
+import { coursesPublicRoutes, coursesProtectedRoutes } from './routes/courses';
+import userCoursesRoutes from './routes/userCourses';
+import { providersRouter, userRequestsRouter, providerRequestsRouter } from './routes/providers';
 import { initializeVertexAI } from './services/vertexAiService';
 import { hasOpenAiApiKey, logStripeEnvironmentLoaded, validateRequiredEnv } from './requiredEnv';
 
@@ -190,6 +193,8 @@ app.get('/health', healthCheck);
 // Public routes are mounted first.
 app.use('/api/user', userPublicRoutes);
 app.use('/api/membership', membershipPublicRoutes);
+app.use('/api/courses', coursesPublicRoutes);
+app.use('/api/providers', providersRouter);
 app.use('/api/provider/auth', providerAuthRoutes);
 app.use('/api/identity-security', identitySecurityRoutes);
 app.use('/api/integrity', integrityRoutes);
@@ -197,12 +202,16 @@ app.use('/api/integrity', integrityRoutes);
 // Protected routes enforce canonical identity within their own routers.
 // This avoids duplicate middleware execution while preserving route-level security.
 app.use('/api/user', userProtectedRoutes);
+app.use('/api/user', userCoursesRoutes);
+app.use('/api/user/requests', userRequestsRouter);
 app.use('/api/membership', membershipProtectedRoutes);
+app.use('/api/courses', coursesProtectedRoutes);
 app.use('/api/ai', aiRoutes);
 app.use('/api/upload', uploadProtectedRoutes);
 app.use('/api/reflection', reflectionRoutes);
 app.use('/api/social', socialRoutes);
 app.use('/api/provider/session', providerSessionRoutes);
+app.use('/api/provider/requests', providerRequestsRouter);
 app.use('/api/bridge', providerBridgeRoutes);
 app.use('/api/immersive', immersiveRoutes);
 app.use('/api/meeting', meetingRoutes);

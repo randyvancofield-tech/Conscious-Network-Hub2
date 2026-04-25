@@ -50,52 +50,7 @@ interface SocialProfileView {
   posts: any[];
 }
 
-const INITIAL_NODES: NodeContent[] = [
-  {
-    id: 'n1',
-    authorId: 'seed-aarav',
-    author: 'Aarav Sharma',
-    avatar: 'https://images.unsplash.com/photo-1506794778202-cad84cf45f1d?auto=format&fit=crop&q=80&w=200',
-    type: 'text',
-    title: 'The Bio-Algorithm of Consciousness',
-    content: 'We are moving away from silicon-locked logic to fluid, human-centric learning models. This is where we forge the new protocol for collective growth.',
-    timestamp: '2h ago',
-    resonances: 42,
-    links: 12,
-    visibility: 'public',
-    comments: [
-      { id: 'c1', author: 'Dr. Amara Okafor', avatar: 'https://images.unsplash.com/photo-1531123897727-8f129e1688ce?auto=format&fit=crop&q=80&w=200', text: 'Incredible insight on neural plasticity!', timestamp: '1h ago' }
-    ]
-  },
-  {
-    id: 'n2',
-    authorId: 'seed-amara',
-    author: 'Dr. Amara Okafor',
-    avatar: 'https://images.unsplash.com/photo-1531123897727-8f129e1688ce?auto=format&fit=crop&q=80&w=200',
-    type: 'image',
-    title: 'Visualizing Neural Sovereignty',
-    content: 'https://images.unsplash.com/photo-1451187580459-43490279c0fa?auto=format&fit=crop&q=80&w=800',
-    timestamp: '5h ago',
-    resonances: 89,
-    links: 24,
-    visibility: 'public',
-    comments: []
-  },
-  {
-    id: 'n3',
-    authorId: 'seed-elena',
-    author: 'Elena Rossi',
-    avatar: 'https://images.unsplash.com/photo-1544005313-94ddf0286df2?auto=format&fit=crop&q=80&w=200',
-    type: 'text',
-    title: 'Integrity in the Digital Age',
-    content: 'Your identity is not data to be sold, it is a sovereign node to be protected. Let us link our intentions without sacrificing our autonomy.',
-    timestamp: '1d ago',
-    resonances: 156,
-    links: 45,
-    visibility: 'public',
-    comments: []
-  }
-];
+const INITIAL_NODES: NodeContent[] = [];
 
 const getYoutubeId = (url: string) => {
   const regExp = /^.*(youtu.be\/|v\/|u\/\w\/|embed\/|watch\?v=|&v=)([^#&?]*).*/;
@@ -183,7 +138,7 @@ const SocialLearningHub: React.FC<SocialLearningHubProps> = ({ user }) => {
 
   const loadFeed = useCallback(async () => {
     if (!user) {
-      setNodes(INITIAL_NODES);
+      setNodes([]);
       return;
     }
 
@@ -199,9 +154,9 @@ const SocialLearningHub: React.FC<SocialLearningHubProps> = ({ user }) => {
 
       const posts = Array.isArray(data?.posts) ? data.posts : [];
       const mapped = posts.map(mapSocialPostToNode);
-      setNodes(mapped.length > 0 ? mapped : INITIAL_NODES);
+      setNodes(mapped);
     } catch {
-      setNodes(INITIAL_NODES);
+      setNodes([]);
     } finally {
       setRefreshingFeed(false);
     }
@@ -787,25 +742,9 @@ const SocialLearningHub: React.FC<SocialLearningHubProps> = ({ user }) => {
               <span className="text-[8px] font-bold text-slate-600 uppercase tracking-widest">Layer 1</span>
             </div>
             <div className="space-y-4 pr-2">
-              {[
-                { name: 'Dr. Amara Okafor', role: 'Mental Wellness', online: true, color: 'from-blue-600 to-teal-400' },
-                { name: 'Imam Kenji Tanaka', role: 'Religious Scholar', online: true, color: 'from-orange-600 to-amber-400' },
-                { name: 'Elena Rossi', role: 'Spiritual Guide', online: true, color: 'from-purple-600 to-pink-400' },
-              ].map((provider, i) => (
-                <div key={i} className={`p-4 rounded-2xl border transition-all cursor-pointer group flex items-center gap-4 ${provider.online ? 'bg-teal-500/5 border-teal-500/10 hover:bg-teal-500/10' : 'bg-white/5 border-white/5 opacity-50'}`}>
-                  <div className="relative">
-                    <div className={`w-12 h-12 rounded-xl bg-gradient-to-br ${provider.color} flex items-center justify-center text-white font-black shadow-lg`}>
-                      {provider.name.charAt(0)}
-                    </div>
-                    {provider.online && <div className="absolute -bottom-1 -right-1 w-3.5 h-3.5 bg-teal-400 rounded-full border-2 border-[#05070a] animate-pulse shadow-glow" />}
-                  </div>
-                  <div className="min-w-0 flex-1">
-                    <h4 className="text-[10px] font-black text-white uppercase tracking-tight truncate group-hover:text-teal-400 transition-colors">{provider.name}</h4>
-                    <p className="text-[8px] text-slate-500 uppercase tracking-widest">{provider.role}</p>
-                  </div>
-                  <ChevronRight className="w-3 h-3 text-slate-700 lg:group-hover:translate-x-1 transition-all" />
-                </div>
-              ))}
+              <div className="p-4 rounded-2xl border border-white/10 bg-white/5 text-slate-400 text-xs leading-relaxed">
+                Verified provider presence will appear here when backed by live provider data.
+              </div>
             </div>
             <button
               onClick={() => void loadFeed()}
@@ -842,6 +781,14 @@ const SocialLearningHub: React.FC<SocialLearningHubProps> = ({ user }) => {
             {postActionError && (
               <div className="xl:col-span-2 rounded-xl border border-red-500/40 bg-red-500/10 px-4 py-3 text-[10px] font-black uppercase tracking-widest text-red-200">
                 {postActionError}
+              </div>
+            )}
+            {visibleNodes.length === 0 && (
+              <div className="xl:col-span-2 glass-panel p-10 rounded-[2rem] border-white/10 text-center">
+                <h4 className="text-lg font-black text-white uppercase tracking-tight">No social posts yet</h4>
+                <p className="text-sm text-slate-400 mt-2">
+                  Real posts created by signed-in members will appear here.
+                </p>
               </div>
             )}
             {visibleNodes.map((node, i) => {
