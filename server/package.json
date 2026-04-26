@@ -9,7 +9,7 @@
         "build": "tsc",
         "db:warmup": "node scripts/neon-direct-check.js",
         "db:push": "npm run db:warmup && prisma db push",
-        "start": "npm run build && node dist/index.js",
+        "start": "node dist/index.js",
         "test": "jest",
         "test:required-secrets": "npm run build && node scripts/verify-required-secrets.js",
         "test:curl": "bash scripts/test.sh",
