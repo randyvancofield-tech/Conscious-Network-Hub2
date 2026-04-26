@@ -65,8 +65,7 @@ const GOOGLE_CLOUD_REGION = process.env.GOOGLE_CLOUD_REGION;
 
 // Initialize Express app
 const app: Express = express();
-const parsedPort = Number(process.env.PORT);
-const PORT = Number.isFinite(parsedPort) && parsedPort > 0 ? parsedPort : 3001;
+const PORT = Number(process.env.PORT || 8080);
 
 // Initialize Vertex AI if possible; in dev we'll attempt init but allow failures
 try {
