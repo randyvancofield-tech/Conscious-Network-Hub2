@@ -2,10 +2,12 @@ import React, { useEffect, useMemo, useState } from 'react';
 import {
   Search, Star, ShieldCheck,
   UserPlus, Info,
-  ChevronRight, Brain
+  ChevronRight, Brain, ArrowLeft
 } from 'lucide-react';
 import { getAuthToken } from '../services/sessionService';
 import { api } from '../services/apiClient';
+import { PROVIDER_SURFACE_RECORDS } from '../services/platformData';
+import { ActionButton, EmptyState, PageHeader, PageShell, SurfacePanel } from './ui/PlatformPrimitives';
 
 interface ProviderProfile {
   id: string;
@@ -14,9 +16,18 @@ interface ProviderProfile {
   location: string;
   bio: string;
   specialty: string;
-  rating: number;
+  rating: number | null;
   experience: string;
   image: string;
+  services?: string[];
+  verificationStatus?: 'base44_pending' | 'verified';
+  accessMode?: 'request' | 'invite_only';
+}
+
+interface ProvidersMarketProps {
+  providerId?: string;
+  onOpenProvider?: (id: string) => void;
+  onBackToList?: () => void;
 }
 
 const normalizeProvider = (rawProvider: any): ProviderProfile => {
@@ -33,10 +44,13 @@ const normalizeProvider = (rawProvider: any): ProviderProfile => {
     rating: 0,
     experience: 'Verified',
     image: String(rawProvider?.avatarUrl || rawProvider?.bannerUrl || 'https://images.unsplash.com/photo-1497366754035-f200968a6e72?auto=format&fit=crop&q=80&w=400'),
+    services: Array.isArray(rawProvider?.services) ? rawProvider.services.map(String) : [],
+    verificationStatus: 'verified',
+    accessMode: 'request',
   };
 };
 
-const ProvidersMarket: React.FC = () => {
+const ProvidersMarket: React.FC<ProvidersMarketProps> = ({ providerId, onOpenProvider, onBackToList }) => {
   const [filter, setFilter] = useState<string>('All');
   const [searchQuery, setSearchQuery] = useState('');
   const [providers, setProviders] = useState<ProviderProfile[]>([]);
@@ -47,28 +61,39 @@ const ProvidersMarket: React.FC = () => {
   const [connectionNote, setConnectionNote] = useState('');
   const [connectionStatus, setConnectionStatus] = useState('');
 
+  const providerRecords: ProviderProfile[] = providers.length > 0 ? providers : PROVIDER_SURFACE_RECORDS;
+
   const categories = useMemo(
-    () => ['All', ...Array.from(new Set(providers.map((provider) => provider.category))).sort()],
-    [providers]
+    () => ['All', ...Array.from(new Set(providerRecords.map((provider) => provider.category))).sort()],
+    [providerRecords]
   );
 
   useEffect(() => {
     let isMounted = true;
+    const controller = new AbortController();
+    const timeoutId = window.setTimeout(() => controller.abort(), 2500);
 
     const loadProviders = async () => {
       setIsLoading(true);
       setLoadError('');
       try {
-        const data = await api<any>('/providers', { auth: false });
+        const data = await api<any>('/providers', { auth: false, signal: controller.signal });
         if (isMounted) {
           setProviders(Array.isArray(data.providers) ? data.providers.map(normalizeProvider) : []);
         }
       } catch (error) {
         if (isMounted) {
           setProviders([]);
-          setLoadError(error instanceof Error ? error.message : 'Unable to load providers');
+          setLoadError(
+            error instanceof DOMException && error.name === 'AbortError'
+              ? 'Provider backend connection pending'
+              : error instanceof Error
+                ? error.message
+                : 'Unable to load providers'
+          );
         }
       } finally {
+        window.clearTimeout(timeoutId);
         if (isMounted) {
           setIsLoading(false);
         }
@@ -78,11 +103,13 @@ const ProvidersMarket: React.FC = () => {
     loadProviders();
     return () => {
       isMounted = false;
+      controller.abort();
+      window.clearTimeout(timeoutId);
     };
   }, []);
 
   const normalizedQuery = searchQuery.trim().toLowerCase();
-  const filteredProviders = providers.filter((provider) => {
+  const filteredProviders = providerRecords.filter((provider) => {
     const matchesCategory = filter === 'All' || provider.category === filter;
     const matchesSearch =
       normalizedQuery.length === 0 ||
@@ -114,6 +141,131 @@ const ProvidersMarket: React.FC = () => {
       setConnectionStatus(error instanceof Error ? error.message : 'Unable to send provider request');
     }
   };
+
+  const routeProvider = providerId
+    ? providerRecords.find((provider) => provider.id === providerId) || null
+    : null;
+
+  if (providerId && !routeProvider) {
+    return (
+      <PageShell>
+        <EmptyState
+          title="Provider not found"
+          description="This provider route is valid, but no frontend or backend provider record matches the requested identifier."
+          action={
+            <ActionButton type="button" onClick={onBackToList} icon={<ArrowLeft className="w-4 h-4" />}>
+              Providers
+            </ActionButton>
+          }
+        />
+      </PageShell>
+    );
+  }
+
+  if (routeProvider) {
+    return (
+      <PageShell>
+        <ActionButton type="button" variant="ghost" onClick={onBackToList} icon={<ArrowLeft className="w-4 h-4" />}>
+          Providers
+        </ActionButton>
+        <PageHeader
+          eyebrow={routeProvider.category}
+          title={routeProvider.name}
+          description={routeProvider.bio}
+          actions={
+            <ActionButton
+              type="button"
+              onClick={() => {
+                setConnectionTarget(routeProvider);
+                setConnectionStatus('');
+                setConnectionNote('');
+              }}
+              icon={<UserPlus className="w-4 h-4" />}
+            >
+              Request Access
+            </ActionButton>
+          }
+        />
+
+        <div className="grid grid-cols-1 gap-6 lg:grid-cols-[1.1fr_0.9fr]">
+          <SurfacePanel className="overflow-hidden p-0">
+            <img src={routeProvider.image} alt={routeProvider.name} className="h-72 w-full object-cover" />
+            <div className="space-y-5 p-6 sm:p-8">
+              <h2 className="text-xl font-black uppercase text-white">Provider Profile</h2>
+              <p className="text-sm leading-6 text-slate-400">{routeProvider.bio}</p>
+              <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+                {[
+                  ['Location', routeProvider.location],
+                  ['Specialty', routeProvider.specialty],
+                  ['Status', routeProvider.experience],
+                ].map(([label, value]) => (
+                  <div key={label} className="rounded-xl border border-white/10 bg-white/5 p-4">
+                    <p className="text-[10px] font-black uppercase tracking-widest text-slate-500">{label}</p>
+                    <p className="mt-1 text-sm font-bold text-white">{value}</p>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </SurfacePanel>
+
+          <SurfacePanel className="space-y-5">
+            <h2 className="text-lg font-black uppercase text-white">Access Structure</h2>
+            <div className="rounded-xl border border-white/10 bg-white/5 p-4">
+              <p className="text-[10px] font-black uppercase tracking-widest text-slate-500">Verification</p>
+              <p className="mt-1 text-sm font-bold text-white">
+                {routeProvider.verificationStatus === 'verified' ? 'Base44 verified' : 'Base44 connection pending'}
+              </p>
+            </div>
+            <div className="space-y-3">
+              <p className="text-[10px] font-black uppercase tracking-widest text-slate-500">Services</p>
+              {(routeProvider.services?.length ? routeProvider.services : ['Provider service records connect here']).map((service) => (
+                <div key={service} className="rounded-xl border border-white/10 bg-white/5 p-3 text-sm text-slate-300">
+                  {service}
+                </div>
+              ))}
+            </div>
+          </SurfacePanel>
+        </div>
+
+        {connectionTarget && (
+          <div className="fixed inset-0 z-[180] bg-black/85 backdrop-blur-sm p-4 flex items-center justify-center">
+            <div className="glass-panel w-full max-w-xl rounded-[2rem] border border-white/10 shadow-2xl p-6 sm:p-8 space-y-5 animate-in zoom-in duration-300">
+              <h4 className="text-2xl font-black text-white tracking-tight">Access Request</h4>
+              <p className="text-sm text-slate-400">
+                Send an introductory message to <span className="text-white font-bold">{connectionTarget.name}</span>.
+              </p>
+              <textarea
+                value={connectionNote}
+                onChange={(e) => setConnectionNote(e.target.value)}
+                className="w-full min-h-[130px] bg-white/5 border border-white/10 rounded-2xl p-4 text-sm text-white focus:outline-none focus:ring-2 focus:ring-blue-500/40"
+                placeholder="Share your intent, goals, and preferred session focus..."
+              />
+              {connectionStatus && (
+                <div className="p-3 rounded-xl bg-emerald-500/10 border border-emerald-500/30 text-emerald-200 text-[11px] font-black uppercase tracking-widest">
+                  {connectionStatus}
+                </div>
+              )}
+              <div className="flex flex-col sm:flex-row gap-3">
+                <button
+                  onClick={() => setConnectionTarget(null)}
+                  className="flex-1 py-3 bg-white/5 hover:bg-white/10 border border-white/10 text-slate-200 rounded-xl font-black text-[11px] uppercase tracking-widest transition-colors"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={submitAnchorLinkRequest}
+                  disabled={!connectionNote.trim()}
+                  className="flex-1 py-3 bg-blue-600 hover:bg-blue-500 disabled:bg-slate-700 disabled:text-slate-500 text-white rounded-xl font-black text-[11px] uppercase tracking-widest transition-colors"
+                >
+                  Send Request
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+      </PageShell>
+    );
+  }
 
   return (
     <div className="space-y-12 animate-in fade-in slide-in-from-bottom-6 duration-700 pb-32">
@@ -159,20 +311,22 @@ const ProvidersMarket: React.FC = () => {
       )}
 
       {!isLoading && loadError && (
-        <div className="glass-panel p-10 rounded-[2rem] border-red-500/20 bg-red-500/5 text-center">
-          <h3 className="text-lg font-black text-white uppercase tracking-tight">Providers unavailable</h3>
-          <p className="text-sm text-slate-400 mt-2">{loadError}</p>
+        <div className="glass-panel p-5 sm:p-6 rounded-2xl border-amber-500/20 bg-amber-500/5">
+          <h3 className="text-sm font-black text-white uppercase tracking-tight">Live providers unavailable</h3>
+          <p className="text-sm text-slate-400 mt-2">
+            {loadError}. Showing the frontend-ready provider surface so marketplace flows can be completed.
+          </p>
         </div>
       )}
 
-      {!isLoading && !loadError && filteredProviders.length === 0 && (
+      {!isLoading && filteredProviders.length === 0 && (
         <div className="glass-panel p-10 rounded-[2rem] border-white/10 text-center">
           <h3 className="text-lg font-black text-white uppercase tracking-tight">No verified providers available</h3>
           <p className="text-sm text-slate-400 mt-2">Base44-verified provider accounts will appear here once their user role is set to provider.</p>
         </div>
       )}
 
-      {!isLoading && !loadError && filteredProviders.length > 0 && (
+      {!isLoading && filteredProviders.length > 0 && (
         <section className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-8">
           {filteredProviders.map((provider) => (
             <div key={provider.id} className="glass-panel group rounded-[2.5rem] overflow-hidden flex flex-col border-white/5 hover:border-blue-500/30 transition-all duration-500 hover:-translate-y-2 shadow-2xl">
@@ -239,7 +393,13 @@ const ProvidersMarket: React.FC = () => {
                       <UserPlus className="w-3.5 h-3.5" /> Anchor Link
                     </button>
                     <button
-                      onClick={() => setSelectedProvider(provider)}
+                      onClick={() => {
+                        if (onOpenProvider) {
+                          onOpenProvider(provider.id);
+                        } else {
+                          setSelectedProvider(provider);
+                        }
+                      }}
                       className="flex items-center justify-center gap-2 py-3 bg-white/5 hover:bg-white/10 border border-white/10 text-slate-300 rounded-xl font-black text-[9px] uppercase tracking-widest transition-all active:scale-95"
                     >
                       <Info className="w-3.5 h-3.5" /> Deep Profile

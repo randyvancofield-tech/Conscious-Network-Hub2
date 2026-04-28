@@ -6,10 +6,15 @@ import {
 } from 'lucide-react';
 import { Course } from '../types';
 import { api } from '../services/apiClient';
+import { COURSE_SURFACE_RECORDS } from '../services/platformData';
+import { ActionButton, EmptyState, PageHeader, PageShell, SurfacePanel } from './ui/PlatformPrimitives';
 
 interface KnowledgePathwaysProps {
   onGoBack: () => void;
   onEnroll: (course: Course) => void;
+  courseId?: string;
+  onOpenCourse?: (id: string) => void;
+  onBackToCatalog?: () => void;
 }
 
 const normalizeCourse = (rawCourse: any): Course => ({
@@ -46,30 +51,48 @@ const getCourseIcon = (courseId: string) => {
   }
 };
 
-const KnowledgePathways: React.FC<KnowledgePathwaysProps> = ({ onGoBack, onEnroll }) => {
+const KnowledgePathways: React.FC<KnowledgePathwaysProps> = ({
+  onGoBack,
+  onEnroll,
+  courseId,
+  onOpenCourse,
+  onBackToCatalog,
+}) => {
   const [selectedSyllabusId, setSelectedSyllabusId] = useState<string | null>(null);
   const [pathways, setPathways] = useState<Course[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [loadError, setLoadError] = useState('');
-  const selectedSyllabus = pathways.find((pathway) => pathway.id === selectedSyllabusId) || null;
+  const courseRecords = pathways.length > 0 ? pathways : COURSE_SURFACE_RECORDS;
+  const selectedSyllabus = courseRecords.find((pathway) => pathway.id === selectedSyllabusId) || null;
+  const routeCourse = courseId ? courseRecords.find((pathway) => pathway.id === courseId) || null : null;
 
   useEffect(() => {
     let isMounted = true;
+    const controller = new AbortController();
+    const timeoutId = window.setTimeout(() => controller.abort(), 2500);
 
     const loadPathways = async () => {
       setIsLoading(true);
       setLoadError('');
       try {
-        const data = await api<any>('/courses', { auth: false });
+        const data = await api<any>('/courses', { auth: false, signal: controller.signal });
         if (isMounted) {
-          setPathways(Array.isArray(data.courses) ? data.courses.map(normalizeCourse) : []);
+          const liveCourses = Array.isArray(data.courses) ? data.courses.map(normalizeCourse) : [];
+          setPathways(liveCourses);
         }
       } catch (error) {
         if (isMounted) {
           setPathways([]);
-          setLoadError(error instanceof Error ? error.message : 'Unable to load courses');
+          setLoadError(
+            error instanceof DOMException && error.name === 'AbortError'
+              ? 'Course backend connection pending'
+              : error instanceof Error
+                ? error.message
+                : 'Unable to load courses'
+          );
         }
       } finally {
+        window.clearTimeout(timeoutId);
         if (isMounted) {
           setIsLoading(false);
         }
@@ -79,8 +102,79 @@ const KnowledgePathways: React.FC<KnowledgePathwaysProps> = ({ onGoBack, onEnrol
     loadPathways();
     return () => {
       isMounted = false;
+      controller.abort();
+      window.clearTimeout(timeoutId);
     };
   }, []);
+
+  if (courseId && !routeCourse) {
+    return (
+      <PageShell>
+        <EmptyState
+          icon={<BookOpen className="w-7 h-7" />}
+          title="Course not found"
+          description="This course route is valid, but no frontend or backend course record matches the requested identifier."
+          action={
+            <ActionButton type="button" onClick={onBackToCatalog || onGoBack} icon={<ArrowLeft className="w-4 h-4" />}>
+              Courses
+            </ActionButton>
+          }
+        />
+      </PageShell>
+    );
+  }
+
+  if (routeCourse) {
+    return (
+      <PageShell>
+        <ActionButton type="button" variant="ghost" onClick={onBackToCatalog || onGoBack} icon={<ArrowLeft className="w-4 h-4" />}>
+          Courses
+        </ActionButton>
+        <PageHeader
+          eyebrow={`${routeCourse.tier} pathway`}
+          title={routeCourse.title}
+          description={routeCourse.description || 'Course details are being prepared by the owner.'}
+          actions={
+            <ActionButton type="button" onClick={() => onEnroll({ ...routeCourse, progress: 0 })} icon={<Play className="w-4 h-4" />}>
+              Enroll
+            </ActionButton>
+          }
+        />
+        <div className="grid grid-cols-1 gap-6 lg:grid-cols-[1.2fr_0.8fr]">
+          <SurfacePanel className="overflow-hidden p-0">
+            <img src={routeCourse.image} alt={routeCourse.title} className="h-72 w-full object-cover" />
+            <div className="space-y-5 p-6 sm:p-8">
+              <h2 className="text-xl font-black uppercase text-white">Course Structure</h2>
+              <p className="text-sm leading-6 text-slate-400">
+                This route owns the full catalog detail experience: overview, enrollment entry, syllabus summary, provider attribution, and future module attachment points.
+              </p>
+              <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+                {[
+                  ['Provider', routeCourse.provider],
+                  ['Tier', routeCourse.tier],
+                  ['Enrollment', routeCourse.enrollmentStatus || 'Open structure'],
+                ].map(([label, value]) => (
+                  <div key={label} className="rounded-xl border border-white/10 bg-white/5 p-4">
+                    <p className="text-[10px] font-black uppercase tracking-widest text-slate-500">{label}</p>
+                    <p className="mt-1 text-sm font-bold text-white">{value}</p>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </SurfacePanel>
+          <SurfacePanel className="space-y-5">
+            <h2 className="text-lg font-black uppercase text-white">Syllabus</h2>
+            {['Foundations and context', 'Applied frameworks', 'Integration and completion criteria'].map((moduleTitle, index) => (
+              <div key={moduleTitle} className="rounded-xl border border-white/10 bg-white/5 p-4">
+                <p className="text-[10px] font-black uppercase tracking-widest text-blue-300">Module {index + 1}</p>
+                <p className="mt-1 text-sm font-bold text-white">{moduleTitle}</p>
+              </div>
+            ))}
+          </SurfacePanel>
+        </div>
+      </PageShell>
+    );
+  }
 
   return (
     <div className="space-y-12 animate-in fade-in slide-in-from-bottom-8 duration-700 pb-32">
@@ -96,14 +190,14 @@ const KnowledgePathways: React.FC<KnowledgePathwaysProps> = ({ onGoBack, onEnrol
         <div className="flex flex-col md:flex-row md:items-end justify-between gap-6">
           <div className="space-y-2">
             <h2 className="text-4xl font-black text-white uppercase tracking-tighter leading-none">Knowledge Pathways</h2>
-            <p className="text-blue-400/60 text-[10px] font-black uppercase tracking-[0.4em]">Discovering Autonomy & Ethical Growth</p>
+          <p className="text-blue-400/60 text-[10px] font-black uppercase tracking-[0.4em]">Discovering Autonomy & Ethical Growth</p>
           </div>
           <div className="flex items-center gap-4 p-4 glass-panel rounded-2xl border-white/5 shadow-2xl">
             <Compass className="w-6 h-6 text-teal-400" />
             <div className="text-left">
               <p className="text-[9px] font-black text-slate-500 uppercase tracking-widest">Active Discovery</p>
               <p className="text-xs font-bold text-white uppercase">
-                {isLoading ? 'Loading modules' : `${pathways.length} Sovereign Modules Identified`}
+                {isLoading ? 'Loading modules' : `${courseRecords.length} Sovereign Modules Identified`}
               </p>
             </div>
           </div>
@@ -117,22 +211,24 @@ const KnowledgePathways: React.FC<KnowledgePathwaysProps> = ({ onGoBack, onEnrol
       )}
 
       {!isLoading && loadError && (
-        <div className="glass-panel p-10 rounded-[2rem] border-red-500/20 bg-red-500/5 text-center">
-          <h3 className="text-lg font-black text-white uppercase tracking-tight">Courses unavailable</h3>
-          <p className="text-sm text-slate-400 mt-2">{loadError}</p>
+        <div className="glass-panel p-5 sm:p-6 rounded-2xl border-amber-500/20 bg-amber-500/5">
+          <h3 className="text-sm font-black text-white uppercase tracking-tight">Live courses unavailable</h3>
+          <p className="text-sm text-slate-400 mt-2">
+            {loadError}. Showing the frontend-ready catalog structure so enrollment flows can be completed.
+          </p>
         </div>
       )}
 
-      {!isLoading && !loadError && pathways.length === 0 && (
+      {!isLoading && courseRecords.length === 0 && (
         <div className="glass-panel p-10 rounded-[2rem] border-white/10 text-center">
           <h3 className="text-lg font-black text-white uppercase tracking-tight">No courses published yet</h3>
           <p className="text-sm text-slate-400 mt-2">Published provider and admin courses will appear here.</p>
         </div>
       )}
 
-      {!isLoading && !loadError && pathways.length > 0 && (
+      {!isLoading && courseRecords.length > 0 && (
         <section className="grid grid-cols-1 lg:grid-cols-2 gap-10">
-          {pathways.map((pathway) => (
+          {courseRecords.map((pathway) => (
             <div
               key={pathway.id}
               className="glass-panel group rounded-[3rem] overflow-hidden flex flex-col border-white/5 hover:border-blue-500/30 transition-all duration-500 shadow-2xl"
@@ -187,7 +283,13 @@ const KnowledgePathways: React.FC<KnowledgePathwaysProps> = ({ onGoBack, onEnrol
                       <Play className="w-4 h-4 fill-white" /> Enroll Node
                     </button>
                     <button
-                      onClick={() => setSelectedSyllabusId(pathway.id)}
+                      onClick={() => {
+                        if (onOpenCourse) {
+                          onOpenCourse(pathway.id);
+                        } else {
+                          setSelectedSyllabusId(pathway.id);
+                        }
+                      }}
                       className="flex items-center justify-center gap-3 py-4 bg-white/5 hover:bg-white/10 border border-white/10 text-slate-300 rounded-2xl font-black text-[10px] uppercase tracking-widest transition-all active:scale-95"
                     >
                       <BookOpen className="w-4 h-4" /> Syllabus

@@ -8,7 +8,9 @@ import ProvidersMarket from './components/ProvidersMarket';
 import KnowledgePathways from './components/KnowledgePathways';
 import CommunityMembers from './components/CommunityMembers';
 import SocialLearningHub from './components/SocialLearningHub';
-import ConsciousMeetings from './components/ConsciousMeetings';
+import MeetingsPage from './components/MeetingsPage';
+import MembershipPage from './components/MembershipPage';
+import NotFoundPage from './components/NotFoundPage';
 import ProviderLaunchGate from './components/ProviderLaunchGate';
 import MusicBox from './components/MusicBox';
 import NotificationsCenter from './components/NotificationsCenter';
@@ -29,8 +31,142 @@ import { clearAuthSession, getAuthToken, setAuthSession } from './services/sessi
 import { canTierAccessNavItem, canTierAccessView } from './services/tierAccess';
 import { ApiError, api, apiHealth, backendAssetUrl, getBackendBaseUrl } from './services/apiClient';
 
+type RouteState = {
+  view: AppView;
+  params: Record<string, string>;
+  path: string;
+};
+
+const normalizePathname = (pathname: string): string => {
+  const normalized = pathname.replace(/\/+$/, '') || '/';
+  return normalized.startsWith('/') ? normalized : `/${normalized}`;
+};
+
+const routePathForView = (view: AppView, params: Record<string, string> = {}): string => {
+  switch (view) {
+    case AppView.ENTRY:
+      return '/';
+    case AppView.MEMBERSHIP_ACCESS:
+      return '/membership-access';
+    case AppView.DASHBOARD:
+      return '/dashboard';
+    case AppView.CONSCIOUS_SOCIAL_LEARNING:
+      return '/social';
+    case AppView.COMMUNITY:
+      return '/community';
+    case AppView.CONSCIOUS_MEETINGS:
+      return '/meetings';
+    case AppView.MEETING_DETAIL:
+      return `/meetings/${encodeURIComponent(params.id || '')}`;
+    case AppView.MY_COURSES:
+      return '/my-courses';
+    case AppView.KNOWLEDGE_PATHWAYS:
+      return '/courses';
+    case AppView.COURSE_DETAIL:
+      return `/courses/${encodeURIComponent(params.id || '')}`;
+    case AppView.PROVIDERS:
+      return '/providers';
+    case AppView.PROVIDER_DETAIL:
+      return `/providers/${encodeURIComponent(params.id || '')}`;
+    case AppView.MY_CONSCIOUS_IDENTITY:
+      return '/profile';
+    case AppView.MEMBERSHIP:
+      return '/membership';
+    case AppView.NOTIFICATIONS:
+      return '/notifications';
+    case AppView.PRIVACY_POLICY:
+      return '/privacy-policy';
+    case AppView.AI_TRANSPARENCY_POLICY:
+      return '/policies/ai-transparency';
+    case AppView.BLOCKCHAIN_DATA_POLICY:
+      return '/policies/blockchain-data';
+    case AppView.VENDOR_API_GOVERNANCE_POLICY:
+      return '/policies/vendor-api-governance';
+    case AppView.NIST_MAPPING_SUMMARY:
+      return '/policies/nist-mapping';
+    case AppView.AI_SAFETY_GOVERNANCE:
+      return '/policies/ai-safety-governance';
+    case AppView.NOT_FOUND:
+      return params.path || '/not-found';
+    default:
+      return '/dashboard';
+  }
+};
+
+const resolveRoute = (pathname: string, search = ''): RouteState => {
+  const path = normalizePathname(pathname);
+  const params = new URLSearchParams(search);
+
+  if (params.get('externalMeetingInvite')) {
+    return { view: AppView.CONSCIOUS_MEETINGS, params: {}, path };
+  }
+
+  const staticRoutes: Record<string, AppView> = {
+    '/': AppView.ENTRY,
+    '/membership-access': AppView.MEMBERSHIP_ACCESS,
+    '/dashboard': AppView.DASHBOARD,
+    '/social': AppView.CONSCIOUS_SOCIAL_LEARNING,
+    '/social-learning': AppView.CONSCIOUS_SOCIAL_LEARNING,
+    '/community': AppView.COMMUNITY,
+    '/meetings': AppView.CONSCIOUS_MEETINGS,
+    '/my-courses': AppView.MY_COURSES,
+    '/courses': AppView.KNOWLEDGE_PATHWAYS,
+    '/providers': AppView.PROVIDERS,
+    '/profile': AppView.MY_CONSCIOUS_IDENTITY,
+    '/membership': AppView.MEMBERSHIP,
+    '/notifications': AppView.NOTIFICATIONS,
+    '/privacy-policy': AppView.PRIVACY_POLICY,
+    '/privacy': AppView.PRIVACY_POLICY,
+    '/policies/privacy': AppView.PRIVACY_POLICY,
+    '/policies/ai-transparency': AppView.AI_TRANSPARENCY_POLICY,
+    '/policies/blockchain-data': AppView.BLOCKCHAIN_DATA_POLICY,
+    '/policies/vendor-api-governance': AppView.VENDOR_API_GOVERNANCE_POLICY,
+    '/policies/nist-mapping': AppView.NIST_MAPPING_SUMMARY,
+    '/policies/ai-safety-governance': AppView.AI_SAFETY_GOVERNANCE,
+  };
+
+  if (staticRoutes[path]) {
+    return { view: staticRoutes[path], params: {}, path };
+  }
+
+  const segments = path.split('/').filter(Boolean);
+  if (segments.length === 2 && segments[0] === 'meetings') {
+    return { view: AppView.MEETING_DETAIL, params: { id: decodeURIComponent(segments[1]) }, path };
+  }
+  if (segments.length === 2 && segments[0] === 'courses') {
+    return { view: AppView.COURSE_DETAIL, params: { id: decodeURIComponent(segments[1]) }, path };
+  }
+  if (segments.length === 2 && segments[0] === 'providers') {
+    return { view: AppView.PROVIDER_DETAIL, params: { id: decodeURIComponent(segments[1]) }, path };
+  }
+
+  return { view: AppView.NOT_FOUND, params: { path }, path };
+};
+
+const getInitialRoute = (): RouteState => {
+  if (typeof window === 'undefined') {
+    return { view: AppView.ENTRY, params: {}, path: '/' };
+  }
+  return resolveRoute(window.location.pathname, window.location.search);
+};
+
+const requiresConfirmedMembership = (view: AppView): boolean =>
+  [
+    AppView.DASHBOARD,
+    AppView.CONSCIOUS_SOCIAL_LEARNING,
+    AppView.COMMUNITY,
+    AppView.CONSCIOUS_MEETINGS,
+    AppView.MEETING_DETAIL,
+    AppView.MY_COURSES,
+    AppView.MY_CONSCIOUS_IDENTITY,
+    AppView.NOTIFICATIONS,
+  ].includes(view);
+
 const App: React.FC = () => {
-  const [currentView, setCurrentView] = useState<AppView>(AppView.ENTRY);
+  const initialRoute = useMemo(getInitialRoute, []);
+  const [currentView, setCurrentViewState] = useState<AppView>(initialRoute.view);
+  const [routeParams, setRouteParams] = useState<Record<string, string>>(initialRoute.params);
+  const [activePath, setActivePath] = useState(initialRoute.path);
   const [isSidebarOpen, setSidebarOpen] = useState(false);
   const [user, setUser] = useState<UserProfile | null>(null);
   const [enrolledCourses, setEnrolledCourses] = useState<Course[]>([]);
@@ -71,6 +207,31 @@ const App: React.FC = () => {
   const insightRef = useRef<HTMLDivElement>(null);
   const [pendingScrollWisdom, setPendingScrollWisdom] = useState(false);
   const [healthStatus, setHealthStatus] = useState<'checking' | 'online' | 'offline'>('checking');
+
+  const setCurrentView = (
+    view: AppView,
+    params: Record<string, string> = {},
+    options: { replace?: boolean; preserveSearch?: boolean } = {}
+  ) => {
+    setCurrentViewState(view);
+    setRouteParams(params);
+
+    if (typeof window === 'undefined') return;
+
+    const nextPath = routePathForView(view, params);
+    const currentSearch = options.preserveSearch ? window.location.search : '';
+    const nextUrl = `${nextPath}${currentSearch}`;
+    const currentUrl = `${window.location.pathname}${window.location.search}`;
+
+    setActivePath(nextPath);
+    if (nextUrl !== currentUrl) {
+      if (options.replace) {
+        window.history.replaceState({}, document.title, nextUrl);
+      } else {
+        window.history.pushState({}, document.title, nextUrl);
+      }
+    }
+  };
 
   const TIERS = [
     {
@@ -281,6 +442,18 @@ const App: React.FC = () => {
   };
 
   useEffect(() => {
+    const handlePopState = () => {
+      const nextRoute = resolveRoute(window.location.pathname, window.location.search);
+      setCurrentViewState(nextRoute.view);
+      setRouteParams(nextRoute.params);
+      setActivePath(nextRoute.path);
+    };
+
+    window.addEventListener('popstate', handlePopState);
+    return () => window.removeEventListener('popstate', handlePopState);
+  }, []);
+
+  useEffect(() => {
     const checkApiKey = async () => {
       // @ts-ignore
       if (window.aistudio?.hasSelectedApiKey) {
@@ -312,7 +485,9 @@ const App: React.FC = () => {
         setAuthSession(token, canonicalUser);
         void refreshUserCourses();
         if (hasConfirmedMembership(canonicalUser)) {
-          setCurrentView(AppView.DASHBOARD);
+          if (currentView === AppView.ENTRY || currentView === AppView.MEMBERSHIP_ACCESS) {
+            setCurrentView(AppView.DASHBOARD);
+          }
           setIsSelectingTier(false);
         } else {
           setCurrentView(AppView.MEMBERSHIP_ACCESS);
@@ -369,16 +544,22 @@ const App: React.FC = () => {
 
   useEffect(() => {
     const controller = new AbortController();
+    const timeoutId = window.setTimeout(() => controller.abort(), 2500);
     const ping = async () => {
       try {
         await apiHealth({ signal: controller.signal });
         setHealthStatus('online');
       } catch {
         setHealthStatus('offline');
+      } finally {
+        window.clearTimeout(timeoutId);
       }
     };
     ping();
-    return () => controller.abort();
+    return () => {
+      controller.abort();
+      window.clearTimeout(timeoutId);
+    };
   }, []);
 
   useEffect(() => {
@@ -391,12 +572,12 @@ const App: React.FC = () => {
   useEffect(() => {
     if (!user) return;
     if (!hasConfirmedMembership(user)) {
-      if (currentView !== AppView.ENTRY && currentView !== AppView.MEMBERSHIP_ACCESS) {
+      if (requiresConfirmedMembership(currentView)) {
         setCurrentView(AppView.MEMBERSHIP_ACCESS);
       }
       return;
     }
-    if (!canTierAccessView(user.tier, currentView)) {
+    if (currentView !== AppView.NOT_FOUND && !canTierAccessView(user.tier, currentView)) {
       setCurrentView(AppView.DASHBOARD);
     }
   }, [user, currentView]);
@@ -853,8 +1034,10 @@ const App: React.FC = () => {
   const navViewMap: Record<string, AppView> = {
     dashboard: AppView.DASHBOARD,
     'social-learning': AppView.CONSCIOUS_SOCIAL_LEARNING,
+    community: AppView.COMMUNITY,
     meetings: AppView.CONSCIOUS_MEETINGS,
     'my-courses': AppView.MY_COURSES,
+    courses: AppView.KNOWLEDGE_PATHWAYS,
     providers: AppView.PROVIDERS,
     profile: AppView.MY_CONSCIOUS_IDENTITY,
     membership: AppView.MEMBERSHIP,
@@ -866,7 +1049,7 @@ const App: React.FC = () => {
   }, [user]);
 
   const renderActiveView = () => {
-    if (user && !hasConfirmedMembership(user)) {
+    if (user && !hasConfirmedMembership(user) && requiresConfirmedMembership(currentView)) {
       return (
         <div className="p-8 max-w-3xl mx-auto">
           <div className="glass-panel p-8 rounded-3xl border border-blue-500/20">
@@ -880,7 +1063,7 @@ const App: React.FC = () => {
         </div>
       );
     }
-    if (user && !canTierAccessView(user.tier, currentView)) {
+    if (user && currentView !== AppView.NOT_FOUND && !canTierAccessView(user.tier, currentView)) {
       return (
         <Dashboard
           user={user}
@@ -903,8 +1086,23 @@ const App: React.FC = () => {
         );
       case AppView.CONSCIOUS_SOCIAL_LEARNING:
         return <SocialLearningHub user={user} />;
+      case AppView.COMMUNITY:
+        return <CommunityMembers />;
       case AppView.CONSCIOUS_MEETINGS:
-        return <ConsciousMeetings user={user} onUpdateUser={updateActiveUser} />;
+        return (
+          <MeetingsPage
+            onOpenMeeting={(id) => setCurrentView(AppView.MEETING_DETAIL, { id })}
+            onBackToList={() => setCurrentView(AppView.CONSCIOUS_MEETINGS)}
+          />
+        );
+      case AppView.MEETING_DETAIL:
+        return (
+          <MeetingsPage
+            meetingId={routeParams.id}
+            onOpenMeeting={(id) => setCurrentView(AppView.MEETING_DETAIL, { id })}
+            onBackToList={() => setCurrentView(AppView.CONSCIOUS_MEETINGS)}
+          />
+        );
       case AppView.MY_CONSCIOUS_IDENTITY: 
         return (
           <ConsciousIdentity 
@@ -924,13 +1122,57 @@ const App: React.FC = () => {
       case AppView.MY_COURSES: 
         return <MyCourses enrolledCourses={enrolledCourses} onNavigateToUniversity={() => setCurrentView(AppView.KNOWLEDGE_PATHWAYS)} />;
       case AppView.PROVIDERS:
-        return <ProvidersMarket />;
+        return (
+          <ProvidersMarket
+            onOpenProvider={(id) => setCurrentView(AppView.PROVIDER_DETAIL, { id })}
+            onBackToList={() => setCurrentView(AppView.PROVIDERS)}
+          />
+        );
+      case AppView.PROVIDER_DETAIL:
+        return (
+          <ProvidersMarket
+            providerId={routeParams.id}
+            onOpenProvider={(id) => setCurrentView(AppView.PROVIDER_DETAIL, { id })}
+            onBackToList={() => setCurrentView(AppView.PROVIDERS)}
+          />
+        );
       case AppView.MEMBERSHIP:
-        return <CommunityMembers />;
+        return (
+          <MembershipPage
+            user={user}
+            selectedTier={selectedTier}
+            isCheckoutPending={isMembershipCheckoutPending}
+            notice={membershipNotice}
+            onSelectTier={(tier) => setSelectedTier(tier)}
+            onSignIn={() => {
+              setPendingTwoFactorMethod(null);
+              setTwoFactorCodeInput('');
+              setProviderTokenInput('');
+              setSigninModalOpen(true);
+            }}
+          />
+        );
       case AppView.NOTIFICATIONS:
         return <NotificationsCenter onBack={() => setCurrentView(AppView.DASHBOARD)} />;
       case AppView.KNOWLEDGE_PATHWAYS:
-        return <KnowledgePathways onGoBack={() => setCurrentView(AppView.MY_COURSES)} onEnroll={enrollCourse} />;
+        return (
+          <KnowledgePathways
+            onGoBack={() => setCurrentView(AppView.MY_COURSES)}
+            onEnroll={enrollCourse}
+            onOpenCourse={(id) => setCurrentView(AppView.COURSE_DETAIL, { id })}
+            onBackToCatalog={() => setCurrentView(AppView.KNOWLEDGE_PATHWAYS)}
+          />
+        );
+      case AppView.COURSE_DETAIL:
+        return (
+          <KnowledgePathways
+            courseId={routeParams.id}
+            onGoBack={() => setCurrentView(AppView.KNOWLEDGE_PATHWAYS)}
+            onEnroll={enrollCourse}
+            onOpenCourse={(id) => setCurrentView(AppView.COURSE_DETAIL, { id })}
+            onBackToCatalog={() => setCurrentView(AppView.KNOWLEDGE_PATHWAYS)}
+          />
+        );
       case AppView.PRIVACY_POLICY:
         return (
           <div className="p-8 max-w-4xl mx-auto">
@@ -1043,6 +1285,14 @@ const App: React.FC = () => {
             </div>
           </div>
         );
+      case AppView.NOT_FOUND:
+        return (
+          <NotFoundPage
+            path={activePath}
+            onGoHome={() => setCurrentView(AppView.ENTRY)}
+            onGoDashboard={() => setCurrentView(AppView.DASHBOARD)}
+          />
+        );
       default: 
         return (
           <Dashboard
@@ -1087,11 +1337,12 @@ const App: React.FC = () => {
             loop
             playsInline
             preload="metadata"
+            poster="/images/home-video-fallback.svg"
             className="fixed inset-0 w-full h-full object-cover z-0"
           >
             <source src="/video/home-bg.mp4" type="video/mp4" />
           </video>
-          <div className="fixed inset-0 bg-black/55 z-1"></div>
+          <div className="fixed inset-0 bg-black/55 z-[1]"></div>
         </>
       )}
 
@@ -1119,7 +1370,7 @@ const App: React.FC = () => {
 
         {currentView === AppView.ENTRY && (
           <div className="flex flex-col items-center justify-center min-h-screen p-4 sm:p-6 md:p-8 text-center animate-in fade-in zoom-in duration-1000">
-            <div className="w-full max-w-4xl space-y-6 sm:space-y-8 md:space-y-12 backdrop-blur-[4px] p-6 sm:p-8 md:p-12 lg:p-16 rounded-2xl sm:rounded-3xl md:rounded-[2.5rem] lg:rounded-[4rem] border border-white/5 bg-white/[0.01] shadow-[0_0_100px_rgba(0,0,0,0.6)]">
+            <div className="portal-entry-card w-full max-w-[calc(100vw-2rem)] sm:max-w-4xl space-y-6 sm:space-y-8 md:space-y-12 overflow-hidden backdrop-blur-[4px] p-6 sm:p-8 md:p-12 lg:p-16 rounded-2xl sm:rounded-3xl md:rounded-[2.5rem] lg:rounded-[4rem] border border-white/5 bg-white/[0.01] shadow-[0_0_100px_rgba(0,0,0,0.6)]">
               <div className="flex justify-center">
                 <div className="p-4 sm:p-6 bg-blue-600/10 rounded-2xl sm:rounded-3xl md:rounded-[2.5rem] border border-blue-500/20 backdrop-blur-3xl shadow-[0_0_30px_rgba(37,99,235,0.2)] animate-pulse">
                   <img src={logo} alt="Conscious Network Hub Logo" className="w-12 h-12 sm:w-14 sm:h-14 md:w-16 md:h-16" />
@@ -1127,13 +1378,13 @@ const App: React.FC = () => {
               </div>
               
               <div className="space-y-4 sm:space-y-5 md:space-y-6">
-                <h1 className="text-3xl xs:text-4xl sm:text-5xl md:text-6xl lg:text-7xl font-black text-white tracking-tight leading-[0.9] drop-shadow-2xl">
+                <h1 className="portal-entry-title break-words text-3xl xs:text-4xl sm:text-5xl md:text-6xl lg:text-7xl font-black text-white tracking-tight leading-[0.9] drop-shadow-2xl">
                   CONSCIOUS <br /> 
                   <span className="text-transparent bg-clip-text bg-gradient-to-r from-blue-400 via-blue-500 to-teal-400 uppercase tracking-tighter drop-shadow-sm">
                     Network Hub
                   </span>
                 </h1>
-                <p className="text-base xs:text-lg sm:text-xl md:text-2xl text-blue-100/70 max-w-2xl mx-auto leading-relaxed font-light drop-shadow-md px-2 sm:px-0">
+                <p className="portal-entry-copy break-words text-base xs:text-lg sm:text-xl md:text-2xl text-blue-100/70 max-w-2xl mx-auto leading-relaxed font-light drop-shadow-md px-2 sm:px-0">
                   Restoring autonomy and protecting identity through a community-centered decentralized social learning infrastructure.
                 </p>
               </div>
@@ -1141,7 +1392,7 @@ const App: React.FC = () => {
               <div className="flex justify-center pt-6 sm:pt-8 md:pt-10">
                 <button 
                   onClick={handleEnterHub}
-                  className="group relative w-full sm:w-auto px-6 sm:px-12 md:px-16 lg:px-20 py-4 sm:py-5 md:py-6 lg:py-7 bg-blue-600 hover:bg-blue-500 text-white rounded-lg sm:rounded-xl md:rounded-[1.5rem] lg:rounded-[2rem] font-black text-base sm:text-lg md:text-xl lg:text-2xl transition-all shadow-[0_0_60px_rgba(37,99,235,0.3)] hover:-translate-y-2 active:scale-95 flex items-center justify-center gap-3 sm:gap-4 overflow-hidden tracking-wider"
+                  className="portal-entry-primary group relative w-full max-w-full min-w-0 sm:w-auto px-4 sm:px-12 md:px-16 lg:px-20 py-4 sm:py-5 md:py-6 lg:py-7 bg-blue-600 hover:bg-blue-500 text-white rounded-lg sm:rounded-xl md:rounded-[1.5rem] lg:rounded-[2rem] font-black text-sm sm:text-lg md:text-xl lg:text-2xl transition-all shadow-[0_0_60px_rgba(37,99,235,0.3)] hover:-translate-y-2 active:scale-95 flex items-center justify-center gap-3 sm:gap-4 overflow-hidden tracking-wider"
                 >
                   <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/10 to-transparent -translate-x-full group-hover:translate-x-full transition-transform duration-1000" />
                   ENTER PORTAL <ChevronRight className="w-5 h-5 sm:w-6 sm:h-6 md:w-7 md:h-7 lg:w-8 lg:h-8 group-hover:translate-x-2 transition-transform" />
@@ -1353,7 +1604,15 @@ const App: React.FC = () => {
                 <nav className="flex-1 space-y-4">
                   {filteredNavigationItems.map((item) => {
                     const view = navViewMap[item.id];
-                    const isActive = currentView === view;
+                    const parentView =
+                      currentView === AppView.PROVIDER_DETAIL
+                        ? AppView.PROVIDERS
+                        : currentView === AppView.COURSE_DETAIL
+                          ? AppView.KNOWLEDGE_PATHWAYS
+                          : currentView === AppView.MEETING_DETAIL
+                            ? AppView.CONSCIOUS_MEETINGS
+                            : currentView;
+                    const isActive = parentView === view;
                     return (
                       <button
                         key={item.id}
@@ -1506,12 +1765,12 @@ const App: React.FC = () => {
               </main>
               <footer className="p-4 bg-black/20 backdrop-blur-sm border-t border-white/5">
                 <div className="max-w-7xl mx-auto flex flex-wrap justify-center gap-4 text-xs">
-                  <button onClick={() => setCurrentView(AppView.PRIVACY_POLICY)} className="text-slate-400 hover:text-white transition-colors">Privacy Policy</button>
-                  <button onClick={() => setCurrentView(AppView.AI_TRANSPARENCY_POLICY)} className="text-slate-400 hover:text-white transition-colors">AI Transparency Policy</button>
-                  <button onClick={() => setCurrentView(AppView.BLOCKCHAIN_DATA_POLICY)} className="text-slate-400 hover:text-white transition-colors">Blockchain Data Policy</button>
-                  <button onClick={() => setCurrentView(AppView.VENDOR_API_GOVERNANCE_POLICY)} className="text-slate-400 hover:text-white transition-colors">Vendor API Governance Policy</button>
-                  <button onClick={() => setCurrentView(AppView.NIST_MAPPING_SUMMARY)} className="text-slate-400 hover:text-white transition-colors">NIST Mapping Summary</button>
-                  <button onClick={() => setCurrentView(AppView.AI_SAFETY_GOVERNANCE)} className="text-slate-400 hover:text-white transition-colors">AI Safety & Governance</button>
+                  <button onClick={() => setCurrentView(AppView.PRIVACY_POLICY)} className="max-w-full whitespace-normal text-center leading-5 text-slate-400 hover:text-white transition-colors">Privacy Policy</button>
+                  <button onClick={() => setCurrentView(AppView.AI_TRANSPARENCY_POLICY)} className="max-w-full whitespace-normal text-center leading-5 text-slate-400 hover:text-white transition-colors">AI Transparency Policy</button>
+                  <button onClick={() => setCurrentView(AppView.BLOCKCHAIN_DATA_POLICY)} className="max-w-full whitespace-normal text-center leading-5 text-slate-400 hover:text-white transition-colors">Blockchain Data Policy</button>
+                  <button onClick={() => setCurrentView(AppView.VENDOR_API_GOVERNANCE_POLICY)} className="max-w-full whitespace-normal text-center leading-5 text-slate-400 hover:text-white transition-colors">Vendor API Governance Policy</button>
+                  <button onClick={() => setCurrentView(AppView.NIST_MAPPING_SUMMARY)} className="max-w-full whitespace-normal text-center leading-5 text-slate-400 hover:text-white transition-colors">NIST Mapping Summary</button>
+                  <button onClick={() => setCurrentView(AppView.AI_SAFETY_GOVERNANCE)} className="max-w-full whitespace-normal text-center leading-5 text-slate-400 hover:text-white transition-colors">AI Safety & Governance</button>
                 </div>
               </footer>
             </div>

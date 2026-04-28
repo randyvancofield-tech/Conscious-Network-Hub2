@@ -13,7 +13,9 @@ const NAV_VIEW_BY_ID: Record<string, AppView> = {
   'social-learning': AppView.CONSCIOUS_SOCIAL_LEARNING,
   meetings: AppView.CONSCIOUS_MEETINGS,
   'my-courses': AppView.MY_COURSES,
+  courses: AppView.KNOWLEDGE_PATHWAYS,
   providers: AppView.PROVIDERS,
+  community: AppView.COMMUNITY,
   profile: AppView.MY_CONSCIOUS_IDENTITY,
   membership: AppView.MEMBERSHIP,
 };
@@ -28,32 +30,42 @@ const BASE_ACCESS_VIEWS = [
   AppView.BLOCKCHAIN_DATA_POLICY,
   AppView.VENDOR_API_GOVERNANCE_POLICY,
   AppView.NIST_MAPPING_SUMMARY,
-  AppView.AI_SAFETY_GOVERNANCE,
-  AppView.NOTIFICATIONS,
-] as const;
+    AppView.AI_SAFETY_GOVERNANCE,
+    AppView.NOTIFICATIONS,
+    AppView.NOT_FOUND,
+  ] as const;
 
 const TIER_ACCESS_MAP: Record<FrontendTier, AppView[]> = {
   [FRONTEND_TIERS.FREE]: [
     ...BASE_ACCESS_VIEWS,
     AppView.CONSCIOUS_SOCIAL_LEARNING,
     AppView.CONSCIOUS_MEETINGS,
+    AppView.MEETING_DETAIL,
+    AppView.COMMUNITY,
     AppView.MEMBERSHIP,
   ],
   [FRONTEND_TIERS.GUIDED]: [
     ...BASE_ACCESS_VIEWS,
     AppView.CONSCIOUS_SOCIAL_LEARNING,
     AppView.CONSCIOUS_MEETINGS,
+    AppView.MEETING_DETAIL,
     AppView.MY_COURSES,
     AppView.KNOWLEDGE_PATHWAYS,
+    AppView.COURSE_DETAIL,
+    AppView.COMMUNITY,
     AppView.MEMBERSHIP,
   ],
   [FRONTEND_TIERS.ACCELERATED]: [
     ...BASE_ACCESS_VIEWS,
     AppView.CONSCIOUS_SOCIAL_LEARNING,
     AppView.CONSCIOUS_MEETINGS,
+    AppView.MEETING_DETAIL,
     AppView.MY_COURSES,
     AppView.KNOWLEDGE_PATHWAYS,
+    AppView.COURSE_DETAIL,
     AppView.PROVIDERS,
+    AppView.PROVIDER_DETAIL,
+    AppView.COMMUNITY,
     AppView.MEMBERSHIP,
   ],
 };
