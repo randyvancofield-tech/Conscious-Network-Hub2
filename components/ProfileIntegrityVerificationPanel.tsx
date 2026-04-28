@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import { ExternalLink, FileCheck2, Lock, ShieldCheck } from 'lucide-react';
-import { buildAuthHeaders } from '../services/sessionService';
+import { api } from '../services/apiClient';
 import { UserProfile } from '../types';
 
 type IntegrityRecord = {
@@ -54,28 +54,6 @@ const ProfileIntegrityVerificationPanel: React.FC<ProfileIntegrityVerificationPa
     safeParseStoredRecord(localStorage.getItem(toStorageKey(user.id)))
   );
 
-  const backendBaseUrl = String((import.meta as any)?.env?.VITE_BACKEND_URL || '')
-    .trim()
-    .replace(/\/+$/, '');
-
-  const toApiUrl = useCallback(
-    (pathOrUrl: string): string => {
-      const raw = String(pathOrUrl || '').trim();
-      if (!raw) return backendBaseUrl || '';
-      if (/^https?:\/\//i.test(raw)) return raw;
-      const normalized = raw.startsWith('/') ? raw : `/${raw}`;
-      return backendBaseUrl ? `${backendBaseUrl}${normalized}` : normalized;
-    },
-    [backendBaseUrl]
-  );
-
-  const verifyEndpoint = toApiUrl(
-    String((import.meta as any)?.env?.VITE_PROFILE_INTEGRITY_VERIFY_URL || '/api/integrity/profile/verify')
-  );
-  const recordEndpoint = toApiUrl(
-    String((import.meta as any)?.env?.VITE_PROFILE_INTEGRITY_RECORD_URL || '/api/integrity/profile/record')
-  );
-
   const persistStoredRecord = (value: StoredRecord): void => {
     setStored(value);
     localStorage.setItem(toStorageKey(user.id), JSON.stringify(value));
@@ -83,12 +61,9 @@ const ProfileIntegrityVerificationPanel: React.FC<ProfileIntegrityVerificationPa
 
   const fetchLatestRecord = useCallback(async (): Promise<void> => {
     try {
-      const response = await fetch(recordEndpoint, {
+      const data = await api<any>('/integrity/profile/record', {
         method: 'GET',
-        headers: buildAuthHeaders(),
       });
-      if (!response.ok) return;
-      const data = await response.json().catch(() => ({}));
       const record = data?.record as IntegrityRecord | undefined;
       if (!record?.verificationRecord) return;
       persistStoredRecord({
@@ -98,7 +73,7 @@ const ProfileIntegrityVerificationPanel: React.FC<ProfileIntegrityVerificationPa
     } catch {
       // Keep component resilient when backend integrity services are unavailable.
     }
-  }, [recordEndpoint]);
+  }, []);
 
   useEffect(() => {
     void fetchLatestRecord();
@@ -109,15 +84,10 @@ const ProfileIntegrityVerificationPanel: React.FC<ProfileIntegrityVerificationPa
     setStatus('');
     setError('');
     try {
-      const response = await fetch(verifyEndpoint, {
+      const data = await api<any>('/integrity/profile/verify', {
         method: 'POST',
-        headers: buildAuthHeaders({ 'Content-Type': 'application/json' }),
-        body: JSON.stringify({ profilePayload }),
+        body: { profilePayload },
       });
-      const data = await response.json().catch(() => ({}));
-      if (!response.ok) {
-        throw new Error(String(data?.error || 'Profile integrity verification failed'));
-      }
 
       const record = data?.record as IntegrityRecord | undefined;
       if (!record?.verificationRecord) {

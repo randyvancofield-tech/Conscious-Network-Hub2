@@ -17,7 +17,8 @@ import {
   Loader2,
 } from 'lucide-react';
 import { UserProfile } from '../types';
-import { buildAuthHeaders, getAuthToken } from '../services/sessionService';
+import { getAuthToken } from '../services/sessionService';
+import { api, backendAssetUrl } from '../services/apiClient';
 
 interface Member {
   id: string;
@@ -80,9 +81,6 @@ const isLikelyAutomatedProfile = (profile: any): boolean => {
 };
 
 const CommunityMembers: React.FC = () => {
-  const backendBaseUrl = (import.meta.env.VITE_BACKEND_URL || '').replace(/\/+$/, '');
-  const toApiUrl = (route: string) => `${backendBaseUrl}${route}`;
-
   const [search, setSearch] = useState('');
   const [selectedMember, setSelectedMember] = useState<Member | null>(null);
   const [messages, setMessages] = useState<{ [key: string]: { text: string; sender: 'me' | 'them'; time: string }[] }>({});
@@ -112,21 +110,11 @@ const CommunityMembers: React.FC = () => {
       setDirectoryError('');
       try {
         const activeUser: UserProfile | null = JSON.parse(localStorage.getItem('hcn_active_user') || 'null');
-        const response = await fetch(toApiUrl('/api/user/directory'), {
-          headers: buildAuthHeaders(),
-        });
-        const payload = await response.json().catch(() => ({}));
-        if (!response.ok) {
-          throw new Error(payload?.error || 'Unable to load members.');
-        }
+        const payload = await api<any>('/user/directory');
 
         const directoryUsers = Array.isArray(payload?.users) ? payload.users : [];
         const toAssetUrl = (value: unknown): string => {
-          const raw = String(value || '').trim();
-          if (!raw) return '';
-          if (/^https?:\/\//i.test(raw)) return raw;
-          const normalized = raw.startsWith('/') ? raw : `/${raw}`;
-          return `${backendBaseUrl}${normalized}`;
+          return backendAssetUrl(value) || '';
         };
 
         const mapped = directoryUsers
@@ -164,7 +152,7 @@ const CommunityMembers: React.FC = () => {
     };
     window.addEventListener('storage', handleStorage);
     return () => window.removeEventListener('storage', handleStorage);
-  }, [backendBaseUrl]);
+  }, []);
 
   const filteredMembers = useMemo(
     () =>
@@ -190,13 +178,7 @@ const CommunityMembers: React.FC = () => {
       for (let page = 0; page < 10; page += 1) {
         const params = new URLSearchParams({ limit: '50' });
         if (cursor) params.set('cursor', cursor);
-        const response = await fetch(toApiUrl(`/api/social/profile/${memberId}?${params.toString()}`), {
-          headers: buildAuthHeaders(),
-        });
-        const data = await response.json().catch(() => ({}));
-        if (!response.ok) {
-          throw new Error(data?.error || 'Unable to load member profile.');
-        }
+        const data = await api<any>(`/social/profile/${memberId}?${params.toString()}`);
         if (!profile) profile = data?.profile || null;
         const pagePosts = Array.isArray(data?.posts) ? data.posts : [];
         for (const post of pagePosts) {

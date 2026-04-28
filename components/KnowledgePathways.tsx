@@ -5,11 +5,11 @@ import {
   BookOpen, Star, Play, X
 } from 'lucide-react';
 import { Course } from '../types';
+import { api } from '../services/apiClient';
 
 interface KnowledgePathwaysProps {
   onGoBack: () => void;
   onEnroll: (course: Course) => void;
-  backendUrl: string;
 }
 
 const normalizeCourse = (rawCourse: any): Course => ({
@@ -46,7 +46,7 @@ const getCourseIcon = (courseId: string) => {
   }
 };
 
-const KnowledgePathways: React.FC<KnowledgePathwaysProps> = ({ onGoBack, onEnroll, backendUrl }) => {
+const KnowledgePathways: React.FC<KnowledgePathwaysProps> = ({ onGoBack, onEnroll }) => {
   const [selectedSyllabusId, setSelectedSyllabusId] = useState<string | null>(null);
   const [pathways, setPathways] = useState<Course[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -60,11 +60,7 @@ const KnowledgePathways: React.FC<KnowledgePathwaysProps> = ({ onGoBack, onEnrol
       setIsLoading(true);
       setLoadError('');
       try {
-        const response = await fetch(`${backendUrl}/api/courses`);
-        const data = await response.json().catch(() => ({}));
-        if (!response.ok) {
-          throw new Error(data?.error || 'Unable to load courses');
-        }
+        const data = await api<any>('/courses', { auth: false });
         if (isMounted) {
           setPathways(Array.isArray(data.courses) ? data.courses.map(normalizeCourse) : []);
         }
@@ -84,7 +80,7 @@ const KnowledgePathways: React.FC<KnowledgePathwaysProps> = ({ onGoBack, onEnrol
     return () => {
       isMounted = false;
     };
-  }, [backendUrl]);
+  }, []);
 
   return (
     <div className="space-y-12 animate-in fade-in slide-in-from-bottom-8 duration-700 pb-32">

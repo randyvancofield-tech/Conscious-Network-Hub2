@@ -4,7 +4,8 @@ import {
   UserPlus, Info,
   ChevronRight, Brain
 } from 'lucide-react';
-import { buildAuthHeaders, getAuthToken } from '../services/sessionService';
+import { getAuthToken } from '../services/sessionService';
+import { api } from '../services/apiClient';
 
 interface ProviderProfile {
   id: string;
@@ -16,10 +17,6 @@ interface ProviderProfile {
   rating: number;
   experience: string;
   image: string;
-}
-
-interface ProvidersMarketProps {
-  backendUrl: string;
 }
 
 const normalizeProvider = (rawProvider: any): ProviderProfile => {
@@ -39,7 +36,7 @@ const normalizeProvider = (rawProvider: any): ProviderProfile => {
   };
 };
 
-const ProvidersMarket: React.FC<ProvidersMarketProps> = ({ backendUrl }) => {
+const ProvidersMarket: React.FC = () => {
   const [filter, setFilter] = useState<string>('All');
   const [searchQuery, setSearchQuery] = useState('');
   const [providers, setProviders] = useState<ProviderProfile[]>([]);
@@ -62,11 +59,7 @@ const ProvidersMarket: React.FC<ProvidersMarketProps> = ({ backendUrl }) => {
       setIsLoading(true);
       setLoadError('');
       try {
-        const response = await fetch(`${backendUrl}/api/providers`);
-        const data = await response.json().catch(() => ({}));
-        if (!response.ok) {
-          throw new Error(data?.error || 'Unable to load providers');
-        }
+        const data = await api<any>('/providers', { auth: false });
         if (isMounted) {
           setProviders(Array.isArray(data.providers) ? data.providers.map(normalizeProvider) : []);
         }
@@ -86,7 +79,7 @@ const ProvidersMarket: React.FC<ProvidersMarketProps> = ({ backendUrl }) => {
     return () => {
       isMounted = false;
     };
-  }, [backendUrl]);
+  }, []);
 
   const normalizedQuery = searchQuery.trim().toLowerCase();
   const filteredProviders = providers.filter((provider) => {
@@ -107,15 +100,10 @@ const ProvidersMarket: React.FC<ProvidersMarketProps> = ({ backendUrl }) => {
     }
 
     try {
-      const response = await fetch(`${backendUrl}/api/providers/${connectionTarget.id}/request`, {
+      await api(`/providers/${connectionTarget.id}/request`, {
         method: 'POST',
-        headers: buildAuthHeaders({ 'Content-Type': 'application/json' }),
-        body: JSON.stringify({ note: connectionNote.trim() }),
+        body: { note: connectionNote.trim() },
       });
-      const data = await response.json().catch(() => ({}));
-      if (!response.ok) {
-        throw new Error(data?.error || 'Unable to send provider request');
-      }
       setConnectionStatus('Request sent. Provider will review it in their secure queue.');
       setConnectionNote('');
       setTimeout(() => {

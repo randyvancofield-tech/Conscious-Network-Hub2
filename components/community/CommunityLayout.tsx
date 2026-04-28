@@ -8,7 +8,7 @@ import {
   Twitter, Github, Globe
 } from 'lucide-react';
 import { UserProfile, Course } from '../../types';
-import { buildAuthHeaders } from '../../services/sessionService';
+import { api } from '../../services/apiClient';
 import ProfileIntegrityVerificationPanel from '../ProfileIntegrityVerificationPanel';
 
 interface ConsciousIdentityProps {
@@ -94,9 +94,6 @@ export const ConsciousIdentity: React.FC<ConsciousIdentityProps> = ({
   const avatarInputRef = useRef<HTMLInputElement>(null);
   const bannerInputRef = useRef<HTMLInputElement>(null);
 
-  const backendBaseUrl = (import.meta.env.VITE_BACKEND_URL || '').replace(/\/+$/, '');
-  const toApiUrl = (route: string) => `${backendBaseUrl}${route}`;
-
   const [formData, setFormData] = useState({
     handle: user.handle || user.name.toLowerCase().replace(/\s+/g, '_'),
     bio: user.bio || '',
@@ -168,20 +165,14 @@ export const ConsciousIdentity: React.FC<ConsciousIdentityProps> = ({
     setUploadingField(field);
 
     try {
-      const endpoint = field === 'avatarUrl' ? '/api/upload/avatar' : '/api/upload/cover';
+      const endpoint = field === 'avatarUrl' ? '/upload/avatar' : '/upload/cover';
       const payload = new FormData();
       payload.append('image', file);
 
-      const response = await fetch(toApiUrl(endpoint), {
+      const data = await api<any>(endpoint, {
         method: 'POST',
-        headers: buildAuthHeaders(),
         body: payload,
       });
-
-      const data = await response.json().catch(() => ({}));
-      if (!response.ok) {
-        throw new Error(data?.error || 'Upload failed');
-      }
 
       const fileUrl = String(data?.fileUrl || '').trim();
       if (!fileUrl) {

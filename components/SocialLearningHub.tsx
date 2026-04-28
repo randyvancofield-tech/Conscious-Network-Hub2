@@ -1,6 +1,6 @@
 
 import React, { useState, useRef, useEffect, useMemo, useCallback } from 'react';
-import { 
+import {
   MessageSquare, Heart,
   Send, Globe, Zap, Sparkles, Filter, 
   LayoutGrid, BookOpen, Layers, Users, ShieldCheck, 
@@ -9,7 +9,7 @@ import {
   Pencil, Trash2, RefreshCw
 } from 'lucide-react';
 import { UserProfile } from '../types';
-import { buildAuthHeaders } from '../services/sessionService';
+import { api } from '../services/apiClient';
 
 interface Comment {
   id: string;
@@ -108,8 +108,6 @@ const mapSocialPostToNode = (post: any): NodeContent => {
 };
 
 const SocialLearningHub: React.FC<SocialLearningHubProps> = ({ user }) => {
-  const backendBaseUrl = (import.meta.env.VITE_BACKEND_URL || '').replace(/\/+$/, '');
-  const toApiUrl = (route: string) => `${backendBaseUrl}${route}`;
   const [nodes, setNodes] = useState<NodeContent[]>(INITIAL_NODES);
   const [newPost, setNewPost] = useState('');
   const [isInjecting, setIsInjecting] = useState(false);
@@ -144,13 +142,7 @@ const SocialLearningHub: React.FC<SocialLearningHubProps> = ({ user }) => {
 
     setRefreshingFeed(true);
     try {
-      const response = await fetch(toApiUrl('/api/social/newsfeed?limit=100'), {
-        headers: buildAuthHeaders(),
-      });
-      const data = await response.json().catch(() => ({}));
-      if (!response.ok) {
-        throw new Error(data?.error || 'Failed to load social newsfeed');
-      }
+      const data = await api<any>('/social/newsfeed?limit=100');
 
       const posts = Array.isArray(data?.posts) ? data.posts : [];
       const mapped = posts.map(mapSocialPostToNode);
@@ -160,7 +152,7 @@ const SocialLearningHub: React.FC<SocialLearningHubProps> = ({ user }) => {
     } finally {
       setRefreshingFeed(false);
     }
-  }, [user, backendBaseUrl]);
+  }, [user]);
 
   useEffect(() => {
     void loadFeed();
@@ -238,15 +230,10 @@ const SocialLearningHub: React.FC<SocialLearningHubProps> = ({ user }) => {
           const uploadPayload = new FormData();
           uploadPayload.append('file', selectedFile.file);
 
-          const uploadResponse = await fetch(toApiUrl('/api/upload/reflection'), {
+          const uploadData = await api<any>('/upload/reflection', {
             method: 'POST',
-            headers: buildAuthHeaders(),
             body: uploadPayload,
           });
-          const uploadData = await uploadResponse.json().catch(() => ({}));
-          if (!uploadResponse.ok) {
-            throw new Error(uploadData?.error || 'Failed to upload media');
-          }
 
           const uploadedUrl = String(uploadData?.fileUrl || '').trim();
           if (!uploadedUrl) {
@@ -269,19 +256,14 @@ const SocialLearningHub: React.FC<SocialLearningHubProps> = ({ user }) => {
           ];
         }
 
-        const response = await fetch(toApiUrl('/api/social/posts'), {
+        const data = await api<any>('/social/posts', {
           method: 'POST',
-          headers: buildAuthHeaders({ 'Content-Type': 'application/json' }),
-          body: JSON.stringify({
+          body: {
             text: newPost.trim(),
             visibility: 'public',
             media,
-          }),
+          },
         });
-        const data = await response.json().catch(() => ({}));
-        if (!response.ok) {
-          throw new Error(data?.error || 'Failed to publish node');
-        }
         const mapped = mapSocialPostToNode(data.post);
         setNodes((prev) => [mapped, ...prev.filter((entry) => entry.id !== mapped.id)]);
       } else {
@@ -314,25 +296,21 @@ const SocialLearningHub: React.FC<SocialLearningHubProps> = ({ user }) => {
   const toggleResonance = async (nodeId: string) => {
     if (user) {
       try {
-        const response = await fetch(toApiUrl(`/api/social/posts/${nodeId}/like`), {
+        const data = await api<any>(`/social/posts/${nodeId}/like`, {
           method: 'POST',
-          headers: buildAuthHeaders(),
         });
-        const data = await response.json().catch(() => ({}));
-        if (response.ok) {
-          setNodes((prev) =>
-            prev.map((node) =>
-              node.id === nodeId
-                ? {
-                    ...node,
-                    hasResonated: Boolean(data?.liked),
-                    resonances: Number(data?.likeCount || 0),
-                  }
-                : node
-            )
-          );
-          return;
-        }
+        setNodes((prev) =>
+          prev.map((node) =>
+            node.id === nodeId
+              ? {
+                  ...node,
+                  hasResonated: Boolean(data?.liked),
+                  resonances: Number(data?.likeCount || 0),
+                }
+              : node
+          )
+        );
+        return;
       } catch {
         // Fallback to local optimistic behavior below.
       }
@@ -398,13 +376,7 @@ const SocialLearningHub: React.FC<SocialLearningHubProps> = ({ user }) => {
       for (let page = 0; page < 10; page += 1) {
         const params = new URLSearchParams({ limit: '50' });
         if (cursor) params.set('cursor', cursor);
-        const response = await fetch(toApiUrl(`/api/social/profile/${authorId}?${params.toString()}`), {
-          headers: buildAuthHeaders(),
-        });
-        const data = await response.json().catch(() => ({}));
-        if (!response.ok) {
-          throw new Error(data?.error || 'Unable to load profile');
-        }
+        const data = await api<any>(`/social/profile/${authorId}?${params.toString()}`);
         if (!profile) profile = data?.profile || null;
         const pagePosts = Array.isArray(data?.posts) ? data.posts : [];
         for (const post of pagePosts) {
@@ -448,15 +420,10 @@ const SocialLearningHub: React.FC<SocialLearningHubProps> = ({ user }) => {
     if (!user) return;
 
     try {
-      const response = await fetch(toApiUrl(`/api/social/posts/${nodeId}`), {
+      const data = await api<any>(`/social/posts/${nodeId}`, {
         method: 'PATCH',
-        headers: buildAuthHeaders({ 'Content-Type': 'application/json' }),
-        body: JSON.stringify({ text: nextText }),
+        body: { text: nextText },
       });
-      const data = await response.json().catch(() => ({}));
-      if (!response.ok) {
-        throw new Error(data?.error || 'Failed to update post');
-      }
       const mapped = mapSocialPostToNode(data.post);
       setNodes((prev) => prev.map((node) => (node.id === nodeId ? mapped : node)));
       setEditingNodeId(null);
@@ -473,14 +440,9 @@ const SocialLearningHub: React.FC<SocialLearningHubProps> = ({ user }) => {
     if (!confirmed) return;
 
     try {
-      const response = await fetch(toApiUrl(`/api/social/posts/${nodeId}`), {
+      await api(`/social/posts/${nodeId}`, {
         method: 'DELETE',
-        headers: buildAuthHeaders(),
       });
-      const data = await response.json().catch(() => ({}));
-      if (!response.ok) {
-        throw new Error(data?.error || 'Failed to delete post');
-      }
       setNodes((prev) => prev.filter((node) => node.id !== nodeId));
       setPostActionError('');
     } catch (error) {

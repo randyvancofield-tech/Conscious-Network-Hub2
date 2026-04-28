@@ -1,7 +1,6 @@
 import React, { useState, useEffect, ChangeEvent } from 'react';
-import axios from 'axios';
 import { UserProfile } from '../types';
-import { buildAuthHeaders } from '../services/sessionService';
+import { api, backendAssetUrl } from '../services/apiClient';
 
 interface Reflection {
   id: string;
@@ -24,12 +23,8 @@ const isLikelyVideoUrl = (url?: string): boolean => {
 };
 
 const Profile: React.FC<ProfileProps> = ({ user, onUserUpdate }) => {
-  const backendBaseUrl = (import.meta.env.VITE_BACKEND_URL || '').replace(/\/+$/, '');
-  const toApiUrl = (path: string) => `${backendBaseUrl}${path}`;
   const toAssetUrl = (url?: string) => {
-    if (!url) return undefined;
-    if (/^https?:\/\//i.test(url)) return url;
-    return `${backendBaseUrl}${url.startsWith('/') ? url : `/${url}`}`;
+    return backendAssetUrl(url);
   };
 
   const [editData, setEditData] = useState<Partial<UserProfile>>({ ...user });
@@ -86,11 +81,9 @@ const Profile: React.FC<ProfileProps> = ({ user, onUserUpdate }) => {
 
   const fetchReflections = async () => {
     try {
-      const res = await axios.get(toApiUrl(`/api/reflection/${user.id}`), {
-        headers: buildAuthHeaders(),
-      });
+      const data = await api<any>(`/reflection/${user.id}`);
       setReflections(
-        (res.data.reflections || []).map((reflection: Reflection) => ({
+        (data.reflections || []).map((reflection: Reflection) => ({
           ...reflection,
           fileUrl: toAssetUrl(reflection.fileUrl),
         }))
@@ -104,10 +97,8 @@ const Profile: React.FC<ProfileProps> = ({ user, onUserUpdate }) => {
     setSecurityLoading(true);
     setSecurityError('');
     try {
-      const res = await axios.get(toApiUrl('/api/user/security'), {
-        headers: buildAuthHeaders(),
-      });
-      const security = res.data?.security || {};
+      const data = await api<any>('/user/security');
+      const security = data?.security || {};
       setSecurityState({
         twoFactorMethod: security.twoFactorMethod || 'none',
         phoneNumberMasked: security.phoneNumberMasked || null,
@@ -137,18 +128,15 @@ const Profile: React.FC<ProfileProps> = ({ user, onUserUpdate }) => {
     setSecurityError('');
     setSecurityMessage('');
     try {
-      await axios.post(
-        toApiUrl('/api/user/2fa/phone/enroll'),
-        { phoneNumber: phoneEnrollInput.trim() },
-        { headers: buildAuthHeaders() }
-      );
+      await api('/user/2fa/phone/enroll', {
+        method: 'POST',
+        body: { phoneNumber: phoneEnrollInput.trim() },
+      });
       setPhoneEnrollInput('');
       setSecurityMessage('Phone 2FA enabled');
       await fetchSecuritySettings();
-    } catch (e: any) {
-      setSecurityError(
-        e?.response?.data?.error || 'Failed to enable phone 2FA'
-      );
+    } catch (e) {
+      setSecurityError(e instanceof Error ? e.message : 'Failed to enable phone 2FA');
     } finally {
       setSecurityLoading(false);
     }
@@ -164,18 +152,15 @@ const Profile: React.FC<ProfileProps> = ({ user, onUserUpdate }) => {
     setSecurityError('');
     setSecurityMessage('');
     try {
-      await axios.post(
-        toApiUrl('/api/user/2fa/wallet/enroll'),
-        { walletDid: walletEnrollInput.trim() },
-        { headers: buildAuthHeaders() }
-      );
+      await api('/user/2fa/wallet/enroll', {
+        method: 'POST',
+        body: { walletDid: walletEnrollInput.trim() },
+      });
       setWalletEnrollInput('');
       setSecurityMessage('Signature-based 2FA enabled');
       await fetchSecuritySettings();
-    } catch (e: any) {
-      setSecurityError(
-        e?.response?.data?.error || 'Failed to enable signature-based 2FA'
-      );
+    } catch (e) {
+      setSecurityError(e instanceof Error ? e.message : 'Failed to enable signature-based 2FA');
     } finally {
       setSecurityLoading(false);
     }
@@ -186,17 +171,14 @@ const Profile: React.FC<ProfileProps> = ({ user, onUserUpdate }) => {
     setSecurityError('');
     setSecurityMessage('');
     try {
-      await axios.post(
-        toApiUrl('/api/user/2fa/disable'),
-        {},
-        { headers: buildAuthHeaders() }
-      );
+      await api('/user/2fa/disable', {
+        method: 'POST',
+        body: {},
+      });
       setSecurityMessage('2FA disabled');
       await fetchSecuritySettings();
-    } catch (e: any) {
-      setSecurityError(
-        e?.response?.data?.error || 'Failed to disable 2FA'
-      );
+    } catch (e) {
+      setSecurityError(e instanceof Error ? e.message : 'Failed to disable 2FA');
     } finally {
       setSecurityLoading(false);
     }
@@ -243,33 +225,29 @@ const Profile: React.FC<ProfileProps> = ({ user, onUserUpdate }) => {
       if (bgVideo) {
         const formData = new FormData();
         formData.append('video', bgVideo);
-        const uploadRes = await axios.post(toApiUrl('/api/upload/profile-background'), formData, {
-          headers: {
-            ...buildAuthHeaders(),
-            'Content-Type': 'multipart/form-data',
-          },
+        const uploadData = await api<any>('/upload/profile-background', {
+          method: 'POST',
+          body: formData,
         });
-        videoUrl = uploadRes.data.fileUrl;
+        videoUrl = uploadData.fileUrl;
         setBgVideoUrl(videoUrl);
       }
 
       if (avatarImage) {
         const formData = new FormData();
         formData.append('image', avatarImage);
-        const uploadRes = await axios.post(toApiUrl('/api/upload/avatar'), formData, {
-          headers: {
-            ...buildAuthHeaders(),
-            'Content-Type': 'multipart/form-data',
-          },
+        const uploadData = await api<any>('/upload/avatar', {
+          method: 'POST',
+          body: formData,
         });
-        avatarUrl = uploadRes.data.fileUrl;
+        avatarUrl = uploadData.fileUrl;
         setAvatarPreviewUrl(avatarUrl || undefined);
         profileMedia = {
           ...profileMedia,
           avatar: {
             url: avatarUrl,
-            storageProvider: uploadRes.data?.media?.storageProvider || 'local',
-            objectKey: uploadRes.data?.media?.objectKey || null,
+            storageProvider: uploadData?.media?.storageProvider || 'local',
+            objectKey: uploadData?.media?.objectKey || null,
           },
         };
       }
@@ -277,38 +255,35 @@ const Profile: React.FC<ProfileProps> = ({ user, onUserUpdate }) => {
       if (coverImage) {
         const formData = new FormData();
         formData.append('image', coverImage);
-        const uploadRes = await axios.post(toApiUrl('/api/upload/cover'), formData, {
-          headers: {
-            ...buildAuthHeaders(),
-            'Content-Type': 'multipart/form-data',
-          },
+        const uploadData = await api<any>('/upload/cover', {
+          method: 'POST',
+          body: formData,
         });
-        bannerUrl = uploadRes.data.fileUrl;
+        bannerUrl = uploadData.fileUrl;
         setCoverPreviewUrl(bannerUrl || undefined);
         profileMedia = {
           ...profileMedia,
           cover: {
             url: bannerUrl,
-            storageProvider: uploadRes.data?.media?.storageProvider || 'local',
-            objectKey: uploadRes.data?.media?.objectKey || null,
+            storageProvider: uploadData?.media?.storageProvider || 'local',
+            objectKey: uploadData?.media?.objectKey || null,
           },
         };
       }
 
-      const res = await axios.put(
-        toApiUrl(`/api/user/${user.id}`),
-        {
+      const data = await api<any>(`/user/${user.id}`, {
+        method: 'PUT',
+        body: {
           ...editData,
           avatarUrl,
           bannerUrl,
           profileMedia,
           profileBackgroundVideo: videoUrl,
         },
-        { headers: buildAuthHeaders() }
-      );
+      });
       setAvatarImage(null);
       setCoverImage(null);
-      onUserUpdate(res.data.user);
+      onUserUpdate(data.user);
     } catch (e) {
       setError('Failed to update profile');
     }
@@ -328,19 +303,16 @@ const Profile: React.FC<ProfileProps> = ({ user, onUserUpdate }) => {
     try {
       const formData = new FormData();
       formData.append('file', reflectionFile);
-      const uploadRes = await axios.post(toApiUrl('/api/upload/reflection'), formData, {
-        headers: {
-          ...buildAuthHeaders(),
-          'Content-Type': 'multipart/form-data',
-        },
+      const uploadData = await api<any>('/upload/reflection', {
+        method: 'POST',
+        body: formData,
       });
-      const fileUrl = uploadRes.data.fileUrl;
+      const fileUrl = uploadData.fileUrl;
       const fileType = reflectionFile.type.startsWith('video') ? 'video' : 'document';
-      await axios.post(
-        toApiUrl('/api/reflection'),
-        { userId: user.id, content: reflectionContent, fileUrl, fileType },
-        { headers: buildAuthHeaders() }
-      );
+      await api('/reflection', {
+        method: 'POST',
+        body: { userId: user.id, content: reflectionContent, fileUrl, fileType },
+      });
       setReflectionFile(null);
       setReflectionContent('');
       fetchReflections();
@@ -354,8 +326,8 @@ const Profile: React.FC<ProfileProps> = ({ user, onUserUpdate }) => {
     setLoading(true);
     setError('');
     try {
-      await axios.delete(toApiUrl(`/api/reflection/${reflectionId}`), {
-        headers: buildAuthHeaders(),
+      await api(`/reflection/${reflectionId}`, {
+        method: 'DELETE',
       });
       setReflections((prev) => prev.filter((entry) => entry.id !== reflectionId));
     } catch {
@@ -368,12 +340,11 @@ const Profile: React.FC<ProfileProps> = ({ user, onUserUpdate }) => {
     setLoading(true);
     setError('');
     try {
-      const res = await axios.patch(
-        toApiUrl(`/api/reflection/${reflectionId}`),
-        { content: editingReflectionContent },
-        { headers: buildAuthHeaders() }
-      );
-      const updated = res.data?.reflection;
+      const data = await api<any>(`/reflection/${reflectionId}`, {
+        method: 'PATCH',
+        body: { content: editingReflectionContent },
+      });
+      const updated = data?.reflection;
       setReflections((prev) =>
         prev.map((entry) =>
           entry.id === reflectionId

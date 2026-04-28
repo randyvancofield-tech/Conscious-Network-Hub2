@@ -1,7 +1,7 @@
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { X, ShieldCheck, Copy, AlertTriangle, Lock } from 'lucide-react';
 import { ethers } from 'ethers';
-import { buildAuthHeaders } from '../services/sessionService';
+import { api } from '../services/apiClient';
 import { UserProfile } from '../types';
 
 interface IdentitySecurityPanelProps {
@@ -62,32 +62,6 @@ const IdentitySecurityPanel: React.FC<IdentitySecurityPanelProps> = ({ isOpen, o
     }>(localStorage.getItem(LS_KEY));
   }, []);
 
-  const backendBaseUrl = String((import.meta as any)?.env?.VITE_BACKEND_URL || '')
-    .trim()
-    .replace(/\/+$/, '');
-  const toApiUrl = useCallback(
-    (pathOrUrl: string): string => {
-      const raw = String(pathOrUrl || '').trim();
-      if (!raw) return backendBaseUrl || '';
-      if (/^https?:\/\//i.test(raw)) return raw;
-      const normalized = raw.startsWith('/') ? raw : `/${raw}`;
-      return backendBaseUrl ? `${backendBaseUrl}${normalized}` : normalized;
-    },
-    [backendBaseUrl]
-  );
-
-  const verifyEndpoint = toApiUrl(
-    String((import.meta as any)?.env?.VITE_IDENTITY_VERIFY_URL || '/api/identity-security/verify')
-  );
-  const challengeEndpoint = toApiUrl(
-    String((import.meta as any)?.env?.VITE_IDENTITY_CHALLENGE_URL || '/api/identity-security/challenge')
-  );
-  const identitySessionEndpoint = toApiUrl(
-    String((import.meta as any)?.env?.VITE_IDENTITY_SESSION_URL || '/api/identity-security/session')
-  );
-  const identityLogoutEndpoint = toApiUrl(
-    String((import.meta as any)?.env?.VITE_IDENTITY_LOGOUT_URL || '/api/identity-security/logout')
-  );
   const configuredChainId = normalizeChainId(
     (import.meta as any)?.env?.VITE_BLOCKCHAIN_NETWORK_ID || DEFAULT_CHAIN_ID
   );
@@ -161,12 +135,10 @@ const IdentitySecurityPanel: React.FC<IdentitySecurityPanelProps> = ({ isOpen, o
   useEffect(() => {
     const restoreIdentitySession = async (): Promise<void> => {
       try {
-        const response = await fetch(identitySessionEndpoint, {
+        const data = await api<any>('/identity-security/session', {
           method: 'GET',
-          credentials: 'include',
+          auth: false,
         });
-        if (!response.ok) return;
-        const data = await response.json().catch(() => ({}));
         const session = data?.session || {};
         const restoredAddress = normalizeAddress(session.address);
         const restoredChainId = normalizeChainId(session.chainId);
@@ -183,7 +155,7 @@ const IdentitySecurityPanel: React.FC<IdentitySecurityPanelProps> = ({ isOpen, o
       }
     };
     void restoreIdentitySession();
-  }, [identitySessionEndpoint]);
+  }, []);
 
   const copyText = async (value: string) => {
     try {
@@ -241,9 +213,9 @@ const IdentitySecurityPanel: React.FC<IdentitySecurityPanelProps> = ({ isOpen, o
     setVerifiedAt('');
     localStorage.removeItem(LS_KEY);
     try {
-      await fetch(identityLogoutEndpoint, {
+      await api('/identity-security/logout', {
         method: 'POST',
-        credentials: 'include',
+        auth: false,
       });
     } catch {
       // Ignore remote logout issues.
@@ -262,20 +234,14 @@ const IdentitySecurityPanel: React.FC<IdentitySecurityPanelProps> = ({ isOpen, o
     setToast('');
 
     try {
-      const challengeResp = await fetch(challengeEndpoint, {
+      const challengeData = await api<any>('/identity-security/challenge', {
         method: 'POST',
-        credentials: 'include',
-        headers: buildAuthHeaders({ 'Content-Type': 'application/json' }),
-        body: JSON.stringify({
+        body: {
           address: connectedAddress,
           chainId: chainId || DEFAULT_CHAIN_ID,
           did: identityDid,
-        }),
+        },
       });
-      const challengeData = await challengeResp.json().catch(() => ({}));
-      if (!challengeResp.ok) {
-        throw new Error(challengeData?.error || 'Identity challenge request failed');
-      }
 
       const challenge = challengeData?.challenge || {};
       const message = String(challenge.message || '').trim();
@@ -288,23 +254,17 @@ const IdentitySecurityPanel: React.FC<IdentitySecurityPanelProps> = ({ isOpen, o
         params: [message, connectedAddress],
       });
 
-      const verifyResp = await fetch(verifyEndpoint, {
+      const verifyData = await api<any>('/identity-security/verify', {
         method: 'POST',
-        credentials: 'include',
-        headers: buildAuthHeaders({ 'Content-Type': 'application/json' }),
-        body: JSON.stringify({
+        body: {
           message,
           signature,
           address: connectedAddress,
           chainId: chainId || DEFAULT_CHAIN_ID,
           did: identityDid,
           requestId: challenge.requestId,
-        }),
+        },
       });
-      const verifyData = await verifyResp.json().catch(() => ({}));
-      if (!verifyResp.ok) {
-        throw new Error(verifyData?.error || 'Identity verification failed');
-      }
 
       const session = verifyData?.session || {};
       setDid(String(session.did || identityDid));

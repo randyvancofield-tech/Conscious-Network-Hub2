@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { CheckCircle, AlertCircle } from 'lucide-react';
-import { buildAuthHeaders } from '../services/sessionService';
+import { api } from '../services/apiClient';
 
 interface PaymentConfirmationProps {
   tier: string;
@@ -17,41 +17,28 @@ const PaymentConfirmation: React.FC<PaymentConfirmationProps> = ({
 }) => {
   const [status, setStatus] = useState<'processing' | 'success' | 'error'>('processing');
   const [error, setError] = useState('');
-  const backendBaseUrl = (import.meta.env.VITE_BACKEND_URL || '').replace(/\/+$/, '');
+
+  const processPayment = React.useCallback(async () => {
+    try {
+      await api('/membership/confirm-payment', {
+        method: 'POST',
+        body: { userId, tier },
+      });
+
+      const membershipData = await api(`/membership/status/${userId}`);
+      setStatus('success');
+      onSuccess(membershipData);
+    } catch (err) {
+      setStatus('error');
+      setError(err instanceof Error ? err.message : 'Payment processing failed');
+    }
+  }, [tier, userId, onSuccess]);
 
   React.useEffect(() => {
-    const processPayment = async () => {
-      try {
-        // Call membership confirmation endpoint
-        const response = await fetch(`${backendBaseUrl}/api/membership/confirm-payment`, {
-          method: 'POST',
-          headers: buildAuthHeaders({ 'Content-Type': 'application/json' }),
-          body: JSON.stringify({ userId, tier })
-        });
-
-        if (!response.ok) {
-          throw new Error('Payment confirmation failed');
-        }
-
-        // Fetch updated membership status
-        const statusResponse = await fetch(
-          `${backendBaseUrl}/api/membership/status/${userId}`,
-          { headers: buildAuthHeaders() }
-        );
-        const membershipData = await statusResponse.json();
-
-        setStatus('success');
-        onSuccess(membershipData);
-      } catch (err) {
-        setStatus('error');
-        setError(err instanceof Error ? err.message : 'Payment processing failed');
-      }
-    };
-
     // Small delay for UX
     const timer = setTimeout(processPayment, 2000);
     return () => clearTimeout(timer);
-  }, [tier, userId, onSuccess]);
+  }, [processPayment]);
 
   return (
     <div className="fixed inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center z-[9999] p-4">
@@ -122,31 +109,6 @@ const PaymentConfirmation: React.FC<PaymentConfirmationProps> = ({
                 onClick={() => {
                   setStatus('processing');
                   setError('');
-                  // Retry payment
-                  const processPayment = async () => {
-                    try {
-                      const response = await fetch(`${backendBaseUrl}/api/membership/confirm-payment`, {
-                        method: 'POST',
-                        headers: buildAuthHeaders({ 'Content-Type': 'application/json' }),
-                        body: JSON.stringify({ userId, tier })
-                      });
-
-                      if (!response.ok) throw new Error('Payment confirmation failed');
-
-                      const statusResponse = await fetch(
-                        `${backendBaseUrl}/api/membership/status/${userId}`,
-                        { headers: buildAuthHeaders() }
-                      );
-                      const membershipData = await statusResponse.json();
-
-                      setStatus('success');
-                      onSuccess(membershipData);
-                    } catch (err) {
-                      setStatus('error');
-                      setError(err instanceof Error ? err.message : 'Payment processing failed');
-                    }
-                  };
-
                   setTimeout(processPayment, 2000);
                 }}
                 className="flex-1 py-3 bg-cyan-600 hover:bg-cyan-500 text-white rounded-xl font-bold text-sm uppercase tracking-widest transition-all"

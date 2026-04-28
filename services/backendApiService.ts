@@ -5,7 +5,7 @@
  * Google Cloud Vertex AI directly. This ensures API keys are never exposed
  * to the frontend.
  */
-import { buildAuthHeaders } from './sessionService';
+import { api, getBackendBaseUrl } from './apiClient';
 
 export interface GroundingChunk {
   text?: string;
@@ -162,45 +162,18 @@ export interface ProviderBridgeConsumeResult {
   };
 }
 
-// Resolve backend URL:
-// - Use VITE_BACKEND_URL if set.
-// - Otherwise use same-origin (empty string), letting dev proxy or reverse proxy handle routing.
-const isLocalBackendUrl = (value: string): boolean => {
-  if (!value) return false;
-  try {
-    const parsed = new URL(value);
-    const host = parsed.hostname.toLowerCase();
-    return host === 'localhost' || host === '127.0.0.1' || host === '::1' || host.endsWith('.localhost');
-  } catch {
-    return false;
-  }
-};
-
-const resolveBackendUrl = (): string => {
-  const envUrl = String(import.meta.env.VITE_BACKEND_URL || '').trim();
-  const allowRemoteInDev = String(import.meta.env.VITE_ALLOW_REMOTE_BACKEND_IN_DEV || '').toLowerCase() === 'true';
-
-  if (envUrl) {
-    if (import.meta.env.DEV && !isLocalBackendUrl(envUrl) && !allowRemoteInDev) {
-      return '';
-    }
-    return envUrl.replace(/\/+$/, '');
-  }
-  return '';
-};
-
-const BACKEND_URL = resolveBackendUrl();
-
 class BackendAPIService {
-  private baseUrl: string;
   private conversationHistory: Array<{ role: string; content: string }> = [];
   private activeHistoryKey: string;
   private readonly maxHistoryEntries = 40;
 
   constructor() {
-    this.baseUrl = BACKEND_URL;
     this.activeHistoryKey = this.getHistoryKey();
     this.loadConversationHistory();
+  }
+
+  private getBackendLabel(): string {
+    return getBackendBaseUrl() || 'same-origin /api';
   }
 
   /**
@@ -215,31 +188,14 @@ class BackendAPIService {
       // Ensure we load the correct user-scoped history
       this.loadConversationHistory(context?.userId);
 
-      const response = await fetch(`${this.baseUrl}/api/ai/chat`, {
+      const data = await api<any>('/ai/chat', {
         method: 'POST',
-        headers: buildAuthHeaders({
-          'Content-Type': 'application/json',
-        }),
-        body: JSON.stringify({
+        body: {
           message: question,
           context,
           conversationHistory: this.conversationHistory,
-        }),
+        },
       });
-
-      if (!response.ok) {
-        const error = await response.json();
-        throw new Error(error.message || 'Failed to get response from backend');
-      }
-
-      const raw = await response.text();
-      let data: any = null;
-      try {
-        data = raw ? JSON.parse(raw) : null;
-      } catch (parseError) {
-        console.error('Non-JSON response from /api/ai/chat:', raw);
-        throw new Error('Backend returned non-JSON response for /api/ai/chat');
-      }
 
       if (!data) {
         console.error('Empty response body from /api/ai/chat');
@@ -270,7 +226,7 @@ class BackendAPIService {
       const message = error instanceof Error ? error.message : String(error);
       if (message.toLowerCase().includes('failed to fetch') || message.toLowerCase().includes('networkerror')) {
         return {
-          text: `Local fallback: AI backend unreachable at ${this.baseUrl}. Please start the backend or set VITE_BACKEND_URL.`,
+          text: `Local fallback: AI backend unreachable at ${this.getBackendLabel()}. Please start or configure the backend.`,
           groundingChunks: [],
           confidenceScore: 50,
           sourceCount: 0,
@@ -287,32 +243,13 @@ class BackendAPIService {
   async getDailyWisdom(): Promise<EnhancedResponse> {
     try {
       const refreshNonce = `${Date.now()}_${Math.random().toString(36).slice(2, 10)}`;
-      const response = await fetch(`${this.baseUrl}/api/ai/wisdom?refresh=${encodeURIComponent(refreshNonce)}`, {
+      const data = await api<any>(`/ai/wisdom?refresh=${encodeURIComponent(refreshNonce)}`, {
         method: 'POST',
         cache: 'no-store',
-        headers: buildAuthHeaders({
-          'Content-Type': 'application/json',
-        }),
-        body: JSON.stringify({
+        body: {
           refreshNonce,
-        }),
+        },
       });
-
-      if (!response.ok) {
-        const errorBody = await response.text().catch(() => '');
-        throw new Error(
-          `Backend error ${response.status} on /api/ai/wisdom${errorBody ? `: ${errorBody}` : ''}`
-        );
-      }
-
-      const raw = await response.text();
-      let data: any = null;
-      try {
-        data = raw ? JSON.parse(raw) : null;
-      } catch {
-        console.error('Non-JSON response from /api/ai/wisdom:', raw);
-        throw new Error('Backend returned non-JSON response for /api/ai/wisdom');
-      }
 
       if (!data || (typeof data.reply === 'undefined' && typeof data.wisdom === 'undefined')) {
         console.error('Invalid or empty JSON from /api/ai/wisdom:', data);
@@ -335,7 +272,7 @@ class BackendAPIService {
         lowered.includes('networkerror');
       if (isNetworkError) {
         return {
-          text: `Local fallback wisdom: backend unreachable at ${this.baseUrl}.`,
+          text: `Local fallback wisdom: backend unreachable at ${this.getBackendLabel()}.`,
           groundingChunks: [],
           confidenceScore: 60,
           sourceCount: 0,
@@ -351,22 +288,10 @@ class BackendAPIService {
    */
   async summarizeMeeting(transcript: string[]): Promise<MeetingSummary | null> {
     try {
-      const response = await fetch(`${this.baseUrl}/api/ai/summarize-meeting`, {
+      const data = await api<any>('/ai/summarize-meeting', {
         method: 'POST',
-        headers: buildAuthHeaders({
-          'Content-Type': 'application/json',
-        }),
-        body: JSON.stringify({ transcript }),
+        body: { transcript },
       });
-
-      if (!response.ok) {
-        const errorBody = await response.text().catch(() => '');
-        throw new Error(
-          `Backend error ${response.status} on /api/ai/summarize-meeting${errorBody ? `: ${errorBody}` : ''}`
-        );
-      }
-
-      const data = await response.json().catch(() => null);
       if (!data || typeof data.summary !== 'string') {
         throw new Error('Invalid JSON from backend');
       }
@@ -403,12 +328,9 @@ class BackendAPIService {
 
   async reportImmersiveSessionEvent(input: ImmersiveSessionEventInput): Promise<void> {
     try {
-      const response = await fetch(`${this.baseUrl}/api/immersive/session-event`, {
+      await api('/immersive/session-event', {
         method: 'POST',
-        headers: buildAuthHeaders({
-          'Content-Type': 'application/json',
-        }),
-        body: JSON.stringify({
+        body: {
           eventType: input.eventType,
           sessionMode: input.sessionMode || 'unknown',
           deviceProfile: input.deviceProfile || null,
@@ -416,15 +338,8 @@ class BackendAPIService {
           errorMessage: input.errorMessage || null,
           userAgent: input.userAgent || null,
           timestamp: input.timestamp || new Date().toISOString(),
-        }),
+        },
       });
-
-      if (!response.ok) {
-        const errorText = await response.text().catch(() => '');
-        console.warn(
-          `Immersive telemetry rejected ${response.status}${errorText ? `: ${errorText}` : ''}`
-        );
-      }
     } catch (error) {
       console.warn('Immersive telemetry unavailable:', error);
     }
@@ -432,16 +347,7 @@ class BackendAPIService {
 
   async getUserDirectory(): Promise<DirectoryUserEntry[]> {
     try {
-      const response = await fetch(`${this.baseUrl}/api/user/directory`, {
-        method: 'GET',
-        headers: buildAuthHeaders(),
-      });
-
-      if (!response.ok) {
-        return [];
-      }
-
-      const data = await response.json().catch(() => null);
+      const data = await api<any>('/user/directory', { method: 'GET' });
       if (!data || !Array.isArray(data.users)) {
         return [];
       }
@@ -462,15 +368,11 @@ class BackendAPIService {
     const normalized = String(code || '').trim();
     if (!normalized) return null;
     try {
-      const response = await fetch(`${this.baseUrl}/api/bridge/provider/consume-launch-code`, {
+      const data = await api<any>('/bridge/provider/consume-launch-code', {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ code: normalized }),
+        auth: false,
+        body: { code: normalized },
       });
-      if (!response.ok) return null;
-      const data = await response.json().catch(() => null);
       if (!data?.session?.token || !data?.providerSession?.token || !data?.user?.id) {
         return null;
       }
@@ -484,14 +386,12 @@ class BackendAPIService {
     const token = String(providerToken || '').trim();
     if (!token) return [];
     try {
-      const response = await fetch(`${this.baseUrl}/api/provider/session/groups`, {
+      const data = await api<any>('/provider/session/groups', {
         method: 'GET',
         headers: {
           Authorization: `Bearer ${token}`,
         },
       });
-      if (!response.ok) return [];
-      const data = await response.json().catch(() => null);
       if (!data || !Array.isArray(data.groups)) return [];
       return data.groups as ProviderInviteGroup[];
     } catch {
@@ -507,16 +407,13 @@ class BackendAPIService {
     const normalizedName = String(groupName || '').trim();
     if (!token || !normalizedName) return null;
     try {
-      const response = await fetch(`${this.baseUrl}/api/provider/session/groups`, {
+      const data = await api<any>('/provider/session/groups', {
         method: 'POST',
         headers: {
           Authorization: `Bearer ${token}`,
-          'Content-Type': 'application/json',
         },
-        body: JSON.stringify({ name: normalizedName }),
+        body: { name: normalizedName },
       });
-      if (!response.ok) return null;
-      const data = await response.json().catch(() => null);
       if (!data?.group) return null;
       return data.group as ProviderInviteGroup;
     } catch {
@@ -534,16 +431,13 @@ class BackendAPIService {
     const normalizedUsername = String(username || '').trim();
     if (!token || !normalizedGroupId || !normalizedUsername) return null;
     try {
-      const response = await fetch(`${this.baseUrl}/api/provider/session/groups/${encodeURIComponent(normalizedGroupId)}/members`, {
+      const data = await api<any>(`/provider/session/groups/${encodeURIComponent(normalizedGroupId)}/members`, {
         method: 'POST',
         headers: {
           Authorization: `Bearer ${token}`,
-          'Content-Type': 'application/json',
         },
-        body: JSON.stringify({ username: normalizedUsername }),
+        body: { username: normalizedUsername },
       });
-      if (!response.ok) return null;
-      const data = await response.json().catch(() => null);
       if (!data?.group) return null;
       return data.group as ProviderInviteGroup;
     } catch {
@@ -555,14 +449,12 @@ class BackendAPIService {
     const token = String(providerToken || '').trim();
     if (!token) return [];
     try {
-      const response = await fetch(`${this.baseUrl}/api/meeting/provider/sessions`, {
+      const data = await api<any>('/meeting/provider/sessions', {
         method: 'GET',
         headers: {
           Authorization: `Bearer ${token}`,
         },
       });
-      if (!response.ok) return [];
-      const data = await response.json().catch(() => null);
       if (!data || !Array.isArray(data.sessions)) return [];
       return data.sessions as MeetingSessionSummary[];
     } catch {
@@ -577,20 +469,17 @@ class BackendAPIService {
     const token = String(providerToken || '').trim();
     if (!token) return null;
     try {
-      const response = await fetch(`${this.baseUrl}/api/meeting/provider/sessions`, {
+      const data = await api<any>('/meeting/provider/sessions', {
         method: 'POST',
         headers: {
           Authorization: `Bearer ${token}`,
-          'Content-Type': 'application/json',
         },
-        body: JSON.stringify({
+        body: {
           title: input.title,
           mode: input.mode,
           maxViewers: input.maxViewers,
-        }),
+        },
       });
-      if (!response.ok) return null;
-      const data = await response.json().catch(() => null);
       if (!data?.session) return null;
       return data.session as MeetingSessionSummary;
     } catch {
@@ -606,14 +495,12 @@ class BackendAPIService {
     const id = String(sessionId || '').trim();
     if (!token || !id) return null;
     try {
-      const response = await fetch(`${this.baseUrl}/api/meeting/provider/sessions/${encodeURIComponent(id)}/start`, {
+      const data = await api<any>(`/meeting/provider/sessions/${encodeURIComponent(id)}/start`, {
         method: 'POST',
         headers: {
           Authorization: `Bearer ${token}`,
         },
       });
-      if (!response.ok) return null;
-      const data = await response.json().catch(() => null);
       if (!data?.session) return null;
       return data.session as MeetingSessionSummary;
     } catch {
@@ -629,13 +516,13 @@ class BackendAPIService {
     const id = String(sessionId || '').trim();
     if (!token || !id) return false;
     try {
-      const response = await fetch(`${this.baseUrl}/api/meeting/provider/sessions/${encodeURIComponent(id)}/end`, {
+      await api(`/meeting/provider/sessions/${encodeURIComponent(id)}/end`, {
         method: 'POST',
         headers: {
           Authorization: `Bearer ${token}`,
         },
       });
-      return response.ok;
+      return true;
     } catch {
       return false;
     }
@@ -650,19 +537,16 @@ class BackendAPIService {
     const id = String(sessionId || '').trim();
     if (!token || !id) return null;
     try {
-      const response = await fetch(`${this.baseUrl}/api/meeting/provider/sessions/${encodeURIComponent(id)}/invite-users`, {
+      const data = await api<any>(`/meeting/provider/sessions/${encodeURIComponent(id)}/invite-users`, {
         method: 'POST',
         headers: {
           Authorization: `Bearer ${token}`,
-          'Content-Type': 'application/json',
         },
-        body: JSON.stringify({
+        body: {
           usernames: Array.isArray(input.usernames) ? input.usernames : [],
           groupIds: Array.isArray(input.groupIds) ? input.groupIds : [],
-        }),
+        },
       });
-      if (!response.ok) return null;
-      const data = await response.json().catch(() => null);
       if (!data?.session) return null;
       return data.session as MeetingSessionSummary;
     } catch {
@@ -679,19 +563,16 @@ class BackendAPIService {
     const id = String(sessionId || '').trim();
     if (!token || !id) return null;
     try {
-      const response = await fetch(`${this.baseUrl}/api/meeting/provider/sessions/${encodeURIComponent(id)}/external-links`, {
+      const data = await api<any>(`/meeting/provider/sessions/${encodeURIComponent(id)}/external-links`, {
         method: 'POST',
         headers: {
           Authorization: `Bearer ${token}`,
-          'Content-Type': 'application/json',
         },
-        body: JSON.stringify({
+        body: {
           expiresInMinutes: input.expiresInMinutes,
           maxUses: input.maxUses,
-        }),
+        },
       });
-      if (!response.ok) return null;
-      const data = await response.json().catch(() => null);
       if (!data?.link) return null;
       return data.link as MeetingExternalLink;
     } catch {
@@ -701,12 +582,7 @@ class BackendAPIService {
 
   async listJoinableMeetingSessions(): Promise<MeetingSessionSummary[]> {
     try {
-      const response = await fetch(`${this.baseUrl}/api/meeting/user/sessions/joinable`, {
-        method: 'GET',
-        headers: buildAuthHeaders(),
-      });
-      if (!response.ok) return [];
-      const data = await response.json().catch(() => null);
+      const data = await api<any>('/meeting/user/sessions/joinable', { method: 'GET' });
       if (!data || !Array.isArray(data.sessions)) return [];
       return data.sessions as MeetingSessionSummary[];
     } catch {
@@ -721,17 +597,12 @@ class BackendAPIService {
     const id = String(sessionId || '').trim();
     if (!id) return null;
     try {
-      const response = await fetch(`${this.baseUrl}/api/meeting/user/sessions/${encodeURIComponent(id)}/join`, {
+      const data = await api<any>(`/meeting/user/sessions/${encodeURIComponent(id)}/join`, {
         method: 'POST',
-        headers: buildAuthHeaders({
-          'Content-Type': 'application/json',
-        }),
-        body: JSON.stringify({
+        body: {
           displayName: displayName || null,
-        }),
+        },
       });
-      if (!response.ok) return null;
-      const data = await response.json().catch(() => null);
       if (!data?.session) return null;
       return data.session as MeetingSessionSummary;
     } catch {
@@ -743,11 +614,10 @@ class BackendAPIService {
     const id = String(sessionId || '').trim();
     if (!id) return false;
     try {
-      const response = await fetch(`${this.baseUrl}/api/meeting/user/sessions/${encodeURIComponent(id)}/leave`, {
+      await api(`/meeting/user/sessions/${encodeURIComponent(id)}/leave`, {
         method: 'POST',
-        headers: buildAuthHeaders(),
       });
-      return response.ok;
+      return true;
     } catch {
       return false;
     }
@@ -757,15 +627,11 @@ class BackendAPIService {
     const token = String(inviteToken || '').trim();
     if (!token) return null;
     try {
-      const response = await fetch(`${this.baseUrl}/api/meeting/guest/preview`, {
+      const data = await api<any>('/meeting/guest/preview', {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ inviteToken: token }),
+        auth: false,
+        body: { inviteToken: token },
       });
-      if (!response.ok) return null;
-      const data = await response.json().catch(() => null);
       if (!data?.session || !data?.link) return null;
       return data as ExternalMeetingPreview;
     } catch {
@@ -783,19 +649,15 @@ class BackendAPIService {
     const normalizedEmail = String(email || '').trim().toLowerCase();
     if (!token || !normalizedName || !normalizedEmail) return null;
     try {
-      const response = await fetch(`${this.baseUrl}/api/meeting/guest/join`, {
+      const data = await api<any>('/meeting/guest/join', {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
+        auth: false,
+        body: {
           inviteToken: token,
           name: normalizedName,
           email: normalizedEmail,
-        }),
+        },
       });
-      if (!response.ok) return null;
-      const data = await response.json().catch(() => null);
       if (!data?.guest || !data?.guestSessionToken || !data?.session) return null;
       return data as ExternalMeetingJoinResult;
     } catch {
@@ -807,14 +669,12 @@ class BackendAPIService {
     const token = String(guestSessionToken || '').trim();
     if (!token) return false;
     try {
-      const response = await fetch(`${this.baseUrl}/api/meeting/guest/leave`, {
+      await api('/meeting/guest/leave', {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ guestSessionToken: token }),
+        auth: false,
+        body: { guestSessionToken: token },
       });
-      return response.ok;
+      return true;
     } catch {
       return false;
     }
@@ -830,24 +690,15 @@ class BackendAPIService {
     userEmail?: string;
   }): Promise<EnhancedResponse & { priority?: string; nextSteps?: string[] }> {
     try {
-      const response = await fetch(`${this.baseUrl}/api/ai/report-issue`, {
+      const data = await api<any>('/ai/report-issue', {
         method: 'POST',
-        headers: buildAuthHeaders({
-          'Content-Type': 'application/json',
-        }),
-        body: JSON.stringify({
+        body: {
           title: issue.title,
           message: issue.description,
           category: issue.category,
           userEmail: issue.userEmail,
-        }),
+        },
       });
-
-      if (!response.ok) {
-        throw new Error('Failed to process issue report');
-      }
-
-      const data = await response.json().catch(() => null);
       if (!data || typeof data.analysis === 'undefined') {
         throw new Error('Invalid JSON from backend');
       }
@@ -866,7 +717,7 @@ class BackendAPIService {
       const message = error instanceof Error ? error.message : String(error);
       if (message.toLowerCase().includes('failed to fetch') || message.toLowerCase().includes('networkerror')) {
         return {
-          text: `Issue captured locally: backend unreachable at ${this.baseUrl}.`,
+          text: `Issue captured locally: backend unreachable at ${this.getBackendLabel()}.`,
           groundingChunks: [],
           confidenceScore: 60,
           sourceCount: 0,
@@ -906,16 +757,7 @@ class BackendAPIService {
     insights: string;
   }> {
     try {
-      const response = await fetch(`${this.baseUrl}/api/ai/trending`, {
-        method: 'GET',
-        headers: buildAuthHeaders(),
-      });
-
-      if (!response.ok) {
-        throw new Error('Failed to fetch trending topics');
-      }
-
-      const data = await response.json().catch(() => null);
+      const data = await api<any>('/ai/trending', { method: 'GET' });
       if (!data || typeof data.insights === 'undefined') {
         throw new Error('Invalid JSON from backend');
       }
@@ -930,7 +772,7 @@ class BackendAPIService {
       if (message.toLowerCase().includes('failed to fetch') || message.toLowerCase().includes('networkerror')) {
         return {
           topics: ['AI Ethics', 'Privacy Protection', 'Decentralization'],
-          insights: `AI backend unavailable at ${this.baseUrl}. Start the server or set VITE_BACKEND_URL.`,
+          insights: `AI backend unavailable at ${this.getBackendLabel()}. Start or configure the backend.`,
         };
       }
       return {

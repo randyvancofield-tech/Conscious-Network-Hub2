@@ -25,8 +25,9 @@ import aiTransparencyPolicy from './docs/compliance/ai-transparency-policy-draft
 import blockchainDataPolicy from './docs/compliance/blockchain-data-policy-draft.md?raw';
 import vendorApiGovernancePolicy from './docs/compliance/vendor-api-governance-policy-draft.md?raw';
 import nistMappingSummary from './docs/compliance/nist-mapping-summary.md?raw';
-import { buildAuthHeaders, clearAuthSession, getAuthToken, setAuthSession } from './services/sessionService';
+import { clearAuthSession, getAuthToken, setAuthSession } from './services/sessionService';
 import { canTierAccessNavItem, canTierAccessView } from './services/tierAccess';
+import { ApiError, api, apiHealth, backendAssetUrl, getBackendBaseUrl } from './services/apiClient';
 
 const App: React.FC = () => {
   const [currentView, setCurrentView] = useState<AppView>(AppView.ENTRY);
@@ -98,51 +99,12 @@ const App: React.FC = () => {
     }
   ];
 
-  const isLocalBackendUrl = (value: string): boolean => {
-    if (!value) return false;
-    try {
-      const parsed = new URL(value);
-      const host = parsed.hostname.toLowerCase();
-      return (
-        host === 'localhost' ||
-        host === '127.0.0.1' ||
-        host === '::1' ||
-        host.endsWith('.localhost')
-      );
-    } catch {
-      return false;
-    }
-  };
-
-  const allowRemoteBackendInDev =
-    String(import.meta.env.VITE_ALLOW_REMOTE_BACKEND_IN_DEV || '').toLowerCase() === 'true';
   const signupTwoFactorEnabled =
     String(import.meta.env.VITE_ENABLE_SIGNUP_2FA || '').toLowerCase() === 'true';
 
-  const resolveBackendUrl = () => {
-    const configured = String(import.meta.env.VITE_BACKEND_URL || '').trim();
-    if (configured) {
-      const normalized = configured.replace(/\/+$/, '');
-      if (import.meta.env.DEV && !isLocalBackendUrl(normalized) && !allowRemoteBackendInDev) {
-        if (typeof window !== 'undefined') {
-          return window.location.origin.replace(/\/+$/, '');
-        }
-        return '';
-      }
-      return normalized;
-    }
-    if (typeof window !== 'undefined') {
-      return window.location.origin.replace(/\/+$/, '');
-    }
-    return '';
-  };
-
   const backendConnectionErrorMessage = (actionLabel: string): string => {
-    const backendUrl = resolveBackendUrl();
-    if (!backendUrl) {
-      return `Unable to ${actionLabel}. Backend URL is not configured.`;
-    }
-    return `Unable to ${actionLabel}. Cannot reach backend at ${backendUrl}.`;
+    const target = getBackendBaseUrl() || 'the configured API route';
+    return `Unable to ${actionLabel}. Cannot reach backend at ${target}.`;
   };
 
   const normalizeCourse = (rawCourse: any): Course => ({
@@ -169,22 +131,15 @@ const App: React.FC = () => {
     }
 
     try {
-      const response = await fetch(`${resolveBackendUrl()}/api/user/courses`, {
-        headers: buildAuthHeaders(),
-      });
-      const data = await response.json().catch(() => ({}));
-      if (!response.ok) {
-        if (response.status === 401) {
-          clearAuthSession();
-          setUser(null);
-        }
-        setEnrolledCourses([]);
-        return [];
-      }
+      const data = await api<{ courses?: unknown[] }>('/user/courses');
       const courses = Array.isArray(data.courses) ? data.courses.map(normalizeCourse) : [];
       setEnrolledCourses(courses);
       return courses;
     } catch (courseError) {
+      if (courseError instanceof ApiError && courseError.status === 401) {
+        clearAuthSession();
+        setUser(null);
+      }
       console.error('Course refresh error:', courseError);
       setEnrolledCourses([]);
       return [];
@@ -204,18 +159,7 @@ const App: React.FC = () => {
   });
 
   const toAbsoluteAssetUrl = (value: unknown): string | undefined => {
-    const raw = typeof value === 'string' ? value.trim() : '';
-    if (!raw) return undefined;
-    if (/^[a-z][a-z0-9+.-]*:/i.test(raw)) return raw;
-    const normalizedPath = raw.startsWith('/') ? raw : `/${raw}`;
-    const backendUrl = resolveBackendUrl();
-    if (backendUrl) {
-      return `${backendUrl}${normalizedPath}`;
-    }
-    if (typeof window !== 'undefined') {
-      return `${window.location.origin.replace(/\/+$/, '')}${normalizedPath}`;
-    }
-    return normalizedPath;
+    return backendAssetUrl(value);
   };
 
   const decodeUploadObjectKeyMimeType = (objectKey: unknown): string | null => {
@@ -362,16 +306,7 @@ const App: React.FC = () => {
       }
 
       try {
-        const response = await fetch(`${resolveBackendUrl()}/api/user/current`, {
-          headers: buildAuthHeaders(),
-        });
-        if (!response.ok) {
-          clearAuthSession();
-          setUser(null);
-          return;
-        }
-
-        const data = await response.json();
+        const data = await api<{ user: any }>('/user/current');
         const canonicalUser = toCanonicalUser(data.user);
         setUser(canonicalUser);
         setAuthSession(token, canonicalUser);
@@ -436,8 +371,8 @@ const App: React.FC = () => {
     const controller = new AbortController();
     const ping = async () => {
       try {
-        const res = await fetch(`${resolveBackendUrl()}/health`, { signal: controller.signal });
-        setHealthStatus(res.ok ? 'online' : 'offline');
+        await apiHealth({ signal: controller.signal });
+        setHealthStatus('online');
       } catch {
         setHealthStatus('offline');
       }
@@ -507,15 +442,7 @@ const App: React.FC = () => {
 
   const refreshCanonicalUser = async (): Promise<UserProfile | null> => {
     try {
-      const response = await fetch(`${resolveBackendUrl()}/api/user/current`, {
-        headers: buildAuthHeaders(),
-      });
-      if (!response.ok) {
-        clearAuthSession();
-        setUser(null);
-        return null;
-      }
-      const data = await response.json();
+      const data = await api<{ user: any }>('/user/current');
       const canonicalUser = toCanonicalUser(data.user);
       setUser(canonicalUser);
       const token = getAuthToken();
@@ -540,26 +467,10 @@ const App: React.FC = () => {
       setError('');
 
       try {
-        const response = await fetch(`${resolveBackendUrl()}/api/membership/stripe/confirm-session`, {
+        await api('/membership/stripe/confirm-session', {
           method: 'POST',
-          headers: buildAuthHeaders({ 'Content-Type': 'application/json' }),
-          body: JSON.stringify({ sessionId: pendingCheckoutSessionId }),
+          body: { sessionId: pendingCheckoutSessionId },
         });
-
-        const data = await response.json().catch(() => ({}));
-        if (!response.ok) {
-          if (response.status === 401) {
-            clearAuthSession();
-            setUser(null);
-            setSignupModalOpen(false);
-            setSigninModalOpen(true);
-            setMembershipNotice('Session expired during checkout verification. Please sign in again.');
-            return;
-          }
-
-          setMembershipNotice(data?.error || 'Unable to verify checkout. Please retry.');
-          return;
-        }
 
         const refreshed = await refreshCanonicalUser();
         if (!refreshed) {
@@ -577,6 +488,18 @@ const App: React.FC = () => {
           setSidebarOpen(true);
         }
       } catch (error) {
+        if (error instanceof ApiError) {
+          if (error.status === 401) {
+            clearAuthSession();
+            setUser(null);
+            setSignupModalOpen(false);
+            setSigninModalOpen(true);
+            setMembershipNotice('Session expired during checkout verification. Please sign in again.');
+            return;
+          }
+          setMembershipNotice(error.message || 'Unable to verify checkout. Please retry.');
+          return;
+        }
         console.error('Checkout confirmation failed:', error);
         setMembershipNotice('Unable to verify checkout due to a connection issue. Please retry.');
       } finally {
@@ -594,31 +517,21 @@ const App: React.FC = () => {
     const normalizedEmail = emailInput.trim().toLowerCase();
 
     try {
-      const response = await fetch(`${resolveBackendUrl()}/api/user/signin`, {
+      const data = await api<any>('/user/signin', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
+        auth: false,
+        body: {
           email: normalizedEmail,
           password: passwordInput,
           twoFactorCode: twoFactorCodeInput,
           providerToken: providerTokenInput,
-        }),
+        },
       });
 
-      const data = await response.json().catch(() => ({}));
-      if (response.status === 202 && data?.requiresTwoFactor) {
+      if (data?.requiresTwoFactor) {
         const method = data?.method === 'wallet' ? 'wallet' : 'phone';
         setPendingTwoFactorMethod(method);
         setError(data?.message || 'Additional verification is required.');
-        return;
-      }
-
-      if (!response.ok) {
-        if (response.status === 503 && data?.code === 'PROFILE_STORE_UNAVAILABLE') {
-          setError(data?.error || 'Profile service is currently unavailable. Please retry shortly.');
-          return;
-        }
-        setError(data?.error || 'Invalid credentials.');
         return;
       }
 
@@ -644,6 +557,15 @@ const App: React.FC = () => {
         setMembershipNotice('Select a membership tier to continue.');
       }
     } catch (error) {
+      if (error instanceof ApiError) {
+        const data = error.data as any;
+        if (error.status === 503 && data?.code === 'PROFILE_STORE_UNAVAILABLE') {
+          setError(error.message || 'Profile service is currently unavailable. Please retry shortly.');
+          return;
+        }
+        setError(error.message || 'Invalid credentials.');
+        return;
+      }
       console.error('Sign-in request failed:', error);
       setHealthStatus('offline');
       setError(backendConnectionErrorMessage('sign in'));
@@ -683,40 +605,19 @@ const App: React.FC = () => {
 
     try {
       const identityName = normalizedEmail.split('@')[0] || 'Node';
-      const response = await fetch(`${resolveBackendUrl()}/api/user/create`, {
+      const data = await api<any>('/user/create', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
+        auth: false,
+        body: {
           email: normalizedEmail,
           name: identityName,
           password: passwordInput,
           twoFactorMethod: twoFactorMethodInput,
           phoneNumber: twoFactorMethodInput === 'phone' ? phoneNumberInput : undefined,
           walletDid: twoFactorMethodInput === 'wallet' ? walletDidInput : undefined,
-        }),
+        },
       });
 
-      const data = await response.json().catch(() => ({}));
-      if (!response.ok) {
-        if (response.status === 503 && data?.code === 'PROFILE_STORE_UNAVAILABLE') {
-          setError(data?.error || 'Profile service is currently unavailable. Please retry shortly.');
-          return;
-        }
-        if (response.status === 503 && data?.code === 'PROFILE_SESSION_ESTABLISH_FAILED') {
-          setSignupModalOpen(false);
-          setSigninModalOpen(true);
-          setPasswordInput('');
-          setConfirmPasswordInput('');
-          setPendingTwoFactorMethod(null);
-          setError(
-            data?.error ||
-              'Profile was created, but session setup failed. Please sign in to continue.'
-          );
-          return;
-        }
-        setError(data?.error || `Unable to create profile (HTTP ${response.status}).`);
-        return;
-      }
       if (!data?.persistenceVerified) {
         setError('Profile persistence verification failed.');
         return;
@@ -733,6 +634,27 @@ const App: React.FC = () => {
       setCurrentView(AppView.MEMBERSHIP_ACCESS);
       setIsSelectingTier(true);
     } catch (error) {
+      if (error instanceof ApiError) {
+        const data = error.data as any;
+        if (error.status === 503 && data?.code === 'PROFILE_STORE_UNAVAILABLE') {
+          setError(error.message || 'Profile service is currently unavailable. Please retry shortly.');
+          return;
+        }
+        if (error.status === 503 && data?.code === 'PROFILE_SESSION_ESTABLISH_FAILED') {
+          setSignupModalOpen(false);
+          setSigninModalOpen(true);
+          setPasswordInput('');
+          setConfirmPasswordInput('');
+          setPendingTwoFactorMethod(null);
+          setError(
+            error.message ||
+              'Profile was created, but session setup failed. Please sign in to continue.'
+          );
+          return;
+        }
+        setError(error.message || `Unable to create profile (HTTP ${error.status}).`);
+        return;
+      }
       console.error('Profile creation request failed:', error);
       setHealthStatus('offline');
       setError(backendConnectionErrorMessage('create profile'));
@@ -756,23 +678,10 @@ const App: React.FC = () => {
         return;
       }
 
-      const response = await fetch(`${resolveBackendUrl()}/api/membership/stripe/create-checkout-session`, {
+      const data = await api<any>('/membership/stripe/create-checkout-session', {
         method: 'POST',
-        headers: buildAuthHeaders({ 'Content-Type': 'application/json' }),
-        body: JSON.stringify({ userId: canonicalUser.id, tier }),
+        body: { userId: canonicalUser.id, tier },
       });
-      const data = await response.json().catch(() => ({}));
-
-      if (!response.ok) {
-        if (response.status === 503 && data?.code === 'STRIPE_UNAVAILABLE') {
-          setMembershipNotice(
-            data?.error || 'Membership checkout is temporarily unavailable. Please retry shortly.'
-          );
-          setMembershipCheckoutPending(false);
-          return;
-        }
-        throw new Error(data?.error || 'Failed to initialize checkout');
-      }
 
       const checkoutUrl = String(data?.checkoutUrl || '').trim();
       if (!checkoutUrl) {
@@ -783,6 +692,13 @@ const App: React.FC = () => {
 
       window.location.assign(checkoutUrl);
     } catch (err) {
+      if (err instanceof ApiError && err.status === 503 && (err.data as any)?.code === 'STRIPE_UNAVAILABLE') {
+        setMembershipNotice(
+          err.message || 'Membership checkout is temporarily unavailable. Please retry shortly.'
+        );
+        setMembershipCheckoutPending(false);
+        return;
+      }
       setMembershipNotice('Failed to process tier selection. Please try again.');
       setMembershipCheckoutPending(false);
       console.error('Tier selection error:', err);
@@ -808,9 +724,8 @@ const App: React.FC = () => {
     void (async () => {
       try {
         if (getAuthToken()) {
-          await fetch(`${resolveBackendUrl()}/api/user/logout`, {
+          await api('/user/logout', {
             method: 'POST',
-            headers: buildAuthHeaders(),
           });
         }
       } catch {
@@ -870,15 +785,10 @@ const App: React.FC = () => {
 
     void (async () => {
       try {
-        const response = await fetch(`${resolveBackendUrl()}/api/courses/${course.id}/enroll`, {
+        const data = await api<any>(`/courses/${course.id}/enroll`, {
           method: 'POST',
-          headers: buildAuthHeaders({ 'Content-Type': 'application/json' }),
-          body: JSON.stringify({}),
+          body: {},
         });
-        const data = await response.json().catch(() => ({}));
-        if (!response.ok) {
-          throw new Error(data?.error || 'Failed to enroll in course');
-        }
         const enrolledCourse = normalizeCourse(data.course || course);
         setEnrolledCourses((current) => {
           const exists = current.some((item) => item.id === enrolledCourse.id);
@@ -912,10 +822,9 @@ const App: React.FC = () => {
 
     void (async () => {
       try {
-        const response = await fetch(`${resolveBackendUrl()}/api/user/${user.id}`, {
+        const data = await api<any>(`/user/${user.id}`, {
           method: 'PUT',
-          headers: buildAuthHeaders({ 'Content-Type': 'application/json' }),
-          body: JSON.stringify({
+          body: {
             name: profileData.name ?? user.name,
             handle: profileData.handle,
             bio: profileData.bio,
@@ -929,13 +838,8 @@ const App: React.FC = () => {
             githubUrl: profileData.githubUrl,
             websiteUrl: profileData.websiteUrl,
             privacySettings: profileData.privacySettings,
-          }),
+          },
         });
-
-        const data = await response.json().catch(() => ({}));
-        if (!response.ok) {
-          throw new Error(data?.error || 'Failed to persist profile');
-        }
 
         const canonical = toCanonicalUser(data.user);
         updateActiveUser({ ...canonical, hasProfile: true });
@@ -1020,13 +924,13 @@ const App: React.FC = () => {
       case AppView.MY_COURSES: 
         return <MyCourses enrolledCourses={enrolledCourses} onNavigateToUniversity={() => setCurrentView(AppView.KNOWLEDGE_PATHWAYS)} />;
       case AppView.PROVIDERS:
-        return <ProvidersMarket backendUrl={resolveBackendUrl()} />;
+        return <ProvidersMarket />;
       case AppView.MEMBERSHIP:
         return <CommunityMembers />;
       case AppView.NOTIFICATIONS:
         return <NotificationsCenter onBack={() => setCurrentView(AppView.DASHBOARD)} />;
       case AppView.KNOWLEDGE_PATHWAYS:
-        return <KnowledgePathways onGoBack={() => setCurrentView(AppView.MY_COURSES)} onEnroll={enrollCourse} backendUrl={resolveBackendUrl()} />;
+        return <KnowledgePathways onGoBack={() => setCurrentView(AppView.MY_COURSES)} onEnroll={enrollCourse} />;
       case AppView.PRIVACY_POLICY:
         return (
           <div className="p-8 max-w-4xl mx-auto">
