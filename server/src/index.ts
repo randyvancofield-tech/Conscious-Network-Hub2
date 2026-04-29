@@ -92,69 +92,24 @@ app.use(helmet());
 // Trust proxy for rate limiting (safe for local dev)
 app.set('trust proxy', 1);
 
-// CORS configuration
-const configuredCorsOrigins = (process.env.CORS_ORIGINS || '')
-  .split(/[,\n\r\t ]+/)
-  .map((origin) => origin.trim())
-  .filter(Boolean);
-
-const requiredCorsOrigins = [
+const allowedOrigins = [
   'https://conscious-network-hub.base44.app',
   'https://conscious-network.org',
+  'http://localhost:3000',
 ];
-const localDevCorsOrigins = ['http://localhost:3000', 'http://127.0.0.1:3000'];
-const corsOriginCandidates = [
-  ...new Set([...requiredCorsOrigins, ...configuredCorsOrigins, ...localDevCorsOrigins]),
-];
-
-const normalizeOrigin = (origin: string): string => {
-  try {
-    return new URL(origin).origin;
-  } catch {
-    return origin.replace(/\/+$/, '');
-  }
-};
-
-const isLocalHost = (hostname: string): boolean =>
-  hostname === 'localhost' ||
-  hostname === '127.0.0.1' ||
-  hostname === '::1' ||
-  hostname.endsWith('.localhost');
-
-const corsOrigins = new Set<string>();
-for (const rawOrigin of corsOriginCandidates) {
-  const normalized = normalizeOrigin(rawOrigin);
-  corsOrigins.add(normalized);
-
-  // If a root domain is configured, allow the "www" variant as well (and vice versa).
-  try {
-    const parsed = new URL(normalized);
-    const host = parsed.hostname;
-    if (!isLocalHost(host) && !/^\d+\.\d+\.\d+\.\d+$/.test(host)) {
-      if (host.startsWith('www.')) {
-        const bare = host.slice(4);
-        corsOrigins.add(`${parsed.protocol}//${bare}${parsed.port ? `:${parsed.port}` : ''}`);
-      } else {
-        corsOrigins.add(`${parsed.protocol}//www.${host}${parsed.port ? `:${parsed.port}` : ''}`);
-      }
-    }
-  } catch {
-    // Ignore invalid entries; exact string check above still applies.
-  }
-}
 
 app.use(
   cors({
-    origin: (origin, callback) => {
-      // Allow requests with no origin (like curl or server-side scripts)
+    origin: function (origin, callback) {
+      // Allow requests with no origin (like curl, mobile apps, or server-side scripts).
       if (!origin) return callback(null, true);
 
-      const normalizedOrigin = normalizeOrigin(origin);
-      if (corsOrigins.has(normalizedOrigin)) {
-        callback(null, true);
-      } else {
-        callback(new Error('Not allowed by CORS'));
+      if (allowedOrigins.includes(origin)) {
+        return callback(null, true);
       }
+
+      console.error('Blocked by CORS:', origin);
+      return callback(null, false);
     },
     methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
     allowedHeaders: ['Content-Type', 'Authorization'],
