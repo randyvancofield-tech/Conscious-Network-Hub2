@@ -11,6 +11,7 @@ import SocialLearningHub from './components/SocialLearningHub';
 import MeetingsPage from './components/MeetingsPage';
 import MembershipPage from './components/MembershipPage';
 import NotFoundPage from './components/NotFoundPage';
+import AuthCallbackPage from './components/AuthCallbackPage';
 import ProviderLaunchGate from './components/ProviderLaunchGate';
 import MusicBox from './components/MusicBox';
 import NotificationsCenter from './components/NotificationsCenter';
@@ -27,7 +28,13 @@ import aiTransparencyPolicy from './docs/compliance/ai-transparency-policy-draft
 import blockchainDataPolicy from './docs/compliance/blockchain-data-policy-draft.md?raw';
 import vendorApiGovernancePolicy from './docs/compliance/vendor-api-governance-policy-draft.md?raw';
 import nistMappingSummary from './docs/compliance/nist-mapping-summary.md?raw';
-import { clearAuthSession, getAuthToken, setAuthSession } from './services/sessionService';
+import {
+  buildBridgeUserFromToken,
+  clearAuthSession,
+  getAuthToken,
+  getCachedAuthUser,
+  setAuthSession,
+} from './services/sessionService';
 import { canTierAccessNavItem, canTierAccessView } from './services/tierAccess';
 import { ApiError, api, apiHealth, backendAssetUrl, getBackendBaseUrl } from './services/apiClient';
 
@@ -46,6 +53,8 @@ const routePathForView = (view: AppView, params: Record<string, string> = {}): s
   switch (view) {
     case AppView.ENTRY:
       return '/';
+    case AppView.AUTH_CALLBACK:
+      return '/auth/callback';
     case AppView.MEMBERSHIP_ACCESS:
       return '/membership-access';
     case AppView.DASHBOARD:
@@ -103,6 +112,7 @@ const resolveRoute = (pathname: string, search = ''): RouteState => {
 
   const staticRoutes: Record<string, AppView> = {
     '/': AppView.ENTRY,
+    '/auth/callback': AppView.AUTH_CALLBACK,
     '/membership-access': AppView.MEMBERSHIP_ACCESS,
     '/dashboard': AppView.DASHBOARD,
     '/social': AppView.CONSCIOUS_SOCIAL_LEARNING,
@@ -162,13 +172,29 @@ const requiresConfirmedMembership = (view: AppView): boolean =>
     AppView.NOTIFICATIONS,
   ].includes(view);
 
+const requiresStoredSession = (view: AppView): boolean =>
+  [
+    AppView.DASHBOARD,
+    AppView.CONSCIOUS_SOCIAL_LEARNING,
+    AppView.COMMUNITY,
+    AppView.CONSCIOUS_MEETINGS,
+    AppView.MEETING_DETAIL,
+    AppView.MY_COURSES,
+    AppView.KNOWLEDGE_PATHWAYS,
+    AppView.COURSE_DETAIL,
+    AppView.PROVIDERS,
+    AppView.PROVIDER_DETAIL,
+    AppView.MY_CONSCIOUS_IDENTITY,
+    AppView.NOTIFICATIONS,
+  ].includes(view);
+
 const App: React.FC = () => {
   const initialRoute = useMemo(getInitialRoute, []);
   const [currentView, setCurrentViewState] = useState<AppView>(initialRoute.view);
   const [routeParams, setRouteParams] = useState<Record<string, string>>(initialRoute.params);
   const [activePath, setActivePath] = useState(initialRoute.path);
   const [isSidebarOpen, setSidebarOpen] = useState(false);
-  const [user, setUser] = useState<UserProfile | null>(null);
+  const [user, setUser] = useState<UserProfile | null>(() => getCachedAuthUser());
   const [enrolledCourses, setEnrolledCourses] = useState<Course[]>([]);
   
   const [isSignupModalOpen, setSignupModalOpen] = useState(false);
@@ -408,6 +434,22 @@ const App: React.FC = () => {
     };
   };
 
+  const mergeBridgeSessionUser = (token: string | null, canonicalUser: UserProfile): UserProfile => {
+    if (!token) return canonicalUser;
+    const bridgeUser = buildBridgeUserFromToken(token);
+    if (!bridgeUser) return canonicalUser;
+
+    return {
+      ...canonicalUser,
+      role: bridgeUser.role,
+      providerExternalId: canonicalUser.providerExternalId || bridgeUser.providerExternalId,
+      tier: canonicalUser.tier || bridgeUser.tier,
+      subscriptionStatus: canonicalUser.subscriptionStatus || bridgeUser.subscriptionStatus,
+      walletDid: bridgeUser.walletDid,
+      identityVerified: true,
+    };
+  };
+
   const isProviderLaunchPath = useMemo(() => {
     if (typeof window === 'undefined') return false;
     return window.location.pathname.replace(/\/+$/, '') === '/provider-launch';
@@ -471,6 +513,9 @@ const App: React.FC = () => {
     if (initialParams.get('externalMeetingInvite')) {
       setCurrentView(AppView.CONSCIOUS_MEETINGS);
     }
+    if (initialRoute.view === AppView.AUTH_CALLBACK) {
+      return;
+    }
 
     const initializeSession = async () => {
       const token = getAuthToken();
@@ -480,7 +525,7 @@ const App: React.FC = () => {
 
       try {
         const data = await api<{ user: any }>('/user/current');
-        const canonicalUser = toCanonicalUser(data.user);
+        const canonicalUser = mergeBridgeSessionUser(token, toCanonicalUser(data.user));
         setUser(canonicalUser);
         setAuthSession(token, canonicalUser);
         void refreshUserCourses();
@@ -495,6 +540,18 @@ const App: React.FC = () => {
           setMembershipNotice('Select a membership tier to continue.');
         }
       } catch {
+        const bridgeUser = buildBridgeUserFromToken(token);
+        if (bridgeUser) {
+          setUser(bridgeUser);
+          setAuthSession(token, bridgeUser);
+          setSelectedTier(bridgeUser.tier || 'Accelerated Tier');
+          setIsSelectingTier(false);
+          setMembershipNotice('');
+          if (currentView === AppView.ENTRY || currentView === AppView.MEMBERSHIP_ACCESS) {
+            setCurrentView(AppView.DASHBOARD);
+          }
+          return;
+        }
         clearAuthSession();
         setUser(null);
       }
@@ -601,8 +658,8 @@ const App: React.FC = () => {
     clearAuthSession();
     setUser(null);
     setEnrolledCourses([]);
-    setCurrentView(AppView.DASHBOARD);
-    if (window.innerWidth >= 1024) setSidebarOpen(true);
+    setMembershipNotice('Protected platform routes require a signed session token.');
+    setCurrentView(AppView.MEMBERSHIP_ACCESS);
   };
 
   const handleOpenIdentityFromSidebar = () => {
@@ -624,9 +681,9 @@ const App: React.FC = () => {
   const refreshCanonicalUser = async (): Promise<UserProfile | null> => {
     try {
       const data = await api<{ user: any }>('/user/current');
-      const canonicalUser = toCanonicalUser(data.user);
-      setUser(canonicalUser);
       const token = getAuthToken();
+      const canonicalUser = mergeBridgeSessionUser(token, toCanonicalUser(data.user));
+      setUser(canonicalUser);
       if (token) {
         setAuthSession(token, canonicalUser);
       }
@@ -995,6 +1052,29 @@ const App: React.FC = () => {
     }
   };
 
+  const handleAuthCallbackAuthenticated = (token: string, authenticatedUser: UserProfile) => {
+    setAuthSession(token, authenticatedUser);
+    setUser(authenticatedUser);
+    setSelectedTier(authenticatedUser.tier || 'Accelerated Tier');
+    setMembershipNotice('');
+    setIsSelectingTier(false);
+    setMembershipCheckoutPending(false);
+    setPendingCheckoutSessionId(null);
+    setPendingTwoFactorMethod(null);
+    setTwoFactorCodeInput('');
+    setProviderTokenInput('');
+    setCurrentView(AppView.DASHBOARD, {}, { replace: true });
+    if (window.innerWidth >= 1024) {
+      setSidebarOpen(true);
+    }
+  };
+
+  const handleAuthCallbackMissingToken = () => {
+    clearAuthSession();
+    setUser(null);
+    setCurrentView(AppView.ENTRY, {}, { replace: true });
+  };
+
   const handleIdentityComplete = (profileData: Partial<UserProfile>) => {
     if (!user) return;
 
@@ -1049,6 +1129,40 @@ const App: React.FC = () => {
   }, [user]);
 
   const renderActiveView = () => {
+    if (requiresStoredSession(currentView) && (!getAuthToken() || !user)) {
+      return (
+        <div className="p-4 sm:p-8 max-w-3xl mx-auto">
+          <div className="glass-panel p-6 sm:p-8 rounded-3xl border border-blue-500/20">
+            <h2 className="text-2xl font-black text-white uppercase tracking-tight mb-4">
+              Session Required
+            </h2>
+            <p className="text-slate-300 text-sm leading-relaxed mb-6">
+              This platform area requires a signed provider or member session token before access.
+            </p>
+            <div className="flex flex-col sm:flex-row gap-3">
+              <button
+                onClick={() => {
+                  setPendingTwoFactorMethod(null);
+                  setTwoFactorCodeInput('');
+                  setProviderTokenInput('');
+                  setSigninModalOpen(true);
+                }}
+                className="px-5 py-3 bg-blue-600 hover:bg-blue-500 text-white rounded-xl text-xs font-black uppercase tracking-widest transition-colors"
+              >
+                Sign In
+              </button>
+              <button
+                onClick={() => setCurrentView(AppView.MEMBERSHIP_ACCESS)}
+                className="px-5 py-3 bg-white/5 hover:bg-white/10 text-slate-200 rounded-xl text-xs font-black uppercase tracking-widest border border-white/10 transition-colors"
+              >
+                Membership Access
+              </button>
+            </div>
+          </div>
+        </div>
+      );
+    }
+
     if (user && !hasConfirmedMembership(user) && requiresConfirmedMembership(currentView)) {
       return (
         <div className="p-8 max-w-3xl mx-auto">
@@ -1302,6 +1416,15 @@ const App: React.FC = () => {
         );
     }
   };
+
+  if (currentView === AppView.AUTH_CALLBACK) {
+    return (
+      <AuthCallbackPage
+        onAuthenticated={handleAuthCallbackAuthenticated}
+        onMissingToken={handleAuthCallbackMissingToken}
+      />
+    );
+  }
 
   if (isProviderLaunchPath) {
     return (

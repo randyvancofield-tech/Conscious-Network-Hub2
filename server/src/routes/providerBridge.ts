@@ -1,7 +1,7 @@
 import crypto from 'crypto';
 import rateLimit from 'express-rate-limit';
 import { Request, Response, Router } from 'express';
-import { createSessionToken, hashPassword } from '../auth';
+import { createSessionToken } from '../auth';
 import { createProviderSessionToken } from '../auth/providerToken';
 import {
   resolveBridgeProviderAudience,
@@ -9,6 +9,10 @@ import {
   resolveBridgeProviderSecret,
 } from '../requiredEnv';
 import { recordAuditEvent } from '../services/auditTelemetry';
+import {
+  toBridgePublicUser,
+  upsertBridgeProviderUser,
+} from '../services/bridgeProviderUser';
 import { localStore } from '../services/persistenceStore';
 import { createProviderSession } from '../services/providerSessionStore';
 import { createUserSession } from '../services/userSessionStore';
@@ -24,7 +28,6 @@ const BRIDGE_CODE_TTL_MS = 120 * 1000;
 const BRIDGE_TIMESTAMP_SKEW_MS = 60 * 1000;
 const PROVIDER_DID_PREFIX = 'provider:';
 const DEFAULT_PROVIDER_SCOPES = ['provider:read', 'provider:host'];
-const DEFAULT_PROVIDER_TIER = 'Accelerated Tier';
 
 const issueLaunchLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
@@ -101,62 +104,6 @@ const canonicalBridgeSignaturePayload = (input: {
     input.jti,
     input.scopes.join(','),
   ].join('\n');
-};
-
-const toBridgePublicUser = (user: Awaited<ReturnType<typeof localStore.getUserById>>) => ({
-  id: user?.id || '',
-  email: user?.email || '',
-  name: user?.name || 'Provider',
-  role: user?.role || 'user',
-  providerExternalId: user?.providerExternalId || null,
-  tier: user?.tier || null,
-  subscriptionStatus: user?.subscriptionStatus || 'inactive',
-  createdAt: user?.createdAt || new Date(),
-  updatedAt: user?.updatedAt || new Date(),
-  twoFactorEnabled: user?.twoFactorMethod ? user.twoFactorMethod !== 'none' : false,
-  twoFactorMethod: user?.twoFactorMethod || 'none',
-  phoneNumberMasked: null,
-  walletDid: null,
-});
-
-const upsertBridgeProviderUser = async (input: {
-  providerExternalId: string;
-  email: string;
-  name: string;
-}): Promise<Awaited<ReturnType<typeof localStore.getUserById>>> => {
-  const normalizedExternalId = String(input.providerExternalId || '').trim();
-  const normalizedEmail = normalizeEmail(input.email);
-  const normalizedName = String(input.name || '').trim() || 'Provider';
-
-  const byExternalId = await localStore.getUserByProviderExternalId(normalizedExternalId);
-  const byEmail = await localStore.getUserByEmail(normalizedEmail);
-
-  if (byExternalId && byEmail && byExternalId.id !== byEmail.id) {
-    throw new Error('Bridge identity conflict: providerExternalId/email mismatch');
-  }
-
-  const target = byExternalId || byEmail;
-  if (!target) {
-    const generatedPassword = hashPassword(crypto.randomBytes(32).toString('hex'));
-    return localStore.createUser({
-      email: normalizedEmail,
-      name: normalizedName,
-      password: generatedPassword,
-      tier: DEFAULT_PROVIDER_TIER,
-      role: 'provider',
-      providerExternalId: normalizedExternalId,
-      twoFactorMethod: 'none',
-    });
-  }
-
-  const updated = await localStore.updateUser(target.id, {
-    name: normalizedName,
-    role: target.role === 'admin' ? 'admin' : 'provider',
-    providerExternalId: normalizedExternalId,
-    tier: target.tier || DEFAULT_PROVIDER_TIER,
-  });
-
-  return updated || target;
 };
 
 router.post(

@@ -1,5 +1,5 @@
 import { Request, Response, NextFunction } from 'express';
-import { verifySessionToken } from './auth';
+import { verifyBridgeAuthToken, verifySessionToken } from './auth';
 import { getUserSessionById } from './services/userSessionStore';
 import { hasTierAccess, TierValue } from './tierPolicy';
 
@@ -7,6 +7,9 @@ export interface AuthenticatedRequest extends Request {
   authUserId?: string;
   authSessionId?: string;
   authTier?: string;
+  authRole?: string;
+  authWalletAddress?: string;
+  authProviderExternalId?: string;
 }
 
 /**
@@ -97,6 +100,23 @@ export function requireCanonicalIdentity(
 
     const token = authHeader.slice('Bearer '.length).trim();
     const payload = verifySessionToken(token);
+    const bridgePayload = payload ? null : verifyBridgeAuthToken(token);
+    if (!payload && !bridgePayload) {
+      logIdentityValidationFailure(req, 'invalid_or_expired_session_token');
+      res.status(401).json({ error: 'Invalid or expired session' });
+      return;
+    }
+
+    const authReq = req as AuthenticatedRequest;
+    if (bridgePayload) {
+      authReq.authUserId = bridgePayload.userId;
+      authReq.authRole = bridgePayload.role;
+      authReq.authWalletAddress = bridgePayload.walletAddress;
+      authReq.authProviderExternalId = bridgePayload.sub;
+      next();
+      return;
+    }
+
     if (!payload) {
       logIdentityValidationFailure(req, 'invalid_or_expired_session_token');
       res.status(401).json({ error: 'Invalid or expired session' });
@@ -114,7 +134,6 @@ export function requireCanonicalIdentity(
       return;
     }
 
-    const authReq = req as AuthenticatedRequest;
     if (payload.sessionId) {
       const persistedSession = await getUserSessionById(payload.sessionId);
       if (!persistedSession) {

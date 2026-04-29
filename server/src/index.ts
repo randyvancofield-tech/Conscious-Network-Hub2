@@ -28,6 +28,7 @@ import identitySecurityRoutes from './routes/identitySecurity';
 import integrityRoutes from './routes/integrity';
 import immersiveRoutes from './routes/immersive';
 import meetingRoutes from './routes/meeting';
+import authBridgeRoutes from './routes/authBridge';
 import providerBridgeRoutes from './routes/providerBridge';
 import { coursesPublicRoutes, coursesProtectedRoutes } from './routes/courses';
 import userCoursesRoutes from './routes/userCourses';
@@ -187,6 +188,10 @@ app.use(requestLogger);
 
 // Health check endpoint (before routes for quick response)
 app.get('/health', healthCheck);
+
+// Base44 provider identity bridge. This intentionally lives outside /api because
+// Base44 redirects and server-to-server callbacks target /auth/bridge.
+app.use('/auth', authBridgeRoutes);
 
 // API routes
 // Public routes are mounted first.
