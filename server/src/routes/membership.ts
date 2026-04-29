@@ -497,6 +497,70 @@ const createCheckoutSessionForTier = async (input: {
   });
 };
 
+const activateFreeTier = async (
+  req: Request,
+  res: Response
+): Promise<Response | void> => {
+  try {
+    const authUserId = getAuthenticatedUserId(req);
+    if (!authUserId) {
+      return res.status(401).json({ error: 'Authentication required' });
+    }
+
+    const requestedBodyUserId = String(req.body?.userId || '').trim();
+    if (
+      requestedBodyUserId &&
+      !enforceAuthenticatedUserMatch(req, res, requestedBodyUserId, 'body.userId')
+    ) {
+      return;
+    }
+
+    const requestedTier = parseRequestedTier(req.body?.tier);
+    if (requestedTier && requestedTier !== TIER_VALUES.FREE) {
+      return res.status(400).json({ error: 'Free tier activation only accepts the free tier' });
+    }
+
+    const user = await localStore.getUserById(authUserId);
+    if (!user) {
+      return res.status(404).json({ error: 'User not found' });
+    }
+
+    const now = new Date();
+    const membership = await upsertMembershipState({
+      userId: authUserId,
+      tier: TIER_VALUES.FREE,
+      status: 'active',
+      startDate: now,
+    });
+
+    const updatedUser = await localStore.updateUser(authUserId, {
+      tier: TIER_VALUES.FREE,
+      subscriptionStatus: 'active',
+      subscriptionStartDate: user.subscriptionStartDate || now,
+      subscriptionEndDate: null,
+    });
+
+    if (!updatedUser) {
+      return res.status(404).json({ error: 'User not found during membership activation' });
+    }
+
+    return res.json({
+      success: true,
+      message: 'Free membership activated successfully',
+      membership: {
+        id: membership.id,
+        tier: membership.tier,
+        status: membership.status,
+        startDate: membership.startDate,
+      },
+      user: toMembershipUserPayload(updatedUser),
+    });
+  } catch (error) {
+    console.error('Error activating free membership tier:', error);
+    return res.status(500).json({ error: 'Failed to activate free membership tier' });
+  }
+};
+
 const startTierCheckout = async (
   req: Request,
   res: Response
@@ -1113,6 +1177,12 @@ export const handleStripeWebhook = async (
 };
 
 protectedRouter.use(requireCanonicalIdentity);
+
+/**
+ * POST /api/membership/select-free-tier
+ * Activate the free/community tier for the authenticated user without Stripe.
+ */
+protectedRouter.post('/select-free-tier', activateFreeTier);
 
 /**
  * POST /api/membership/stripe/create-checkout-session

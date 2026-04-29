@@ -45,6 +45,7 @@ type RouteState = {
 };
 
 const BASE44_PROVIDER_PORTAL_URL = 'https://conscious-network-hub.base44.app';
+const FREE_TIER_NAME = 'Free / Community Tier';
 
 const normalizePathname = (pathname: string): string => {
   const normalized = pathname.replace(/\/+$/, '') || '/';
@@ -196,7 +197,7 @@ const App: React.FC = () => {
   const [isSignupModalOpen, setSignupModalOpen] = useState(false);
   const [isSigninModalOpen, setSigninModalOpen] = useState(false);
   const [isIdentitySecurityOpen, setIdentitySecurityOpen] = useState(false);
-  const [selectedTier, setSelectedTier] = useState('Free / Community Tier');
+  const [selectedTier, setSelectedTier] = useState(FREE_TIER_NAME);
   
   const [hasApiKey, setHasApiKey] = useState<boolean | null>(null);
 
@@ -257,7 +258,7 @@ const App: React.FC = () => {
 
   const TIERS = [
     {
-      name: "Free / Community Tier",
+      name: FREE_TIER_NAME,
       price: "Free",
       description: "Provides basic access to community discussions, public posts, and selected events.",
       access: "Limited; no provider sessions.",
@@ -436,7 +437,7 @@ const App: React.FC = () => {
       ...canonicalUser,
       role: 'user',
       providerExternalId: null,
-      tier: canonicalUser.tier || 'Free / Community Tier',
+      tier: canonicalUser.tier,
     };
   };
 
@@ -464,6 +465,8 @@ const App: React.FC = () => {
 
   const hasConfirmedMembership = (profile: UserProfile | null | undefined): boolean =>
     Boolean(profile && typeof profile.tier === 'string' && profile.tier.trim().length > 0);
+
+  const isFreeMembershipTier = (tier: string): boolean => tier === FREE_TIER_NAME;
 
   const MIN_PASSWORD_LENGTH = 12;
 
@@ -541,7 +544,7 @@ const App: React.FC = () => {
           setUserAuthSession(token, canonicalUser);
         }
         void refreshUserCourses();
-        setSelectedTier(canonicalUser.tier || 'Free / Community Tier');
+        setSelectedTier(canonicalUser.tier || FREE_TIER_NAME);
         setIsSelectingTier(false);
       } catch {
         const bridgeUser = buildBridgeUserFromToken(token);
@@ -711,7 +714,7 @@ const App: React.FC = () => {
           return;
         }
 
-        setSelectedTier(refreshed.tier || 'Free / Community Tier');
+        setSelectedTier(refreshed.tier || FREE_TIER_NAME);
         setMembershipNotice('');
         setIsSelectingTier(false);
         setCurrentView(AppView.DASHBOARD);
@@ -767,19 +770,20 @@ const App: React.FC = () => {
       }
 
       const canonicalUser = toPlatformUser(data.user);
+      const needsMembershipSelection = !hasConfirmedMembership(canonicalUser);
       setUserAuthSession(data.token, canonicalUser);
       setUser(canonicalUser);
       void refreshUserCourses();
-      setSelectedTier(canonicalUser.tier || 'Free / Community Tier');
-      setIsSelectingTier(false);
+      setSelectedTier(canonicalUser.tier || FREE_TIER_NAME);
+      setIsSelectingTier(needsMembershipSelection);
       setMembershipCheckoutPending(false);
-      setMembershipNotice('');
+      setMembershipNotice(needsMembershipSelection ? 'Select a membership tier to continue.' : '');
       setPendingCheckoutSessionId(null);
       setPendingTwoFactorMethod(null);
       setTwoFactorCodeInput('');
       setProviderTokenInput('');
       closeModals();
-      setCurrentView(AppView.ENTRY, {}, { replace: true });
+      setCurrentView(needsMembershipSelection ? AppView.MEMBERSHIP_ACCESS : AppView.ENTRY, {}, { replace: true });
       setSidebarOpen(false);
     } catch (error) {
       if (error instanceof ApiError) {
@@ -849,15 +853,16 @@ const App: React.FC = () => {
       }
 
       const canonicalUser = toPlatformUser(data.user);
+      const needsMembershipSelection = !hasConfirmedMembership(canonicalUser);
       setUserAuthSession(data.token, canonicalUser);
       setUser(canonicalUser);
       void refreshUserCourses();
-      setSelectedTier((currentTier) => currentTier || canonicalUser.tier || 'Free / Community Tier');
+      setSelectedTier((currentTier) => currentTier || canonicalUser.tier || FREE_TIER_NAME);
       setMembershipCheckoutPending(false);
-      setMembershipNotice('');
+      setMembershipNotice(needsMembershipSelection ? 'Select a membership tier to continue.' : '');
       closeModals();
-      setCurrentView(AppView.ENTRY, {}, { replace: true });
-      setIsSelectingTier(false);
+      setCurrentView(needsMembershipSelection ? AppView.MEMBERSHIP_ACCESS : AppView.ENTRY, {}, { replace: true });
+      setIsSelectingTier(needsMembershipSelection);
       setSidebarOpen(false);
     } catch (error) {
       if (error instanceof ApiError) {
@@ -888,7 +893,18 @@ const App: React.FC = () => {
   };
 
   const handleMembershipTierSelect = async (tier: string) => {
-    if (!user || isMembershipCheckoutPending) return;
+    if (isMembershipCheckoutPending) return;
+    if (!user) {
+      setSelectedTier(tier);
+      setMembershipNotice('Sign in to continue membership selection.');
+      setSignupModalOpen(false);
+      setSigninModalOpen(true);
+      setPendingTwoFactorMethod(null);
+      setTwoFactorCodeInput('');
+      setProviderTokenInput('');
+      return;
+    }
+
     setSelectedTier(tier);
     setMembershipNotice('');
     setError('');
@@ -901,6 +917,31 @@ const App: React.FC = () => {
         setSignupModalOpen(false);
         setSigninModalOpen(true);
         setMembershipCheckoutPending(false);
+        return;
+      }
+
+      if (isFreeMembershipTier(tier)) {
+        const data = await api<any>('/membership/select-free-tier', {
+          method: 'POST',
+          body: { userId: canonicalUser.id, tier },
+        });
+
+        const refreshed = await refreshCanonicalUser();
+        const activatedUser = refreshed || toPlatformUser(data.user || { ...canonicalUser, tier: FREE_TIER_NAME });
+        const token = getAuthToken();
+        setUser(activatedUser);
+        if (token) {
+          setUserAuthSession(token, activatedUser);
+        }
+        void refreshUserCourses();
+        setSelectedTier(activatedUser.tier || FREE_TIER_NAME);
+        setMembershipNotice('');
+        setIsSelectingTier(false);
+        setMembershipCheckoutPending(false);
+        setCurrentView(AppView.DASHBOARD);
+        if (window.innerWidth >= 1024) {
+          setSidebarOpen(true);
+        }
         return;
       }
 
@@ -1166,6 +1207,15 @@ const App: React.FC = () => {
             <p className="text-slate-300 text-sm leading-relaxed">
               Select a membership tier from Membership Access to unlock your node and enter the hub.
             </p>
+            <button
+              onClick={() => {
+                setIsSelectingTier(true);
+                setCurrentView(AppView.MEMBERSHIP_ACCESS);
+              }}
+              className="mt-6 px-5 py-3 bg-blue-600 hover:bg-blue-500 text-white rounded-xl text-xs font-black uppercase tracking-widest transition-colors"
+            >
+              Choose Membership
+            </button>
           </div>
         </div>
       );
@@ -1260,7 +1310,7 @@ const App: React.FC = () => {
             selectedTier={selectedTier}
             isCheckoutPending={isMembershipCheckoutPending}
             notice={membershipNotice}
-            onSelectTier={(tier) => setSelectedTier(tier)}
+            onSelectTier={handleMembershipTierSelect}
             onSignIn={() => {
               setPendingTwoFactorMethod(null);
               setTwoFactorCodeInput('');
@@ -1612,11 +1662,9 @@ const App: React.FC = () => {
                     </div>
                     <button 
                       onClick={() => {
-                        if (isSelectingTier && user) {
-                          // User just created profile, process tier selection
+                        if (user) {
                           handleMembershipTierSelect(tier.name);
                         } else {
-                          // User is exploring, show signup modal
                           setSelectedTier(tier.name);
                           setPendingTwoFactorMethod(null);
                           setTwoFactorCodeInput('');
@@ -1631,6 +1679,8 @@ const App: React.FC = () => {
                         ? 'Redirecting to Checkout...'
                         : pendingCheckoutSessionId
                         ? 'Verifying Checkout...'
+                        : isFreeMembershipTier(tier.name)
+                        ? 'Activate Free Tier'
                         : `Anchor as ${tier.name.split(' ')[0]}`}
                     </button>
                   </div>
@@ -1935,7 +1985,7 @@ const App: React.FC = () => {
                   onClick={() => {
                     setIdentityGuestPromptOpen(false);
                     setCurrentView(AppView.MEMBERSHIP_ACCESS);
-                    setSelectedTier('Free / Community Tier');
+                    setSelectedTier(FREE_TIER_NAME);
                     setIsSelectingTier(false);
                     setSigninModalOpen(false);
                     setSignupModalOpen(true);

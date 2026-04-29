@@ -4,6 +4,8 @@ import { MEMBERSHIP_TIERS } from '../services/platformData';
 import { UserProfile } from '../types';
 import { ActionButton, PageHeader, PageShell, SurfacePanel } from './ui/PlatformPrimitives';
 
+const FREE_TIER_NAME = 'Free / Community Tier';
+
 type MembershipPageProps = {
   user: UserProfile | null;
   selectedTier: string;
@@ -25,7 +27,7 @@ const MembershipPage: React.FC<MembershipPageProps> = ({
     <PageHeader
       eyebrow="Access architecture"
       title="Membership"
-      description="Production-ready tier selection is in place. Stripe checkout remains disabled at the UI entry point until the backend membership service is connected."
+      description="Select the membership level for your platform account. Free activation is immediate; paid tiers continue through Stripe Checkout."
       actions={
         user ? (
           <div className="rounded-xl border border-white/10 bg-white/5 px-4 py-3 text-xs font-black uppercase tracking-widest text-slate-300">
@@ -45,11 +47,13 @@ const MembershipPage: React.FC<MembershipPageProps> = ({
 
     <section className="grid grid-cols-1 gap-5 lg:grid-cols-3">
       {MEMBERSHIP_TIERS.map((tier) => {
-        const isCurrent = selectedTier === tier.name || user?.tier === tier.name;
+        const isCurrent = user?.tier === tier.name;
+        const isSelected = selectedTier === tier.name || isCurrent;
+        const isFreeTier = tier.name === FREE_TIER_NAME;
         return (
           <SurfacePanel
             key={tier.id}
-            className={`flex h-full flex-col gap-6 ${isCurrent ? 'border-blue-400/50 bg-blue-500/10' : ''}`}
+            className={`flex h-full flex-col gap-6 ${isSelected ? 'border-blue-400/50 bg-blue-500/10' : ''}`}
           >
             <div className="flex items-start justify-between gap-4">
               <div className="space-y-2">
@@ -57,7 +61,7 @@ const MembershipPage: React.FC<MembershipPageProps> = ({
                 <h2 className="text-2xl font-black uppercase text-white">{tier.name}</h2>
               </div>
               <div className="flex h-11 w-11 items-center justify-center rounded-xl border border-white/10 bg-white/5 text-blue-300">
-                {isCurrent ? <CheckCircle2 className="h-5 w-5" /> : <Sparkles className="h-5 w-5" />}
+                {isSelected ? <CheckCircle2 className="h-5 w-5" /> : <Sparkles className="h-5 w-5" />}
               </div>
             </div>
 
@@ -84,11 +88,19 @@ const MembershipPage: React.FC<MembershipPageProps> = ({
               <ActionButton
                 type="button"
                 className="w-full"
-                disabled={isCheckoutPending || !tier.checkoutEnabled}
-                icon={<CreditCard className="h-4 w-4" />}
+                disabled={isCheckoutPending || isCurrent}
+                icon={isFreeTier ? <Sparkles className="h-4 w-4" /> : <CreditCard className="h-4 w-4" />}
                 onClick={() => onSelectTier(tier.name)}
               >
-                {tier.checkoutEnabled ? 'Continue to Checkout' : 'Checkout Pending Backend'}
+                {isCheckoutPending && isSelected
+                  ? 'Processing...'
+                  : isCurrent
+                  ? 'Current Tier'
+                  : !user
+                  ? 'Sign In to Continue'
+                  : isFreeTier
+                  ? 'Activate Free Tier'
+                  : 'Continue to Checkout'}
               </ActionButton>
               <p className="text-xs leading-5 text-slate-500">{tier.access}</p>
             </div>

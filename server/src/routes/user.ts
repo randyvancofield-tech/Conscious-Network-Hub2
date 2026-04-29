@@ -7,7 +7,6 @@ import {
   needsPasswordRehash,
   verifyPassword,
 } from '../auth';
-import { verifyProviderSessionToken } from '../auth/providerToken';
 import {
   enforceAuthenticatedUserMatch,
   getAuthenticatedSessionId,
@@ -18,7 +17,6 @@ import {
 import { recordAuditEvent } from '../services/auditTelemetry';
 import { localStore, TwoFactorMethod } from '../services/persistenceStore';
 import { mirrorUserToGoogleSheets } from '../services/googleSheetsMirror';
-import { getProviderSessionById } from '../services/providerSessionStore';
 import { maskPhoneNumber, maskWalletDid } from '../services/sensitiveDataPolicy';
 import { createUserSession, revokeUserSession } from '../services/userSessionStore';
 import {
@@ -314,7 +312,6 @@ publicRouter.post('/signin', validateJsonBody(userSignInSchema), async (req: Req
     emailHash = email ? safeLogHash(email) : null;
     const password = String(req.body?.password || '');
     const twoFactorCode = String(req.body?.twoFactorCode || '').trim();
-    const providerToken = String(req.body?.providerToken || '').trim();
     const auditSignIn = (
       outcome: 'success' | 'deny' | 'error',
       statusCode: number,
@@ -392,6 +389,16 @@ publicRouter.post('/signin', validateJsonBody(userSignInSchema), async (req: Req
         })) || user;
     }
 
+    const role = String(user.role || 'user').trim().toLowerCase();
+    if (role !== 'user') {
+      auditSignIn('deny', 403, 'direct_platform_signin_role_denied', user.id, {
+        role,
+      });
+      return res.status(403).json({
+        error: 'Provider accounts must authenticate through the provider portal',
+      });
+    }
+
     if (user.twoFactorMethod === 'phone') {
       if (!user.phoneNumber) {
         auditSignIn('deny', 403, 'phone_2fa_missing_phone', user.id);
@@ -461,47 +468,6 @@ publicRouter.post('/signin', validateJsonBody(userSignInSchema), async (req: Req
           pendingPhoneOtpExpiresAt: null,
           pendingPhoneOtpAttempts: 0,
         })) || user;
-    }
-
-    if (user.twoFactorMethod === 'wallet') {
-      if (!providerToken) {
-        auditSignIn('deny', 202, 'two_factor_required_wallet', user.id, {
-          twoFactorMethod: 'wallet',
-        });
-        return res.status(202).json({
-          success: false,
-          requiresTwoFactor: true,
-          method: 'wallet',
-          message: 'Wallet provider session token required to complete sign-in',
-        });
-      }
-
-      const providerPayload = verifyProviderSessionToken(providerToken);
-      if (!providerPayload) {
-        auditSignIn('deny', 401, 'wallet_provider_token_invalid', user.id);
-        return res.status(401).json({ error: 'Invalid or expired wallet provider token' });
-      }
-
-      const providerSession = await getProviderSessionById(providerPayload.sessionId);
-      if (!providerSession || providerSession.revokedAt) {
-        auditSignIn('deny', 401, 'wallet_provider_session_invalid_or_revoked', user.id);
-        return res.status(401).json({ error: 'Wallet provider session is invalid or revoked' });
-      }
-
-      if (providerSession.expiresAt.getTime() <= Date.now()) {
-        auditSignIn('deny', 401, 'wallet_provider_session_expired', user.id);
-        return res.status(401).json({ error: 'Wallet provider session expired' });
-      }
-
-      if (providerSession.did !== providerPayload.did) {
-        auditSignIn('deny', 401, 'wallet_provider_identity_mismatch', user.id);
-        return res.status(401).json({ error: 'Wallet provider identity mismatch' });
-      }
-
-      if (user.walletDid && providerSession.did !== user.walletDid) {
-        auditSignIn('deny', 403, 'wallet_did_mismatch', user.id);
-        return res.status(403).json({ error: 'Wallet DID does not match enrolled profile wallet' });
-      }
     }
 
     user =

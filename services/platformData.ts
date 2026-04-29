@@ -133,7 +133,7 @@ export const MEMBERSHIP_TIERS: MembershipTierRecord[] = [
     access: 'Community discussions, public posts, and selected sessions.',
     ideal: 'Individuals exploring the platform before committing to guided support.',
     features: ['Public social learning', 'Community profile', 'Selected events'],
-    checkoutEnabled: false,
+    checkoutEnabled: true,
   },
   {
     id: 'guided',
@@ -144,7 +144,7 @@ export const MEMBERSHIP_TIERS: MembershipTierRecord[] = [
     access: 'Guided pathways, member sessions, and deeper community participation.',
     ideal: 'Members seeking clarity, emotional wellness, or spiritual development.',
     features: ['Guided pathways', 'Provider session access', 'Member learning history'],
-    checkoutEnabled: false,
+    checkoutEnabled: true,
   },
   {
     id: 'accelerated',
@@ -155,6 +155,6 @@ export const MEMBERSHIP_TIERS: MembershipTierRecord[] = [
     access: 'Full provider discovery, live programs, and advanced thematic content.',
     ideal: 'Members committed to intentional development and consistent practice.',
     features: ['Provider marketplace access', 'Advanced courses', 'Live and replay sessions'],
-    checkoutEnabled: false,
+    checkoutEnabled: true,
   },
 ];
