@@ -5,7 +5,6 @@ import {
   SkipForward,
   SkipBack,
   Music,
-  GripHorizontal,
   Volume2,
   VolumeX,
   Minimize2,
@@ -171,6 +170,16 @@ const TRACKS: Track[] = [
     license: "Public Domain"
   },
 
+  // ========== WESTERN SACRED - GREGORIAN CHANT ==========
+  {
+    name: "Kyrie Eleison",
+    subtitle: "Gregorian Vespers - Catholic Chant",
+    culture: "Western Sacred",
+    url: "https://upload.wikimedia.org/wikipedia/commons/7/73/Schola_Gregoriana-Kyrie_eleison.ogg",
+    source: "Wikimedia Commons - Schola Gregoriana",
+    license: "CC BY-SA 3.0"
+  },
+
   // ========== LATIN AMERICA & CARIBBEAN ==========
   {
     name: "Son Jarocho",
@@ -274,8 +283,6 @@ const TRACKS: Track[] = [
   }
 ];
 
-type CornerPosition = 'top-left' | 'top-right' | 'bottom-left' | 'bottom-right' | 'center';
-
 const MusicBox: React.FC = () => {
   const [isPlaying, setIsPlaying] = useState(false);
   const [currentTrack, setCurrentTrack] = useState(0);
@@ -284,15 +291,11 @@ const MusicBox: React.FC = () => {
   const [volume, setVolume] = useState(100);
   const [repeatMode, setRepeatMode] = useState<RepeatMode>('off');
   const [isShuffle, setIsShuffle] = useState(false);
-  const [position, setPosition] = useState({ x: 20, y: 120 });
-  const [isDragging, setIsDragging] = useState(false);
-  const [dragOffset, setDragOffset] = useState({ x: 0, y: 0 });
   const [duration, setDuration] = useState(0);
   const [currentTime, setCurrentTime] = useState(0);
   const [showPlaylist, setShowPlaylist] = useState(false);
 
   const audioRef = useRef<HTMLAudioElement | null>(null);
-  const musicBoxRef = useRef<HTMLDivElement | null>(null);
 
   const safePlay = () => {
     if (!audioRef.current) return;
@@ -405,24 +408,6 @@ const MusicBox: React.FC = () => {
     }
   }, [volume, isMuted]);
 
-  // Snap to corners when minimized at edges
-  useEffect(() => {
-    if (isMinimized && !isDragging) {
-      const snapThreshold = 100;
-      const newPos = { ...position };
-
-      if (position.x < snapThreshold) newPos.x = 20;
-      else if (position.x > window.innerWidth - snapThreshold) newPos.x = window.innerWidth - 110;
-
-      if (position.y < snapThreshold) newPos.y = 20;
-      else if (position.y > window.innerHeight - snapThreshold) newPos.y = window.innerHeight - 110;
-
-      if (newPos.x !== position.x || newPos.y !== position.y) {
-        setPosition(newPos);
-      }
-    }
-  }, [isMinimized, isDragging, position]);
-
   const togglePlay = (e: React.MouseEvent) => {
     e.stopPropagation();
     if (!audioRef.current) return;
@@ -452,66 +437,6 @@ const MusicBox: React.FC = () => {
     setIsShuffle(!isShuffle);
   };
 
-  const snapToCorner = (corner: CornerPosition) => {
-    const padding = 20;
-    const boxWidth = isMinimized ? 100 : 330;
-    const boxHeight = isMinimized ? 100 : 360;
-
-    const corners: Record<CornerPosition, { x: number; y: number }> = {
-      'top-left': { x: padding, y: padding },
-      'top-right': { x: window.innerWidth - boxWidth - padding, y: padding },
-      'bottom-left': { x: padding, y: window.innerHeight - boxHeight - padding },
-      'bottom-right': { x: window.innerWidth - boxWidth - padding, y: window.innerHeight - boxHeight - padding },
-      'center': { x: (window.innerWidth - boxWidth) / 2, y: (window.innerHeight - boxHeight) / 2 }
-    };
-
-    setPosition(corners[corner]);
-  };
-
-  const handleMouseDown = (e: React.MouseEvent | React.TouchEvent) => {
-    const clientX = 'touches' in e ? e.touches[0].clientX : (e as React.MouseEvent).clientX;
-    const clientY = 'touches' in e ? e.touches[0].clientY : (e as React.MouseEvent).clientY;
-
-    setIsDragging(true);
-    setDragOffset({
-      x: clientX - position.x,
-      y: clientY - position.y
-    });
-  };
-
-  useEffect(() => {
-    const handleMove = (e: MouseEvent | TouchEvent) => {
-      if (!isDragging) return;
-      const clientX = 'touches' in e ? e.touches[0].clientX : (e as MouseEvent).clientX;
-      const clientY = 'touches' in e ? e.touches[0].clientY : (e as MouseEvent).clientY;
-
-      // Keep within viewport bounds reasonably
-      const maxX = Math.max(0, window.innerWidth - 300);
-      const maxY = Math.max(0, window.innerHeight - 200);
-
-      setPosition({
-        x: Math.max(0, Math.min(maxX, clientX - dragOffset.x)),
-        y: Math.max(0, Math.min(maxY, clientY - dragOffset.y))
-      });
-    };
-
-    const handleUp = () => setIsDragging(false);
-
-    if (isDragging) {
-      window.addEventListener('mousemove', handleMove);
-      window.addEventListener('mouseup', handleUp);
-      window.addEventListener('touchmove', handleMove);
-      window.addEventListener('touchend', handleUp);
-    }
-
-    return () => {
-      window.removeEventListener('mousemove', handleMove);
-      window.removeEventListener('mouseup', handleUp);
-      window.removeEventListener('touchmove', handleMove);
-      window.removeEventListener('touchend', handleUp);
-    };
-  }, [isDragging, dragOffset]);
-
   const formatTime = (time: number) => {
     if (!time || isNaN(time)) return '0:00';
     const minutes = Math.floor(time / 60);
@@ -523,14 +448,13 @@ const MusicBox: React.FC = () => {
 
   return (
     <div
-      ref={musicBoxRef}
-      className={`fixed z-[999] transition-all ${isDragging ? 'shadow-2xl' : 'shadow-xl'}`}
-      style={{ left: `${position.x}px`, top: `${position.y}px`, touchAction: 'none' }}
+      className="fixed right-3 sm:right-5 lg:right-6 z-[90] pointer-events-none transition-all"
+      style={{ bottom: 'calc(env(safe-area-inset-bottom, 0px) + 1rem)' }}
     >
       {/* Minimized Alert Glow */}
       {isMinimized && (
         <div
-          className={`absolute -inset-3 rounded-2xl ${isPlaying ? 'animate-pulse' : 'animate-spin'} opacity-50`}
+          className={`absolute -inset-1 rounded-full ${isPlaying ? 'animate-pulse' : ''} opacity-50`}
           style={{
             background: 'radial-gradient(circle, rgba(96,165,250,0.4) 0%, rgba(30,144,255,0.1) 100%)',
             animationDuration: isPlaying ? '2s' : '4s'
@@ -548,39 +472,35 @@ const MusicBox: React.FC = () => {
         }
       `}</style>
 
-      <div className={`music-box-glow glass-panel rounded-[1.8rem] border-2 border-cyan-400/40 backdrop-blur-3xl overflow-hidden flex flex-col transition-all duration-300 bg-gradient-to-br from-blue-950/70 via-slate-900/60 to-blue-900/50 ${isMinimized ? 'w-24 h-24' : 'w-96'}`}>
-        {/* Drag Handle with Brand Name */}
-        <div
-          onMouseDown={handleMouseDown}
-          onTouchStart={handleMouseDown}
-          className="h-8 flex items-center justify-between px-4 cursor-move hover:bg-cyan-500/10 border-b border-cyan-400/30"
-        >
-          <GripHorizontal className="w-4 h-4 text-cyan-400/70" />
-          {!isMinimized && (
-            <div className="flex items-center gap-2 flex-1 justify-center">
+      <div className={`music-box-glow pointer-events-auto glass-panel border-2 border-cyan-400/40 backdrop-blur-3xl overflow-hidden flex flex-col transition-all duration-300 bg-gradient-to-br from-blue-950/70 via-slate-900/60 to-blue-900/50 ${isMinimized ? 'rounded-full' : 'w-[min(calc(100vw-1.5rem),24rem)] rounded-[1.5rem] max-h-[calc(100dvh-2rem)]'}`}>
+        {!isMinimized && (
+          <div className="h-11 flex items-center justify-between gap-3 px-4 border-b border-cyan-400/30 bg-blue-950/40">
+            <div className="flex min-w-0 items-center gap-2">
               <Sparkles className="w-4 h-4 text-yellow-300 animate-pulse" />
-              <span className="text-[11px] font-bold bg-gradient-to-r from-cyan-300 via-blue-300 to-cyan-300 bg-clip-text text-transparent uppercase tracking-widest">
+              <span className="truncate text-[11px] font-bold bg-gradient-to-r from-cyan-300 via-blue-300 to-cyan-300 bg-clip-text text-transparent uppercase tracking-widest">
                 Conscious Music
               </span>
-              <Sparkles className="w-4 h-4 text-yellow-300 animate-pulse" />
             </div>
-          )}
-        </div>
+            <button
+              onClick={() => setIsMinimized(true)}
+              className="p-2 hover:bg-cyan-500/20 rounded-lg text-cyan-300/70 hover:text-cyan-200 flex-shrink-0 transition-all"
+              title="Minimize music player"
+            >
+              <Minimize2 className="w-4 h-4" />
+            </button>
+          </div>
+        )}
 
         {isMinimized ? (
           // Minimized View - Alert Icon
           <button
             onClick={() => setIsMinimized(false)}
-            className="flex-1 flex items-center justify-center text-cyan-300 hover:text-cyan-100 transition-colors hover:bg-cyan-500/15 relative group"
+            className="group flex h-12 max-w-[calc(100vw-1.5rem)] items-center justify-center gap-2 rounded-full px-4 text-cyan-200 hover:text-cyan-50 transition-colors hover:bg-cyan-500/15"
             title="🎵 Conscious Music Entertainment - Click to enjoy global sounds"
           >
-            <div className="relative">
-              <Music className={`w-8 h-8 ${isPlaying ? 'animate-pulse' : ''}`} />
-              <Sparkles className="w-4 h-4 text-yellow-300 absolute -top-1 -right-1 animate-bounce" />
-            </div>
-            <div className="absolute -bottom-12 left-1/2 transform -translate-x-1/2 bg-gradient-to-b from-blue-900 to-blue-950 border border-cyan-400 px-3 py-2 rounded-lg text-[10px] text-cyan-100 whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none shadow-lg">
-              🎵 Entertainment Hub
-            </div>
+            <Music className={`w-4 h-4 ${isPlaying ? 'animate-pulse' : ''}`} />
+            <span className="text-[10px] font-black uppercase tracking-widest">Music</span>
+            {isPlaying && <span className="h-2 w-2 rounded-full bg-emerald-300 shadow-[0_0_12px_rgba(110,231,183,0.8)]" />}
           </button>
         ) : (
           // Expanded View
@@ -693,51 +613,13 @@ const MusicBox: React.FC = () => {
               <span className="text-[9px] text-cyan-300/70 w-6 text-right font-bold">{volume}%</span>
             </div>
 
-            {/* Navigation & Controls */}
-            <div className="grid grid-cols-3 gap-2 pt-2 border-t border-cyan-400/20">
-              <button
-                onClick={() => snapToCorner('top-left')}
-                className="text-[10px] px-2 py-2 rounded-lg bg-blue-900/40 hover:bg-blue-800/60 text-cyan-300 hover:text-cyan-100 transition-all border border-cyan-400/25 hover:border-cyan-400/50 font-bold"
-                title="Snap to top-left corner"
-              >
-                ↖️
-              </button>
-              <button
-                onClick={() => snapToCorner('center')}
-                className="text-[10px] px-2 py-2 rounded-lg bg-blue-900/40 hover:bg-blue-800/60 text-cyan-300 hover:text-cyan-100 transition-all border border-cyan-400/25 hover:border-cyan-400/50 font-bold"
-                title="Center on screen"
-              >
-                ⊙
-              </button>
-              <button
-                onClick={() => snapToCorner('top-right')}
-                className="text-[10px] px-2 py-2 rounded-lg bg-blue-900/40 hover:bg-blue-800/60 text-cyan-300 hover:text-cyan-100 transition-all border border-cyan-400/25 hover:border-cyan-400/50 font-bold"
-                title="Snap to top-right corner"
-              >
-                ↗️
-              </button>
-              <button
-                onClick={() => snapToCorner('bottom-left')}
-                className="text-[10px] px-2 py-2 rounded-lg bg-blue-900/40 hover:bg-blue-800/60 text-cyan-300 hover:text-cyan-100 transition-all border border-cyan-400/25 hover:border-cyan-400/50 font-bold"
-                title="Snap to bottom-left corner"
-              >
-                ↙️
-              </button>
-              <button
-                onClick={() => setShowPlaylist(!showPlaylist)}
-                className="text-[10px] px-2 py-2 rounded-lg bg-blue-900/40 hover:bg-blue-800/60 text-cyan-300 hover:text-cyan-100 transition-all border border-cyan-400/25 hover:border-cyan-400/50 font-bold"
-                title="Toggle global playlist"
-              >
-                🌍
-              </button>
-              <button
-                onClick={() => snapToCorner('bottom-right')}
-                className="text-[10px] px-2 py-2 rounded-lg bg-blue-900/40 hover:bg-blue-800/60 text-cyan-300 hover:text-cyan-100 transition-all border border-cyan-400/25 hover:border-cyan-400/50 font-bold"
-                title="Snap to bottom-right corner"
-              >
-                ↘️
-              </button>
-            </div>
+            <button
+              onClick={() => setShowPlaylist(!showPlaylist)}
+              className="w-full rounded-xl border border-cyan-400/25 bg-blue-900/40 px-3 py-3 text-[10px] font-black uppercase tracking-widest text-cyan-200 transition-all hover:bg-blue-800/60 hover:text-cyan-50"
+              title="Toggle global playlist"
+            >
+              {showPlaylist ? 'Hide Playlist' : 'Open Playlist'}
+            </button>
 
             {/* Global Playlist with Cultural Representation & Licensing Info */}
             {showPlaylist && (
