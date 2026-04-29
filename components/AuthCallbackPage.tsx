@@ -5,38 +5,44 @@ import { UserProfile } from '../types';
 
 interface AuthCallbackPageProps {
   onAuthenticated: (token: string, user: UserProfile) => void;
-  onMissingToken: () => void;
+  onInvalidToken: () => void;
 }
 
 type CallbackState = 'loading' | 'success' | 'error';
+const BASE44_PORTAL_URL = 'https://conscious-network-hub.base44.app';
+const INVALID_SESSION_MESSAGE =
+  'Your session could not be verified. Please return and reconnect.';
 
 const AuthCallbackPage: React.FC<AuthCallbackPageProps> = ({
   onAuthenticated,
-  onMissingToken,
+  onInvalidToken,
 }) => {
   const [state, setState] = useState<CallbackState>('loading');
-  const [message, setMessage] = useState('Verifying provider portal session...');
+  const [message, setMessage] = useState('Signing you in...');
 
   useEffect(() => {
     if (typeof window === 'undefined') return;
 
     const token = new URLSearchParams(window.location.search).get('token')?.trim() || '';
     if (!token) {
-      onMissingToken();
+      onInvalidToken();
+      setState('error');
+      setMessage(INVALID_SESSION_MESSAGE);
       return;
     }
 
     const bridgeUser = buildBridgeUserFromToken(token);
     if (!bridgeUser) {
+      onInvalidToken();
       setState('error');
-      setMessage('Provider session token is invalid or expired.');
+      setMessage(INVALID_SESSION_MESSAGE);
       return;
     }
 
     setState('success');
     setMessage('Provider session verified. Opening your dashboard...');
     onAuthenticated(token, bridgeUser);
-  }, [onAuthenticated, onMissingToken]);
+  }, [onAuthenticated, onInvalidToken]);
 
   return (
     <div className="min-h-screen w-full bg-slate-950 text-white flex items-center justify-center p-6">
@@ -60,10 +66,10 @@ const AuthCallbackPage: React.FC<AuthCallbackPageProps> = ({
         {state === 'error' && (
           <button
             type="button"
-            onClick={onMissingToken}
+            onClick={() => window.location.assign(BASE44_PORTAL_URL)}
             className="w-full px-4 py-3 rounded-xl bg-blue-600 hover:bg-blue-500 text-white text-xs font-black uppercase tracking-widest transition-colors"
           >
-            Return to Hub
+            Return to Portal
           </button>
         )}
       </div>

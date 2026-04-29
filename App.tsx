@@ -1069,10 +1069,9 @@ const App: React.FC = () => {
     }
   };
 
-  const handleAuthCallbackMissingToken = () => {
+  const handleAuthCallbackInvalidToken = () => {
     clearAuthSession();
     setUser(null);
-    setCurrentView(AppView.ENTRY, {}, { replace: true });
   };
 
   const handleIdentityComplete = (profileData: Partial<UserProfile>) => {
@@ -1421,7 +1420,7 @@ const App: React.FC = () => {
     return (
       <AuthCallbackPage
         onAuthenticated={handleAuthCallbackAuthenticated}
-        onMissingToken={handleAuthCallbackMissingToken}
+        onInvalidToken={handleAuthCallbackInvalidToken}
       />
     );
   }

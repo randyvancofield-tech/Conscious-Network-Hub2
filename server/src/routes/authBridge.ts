@@ -39,6 +39,8 @@ const normalizeWalletAddress = (value: unknown): string | null => {
 };
 
 router.post('/bridge', bridgeAuthLimiter, async (req: Request, res: Response): Promise<void> => {
+  console.log('Bridge request received', req.body);
+
   const id = normalizeRequiredString(req.body?.id);
   const email = normalizeEmail(req.body?.email);
   const role = normalizeRole(req.body?.role);

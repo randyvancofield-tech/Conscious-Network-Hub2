@@ -98,8 +98,14 @@ const configuredCorsOrigins = (process.env.CORS_ORIGINS || '')
   .map((origin) => origin.trim())
   .filter(Boolean);
 
+const requiredCorsOrigins = [
+  'https://conscious-network-hub.base44.app',
+  'https://conscious-network.org',
+];
 const localDevCorsOrigins = ['http://localhost:3000', 'http://127.0.0.1:3000'];
-const corsOriginCandidates = [...new Set([...configuredCorsOrigins, ...localDevCorsOrigins])];
+const corsOriginCandidates = [
+  ...new Set([...requiredCorsOrigins, ...configuredCorsOrigins, ...localDevCorsOrigins]),
+];
 
 const normalizeOrigin = (origin: string): string => {
   try {
