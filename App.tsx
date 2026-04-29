@@ -12,7 +12,6 @@ import MeetingsPage from './components/MeetingsPage';
 import MembershipPage from './components/MembershipPage';
 import NotFoundPage from './components/NotFoundPage';
 import AuthCallbackPage from './components/AuthCallbackPage';
-import ProviderLaunchGate from './components/ProviderLaunchGate';
 import MusicBox from './components/MusicBox';
 import NotificationsCenter from './components/NotificationsCenter';
 import { ConsciousIdentity } from './components/community/CommunityLayout';
@@ -30,10 +29,11 @@ import vendorApiGovernancePolicy from './docs/compliance/vendor-api-governance-p
 import nistMappingSummary from './docs/compliance/nist-mapping-summary.md?raw';
 import {
   buildBridgeUserFromToken,
-  clearAuthSession,
   getAuthToken,
   getCachedAuthUser,
-  setAuthSession,
+  setGuestSession,
+  setProviderAuthSession,
+  setUserAuthSession,
 } from './services/sessionService';
 import { canTierAccessNavItem, canTierAccessView } from './services/tierAccess';
 import { ApiError, api, apiHealth, backendAssetUrl, getBackendBaseUrl } from './services/apiClient';
@@ -43,6 +43,8 @@ type RouteState = {
   params: Record<string, string>;
   path: string;
 };
+
+const BASE44_PROVIDER_PORTAL_URL = 'https://conscious-network-hub.base44.app';
 
 const normalizePathname = (pathname: string): string => {
   const normalized = pathname.replace(/\/+$/, '') || '/';
@@ -163,8 +165,6 @@ const getInitialRoute = (): RouteState => {
 const requiresConfirmedMembership = (view: AppView): boolean =>
   [
     AppView.DASHBOARD,
-    AppView.CONSCIOUS_SOCIAL_LEARNING,
-    AppView.COMMUNITY,
     AppView.CONSCIOUS_MEETINGS,
     AppView.MEETING_DETAIL,
     AppView.MY_COURSES,
@@ -175,13 +175,9 @@ const requiresConfirmedMembership = (view: AppView): boolean =>
 const requiresStoredSession = (view: AppView): boolean =>
   [
     AppView.DASHBOARD,
-    AppView.CONSCIOUS_SOCIAL_LEARNING,
-    AppView.COMMUNITY,
     AppView.CONSCIOUS_MEETINGS,
     AppView.MEETING_DETAIL,
     AppView.MY_COURSES,
-    AppView.KNOWLEDGE_PATHWAYS,
-    AppView.COURSE_DETAIL,
     AppView.PROVIDERS,
     AppView.PROVIDER_DETAIL,
     AppView.MY_CONSCIOUS_IDENTITY,
@@ -324,7 +320,7 @@ const App: React.FC = () => {
       return courses;
     } catch (courseError) {
       if (courseError instanceof ApiError && courseError.status === 401) {
-        clearAuthSession();
+        setGuestSession();
         setUser(null);
       }
       console.error('Course refresh error:', courseError);
@@ -434,10 +430,21 @@ const App: React.FC = () => {
     };
   };
 
-  const mergeBridgeSessionUser = (token: string | null, canonicalUser: UserProfile): UserProfile => {
-    if (!token) return canonicalUser;
+  const toPlatformUser = (rawUser: any): UserProfile => {
+    const canonicalUser = toCanonicalUser(rawUser);
+    return {
+      ...canonicalUser,
+      role: 'user',
+      providerExternalId: null,
+      tier: canonicalUser.tier || 'Free / Community Tier',
+    };
+  };
+
+  const toSessionUserFromBackend = (token: string | null, rawUser: any): UserProfile => {
+    const canonicalUser = toCanonicalUser(rawUser);
+    if (!token) return toPlatformUser(rawUser);
     const bridgeUser = buildBridgeUserFromToken(token);
-    if (!bridgeUser) return canonicalUser;
+    if (!bridgeUser) return toPlatformUser(rawUser);
 
     return {
       ...canonicalUser,
@@ -450,9 +457,9 @@ const App: React.FC = () => {
     };
   };
 
-  const isProviderLaunchPath = useMemo(() => {
+  const isProviderGatewayPath = useMemo(() => {
     if (typeof window === 'undefined') return false;
-    return window.location.pathname.replace(/\/+$/, '') === '/provider-launch';
+    return window.location.pathname.replace(/\/+$/, '') === '/provider-gateway';
   }, []);
 
   const hasConfirmedMembership = (profile: UserProfile | null | undefined): boolean =>
@@ -520,39 +527,33 @@ const App: React.FC = () => {
     const initializeSession = async () => {
       const token = getAuthToken();
       if (!token) {
+        setGuestSession();
         return;
       }
 
       try {
         const data = await api<{ user: any }>('/user/current');
-        const canonicalUser = mergeBridgeSessionUser(token, toCanonicalUser(data.user));
+        const canonicalUser = toSessionUserFromBackend(token, data.user);
         setUser(canonicalUser);
-        setAuthSession(token, canonicalUser);
-        void refreshUserCourses();
-        if (hasConfirmedMembership(canonicalUser)) {
-          if (currentView === AppView.ENTRY || currentView === AppView.MEMBERSHIP_ACCESS) {
-            setCurrentView(AppView.DASHBOARD);
-          }
-          setIsSelectingTier(false);
+        if (buildBridgeUserFromToken(token)) {
+          setProviderAuthSession(token, canonicalUser);
         } else {
-          setCurrentView(AppView.MEMBERSHIP_ACCESS);
-          setIsSelectingTier(true);
-          setMembershipNotice('Select a membership tier to continue.');
+          setUserAuthSession(token, canonicalUser);
         }
+        void refreshUserCourses();
+        setSelectedTier(canonicalUser.tier || 'Free / Community Tier');
+        setIsSelectingTier(false);
       } catch {
         const bridgeUser = buildBridgeUserFromToken(token);
         if (bridgeUser) {
           setUser(bridgeUser);
-          setAuthSession(token, bridgeUser);
+          setProviderAuthSession(token, bridgeUser);
           setSelectedTier(bridgeUser.tier || 'Accelerated Tier');
           setIsSelectingTier(false);
           setMembershipNotice('');
-          if (currentView === AppView.ENTRY || currentView === AppView.MEMBERSHIP_ACCESS) {
-            setCurrentView(AppView.DASHBOARD);
-          }
           return;
         }
-        clearAuthSession();
+        setGuestSession();
         setUser(null);
       }
     };
@@ -626,19 +627,6 @@ const App: React.FC = () => {
     }
   }, [pendingScrollWisdom, currentView]);
 
-  useEffect(() => {
-    if (!user) return;
-    if (!hasConfirmedMembership(user)) {
-      if (requiresConfirmedMembership(currentView)) {
-        setCurrentView(AppView.MEMBERSHIP_ACCESS);
-      }
-      return;
-    }
-    if (currentView !== AppView.NOT_FOUND && !canTierAccessView(user.tier, currentView)) {
-      setCurrentView(AppView.DASHBOARD);
-    }
-  }, [user, currentView]);
-
   const handleOpenSelectKey = async () => {
     // @ts-ignore
     if (window.aistudio?.openSelectKey) {
@@ -655,11 +643,12 @@ const App: React.FC = () => {
   const handleGoHome = () => setCurrentView(AppView.ENTRY);
   
   const handleExploreAsGuest = () => {
-    clearAuthSession();
+    setGuestSession();
     setUser(null);
     setEnrolledCourses([]);
-    setMembershipNotice('Protected platform routes require a signed session token.');
-    setCurrentView(AppView.MEMBERSHIP_ACCESS);
+    setMembershipNotice('');
+    setCurrentView(AppView.COMMUNITY);
+    if (window.innerWidth >= 1024) setSidebarOpen(true);
   };
 
   const handleOpenIdentityFromSidebar = () => {
@@ -682,14 +671,18 @@ const App: React.FC = () => {
     try {
       const data = await api<{ user: any }>('/user/current');
       const token = getAuthToken();
-      const canonicalUser = mergeBridgeSessionUser(token, toCanonicalUser(data.user));
+      const canonicalUser = toSessionUserFromBackend(token, data.user);
       setUser(canonicalUser);
       if (token) {
-        setAuthSession(token, canonicalUser);
+        if (buildBridgeUserFromToken(token)) {
+          setProviderAuthSession(token, canonicalUser);
+        } else {
+          setUserAuthSession(token, canonicalUser);
+        }
       }
       return canonicalUser;
     } catch {
-      clearAuthSession();
+      setGuestSession();
       setUser(null);
       return null;
     }
@@ -728,7 +721,7 @@ const App: React.FC = () => {
       } catch (error) {
         if (error instanceof ApiError) {
           if (error.status === 401) {
-            clearAuthSession();
+            setGuestSession();
             setUser(null);
             setSignupModalOpen(false);
             setSigninModalOpen(true);
@@ -773,13 +766,12 @@ const App: React.FC = () => {
         return;
       }
 
-      const canonicalUser = toCanonicalUser(data.user);
-      setAuthSession(data.token, canonicalUser);
+      const canonicalUser = toPlatformUser(data.user);
+      setUserAuthSession(data.token, canonicalUser);
       setUser(canonicalUser);
       void refreshUserCourses();
       setSelectedTier(canonicalUser.tier || 'Free / Community Tier');
-      const confirmedMembership = hasConfirmedMembership(canonicalUser);
-      setIsSelectingTier(!confirmedMembership);
+      setIsSelectingTier(false);
       setMembershipCheckoutPending(false);
       setMembershipNotice('');
       setPendingCheckoutSessionId(null);
@@ -787,13 +779,8 @@ const App: React.FC = () => {
       setTwoFactorCodeInput('');
       setProviderTokenInput('');
       closeModals();
-      if (confirmedMembership) {
-        setCurrentView(AppView.DASHBOARD);
-        if (window.innerWidth >= 1024) setSidebarOpen(true);
-      } else {
-        setCurrentView(AppView.MEMBERSHIP_ACCESS);
-        setMembershipNotice('Select a membership tier to continue.');
-      }
+      setCurrentView(AppView.ENTRY, {}, { replace: true });
+      setSidebarOpen(false);
     } catch (error) {
       if (error instanceof ApiError) {
         const data = error.data as any;
@@ -861,16 +848,17 @@ const App: React.FC = () => {
         return;
       }
 
-      const canonicalUser = toCanonicalUser(data.user);
-      setAuthSession(data.token, canonicalUser);
+      const canonicalUser = toPlatformUser(data.user);
+      setUserAuthSession(data.token, canonicalUser);
       setUser(canonicalUser);
       void refreshUserCourses();
       setSelectedTier((currentTier) => currentTier || canonicalUser.tier || 'Free / Community Tier');
       setMembershipCheckoutPending(false);
       setMembershipNotice('');
       closeModals();
-      setCurrentView(AppView.MEMBERSHIP_ACCESS);
-      setIsSelectingTier(true);
+      setCurrentView(AppView.ENTRY, {}, { replace: true });
+      setIsSelectingTier(false);
+      setSidebarOpen(false);
     } catch (error) {
       if (error instanceof ApiError) {
         const data = error.data as any;
@@ -945,7 +933,7 @@ const App: React.FC = () => {
 
   const handleSignOut = () => {
     const finalizeSignOut = () => {
-      clearAuthSession();
+      setGuestSession();
       setUser(null);
       setEnrolledCourses([]);
       setIsSelectingTier(false);
@@ -1044,16 +1032,22 @@ const App: React.FC = () => {
   };
 
   const updateActiveUser = (updated: UserProfile) => {
-    const canonicalUpdated = toCanonicalUser({ ...user, ...updated });
-    setUser(canonicalUpdated);
     const token = getAuthToken();
+    const canonicalUpdated = buildBridgeUserFromToken(token || '')
+      ? toSessionUserFromBackend(token, { ...user, ...updated })
+      : toPlatformUser({ ...user, ...updated });
+    setUser(canonicalUpdated);
     if (token) {
-      setAuthSession(token, canonicalUpdated);
+      if (buildBridgeUserFromToken(token)) {
+        setProviderAuthSession(token, canonicalUpdated);
+      } else {
+        setUserAuthSession(token, canonicalUpdated);
+      }
     }
   };
 
   const handleAuthCallbackAuthenticated = (token: string, authenticatedUser: UserProfile) => {
-    setAuthSession(token, authenticatedUser);
+    setProviderAuthSession(token, authenticatedUser);
     setUser(authenticatedUser);
     setSelectedTier(authenticatedUser.tier || 'Accelerated Tier');
     setMembershipNotice('');
@@ -1070,7 +1064,7 @@ const App: React.FC = () => {
   };
 
   const handleAuthCallbackInvalidToken = () => {
-    clearAuthSession();
+    setGuestSession();
     setUser(null);
   };
 
@@ -1178,12 +1172,22 @@ const App: React.FC = () => {
     }
     if (user && currentView !== AppView.NOT_FOUND && !canTierAccessView(user.tier, currentView)) {
       return (
-        <Dashboard
-          user={user}
-          onEnroll={enrollCourse}
-          onManageReputation={() => setCurrentView(AppView.MY_CONSCIOUS_IDENTITY)}
-          insightRef={insightRef}
-        />
+        <div className="p-4 sm:p-8 max-w-3xl mx-auto">
+          <div className="glass-panel p-6 sm:p-8 rounded-3xl border border-blue-500/20">
+            <h2 className="text-2xl font-black text-white uppercase tracking-tight mb-4">
+              Tier Upgrade Required
+            </h2>
+            <p className="text-slate-300 text-sm leading-relaxed mb-6">
+              This feature is locked for your current tier. Choose a higher tier when you are ready to unlock it.
+            </p>
+            <button
+              onClick={() => setCurrentView(AppView.MEMBERSHIP)}
+              className="px-5 py-3 bg-blue-600 hover:bg-blue-500 text-white rounded-xl text-xs font-black uppercase tracking-widest transition-colors"
+            >
+              View Memberships
+            </button>
+          </div>
+        </div>
       );
     }
 
@@ -1425,24 +1429,16 @@ const App: React.FC = () => {
     );
   }
 
-  if (isProviderLaunchPath) {
+  if (isProviderGatewayPath) {
+    if (typeof window !== 'undefined') {
+      window.location.replace(BASE44_PROVIDER_PORTAL_URL);
+    }
     return (
-      <ProviderLaunchGate
-        onAuthenticated={(authenticatedUser) => {
-          setUser(authenticatedUser);
-          setSelectedTier(authenticatedUser.tier || 'Accelerated Tier');
-          setMembershipNotice('');
-          setIsSelectingTier(false);
-          setPendingCheckoutSessionId(null);
-          setPendingTwoFactorMethod(null);
-          setTwoFactorCodeInput('');
-          setProviderTokenInput('');
-          setCurrentView(AppView.DASHBOARD);
-          if (window.innerWidth >= 1024) {
-            setSidebarOpen(true);
-          }
-        }}
-      />
+      <div className="min-h-screen w-full bg-slate-950 text-white flex items-center justify-center p-6">
+        <div className="glass-panel w-full max-w-md rounded-3xl border border-blue-500/20 p-8 text-center">
+          <p className="text-sm text-slate-200">Opening provider portal...</p>
+        </div>
+      </div>
     );
   }
 

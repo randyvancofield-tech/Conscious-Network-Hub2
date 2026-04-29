@@ -3,6 +3,17 @@ import { UserProfile } from '../types';
 export const AUTH_TOKEN_KEY = 'hcn_auth_token';
 export const BRIDGE_AUTH_TOKEN_KEY = 'auth_token';
 export const ACTIVE_USER_CACHE_KEY = 'hcn_active_user';
+export const PLATFORM_SESSION_KEY = 'hcn_platform_session';
+
+type PlatformSessionRole = 'guest' | 'user' | 'provider' | 'admin';
+type PlatformSessionTier = 'free' | 'guided' | 'accelerated';
+
+interface PlatformSessionState {
+  isAuthenticated: boolean;
+  role: PlatformSessionRole;
+  tier?: PlatformSessionTier;
+  permissions: string[];
+}
 
 interface SessionTokenPayload {
   userId?: string;
@@ -19,6 +30,13 @@ interface SessionTokenPayload {
 }
 
 const hasBrowserStorage = (): boolean => typeof window !== 'undefined' && !!window.localStorage;
+
+const normalizePlatformTier = (tier?: string | null): PlatformSessionTier => {
+  const normalized = String(tier || '').trim().toLowerCase();
+  if (normalized.includes('accelerated')) return 'accelerated';
+  if (normalized.includes('guided')) return 'guided';
+  return 'free';
+};
 
 const fromBase64Url = (value: string): string => {
   const normalized = value.replace(/-/g, '+').replace(/_/g, '/');
@@ -75,13 +93,50 @@ export const getAuthToken = (): string | null => {
   return null;
 };
 
-export const setAuthSession = (token: string, user?: UserProfile | null): void => {
+const writePlatformSession = (session: PlatformSessionState): void => {
+  if (!hasBrowserStorage()) return;
+  localStorage.setItem(PLATFORM_SESSION_KEY, JSON.stringify(session));
+};
+
+export const setGuestSession = (): void => {
+  if (!hasBrowserStorage()) return;
+  localStorage.removeItem(AUTH_TOKEN_KEY);
+  localStorage.removeItem(BRIDGE_AUTH_TOKEN_KEY);
+  localStorage.removeItem(ACTIVE_USER_CACHE_KEY);
+  writePlatformSession({
+    isAuthenticated: false,
+    role: 'guest',
+    permissions: [],
+  });
+};
+
+export const setUserAuthSession = (token: string, user?: UserProfile | null): void => {
+  if (!hasBrowserStorage()) return;
+  const platformUser = user ? { ...user, role: 'user' as const, providerExternalId: null } : null;
+  localStorage.setItem(AUTH_TOKEN_KEY, token);
+  localStorage.removeItem(BRIDGE_AUTH_TOKEN_KEY);
+  if (platformUser) {
+    localStorage.setItem(ACTIVE_USER_CACHE_KEY, JSON.stringify(platformUser));
+  }
+  writePlatformSession({
+    isAuthenticated: true,
+    role: 'user',
+    tier: normalizePlatformTier(platformUser?.tier),
+    permissions: [],
+  });
+};
+
+export const setProviderAuthSession = (token: string, user: UserProfile): void => {
   if (!hasBrowserStorage()) return;
   localStorage.setItem(AUTH_TOKEN_KEY, token);
   localStorage.setItem(BRIDGE_AUTH_TOKEN_KEY, token);
-  if (user) {
-    localStorage.setItem(ACTIVE_USER_CACHE_KEY, JSON.stringify(user));
-  }
+  localStorage.setItem(ACTIVE_USER_CACHE_KEY, JSON.stringify(user));
+  writePlatformSession({
+    isAuthenticated: true,
+    role: user.role === 'admin' ? 'admin' : 'provider',
+    tier: normalizePlatformTier(user.tier),
+    permissions: ['provider:portal'],
+  });
 };
 
 export const clearAuthSession = (): void => {
@@ -89,6 +144,7 @@ export const clearAuthSession = (): void => {
   localStorage.removeItem(AUTH_TOKEN_KEY);
   localStorage.removeItem(BRIDGE_AUTH_TOKEN_KEY);
   localStorage.removeItem(ACTIVE_USER_CACHE_KEY);
+  localStorage.removeItem(PLATFORM_SESSION_KEY);
 };
 
 export const buildBridgeUserFromToken = (token: string): UserProfile | null => {

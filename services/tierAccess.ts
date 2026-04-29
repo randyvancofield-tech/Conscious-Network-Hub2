@@ -43,6 +43,8 @@ const TIER_ACCESS_MAP: Record<FrontendTier, AppView[]> = {
     AppView.CONSCIOUS_MEETINGS,
     AppView.MEETING_DETAIL,
     AppView.COMMUNITY,
+    AppView.KNOWLEDGE_PATHWAYS,
+    AppView.COURSE_DETAIL,
     AppView.MEMBERSHIP,
   ],
   [FRONTEND_TIERS.GUIDED]: [
