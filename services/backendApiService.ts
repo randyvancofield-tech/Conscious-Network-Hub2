@@ -158,6 +158,7 @@ export interface ProviderBridgeConsumeResult {
     twoFactorEnabled: boolean;
     twoFactorMethod: 'none' | 'phone' | 'wallet';
     phoneNumberMasked: string | null;
+    walletAddress?: string | null;
     walletDid: string | null;
   };
 }

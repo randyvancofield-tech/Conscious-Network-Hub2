@@ -55,6 +55,7 @@ model User {
   profileBackgroundVideo String?
   phoneNumber    String?
   twoFactorMethod String  @default("none")
+  walletAddress   String?
   walletDid      String?
   pendingPhoneOtpHash String?
   pendingPhoneOtpExpiresAt DateTime?
@@ -172,6 +173,11 @@ model ProviderBridgeLaunch {
   providerExternalId String
   email              String
   name               String
+  role               String   @default("provider")
+  approvalStatus     String?
+  providerApproved   Boolean  @default(false)
+  walletAddress      String?
+  walletDid          String?
   issuedAt           DateTime
   expiresAt          DateTime
   consumedAt         DateTime?

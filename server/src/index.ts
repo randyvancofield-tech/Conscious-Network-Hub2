@@ -150,8 +150,7 @@ app.use(requestLogger);
 // Health check endpoint (before routes for quick response)
 app.get('/health', healthCheck);
 
-// Base44 provider identity bridge. This intentionally lives outside /api because
-// Base44 redirects and server-to-server callbacks target /auth/bridge.
+// Legacy Base44 provider bridge. Provider launch now uses /api/bridge/provider/issue-launch-code.
 app.use('/auth', authBridgeRoutes);
 
 // API routes

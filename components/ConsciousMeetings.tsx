@@ -30,6 +30,10 @@ import {
   startProviderMeetingSession,
   summarizeMeeting,
 } from '../services/backendApiService';
+import {
+  PROVIDER_SESSION_TOKEN_EVENT,
+  PROVIDER_SESSION_TOKEN_KEY,
+} from '../services/sessionService';
 import type {
   ExternalMeetingPreview,
   MeetingSessionMode,
@@ -97,8 +101,6 @@ const EMPTY_MEETING_NOTES = (): MeetingNotes => ({
 
 const BACKGROUND_UPLOAD_MAX_BYTES = 25 * 1024 * 1024;
 const ALLOWED_BACKGROUND_VIDEO_TYPES = new Set(['video/mp4', 'video/webm', 'video/quicktime']);
-const PROVIDER_SESSION_TOKEN_EVENT = 'hcn:provider-session-token-updated';
-
 const SYNTHESIS_AGENT_OPTIONS: Array<{ id: SynthesisAgentMode; label: string; description: string }> = [
   {
     id: 'meeting-bot',
@@ -308,7 +310,7 @@ const ConsciousMeetings: React.FC<ConsciousMeetingsProps> = ({ user }) => {
     "Jordan: Great, I will also provide you with the bio-hacking resource by Sven."
   ];
 
-  const providerTokenStorageKey = 'hcn_provider_session_token';
+  const providerTokenStorageKey = PROVIDER_SESSION_TOKEN_KEY;
   const externalGuestSessionStorageKey = 'hcn_external_guest_session_token';
 
   const normalizeUsername = (input: string): string => input.trim().replace(/^@+/, '').toLowerCase();

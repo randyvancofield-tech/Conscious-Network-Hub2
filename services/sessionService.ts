@@ -4,6 +4,8 @@ export const AUTH_TOKEN_KEY = 'hcn_auth_token';
 export const BRIDGE_AUTH_TOKEN_KEY = 'auth_token';
 export const ACTIVE_USER_CACHE_KEY = 'hcn_active_user';
 export const PLATFORM_SESSION_KEY = 'hcn_platform_session';
+export const PROVIDER_SESSION_TOKEN_KEY = 'hcn_provider_session_token';
+export const PROVIDER_SESSION_TOKEN_EVENT = 'hcn:provider-session-token-updated';
 
 type PlatformSessionRole = 'guest' | 'user' | 'provider' | 'admin';
 type PlatformSessionTier = 'free' | 'guided' | 'accelerated';
@@ -30,6 +32,8 @@ interface SessionTokenPayload {
 }
 
 const hasBrowserStorage = (): boolean => typeof window !== 'undefined' && !!window.localStorage;
+const hasBrowserSessionStorage = (): boolean =>
+  typeof window !== 'undefined' && !!window.sessionStorage;
 
 const normalizePlatformTier = (tier?: string | null): PlatformSessionTier => {
   const normalized = String(tier || '').trim().toLowerCase();
@@ -103,6 +107,7 @@ export const setGuestSession = (): void => {
   localStorage.removeItem(AUTH_TOKEN_KEY);
   localStorage.removeItem(BRIDGE_AUTH_TOKEN_KEY);
   localStorage.removeItem(ACTIVE_USER_CACHE_KEY);
+  setProviderControlSession('');
   writePlatformSession({
     isAuthenticated: false,
     role: 'guest',
@@ -139,12 +144,36 @@ export const setProviderAuthSession = (token: string, user: UserProfile): void =
   });
 };
 
+export const setProviderControlSession = (token: string): void => {
+  if (typeof window === 'undefined') return;
+  const normalized = String(token || '').trim();
+  if (hasBrowserSessionStorage()) {
+    if (normalized) {
+      window.sessionStorage.setItem(PROVIDER_SESSION_TOKEN_KEY, normalized);
+    } else {
+      window.sessionStorage.removeItem(PROVIDER_SESSION_TOKEN_KEY);
+    }
+  }
+  window.dispatchEvent(
+    new CustomEvent(PROVIDER_SESSION_TOKEN_EVENT, {
+      detail: { token: normalized },
+    })
+  );
+};
+
+export const getProviderControlSession = (): string | null => {
+  if (!hasBrowserSessionStorage()) return null;
+  const token = String(window.sessionStorage.getItem(PROVIDER_SESSION_TOKEN_KEY) || '').trim();
+  return token || null;
+};
+
 export const clearAuthSession = (): void => {
   if (!hasBrowserStorage()) return;
   localStorage.removeItem(AUTH_TOKEN_KEY);
   localStorage.removeItem(BRIDGE_AUTH_TOKEN_KEY);
   localStorage.removeItem(ACTIVE_USER_CACHE_KEY);
   localStorage.removeItem(PLATFORM_SESSION_KEY);
+  setProviderControlSession('');
 };
 
 export const buildBridgeUserFromToken = (token: string): UserProfile | null => {

@@ -8,6 +8,7 @@ import ProvidersMarket from './components/ProvidersMarket';
 import KnowledgePathways from './components/KnowledgePathways';
 import CommunityMembers from './components/CommunityMembers';
 import SocialLearningHub from './components/SocialLearningHub';
+import ConsciousMeetings from './components/ConsciousMeetings';
 import MeetingsPage from './components/MeetingsPage';
 import MembershipPage from './components/MembershipPage';
 import NotFoundPage from './components/NotFoundPage';
@@ -32,6 +33,7 @@ import {
   getAuthToken,
   getCachedAuthUser,
   setGuestSession,
+  setProviderControlSession,
   setProviderAuthSession,
   setUserAuthSession,
 } from './services/sessionService';
@@ -443,9 +445,9 @@ const App: React.FC = () => {
 
   const toSessionUserFromBackend = (token: string | null, rawUser: any): UserProfile => {
     const canonicalUser = toCanonicalUser(rawUser);
-    if (!token) return toPlatformUser(rawUser);
+    if (!token) return canonicalUser;
     const bridgeUser = buildBridgeUserFromToken(token);
-    if (!bridgeUser) return toPlatformUser(rawUser);
+    if (!bridgeUser) return canonicalUser;
 
     return {
       ...canonicalUser,
@@ -465,6 +467,9 @@ const App: React.FC = () => {
 
   const hasConfirmedMembership = (profile: UserProfile | null | undefined): boolean =>
     Boolean(profile && typeof profile.tier === 'string' && profile.tier.trim().length > 0);
+
+  const hasProviderRole = (profile: UserProfile | null | undefined): boolean =>
+    profile?.role === 'provider' || profile?.role === 'admin';
 
   const isFreeMembershipTier = (tier: string): boolean => tier === FREE_TIER_NAME;
 
@@ -538,7 +543,7 @@ const App: React.FC = () => {
         const data = await api<{ user: any }>('/user/current');
         const canonicalUser = toSessionUserFromBackend(token, data.user);
         setUser(canonicalUser);
-        if (buildBridgeUserFromToken(token)) {
+        if (buildBridgeUserFromToken(token) || hasProviderRole(canonicalUser)) {
           setProviderAuthSession(token, canonicalUser);
         } else {
           setUserAuthSession(token, canonicalUser);
@@ -677,7 +682,7 @@ const App: React.FC = () => {
       const canonicalUser = toSessionUserFromBackend(token, data.user);
       setUser(canonicalUser);
       if (token) {
-        if (buildBridgeUserFromToken(token)) {
+        if (buildBridgeUserFromToken(token) || hasProviderRole(canonicalUser)) {
           setProviderAuthSession(token, canonicalUser);
         } else {
           setUserAuthSession(token, canonicalUser);
@@ -1079,7 +1084,7 @@ const App: React.FC = () => {
       : toPlatformUser({ ...user, ...updated });
     setUser(canonicalUpdated);
     if (token) {
-      if (buildBridgeUserFromToken(token)) {
+      if (buildBridgeUserFromToken(token) || hasProviderRole(canonicalUpdated)) {
         setProviderAuthSession(token, canonicalUpdated);
       } else {
         setUserAuthSession(token, canonicalUpdated);
@@ -1087,8 +1092,15 @@ const App: React.FC = () => {
     }
   };
 
-  const handleAuthCallbackAuthenticated = (token: string, authenticatedUser: UserProfile) => {
+  const handleAuthCallbackAuthenticated = (
+    token: string,
+    authenticatedUser: UserProfile,
+    providerSessionToken?: string
+  ) => {
     setProviderAuthSession(token, authenticatedUser);
+    if (providerSessionToken) {
+      setProviderControlSession(providerSessionToken);
+    }
     setUser(authenticatedUser);
     setSelectedTier(authenticatedUser.tier || 'Accelerated Tier');
     setMembershipNotice('');
@@ -1098,7 +1110,7 @@ const App: React.FC = () => {
     setPendingTwoFactorMethod(null);
     setTwoFactorCodeInput('');
     setProviderTokenInput('');
-    setCurrentView(AppView.DASHBOARD, {}, { replace: true });
+    setCurrentView(AppView.CONSCIOUS_MEETINGS, {}, { replace: true });
     if (window.innerWidth >= 1024) {
       setSidebarOpen(true);
     }
@@ -1256,7 +1268,9 @@ const App: React.FC = () => {
       case AppView.COMMUNITY:
         return <CommunityMembers />;
       case AppView.CONSCIOUS_MEETINGS:
-        return (
+        return hasProviderRole(user) ? (
+          <ConsciousMeetings user={user} />
+        ) : (
           <MeetingsPage
             onOpenMeeting={(id) => setCurrentView(AppView.MEETING_DETAIL, { id })}
             onBackToList={() => setCurrentView(AppView.CONSCIOUS_MEETINGS)}
@@ -1804,28 +1818,21 @@ const App: React.FC = () => {
                 </nav>
 
                 <div className="pt-10 border-t border-white/5 space-y-4">
-                  <button 
-                    onClick={() => {
-                      if (!user) {
-                        setError('Sign in required for identity security access.');
-                        setPendingTwoFactorMethod(null);
-                        setTwoFactorCodeInput('');
-                        setProviderTokenInput('');
-                        setSigninModalOpen(true);
+                  {hasProviderRole(user) && (
+                    <button
+                      onClick={() => {
+                        setIdentitySecurityOpen(true);
                         closeSidebarOnMobile();
-                        return;
-                      }
-                      setIdentitySecurityOpen(true);
-                      closeSidebarOnMobile();
-                    }} 
-                    className="w-full flex items-center justify-between p-4 bg-blue-600/5 hover:bg-blue-600/10 rounded-2xl border border-blue-500/10 transition-all group"
-                  >
-                    <div className="flex items-center gap-4">
-                      <Shield className="w-5 h-5 text-blue-400" />
-                      <span className="text-[9px] font-black text-blue-200 uppercase tracking-widest">Identity Security</span>
-                    </div>
-                    <ChevronRight className="w-4 h-4 text-blue-500 group-hover:translate-x-1 transition-transform" />
-                  </button>
+                      }}
+                      className="w-full flex items-center justify-between p-4 bg-blue-600/5 hover:bg-blue-600/10 rounded-2xl border border-blue-500/10 transition-all group"
+                    >
+                      <div className="flex items-center gap-4">
+                        <Shield className="w-5 h-5 text-blue-400" />
+                        <span className="text-[9px] font-black text-blue-200 uppercase tracking-widest">Provider Trust</span>
+                      </div>
+                      <ChevronRight className="w-4 h-4 text-blue-500 group-hover:translate-x-1 transition-transform" />
+                    </button>
+                  )}
                   <button onClick={handleSignOut} className="w-full flex items-center gap-4 px-6 py-4 text-slate-500 hover:text-red-400 transition-colors">
                     <LogOut className="w-5 h-5" />
                     <span className="text-[9px] font-black uppercase tracking-widest">Disconnect</span>

@@ -1,6 +1,7 @@
 import crypto from 'crypto';
 import rateLimit from 'express-rate-limit';
 import { Request, Response, Router } from 'express';
+import { ethers } from 'ethers';
 import { createSessionToken } from '../auth';
 import { createProviderSessionToken } from '../auth/providerToken';
 import {
@@ -61,6 +62,47 @@ const normalizeScopes = (value: unknown): string[] => {
 const normalizeEmail = (value: unknown): string =>
   String(value || '').trim().toLowerCase();
 
+const normalizeRequiredString = (value: unknown): string => String(value || '').trim();
+
+const normalizeWalletAddress = (value: unknown): string | null => {
+  const raw = normalizeRequiredString(value);
+  if (!raw) return null;
+  try {
+    return ethers.getAddress(raw);
+  } catch {
+    return null;
+  }
+};
+
+const normalizeProviderRole = (value: unknown): 'provider' | null => {
+  return normalizeRequiredString(value).toLowerCase() === 'provider' ? 'provider' : null;
+};
+
+const normalizeApprovalStatus = (value: unknown): string | null => {
+  const normalized = normalizeRequiredString(value).toLowerCase();
+  return normalized || null;
+};
+
+const normalizeProviderApproved = (value: unknown): boolean => value === true;
+
+const parseDidPkh = (value: unknown): { chainId: number; address: string; did: string } | null => {
+  const raw = normalizeRequiredString(value);
+  const match = /^did:pkh:eip155:(\d+):(0x[a-f0-9]{40})$/i.exec(raw);
+  if (!match) return null;
+  const chainId = Number(match[1]);
+  if (!Number.isFinite(chainId) || chainId <= 0) return null;
+  try {
+    const address = ethers.getAddress(match[2]);
+    return {
+      chainId: Math.floor(chainId),
+      address,
+      did: `did:pkh:eip155:${Math.floor(chainId)}:${address.toLowerCase()}`,
+    };
+  } catch {
+    return null;
+  }
+};
+
 const toTimestampMs = (raw: string): number | null => {
   if (!raw) return null;
   const parsed = Number(raw);
@@ -91,6 +133,10 @@ const canonicalBridgeSignaturePayload = (input: {
   providerExternalId: string;
   email: string;
   name: string;
+  role: 'provider';
+  approvalStatus: 'approved';
+  walletAddress: string;
+  walletDid: string;
   jti: string;
   scopes: string[];
 }): string => {
@@ -101,6 +147,10 @@ const canonicalBridgeSignaturePayload = (input: {
     input.providerExternalId,
     input.email,
     input.name,
+    input.role,
+    input.approvalStatus,
+    input.walletAddress,
+    input.walletDid,
     input.jti,
     input.scopes.join(','),
   ].join('\n');
@@ -123,6 +173,12 @@ router.post(
     const providerExternalId = String(req.body?.providerExternalId || '').trim();
     const email = normalizeEmail(req.body?.email);
     const name = String(req.body?.name || '').trim();
+    const role = normalizeProviderRole(req.body?.role);
+    const approvalStatus = normalizeApprovalStatus(req.body?.approvalStatus);
+    const approvalStatusWasProvided = Object.prototype.hasOwnProperty.call(req.body || {}, 'approvalStatus');
+    const providerApproved = normalizeProviderApproved(req.body?.providerApproved);
+    const walletAddress = normalizeWalletAddress(req.body?.walletAddress);
+    const walletDid = parseDidPkh(req.body?.walletDid);
     const jti = String(req.body?.jti || '').trim();
     const requestAudience = String(req.body?.aud || '').trim();
     const scopes = normalizeScopes(req.body?.scopes);
@@ -138,11 +194,44 @@ router.post(
           headerIssuer,
           requestAudience,
           providerExternalId,
+          role: role || String(req.body?.role || '').trim() || null,
+          approvalStatus: approvalStatus || null,
+          providerApproved,
           keyId: headerKeyId,
         },
       });
       res.status(statusCode).json({ error: reason });
     };
+
+    if (role !== 'provider') {
+      deny(403, 'Provider bridge role required');
+      return;
+    }
+
+    if (approvalStatusWasProvided && approvalStatus !== 'approved') {
+      deny(403, 'Provider approval required');
+      return;
+    }
+
+    if (!providerApproved && approvalStatus !== 'approved') {
+      deny(403, 'Provider approval required');
+      return;
+    }
+
+    if (!walletAddress) {
+      deny(400, 'Invalid provider wallet address');
+      return;
+    }
+
+    if (!walletDid) {
+      deny(400, 'Invalid provider wallet DID');
+      return;
+    }
+
+    if (walletDid.address.toLowerCase() !== walletAddress.toLowerCase()) {
+      deny(400, 'Provider wallet DID/address mismatch');
+      return;
+    }
 
     if (!headerIssuer || headerIssuer !== issuer) {
       deny(401, 'Invalid bridge issuer');
@@ -176,6 +265,10 @@ router.post(
       providerExternalId,
       email,
       name,
+      role,
+      approvalStatus: 'approved',
+      walletAddress,
+      walletDid: walletDid.did,
       jti,
       scopes,
     });
@@ -200,6 +293,11 @@ router.post(
       providerExternalId,
       email,
       name,
+      role,
+      approvalStatus: 'approved',
+      providerApproved: true,
+      walletAddress,
+      walletDid: walletDid.did,
       issuedAt: new Date(now),
       expiresAt,
       jti,
@@ -216,6 +314,7 @@ router.post(
         providerExternalId,
         jti,
         expiresAt: expiresAt.toISOString(),
+        walletChainId: walletDid.chainId,
         keyId: headerKeyId,
       },
     });
@@ -312,10 +411,35 @@ router.post(
       return;
     }
 
+    if (
+      consumed.role !== 'provider' ||
+      consumed.providerApproved !== true ||
+      !consumed.walletAddress ||
+      !consumed.walletDid
+    ) {
+      recordAuditEvent(req, {
+        domain: 'auth',
+        action: 'provider_bridge_consume_launch_code',
+        outcome: 'deny',
+        statusCode: 403,
+        metadata: {
+          reason: 'provider_launch_not_approved_or_wallet_bound',
+          providerExternalId: consumed.providerExternalId,
+          role: consumed.role,
+          providerApproved: consumed.providerApproved,
+        },
+      });
+      res.status(403).json({ error: 'Provider launch is not approved or wallet-bound' });
+      return;
+    }
+
     const user = await upsertBridgeProviderUser({
       providerExternalId: consumed.providerExternalId,
       email: consumed.email,
       name: consumed.name,
+      role: 'provider',
+      walletAddress: consumed.walletAddress,
+      walletDid: consumed.walletDid,
     });
     if (!user) {
       recordAuditEvent(req, {

@@ -2,11 +2,9 @@ import crypto from 'crypto';
 import { Request, Response, Router } from 'express';
 import jwt from 'jsonwebtoken';
 import { ethers } from 'ethers';
-import { createProviderSessionToken } from '../auth/providerToken';
 import { getAuthenticatedUserId, requireCanonicalIdentity } from '../middleware';
 import { resolveAuthTokenSecret } from '../requiredEnv';
 import { localStore } from '../services/persistenceStore';
-import { createProviderSession } from '../services/providerSessionStore';
 import { recordAuditEvent } from '../services/auditTelemetry';
 
 type IdentityChallengeRecord = {
@@ -410,16 +408,6 @@ protectedRouter.post('/verify', async (req: Request, res: Response): Promise<voi
     return;
   }
 
-  const providerSession = await createProviderSession(canonicalDid, [
-    'provider:read',
-    'identity:session',
-  ]);
-  const providerToken = createProviderSessionToken(
-    providerSession.id,
-    providerSession.did,
-    providerSession.scopes
-  );
-
   const verifiedAt = new Date();
   const identitySessionTtlSeconds = getIdentitySessionTtlSeconds();
   const identitySessionExpiresAt = Math.floor(Date.now() / 1000) + identitySessionTtlSeconds;
@@ -471,8 +459,6 @@ protectedRouter.post('/verify', async (req: Request, res: Response): Promise<voi
       chainId: challenge.chainId,
       verifiedAt: verifiedAt.toISOString(),
       identitySessionExpiresAt: new Date(identitySessionExpiresAt * 1000).toISOString(),
-      providerToken: providerToken.token,
-      providerTokenExpiresAt: providerToken.expiresAt,
     },
     identitySessionToken,
   });

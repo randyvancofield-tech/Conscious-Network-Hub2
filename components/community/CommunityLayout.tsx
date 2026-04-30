@@ -87,6 +87,8 @@ export const ConsciousIdentity: React.FC<ConsciousIdentityProps> = ({
     );
   }
 
+  const isProviderTrustProfile = user.role === 'provider' || user.role === 'admin';
+
   const [isEditing, setIsEditing] = useState(!user.hasProfile);
   const [step, setStep] = useState(1);
   const [uploadingField, setUploadingField] = useState<'avatarUrl' | 'bannerUrl' | null>(null);
@@ -691,25 +693,27 @@ export const ConsciousIdentity: React.FC<ConsciousIdentityProps> = ({
                   </div>
                 </div>
 
-                <ProfileIntegrityVerificationPanel
-                  user={user}
-                  profilePayload={{
-                    name: user.name,
-                    handle: formData.handle,
-                    bio: formData.bio || null,
-                    location: formData.location || null,
-                    dateOfBirth: formData.dateOfBirth || null,
-                    avatarUrl: formData.profileMedia.avatar.url || formData.avatarUrl || null,
-                    bannerUrl: formData.profileMedia.cover.url || formData.bannerUrl || null,
-                    interests: formData.interests,
-                    links: {
-                      twitterUrl: formData.twitterUrl || null,
-                      githubUrl: formData.githubUrl || null,
-                      websiteUrl: formData.websiteUrl || null,
-                    },
-                    privacySettings: formData.privacySettings,
-                  }}
-                />
+                {isProviderTrustProfile && (
+                  <ProfileIntegrityVerificationPanel
+                    user={user}
+                    profilePayload={{
+                      name: user.name,
+                      handle: formData.handle,
+                      bio: formData.bio || null,
+                      location: formData.location || null,
+                      dateOfBirth: formData.dateOfBirth || null,
+                      avatarUrl: formData.profileMedia.avatar.url || formData.avatarUrl || null,
+                      bannerUrl: formData.profileMedia.cover.url || formData.bannerUrl || null,
+                      interests: formData.interests,
+                      links: {
+                        twitterUrl: formData.twitterUrl || null,
+                        githubUrl: formData.githubUrl || null,
+                        websiteUrl: formData.websiteUrl || null,
+                      },
+                      privacySettings: formData.privacySettings,
+                    }}
+                  />
+                )}
               </div>
             </div>
           </div>

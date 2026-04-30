@@ -56,6 +56,7 @@ interface UserRow {
   profileBackgroundVideo: string | null;
   phoneNumber: string | null;
   twoFactorMethod: TwoFactorMethod;
+  walletAddress: string | null;
   walletDid: string | null;
   pendingPhoneOtpHash: string | null;
   pendingPhoneOtpExpiresAt: NullableIso;
@@ -140,6 +141,11 @@ interface ProviderBridgeLaunchRow {
   providerExternalId: string;
   email: string;
   name: string;
+  role?: string;
+  approvalStatus?: string | null;
+  providerApproved?: boolean;
+  walletAddress?: string | null;
+  walletDid?: string | null;
   issuedAt: string;
   expiresAt: string;
   consumedAt: NullableIso;
@@ -234,6 +240,7 @@ export interface LocalUserRecord {
   profileBackgroundVideo: string | null;
   phoneNumber: string | null;
   twoFactorMethod: TwoFactorMethod;
+  walletAddress: string | null;
   walletDid: string | null;
   pendingPhoneOtpHash: string | null;
   pendingPhoneOtpExpiresAt: Date | null;
@@ -318,6 +325,11 @@ export interface LocalProviderBridgeLaunchRecord {
   providerExternalId: string;
   email: string;
   name: string;
+  role: string;
+  approvalStatus: string | null;
+  providerApproved: boolean;
+  walletAddress: string | null;
+  walletDid: string | null;
   issuedAt: Date;
   expiresAt: Date;
   consumedAt: Date | null;
@@ -348,6 +360,7 @@ interface CreateUserInput {
   tier: string;
   phoneNumber?: string | null;
   twoFactorMethod?: TwoFactorMethod;
+  walletAddress?: string | null;
   walletDid?: string | null;
 }
 
@@ -355,6 +368,7 @@ interface UpdateUserInput {
   name?: string | null;
   role?: UserRole;
   providerExternalId?: string | null;
+  walletAddress?: string | null;
   handle?: string | null;
   bio?: string | null;
   location?: string | null;
@@ -444,6 +458,11 @@ interface CreateProviderBridgeLaunchInput {
   issuedAt: Date;
   expiresAt: Date;
   jti: string;
+  role: 'provider';
+  approvalStatus: string | null;
+  providerApproved: boolean;
+  walletAddress: string;
+  walletDid: string;
   scopes: string[];
   createdAt?: Date;
 }
@@ -746,6 +765,7 @@ const rowToUser = (row: UserRow): LocalUserRecord => ({
   profileBackgroundVideo: row.profileBackgroundVideo,
   phoneNumber: revealSensitiveFieldSafe('phoneNumber', row.phoneNumber),
   twoFactorMethod: row.twoFactorMethod,
+  walletAddress: row.walletAddress || null,
   walletDid: revealSensitiveFieldSafe('walletDid', row.walletDid),
   pendingPhoneOtpHash: row.pendingPhoneOtpHash,
   pendingPhoneOtpExpiresAt: row.pendingPhoneOtpExpiresAt ? toDate(row.pendingPhoneOtpExpiresAt) : null,
@@ -837,6 +857,11 @@ const rowToProviderBridgeLaunch = (
     providerExternalId: row.providerExternalId,
     email: row.email,
     name: row.name,
+    role: 'provider',
+    approvalStatus: String(row.approvalStatus || '').trim() || null,
+    providerApproved: row.providerApproved === true,
+    walletAddress: String(row.walletAddress || '').trim() || null,
+    walletDid: String(row.walletDid || '').trim() || null,
     issuedAt: toDate(row.issuedAt),
     expiresAt: toDate(row.expiresAt),
     consumedAt: row.consumedAt ? toDate(row.consumedAt) : null,
@@ -985,6 +1010,7 @@ export const localStore = {
       profileBackgroundVideo: null,
       phoneNumber: protectSensitiveField('phoneNumber', input.phoneNumber?.trim() || null),
       twoFactorMethod: input.twoFactorMethod || 'none',
+      walletAddress: input.walletAddress?.trim() || null,
       walletDid: protectSensitiveField('walletDid', input.walletDid?.trim() || null),
       pendingPhoneOtpHash: null,
       pendingPhoneOtpExpiresAt: null,
@@ -1066,6 +1092,9 @@ export const localStore = {
     }
     if (updates.twoFactorMethod !== undefined) {
       row.twoFactorMethod = updates.twoFactorMethod;
+    }
+    if (updates.walletAddress !== undefined) {
+      row.walletAddress = updates.walletAddress?.trim() || null;
     }
     if (updates.walletDid !== undefined) {
       row.walletDid = protectSensitiveField('walletDid', updates.walletDid);
@@ -1339,6 +1368,11 @@ export const localStore = {
       providerExternalId: String(input.providerExternalId || '').trim(),
       email: normalizeEmail(input.email),
       name: String(input.name || '').trim() || 'Provider',
+      role: 'provider',
+      approvalStatus: input.approvalStatus,
+      providerApproved: input.providerApproved === true,
+      walletAddress: String(input.walletAddress || '').trim(),
+      walletDid: String(input.walletDid || '').trim(),
       issuedAt: input.issuedAt.toISOString(),
       expiresAt: input.expiresAt.toISOString(),
       consumedAt: null,

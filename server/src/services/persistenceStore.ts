@@ -163,6 +163,7 @@ const toLocalUser = (row: any): LocalUserRecord => ({
   profileBackgroundVideo: toNullableString(row.profileBackgroundVideo),
   phoneNumber: revealSensitiveFieldSafe('phoneNumber', toNullableString(row.phoneNumber)),
   twoFactorMethod: (row.twoFactorMethod || 'none') as TwoFactorMethod,
+  walletAddress: toNullableString(row.walletAddress),
   walletDid: revealSensitiveFieldSafe('walletDid', toNullableString(row.walletDid)),
   pendingPhoneOtpHash: toNullableString(row.pendingPhoneOtpHash),
   pendingPhoneOtpExpiresAt: row.pendingPhoneOtpExpiresAt || null,
@@ -272,6 +273,11 @@ const toLocalProviderBridgeLaunch = (row: any): LocalProviderBridgeLaunchRecord 
   providerExternalId: row.providerExternalId,
   email: row.email,
   name: row.name,
+  role: 'provider',
+  approvalStatus: toNullableString(row.approvalStatus),
+  providerApproved: row.providerApproved === true,
+  walletAddress: toNullableString(row.walletAddress),
+  walletDid: toNullableString(row.walletDid),
   issuedAt: row.issuedAt,
   expiresAt: row.expiresAt,
   consumedAt: row.consumedAt || null,
@@ -405,6 +411,7 @@ export const localStore = {
           profileBackgroundVideo: null,
           phoneNumber: protectSensitiveField('phoneNumber', toNullableString(input.phoneNumber)),
           twoFactorMethod: input.twoFactorMethod || 'none',
+          walletAddress: toNullableString(input.walletAddress),
           walletDid: protectSensitiveField('walletDid', toNullableString(input.walletDid)),
           pendingPhoneOtpHash: null,
           pendingPhoneOtpExpiresAt: null,
@@ -494,6 +501,9 @@ export const localStore = {
         data.phoneNumber = protectSensitiveField('phoneNumber', updates.phoneNumber);
       }
       if (updates.twoFactorMethod !== undefined) data.twoFactorMethod = updates.twoFactorMethod;
+      if (updates.walletAddress !== undefined) {
+        data.walletAddress = toNullableString(updates.walletAddress);
+      }
       if (updates.walletDid !== undefined) {
         data.walletDid = protectSensitiveField('walletDid', updates.walletDid);
       }
@@ -893,6 +903,11 @@ export const localStore = {
           providerExternalId: input.providerExternalId,
           email: input.email.trim().toLowerCase(),
           name: input.name.trim() || 'Provider',
+          role: 'provider',
+          approvalStatus: toNullableString(input.approvalStatus),
+          providerApproved: input.providerApproved === true,
+          walletAddress: toNullableString(input.walletAddress),
+          walletDid: toNullableString(input.walletDid),
           issuedAt: input.issuedAt,
           expiresAt: input.expiresAt,
           consumedAt: null,

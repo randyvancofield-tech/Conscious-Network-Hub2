@@ -1,10 +1,12 @@
 import React, { useEffect, useState } from 'react';
 import { AlertTriangle, Loader2, ShieldCheck } from 'lucide-react';
 import { buildBridgeUserFromToken } from '../services/sessionService';
+import { consumeProviderLaunchCode } from '../services/backendApiService';
+import type { ProviderBridgeConsumeResult } from '../services/backendApiService';
 import { UserProfile } from '../types';
 
 interface AuthCallbackPageProps {
-  onAuthenticated: (token: string, user: UserProfile) => void;
+  onAuthenticated: (token: string, user: UserProfile, providerSessionToken?: string) => void;
   onInvalidToken: () => void;
 }
 
@@ -12,6 +14,31 @@ type CallbackState = 'loading' | 'success' | 'error';
 const BASE44_PORTAL_URL = 'https://conscious-network-hub.base44.app';
 const INVALID_SESSION_MESSAGE =
   'Your session could not be verified. Please return and reconnect.';
+
+const toProviderLaunchUser = (result: ProviderBridgeConsumeResult): UserProfile | null => {
+  const rawUser = result.user;
+  const role = rawUser.role === 'admin' ? 'admin' : rawUser.role === 'provider' ? 'provider' : null;
+  if (!role || !rawUser.id || !rawUser.email) return null;
+
+  return {
+    id: rawUser.id,
+    name: rawUser.name || rawUser.email.split('@')[0] || 'Provider',
+    email: rawUser.email,
+    role,
+    providerExternalId: rawUser.providerExternalId,
+    tier: rawUser.tier || 'Accelerated Tier',
+    subscriptionStatus: rawUser.subscriptionStatus || 'active',
+    hasProfile: true,
+    identityVerified: Boolean(rawUser.walletDid),
+    reputationScore: 100,
+    accessKeyIndex: 200,
+    createdAt: rawUser.createdAt,
+    twoFactorEnabled: rawUser.twoFactorEnabled,
+    twoFactorMethod: rawUser.twoFactorMethod,
+    phoneNumberMasked: rawUser.phoneNumberMasked,
+    walletDid: rawUser.walletDid,
+  };
+};
 
 const AuthCallbackPage: React.FC<AuthCallbackPageProps> = ({
   onAuthenticated,
@@ -23,25 +50,59 @@ const AuthCallbackPage: React.FC<AuthCallbackPageProps> = ({
   useEffect(() => {
     if (typeof window === 'undefined') return;
 
-    const token = new URLSearchParams(window.location.search).get('token')?.trim() || '';
-    if (!token) {
+    let cancelled = false;
+    const authenticate = async (): Promise<void> => {
+      const params = new URLSearchParams(window.location.search);
+      const launchCode = params.get('launchCode')?.trim() || '';
+      if (launchCode) {
+        setMessage('Verifying provider launch...');
+        const result = await consumeProviderLaunchCode(launchCode);
+        if (cancelled) return;
+        const launchUser = result ? toProviderLaunchUser(result) : null;
+        if (!result || !launchUser) {
+          onInvalidToken();
+          setState('error');
+          setMessage(INVALID_SESSION_MESSAGE);
+          return;
+        }
+
+        setState('success');
+        setMessage('Provider launch verified. Opening your provider tools...');
+        onAuthenticated(result.session.token, launchUser, result.providerSession.token);
+        return;
+      }
+
+      const token = params.get('token')?.trim() || '';
+      if (!token) {
+        onInvalidToken();
+        setState('error');
+        setMessage(INVALID_SESSION_MESSAGE);
+        return;
+      }
+
+      const bridgeUser = buildBridgeUserFromToken(token);
+      if (!bridgeUser) {
+        onInvalidToken();
+        setState('error');
+        setMessage(INVALID_SESSION_MESSAGE);
+        return;
+      }
+
+      setState('success');
+      setMessage('Provider session verified. Opening your provider tools...');
+      onAuthenticated(token, bridgeUser);
+    };
+
+    void authenticate().catch(() => {
+      if (cancelled) return;
       onInvalidToken();
       setState('error');
       setMessage(INVALID_SESSION_MESSAGE);
-      return;
-    }
+    });
 
-    const bridgeUser = buildBridgeUserFromToken(token);
-    if (!bridgeUser) {
-      onInvalidToken();
-      setState('error');
-      setMessage(INVALID_SESSION_MESSAGE);
-      return;
-    }
-
-    setState('success');
-    setMessage('Provider session verified. Opening your dashboard...');
-    onAuthenticated(token, bridgeUser);
+    return () => {
+      cancelled = true;
+    };
   }, [onAuthenticated, onInvalidToken]);
 
   return (

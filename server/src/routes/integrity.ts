@@ -400,6 +400,11 @@ const isDebugRequested = (req: Request): boolean => {
   return debugFlag === '1' || debugFlag === 'true' || debugFlag === 'yes';
 };
 
+const hasProviderTrustRole = (user: any): boolean => {
+  const role = String(user?.role || '').trim().toLowerCase();
+  return role === 'provider' || role === 'admin';
+};
+
 protectedRouter.post('/profile/verify', async (req: Request, res: Response): Promise<void> => {
   const authUserId = getAuthenticatedUserId(req);
   if (!authUserId) {
@@ -408,6 +413,11 @@ protectedRouter.post('/profile/verify', async (req: Request, res: Response): Pro
   }
 
   const user = await localStore.getUserById(authUserId);
+  if (!hasProviderTrustRole(user)) {
+    res.status(403).json({ error: 'Provider trust verification requires provider launch identity' });
+    return;
+  }
+
   const did = String(user?.walletDid || '').trim();
   const didPkh = parseDidPkh(did);
   if (!user || !didPkh) {
@@ -498,6 +508,11 @@ protectedRouter.get('/profile/record', async (req: Request, res: Response): Prom
   }
 
   const user = await localStore.getUserById(authUserId);
+  if (!hasProviderTrustRole(user)) {
+    res.status(403).json({ error: 'Provider trust verification requires provider launch identity' });
+    return;
+  }
+
   const did = String(user?.walletDid || '').trim();
   const didPkh = parseDidPkh(did);
   if (!user || !didPkh) {
