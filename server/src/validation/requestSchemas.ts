@@ -262,3 +262,19 @@ export const providerBridgeConsumeLaunchCodeSchema: JsonSchema = {
     code: { type: 'string', minLength: 8, maxLength: 256 },
   },
 };
+
+export const providerBridgeRevokeAccessSchema: JsonSchema = {
+  type: 'object',
+  additionalProperties: false,
+  required: ['providerExternalId', 'role', 'approvalStatus', 'jti', 'aud'],
+  properties: {
+    providerExternalId: { type: 'string', minLength: 1, maxLength: 256 },
+    email: { type: 'string', minLength: 3, maxLength: 320 },
+    role: { type: 'string', enum: ['provider'] },
+    approvalStatus: { type: 'string', minLength: 1, maxLength: 64 },
+    providerApproved: { type: 'boolean' },
+    reason: { type: 'string', maxLength: 512 },
+    jti: { type: 'string', minLength: 8, maxLength: 256 },
+    aud: { type: 'string', minLength: 1, maxLength: 256 },
+  },
+};

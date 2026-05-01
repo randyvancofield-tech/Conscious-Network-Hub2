@@ -80,3 +80,7 @@ export const getProviderSessionById = async (
 export const revokeProviderSession = async (sessionId: string): Promise<void> => {
   await localStore.revokeProviderSession(sessionId);
 };
+
+export const revokeProviderSessionsByDid = async (did: string): Promise<number> => {
+  return localStore.revokeProviderSessionsByDid(did);
+};

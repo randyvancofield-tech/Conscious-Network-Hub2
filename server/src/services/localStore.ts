@@ -35,6 +35,10 @@ interface UserRow {
   name: string | null;
   role: UserRole;
   providerExternalId: string | null;
+  providerApprovalStatus: string | null;
+  providerApproved: boolean;
+  providerRevokedAt: NullableIso;
+  providerAccessUpdatedAt: NullableIso;
   handle: string | null;
   bio: string | null;
   location: string | null;
@@ -219,6 +223,10 @@ export interface LocalUserRecord {
   name: string | null;
   role: UserRole;
   providerExternalId: string | null;
+  providerApprovalStatus: string | null;
+  providerApproved: boolean;
+  providerRevokedAt: Date | null;
+  providerAccessUpdatedAt: Date | null;
   handle: string | null;
   bio: string | null;
   location: string | null;
@@ -343,6 +351,10 @@ interface CreateUserInput {
   name: string;
   role?: UserRole;
   providerExternalId?: string | null;
+  providerApprovalStatus?: string | null;
+  providerApproved?: boolean;
+  providerRevokedAt?: Date | null;
+  providerAccessUpdatedAt?: Date | null;
   handle?: string | null;
   bio?: string | null;
   location?: string | null;
@@ -368,6 +380,10 @@ interface UpdateUserInput {
   name?: string | null;
   role?: UserRole;
   providerExternalId?: string | null;
+  providerApprovalStatus?: string | null;
+  providerApproved?: boolean;
+  providerRevokedAt?: Date | null;
+  providerAccessUpdatedAt?: Date | null;
   walletAddress?: string | null;
   handle?: string | null;
   bio?: string | null;
@@ -744,6 +760,10 @@ const rowToUser = (row: UserRow): LocalUserRecord => ({
   name: row.name,
   role: row.role || 'user',
   providerExternalId: row.providerExternalId || null,
+  providerApprovalStatus: row.providerApprovalStatus || null,
+  providerApproved: row.providerApproved === true,
+  providerRevokedAt: row.providerRevokedAt ? toDate(row.providerRevokedAt) : null,
+  providerAccessUpdatedAt: row.providerAccessUpdatedAt ? toDate(row.providerAccessUpdatedAt) : null,
   handle: row.handle || null,
   bio: row.bio || null,
   location: row.location || null,
@@ -985,6 +1005,12 @@ export const localStore = {
       name: input.name || null,
       role: input.role || 'user',
       providerExternalId: input.providerExternalId?.trim() || null,
+      providerApprovalStatus: input.providerApprovalStatus?.trim() || null,
+      providerApproved: input.providerApproved === true,
+      providerRevokedAt: input.providerRevokedAt ? input.providerRevokedAt.toISOString() : null,
+      providerAccessUpdatedAt: input.providerAccessUpdatedAt
+        ? input.providerAccessUpdatedAt.toISOString()
+        : null,
       handle: input.handle?.trim() || null,
       bio: input.bio?.trim() || null,
       location: input.location?.trim() || null,
@@ -1037,6 +1063,22 @@ export const localStore = {
     if (updates.role !== undefined) row.role = updates.role;
     if (updates.providerExternalId !== undefined) {
       row.providerExternalId = updates.providerExternalId?.trim() || null;
+    }
+    if (updates.providerApprovalStatus !== undefined) {
+      row.providerApprovalStatus = updates.providerApprovalStatus?.trim() || null;
+    }
+    if (updates.providerApproved !== undefined) {
+      row.providerApproved = updates.providerApproved === true;
+    }
+    if (updates.providerRevokedAt !== undefined) {
+      row.providerRevokedAt = updates.providerRevokedAt
+        ? updates.providerRevokedAt.toISOString()
+        : null;
+    }
+    if (updates.providerAccessUpdatedAt !== undefined) {
+      row.providerAccessUpdatedAt = updates.providerAccessUpdatedAt
+        ? updates.providerAccessUpdatedAt.toISOString()
+        : null;
     }
     if (updates.handle !== undefined) row.handle = updates.handle;
     if (updates.bio !== undefined) row.bio = updates.bio;
@@ -1304,6 +1346,25 @@ export const localStore = {
     saveStore(store);
   },
 
+  revokeProviderSessionsByDid(did: string): number {
+    const normalizedDid = String(did || '').trim();
+    if (!normalizedDid) return 0;
+
+    const store = loadStore();
+    let revokedCount = 0;
+    const revokedAt = nowIso();
+    for (const row of store.providerSessions) {
+      if (row.did === normalizedDid && !row.revokedAt) {
+        row.revokedAt = revokedAt;
+        revokedCount += 1;
+      }
+    }
+    if (revokedCount > 0) {
+      saveStore(store);
+    }
+    return revokedCount;
+  },
+
   listProviderInviteGroupsByDid(did: string, limit = 50): LocalProviderInviteGroupRecord[] {
     const normalizedDid = String(did || '').trim();
     if (!normalizedDid) return [];
@@ -1424,7 +1485,7 @@ export const localStore = {
     const row = store.providerBridgeLaunches.find((entry) => entry.id === normalizedId);
     if (!row) return null;
     if (row.consumedAt) {
-      return rowToProviderBridgeLaunch(row);
+      return null;
     }
 
     row.consumedAt = consumedAt.toISOString();

@@ -1,7 +1,9 @@
 import { NextFunction, Request, Response } from 'express';
 import { verifyProviderSessionToken } from './auth/providerToken';
-import { getProviderSessionById } from './services/providerSessionStore';
+import { getProviderSessionById, revokeProviderSession } from './services/providerSessionStore';
+import { getProviderAccessDenyReason, isProviderAccessActive } from './services/providerAccess';
 import { localStore } from './services/persistenceStore';
+import { recordAuditEvent } from './services/auditTelemetry';
 
 export interface ProviderAuthenticatedRequest extends Request {
   providerDid?: string;
@@ -81,6 +83,26 @@ export const requireProviderSession = async (
       return;
     }
 
+    if (!isProviderAccessActive(providerUser)) {
+      await revokeProviderSession(session.id);
+      const reason = getProviderAccessDenyReason(providerUser);
+      recordAuditEvent(req, {
+        domain: 'auth',
+        action: 'provider_session_access',
+        outcome: 'deny',
+        actorUserId: providerUserId,
+        targetUserId: providerUserId,
+        statusCode: 403,
+        metadata: {
+          reason,
+          providerSessionId: session.id,
+          role: normalizedRole,
+        },
+      });
+      res.status(403).json({ error: 'Provider access is not active' });
+      return;
+    }
+
     const providerReq = req as ProviderAuthenticatedRequest;
     providerReq.providerDid = providerDid;
     providerReq.providerSessionId = session.id;
@@ -98,6 +120,11 @@ export const requireProviderScope =
   (requiredScope: string) =>
   (req: Request, res: Response, next: NextFunction): void => {
     const providerReq = req as ProviderAuthenticatedRequest;
+    if (providerReq.providerRole === 'admin') {
+      next();
+      return;
+    }
+
     const scopes = providerReq.providerScopes || [];
     if (scopes.includes(requiredScope) || scopes.includes('provider:*')) {
       next();

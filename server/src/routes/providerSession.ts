@@ -1,6 +1,10 @@
 import crypto from 'crypto';
 import { Request, Response, Router } from 'express';
-import { ProviderAuthenticatedRequest, requireProviderSession } from '../providerMiddleware';
+import {
+  ProviderAuthenticatedRequest,
+  requireProviderScope,
+  requireProviderSession,
+} from '../providerMiddleware';
 import { recordAuditEvent } from '../services/auditTelemetry';
 import { revokeProviderSession } from '../services/providerSessionStore';
 import { localStore, type LocalProviderInviteGroupRecord } from '../services/persistenceStore';
@@ -99,8 +103,20 @@ const findDirectoryMember = async (username: string): Promise<ProviderGroupMembe
  * GET /api/provider/session/current
  * Returns current provider identity and session claims.
  */
-router.get('/current', (req: Request, res: Response): void => {
+router.get('/current', requireProviderScope('provider:read'), (req: Request, res: Response): void => {
   const providerReq = req as ProviderAuthenticatedRequest;
+  recordAuditEvent(req, {
+    domain: 'auth',
+    action: 'provider_session_current',
+    outcome: 'success',
+    actorUserId: providerReq.providerUserId || providerReq.providerDid || null,
+    targetUserId: providerReq.providerUserId || providerReq.providerDid || null,
+    statusCode: 200,
+    metadata: {
+      providerSessionId: providerReq.providerSessionId || null,
+      scopesCount: (providerReq.providerScopes || []).length,
+    },
+  });
   res.json({
     success: true,
     did: providerReq.providerDid,
@@ -158,7 +174,7 @@ router.post('/revoke', async (req: Request, res: Response): Promise<void> => {
  * GET /api/provider/session/groups
  * Returns provider-owned invite groups built from username-based members.
  */
-router.get('/groups', async (req: Request, res: Response): Promise<void> => {
+router.get('/groups', requireProviderScope('provider:read'), async (req: Request, res: Response): Promise<void> => {
   const providerReq = req as ProviderAuthenticatedRequest;
   const providerDid = String(providerReq.providerDid || '').trim();
   if (!providerDid) {
@@ -168,6 +184,18 @@ router.get('/groups', async (req: Request, res: Response): Promise<void> => {
 
   try {
     const groups = await readGroupsForProvider(providerDid);
+    recordAuditEvent(req, {
+      domain: 'social',
+      action: 'provider_group_list',
+      outcome: 'success',
+      actorUserId: providerReq.providerUserId || providerDid,
+      targetUserId: providerReq.providerUserId || providerDid,
+      statusCode: 200,
+      metadata: {
+        providerSessionId: providerReq.providerSessionId || null,
+        groupCount: groups.length,
+      },
+    });
     res.json({
       success: true,
       groups,
@@ -182,7 +210,7 @@ router.get('/groups', async (req: Request, res: Response): Promise<void> => {
  * POST /api/provider/session/groups
  * Body: { name: string }
  */
-router.post('/groups', async (req: Request, res: Response): Promise<void> => {
+router.post('/groups', requireProviderScope('provider:host'), async (req: Request, res: Response): Promise<void> => {
   const providerReq = req as ProviderAuthenticatedRequest;
   const providerDid = String(providerReq.providerDid || '').trim();
   if (!providerDid) {
@@ -234,7 +262,7 @@ router.post('/groups', async (req: Request, res: Response): Promise<void> => {
  * POST /api/provider/session/groups/:groupId/members
  * Body: { username: string }
  */
-router.post('/groups/:groupId/members', async (req: Request, res: Response): Promise<void> => {
+router.post('/groups/:groupId/members', requireProviderScope('provider:host'), async (req: Request, res: Response): Promise<void> => {
   const providerReq = req as ProviderAuthenticatedRequest;
   const providerDid = String(providerReq.providerDid || '').trim();
   if (!providerDid) {
@@ -301,7 +329,7 @@ router.post('/groups/:groupId/members', async (req: Request, res: Response): Pro
 /**
  * DELETE /api/provider/session/groups/:groupId/members/:username
  */
-router.delete('/groups/:groupId/members/:username', async (req: Request, res: Response): Promise<void> => {
+router.delete('/groups/:groupId/members/:username', requireProviderScope('provider:host'), async (req: Request, res: Response): Promise<void> => {
   const providerReq = req as ProviderAuthenticatedRequest;
   const providerDid = String(providerReq.providerDid || '').trim();
   if (!providerDid) {

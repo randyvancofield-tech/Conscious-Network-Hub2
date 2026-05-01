@@ -16,6 +16,25 @@ import {
 
 const router = Router();
 
+router.use((req: Request, res: Response): void => {
+  recordAuditEvent(req, {
+    domain: 'auth',
+    action: 'provider_direct_auth_legacy',
+    outcome: 'deny',
+    statusCode: 410,
+    metadata: {
+      reason: 'provider_direct_auth_disabled',
+      canonicalIssueEndpoint: '/api/bridge/provider/issue-launch-code',
+      canonicalCallback: '/auth/callback?launchCode=<code>',
+    },
+  });
+  res.status(410).json({
+    error: 'Direct provider authentication is disabled',
+    canonicalProviderEntry: '/api/bridge/provider/issue-launch-code',
+    callback: '/auth/callback?launchCode=<code>',
+  });
+});
+
 const sanitizeScopes = (raw: unknown): string[] => {
   if (!Array.isArray(raw)) return ['provider:read'];
   const scopes = raw

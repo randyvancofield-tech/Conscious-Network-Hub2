@@ -28,6 +28,10 @@ model User {
   name          String?
   role          UserRole   @default(user)
   providerExternalId String? @unique
+  providerApprovalStatus String?
+  providerApproved Boolean @default(false)
+  providerRevokedAt DateTime?
+  providerAccessUpdatedAt DateTime?
   handle        String?
   bio           String?
   location      String?

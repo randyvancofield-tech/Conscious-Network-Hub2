@@ -151,6 +151,9 @@ export interface ProviderBridgeConsumeResult {
     name: string;
     role: 'user' | 'provider' | 'admin';
     providerExternalId: string | null;
+    providerApprovalStatus?: string | null;
+    providerApproved?: boolean;
+    providerRevokedAt?: string | Date | null;
     tier: string | null;
     subscriptionStatus: string | null;
     createdAt: string;

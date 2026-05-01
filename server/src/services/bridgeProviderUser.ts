@@ -4,6 +4,7 @@ import { hashPassword } from '../auth';
 import { localStore } from './persistenceStore';
 
 const DEFAULT_PROVIDER_TIER = 'Accelerated Tier';
+const APPROVED_PROVIDER_STATUS = 'approved';
 
 type BridgeRole = 'provider' | 'admin';
 
@@ -33,6 +34,9 @@ export const toBridgePublicUser = (
   name: user?.name || 'Provider',
   role: user?.role || 'user',
   providerExternalId: user?.providerExternalId || null,
+  providerApprovalStatus: user?.providerApprovalStatus || null,
+  providerApproved: user?.providerApproved === true,
+  providerRevokedAt: user?.providerRevokedAt || null,
   tier: user?.tier || null,
   subscriptionStatus: user?.subscriptionStatus || 'inactive',
   createdAt: user?.createdAt || new Date(),
@@ -70,6 +74,7 @@ export const upsertBridgeProviderUser = async (input: {
   const target = byExternalId || byEmail;
   if (!target) {
     const generatedPassword = hashPassword(crypto.randomBytes(32).toString('hex'));
+    const approvedAt = new Date();
     return localStore.createUser({
       email: normalizedEmail,
       name: normalizedName,
@@ -77,16 +82,25 @@ export const upsertBridgeProviderUser = async (input: {
       tier: DEFAULT_PROVIDER_TIER,
       role: requestedRole,
       providerExternalId: normalizedExternalId,
+      providerApprovalStatus: APPROVED_PROVIDER_STATUS,
+      providerApproved: true,
+      providerRevokedAt: null,
+      providerAccessUpdatedAt: approvedAt,
       twoFactorMethod: 'none',
       walletAddress: normalizedWalletAddress,
       walletDid: normalizedWalletDid,
     });
   }
 
+  const approvedAt = new Date();
   const updated = await localStore.updateUser(target.id, {
     name: normalizedName,
-    role: requestedRole === 'admin' || target.role === 'admin' ? 'admin' : 'provider',
+    role: requestedRole,
     providerExternalId: normalizedExternalId,
+    providerApprovalStatus: APPROVED_PROVIDER_STATUS,
+    providerApproved: true,
+    providerRevokedAt: null,
+    providerAccessUpdatedAt: approvedAt,
     tier: target.tier || DEFAULT_PROVIDER_TIER,
     ...(normalizedWalletAddress ? { walletAddress: normalizedWalletAddress } : {}),
     ...(normalizedWalletDid ? { walletDid: normalizedWalletDid } : {}),

@@ -9,6 +9,7 @@ import {
 } from '../middleware';
 import {
   ProviderAuthenticatedRequest,
+  requireProviderScope,
   requireProviderSession,
 } from '../providerMiddleware';
 import { resolveAuthTokenSecret } from '../requiredEnv';
@@ -400,16 +401,28 @@ const isUserInvited = (session: MeetingSessionRecord, user: any): boolean => {
   return false;
 };
 
-providerRouter.get('/sessions', async (req: Request, res: Response): Promise<void> => {
+providerRouter.get('/sessions', requireProviderScope('provider:read'), async (req: Request, res: Response): Promise<void> => {
   const providerReq = req as ProviderAuthenticatedRequest;
   const providerDid = String(providerReq.providerDid || '').trim();
   const sessions = (await listProviderMeetingSessions(providerDid))
     .sort((a, b) => b.createdAtMs - a.createdAtMs)
     .map(sessionToResponse);
+  recordAuditEvent(req, {
+    domain: 'social',
+    action: 'provider_meeting_sessions_list',
+    outcome: 'success',
+    actorUserId: providerReq.providerUserId || providerDid,
+    targetUserId: providerReq.providerUserId || providerDid,
+    statusCode: 200,
+    metadata: {
+      providerSessionId: providerReq.providerSessionId || null,
+      sessionCount: sessions.length,
+    },
+  });
   res.json({ success: true, sessions });
 });
 
-providerRouter.post('/sessions', async (req: Request, res: Response): Promise<void> => {
+providerRouter.post('/sessions', requireProviderScope('provider:host'), async (req: Request, res: Response): Promise<void> => {
   const providerReq = req as ProviderAuthenticatedRequest;
   const providerDid = String(providerReq.providerDid || '').trim();
   const providerUserId = String(providerReq.providerUserId || '').trim();
@@ -460,7 +473,7 @@ providerRouter.post('/sessions', async (req: Request, res: Response): Promise<vo
   res.status(201).json({ success: true, session: sessionToResponse(record) });
 });
 
-providerRouter.post('/sessions/:sessionId/start', async (req: Request, res: Response): Promise<void> => {
+providerRouter.post('/sessions/:sessionId/start', requireProviderScope('provider:host'), async (req: Request, res: Response): Promise<void> => {
   const resolved = await findProviderSessionOrDeny(req, res);
   if (!resolved) return;
   const { providerDid, providerUserId, session } = resolved;
@@ -501,7 +514,7 @@ providerRouter.post('/sessions/:sessionId/start', async (req: Request, res: Resp
   res.json({ success: true, session: sessionToResponse(session) });
 });
 
-providerRouter.post('/sessions/:sessionId/end', async (req: Request, res: Response): Promise<void> => {
+providerRouter.post('/sessions/:sessionId/end', requireProviderScope('provider:host'), async (req: Request, res: Response): Promise<void> => {
   const resolved = await findProviderSessionOrDeny(req, res);
   if (!resolved) return;
   const { providerUserId, session } = resolved;
@@ -527,7 +540,7 @@ providerRouter.post('/sessions/:sessionId/end', async (req: Request, res: Respon
   res.json({ success: true, sessionId: session.id, status: 'ended' });
 });
 
-providerRouter.post('/sessions/:sessionId/invite-users', async (req: Request, res: Response): Promise<void> => {
+providerRouter.post('/sessions/:sessionId/invite-users', requireProviderScope('provider:host'), async (req: Request, res: Response): Promise<void> => {
   const resolved = await findProviderSessionOrDeny(req, res);
   if (!resolved) return;
   const { providerDid, providerUserId, session } = resolved;
@@ -606,7 +619,7 @@ providerRouter.post('/sessions/:sessionId/invite-users', async (req: Request, re
   });
 });
 
-providerRouter.post('/sessions/:sessionId/external-links', async (req: Request, res: Response): Promise<void> => {
+providerRouter.post('/sessions/:sessionId/external-links', requireProviderScope('provider:host'), async (req: Request, res: Response): Promise<void> => {
   const resolved = await findProviderSessionOrDeny(req, res);
   if (!resolved) return;
   const { providerUserId, session } = resolved;
@@ -675,9 +688,23 @@ providerRouter.post('/sessions/:sessionId/external-links', async (req: Request, 
   });
 });
 
-providerRouter.get('/sessions/:sessionId', async (req: Request, res: Response): Promise<void> => {
+providerRouter.get('/sessions/:sessionId', requireProviderScope('provider:read'), async (req: Request, res: Response): Promise<void> => {
   const resolved = await findProviderSessionOrDeny(req, res);
   if (!resolved) return;
+  const providerReq = req as ProviderAuthenticatedRequest;
+  recordAuditEvent(req, {
+    domain: 'social',
+    action: 'provider_meeting_session_read',
+    outcome: 'success',
+    actorUserId: providerReq.providerUserId || resolved.providerDid,
+    targetUserId: providerReq.providerUserId || resolved.providerDid,
+    statusCode: 200,
+    metadata: {
+      providerSessionId: providerReq.providerSessionId || null,
+      sessionId: resolved.session.id,
+      status: resolved.session.status,
+    },
+  });
   res.json({ success: true, session: sessionToResponse(resolved.session) });
 });
 

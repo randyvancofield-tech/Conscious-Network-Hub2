@@ -1,6 +1,8 @@
 import { Request, Response, NextFunction } from 'express';
 import { verifyBridgeAuthToken, verifySessionToken } from './auth';
-import { getUserSessionById } from './services/userSessionStore';
+import { getUserSessionById, revokeUserSession } from './services/userSessionStore';
+import { localStore } from './services/persistenceStore';
+import { getProviderAccessDenyReason, isProviderAccessActive } from './services/providerAccess';
 import { hasTierAccess, TierValue } from './tierPolicy';
 
 export interface AuthenticatedRequest extends Request {
@@ -109,10 +111,34 @@ export function requireCanonicalIdentity(
 
     const authReq = req as AuthenticatedRequest;
     if (bridgePayload) {
+      const bridgeUser = await localStore.getUserById(bridgePayload.userId);
+      if (!bridgeUser) {
+        logIdentityValidationFailure(req, 'authenticated_user_not_found', {
+          userId: bridgePayload.userId,
+          authSource: 'bridge_token',
+        });
+        res.status(401).json({ error: 'Invalid or expired session' });
+        return;
+      }
+
+      if (
+        (bridgeUser.role === 'provider' || bridgeUser.role === 'admin') &&
+        !isProviderAccessActive(bridgeUser)
+      ) {
+        logIdentityValidationFailure(req, getProviderAccessDenyReason(bridgeUser), {
+          userId: bridgeUser.id,
+          role: bridgeUser.role,
+          authSource: 'bridge_token',
+        });
+        res.status(403).json({ error: 'Provider access is not active' });
+        return;
+      }
+
       authReq.authUserId = bridgePayload.userId;
-      authReq.authRole = bridgePayload.role;
-      authReq.authWalletAddress = bridgePayload.walletAddress;
-      authReq.authProviderExternalId = bridgePayload.sub;
+      authReq.authRole = bridgeUser.role;
+      authReq.authTier = bridgeUser.tier;
+      authReq.authWalletAddress = bridgeUser.walletAddress || bridgePayload.walletAddress;
+      authReq.authProviderExternalId = bridgeUser.providerExternalId || bridgePayload.sub;
       next();
       return;
     }
@@ -161,7 +187,34 @@ export function requireCanonicalIdentity(
       authReq.authSessionId = persistedSession.id;
     }
 
+    const user = await localStore.getUserById(payload.userId);
+    if (!user) {
+      logIdentityValidationFailure(req, 'authenticated_user_not_found', {
+        userId: payload.userId,
+        sessionId: payload.sessionId || null,
+      });
+      res.status(401).json({ error: 'Invalid or expired session' });
+      return;
+    }
+
+    if ((user.role === 'provider' || user.role === 'admin') && !isProviderAccessActive(user)) {
+      if (payload.sessionId) {
+        await revokeUserSession(payload.sessionId);
+      }
+      logIdentityValidationFailure(req, getProviderAccessDenyReason(user), {
+        userId: user.id,
+        sessionId: payload.sessionId || null,
+        role: user.role,
+      });
+      res.status(403).json({ error: 'Provider access is not active' });
+      return;
+    }
+
     authReq.authUserId = payload.userId;
+    authReq.authRole = user.role;
+    authReq.authTier = user.tier;
+    authReq.authWalletAddress = user.walletAddress || undefined;
+    authReq.authProviderExternalId = user.providerExternalId || undefined;
     next();
   })().catch((error) => {
     console.error('[AUTH][ERROR] Failed to validate canonical identity', error);

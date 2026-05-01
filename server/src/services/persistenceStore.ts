@@ -138,6 +138,10 @@ const toLocalUser = (row: any): LocalUserRecord => ({
   name: row.name,
   role: (String(row.role || 'user').trim().toLowerCase() || 'user') as LocalUserRecord['role'],
   providerExternalId: toNullableString(row.providerExternalId),
+  providerApprovalStatus: toNullableString(row.providerApprovalStatus),
+  providerApproved: row.providerApproved === true,
+  providerRevokedAt: row.providerRevokedAt || null,
+  providerAccessUpdatedAt: row.providerAccessUpdatedAt || null,
   handle: toNullableString(row.handle),
   bio: toNullableString(row.bio),
   location: toNullableString(row.location),
@@ -386,6 +390,10 @@ export const localStore = {
           name: toNullableString(input.name),
           role: (String(input.role || 'user').trim().toLowerCase() || 'user') as any,
           providerExternalId: toNullableString(input.providerExternalId),
+          providerApprovalStatus: toNullableString(input.providerApprovalStatus),
+          providerApproved: input.providerApproved === true,
+          providerRevokedAt: input.providerRevokedAt || null,
+          providerAccessUpdatedAt: input.providerAccessUpdatedAt || null,
           handle: toNullableString(input.handle),
           bio: toNullableString(input.bio),
           location: toNullableString(input.location),
@@ -436,6 +444,18 @@ export const localStore = {
       }
       if (updates.providerExternalId !== undefined) {
         data.providerExternalId = toNullableString(updates.providerExternalId);
+      }
+      if (updates.providerApprovalStatus !== undefined) {
+        data.providerApprovalStatus = toNullableString(updates.providerApprovalStatus);
+      }
+      if (updates.providerApproved !== undefined) {
+        data.providerApproved = updates.providerApproved === true;
+      }
+      if (updates.providerRevokedAt !== undefined) {
+        data.providerRevokedAt = updates.providerRevokedAt || null;
+      }
+      if (updates.providerAccessUpdatedAt !== undefined) {
+        data.providerAccessUpdatedAt = updates.providerAccessUpdatedAt || null;
       }
       if (updates.handle !== undefined) data.handle = updates.handle;
       if (updates.bio !== undefined) data.bio = updates.bio;
@@ -820,6 +840,23 @@ export const localStore = {
     }
   },
 
+  async revokeProviderSessionsByDid(did: string): Promise<number> {
+    try {
+      const normalizedDid = String(did || '').trim();
+      if (!normalizedDid) return 0;
+      const result = await ensurePrisma().providerSession.updateMany({
+        where: {
+          did: normalizedDid,
+          revokedAt: null,
+        },
+        data: { revokedAt: new Date() },
+      });
+      return result.count;
+    } catch (error) {
+      return translatePrismaError(error);
+    }
+  },
+
   async listProviderInviteGroupsByDid(
     did: string,
     limit = 50
@@ -948,15 +985,13 @@ export const localStore = {
   ): Promise<LocalProviderBridgeLaunchRecord | null> {
     try {
       const db = ensurePrisma() as any;
-      const existing = await db.providerBridgeLaunch.findUnique({ where: { id } });
-      if (!existing) return null;
-      if (existing.consumedAt) {
-        return toLocalProviderBridgeLaunch(existing);
-      }
-      const row = await db.providerBridgeLaunch.update({
-        where: { id },
+      const consumed = await db.providerBridgeLaunch.updateMany({
+        where: { id, consumedAt: null },
         data: { consumedAt },
       });
+      if (consumed.count !== 1) return null;
+      const row = await db.providerBridgeLaunch.findUnique({ where: { id } });
+      if (!row) return null;
       return toLocalProviderBridgeLaunch(row);
     } catch (error) {
       if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2025') {

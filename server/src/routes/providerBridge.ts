@@ -14,6 +14,10 @@ import {
   toBridgePublicUser,
   upsertBridgeProviderUser,
 } from '../services/bridgeProviderUser';
+import {
+  getProviderDidForUserId,
+  revokeProviderAccessForUser,
+} from '../services/providerAccess';
 import { localStore } from '../services/persistenceStore';
 import { createProviderSession } from '../services/providerSessionStore';
 import { createUserSession } from '../services/userSessionStore';
@@ -21,13 +25,13 @@ import { validateJsonBody } from '../validation/jsonSchema';
 import {
   providerBridgeConsumeLaunchCodeSchema,
   providerBridgeIssueLaunchCodeSchema,
+  providerBridgeRevokeAccessSchema,
 } from '../validation/requestSchemas';
 
 const router = Router();
 
 const BRIDGE_CODE_TTL_MS = 120 * 1000;
 const BRIDGE_TIMESTAMP_SKEW_MS = 60 * 1000;
-const PROVIDER_DID_PREFIX = 'provider:';
 const DEFAULT_PROVIDER_SCOPES = ['provider:read', 'provider:host'];
 
 const issueLaunchLimiter = rateLimit({
@@ -44,6 +48,14 @@ const consumeLaunchLimiter = rateLimit({
   standardHeaders: true,
   legacyHeaders: false,
   message: { error: 'Bridge consume launch rate limit exceeded. Retry later.' },
+});
+
+const revokeAccessLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 120,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: 'Bridge provider revocation rate limit exceeded. Retry later.' },
 });
 
 const normalizeScopes = (value: unknown): string[] => {
@@ -153,6 +165,32 @@ const canonicalBridgeSignaturePayload = (input: {
     input.walletDid,
     input.jti,
     input.scopes.join(','),
+  ].join('\n');
+};
+
+const canonicalBridgeRevocationSignaturePayload = (input: {
+  issuer: string;
+  audience: string;
+  timestampMs: number;
+  providerExternalId: string;
+  email: string;
+  role: 'provider';
+  approvalStatus: string;
+  providerApproved: boolean;
+  jti: string;
+  reason: string;
+}): string => {
+  return [
+    input.issuer,
+    input.audience,
+    String(input.timestampMs),
+    input.providerExternalId,
+    input.email,
+    input.role,
+    input.approvalStatus,
+    String(input.providerApproved),
+    input.jti,
+    input.reason,
   ].join('\n');
 };
 
@@ -329,6 +367,146 @@ router.post(
 );
 
 router.post(
+  '/provider/revoke-access',
+  revokeAccessLimiter,
+  validateJsonBody(providerBridgeRevokeAccessSchema),
+  async (req: Request, res: Response): Promise<void> => {
+    const issuer = resolveBridgeProviderIssuer();
+    const audience = resolveBridgeProviderAudience();
+    const secret = resolveBridgeProviderSecret();
+
+    const headerIssuer = String(req.headers['x-bridge-issuer'] || '').trim();
+    const headerTimestampRaw = String(req.headers['x-bridge-timestamp'] || '').trim();
+    const headerSignature = String(req.headers['x-bridge-signature'] || '').trim();
+    const headerKeyId = String(req.headers['x-bridge-key-id'] || '').trim() || null;
+
+    const providerExternalId = String(req.body?.providerExternalId || '').trim();
+    const email = normalizeEmail(req.body?.email);
+    const role = normalizeProviderRole(req.body?.role);
+    const approvalStatus = normalizeApprovalStatus(req.body?.approvalStatus);
+    const providerApproved = normalizeProviderApproved(req.body?.providerApproved);
+    const reason = String(req.body?.reason || '').trim().slice(0, 512);
+    const jti = String(req.body?.jti || '').trim();
+    const requestAudience = String(req.body?.aud || '').trim();
+
+    const deny = (statusCode: number, denyReason: string): void => {
+      recordAuditEvent(req, {
+        domain: 'auth',
+        action: 'provider_bridge_revoke_access',
+        outcome: 'deny',
+        statusCode,
+        metadata: {
+          reason: denyReason,
+          headerIssuer,
+          requestAudience,
+          providerExternalId,
+          role: role || String(req.body?.role || '').trim() || null,
+          approvalStatus,
+          providerApproved,
+          keyId: headerKeyId,
+        },
+      });
+      res.status(statusCode).json({ error: denyReason });
+    };
+
+    if (role !== 'provider') {
+      deny(403, 'Provider bridge role required');
+      return;
+    }
+
+    if (!approvalStatus || approvalStatus === 'approved' || providerApproved === true) {
+      deny(403, 'Non-approved provider status required');
+      return;
+    }
+
+    if (!headerIssuer || headerIssuer !== issuer) {
+      deny(401, 'Invalid bridge issuer');
+      return;
+    }
+
+    if (!requestAudience || requestAudience !== audience) {
+      deny(401, 'Invalid bridge audience');
+      return;
+    }
+
+    const headerTimestampMs = toTimestampMs(headerTimestampRaw);
+    if (!headerTimestampMs) {
+      deny(400, 'Invalid bridge timestamp');
+      return;
+    }
+    if (Math.abs(Date.now() - headerTimestampMs) > BRIDGE_TIMESTAMP_SKEW_MS) {
+      deny(401, 'Bridge timestamp outside accepted skew');
+      return;
+    }
+
+    if (!headerSignature) {
+      deny(401, 'Missing bridge signature');
+      return;
+    }
+
+    const signaturePayload = canonicalBridgeRevocationSignaturePayload({
+      issuer: headerIssuer,
+      audience: requestAudience,
+      timestampMs: headerTimestampMs,
+      providerExternalId,
+      email,
+      role,
+      approvalStatus,
+      providerApproved: false,
+      jti,
+      reason,
+    });
+    const expectedSignature = hmacHex(secret, signaturePayload);
+    if (!timingSafeEqualHex(headerSignature, expectedSignature)) {
+      deny(401, 'Invalid bridge signature');
+      return;
+    }
+
+    const providerUser = await localStore.getUserByProviderExternalId(providerExternalId);
+    if (!providerUser) {
+      deny(404, 'Provider user not found');
+      return;
+    }
+
+    if (email && providerUser.email !== email) {
+      deny(409, 'Provider identity email mismatch');
+      return;
+    }
+
+    const revoked = await revokeProviderAccessForUser(providerUser, { approvalStatus });
+
+    recordAuditEvent(req, {
+      domain: 'auth',
+      action: 'provider_bridge_revoke_access',
+      outcome: 'success',
+      actorUserId: revoked.user.id,
+      targetUserId: revoked.user.id,
+      statusCode: 200,
+      metadata: {
+        providerExternalId,
+        approvalStatus,
+        providerSessionsRevoked: revoked.providerSessionsRevoked,
+        userSessionsRevoked: revoked.userSessionsRevoked,
+        jti,
+        reason: reason || null,
+        keyId: headerKeyId,
+      },
+    });
+
+    res.json({
+      success: true,
+      providerExternalId,
+      providerUserId: revoked.user.id,
+      approvalStatus: revoked.user.providerApprovalStatus,
+      providerApproved: revoked.user.providerApproved,
+      providerRevokedAt: revoked.user.providerRevokedAt,
+      providerSessionsRevoked: revoked.providerSessionsRevoked,
+      userSessionsRevoked: revoked.userSessionsRevoked,
+    });
+  }
+);
+
+router.post(
   '/provider/consume-launch-code',
   consumeLaunchLimiter,
   validateJsonBody(providerBridgeConsumeLaunchCodeSchema),
@@ -400,14 +578,14 @@ router.post(
       recordAuditEvent(req, {
         domain: 'auth',
         action: 'provider_bridge_consume_launch_code',
-        outcome: 'error',
-        statusCode: 500,
+        outcome: 'deny',
+        statusCode: 409,
         metadata: {
-          reason: 'launch_code_consume_failed',
+          reason: 'launch_code_already_consumed',
           providerExternalId: launch.providerExternalId,
         },
       });
-      res.status(500).json({ error: 'Failed to consume launch code' });
+      res.status(409).json({ error: 'Launch code already consumed' });
       return;
     }
 
@@ -462,7 +640,7 @@ router.post(
       expiresAt: persistedSession.expiresAt.getTime(),
     });
 
-    const providerDid = `${PROVIDER_DID_PREFIX}${user.id}`;
+    const providerDid = getProviderDidForUserId(user.id);
     const providerSession = await createProviderSession(providerDid, consumed.scopes);
     const providerToken = createProviderSessionToken(
       providerSession.id,
@@ -472,7 +650,36 @@ router.post(
 
     recordAuditEvent(req, {
       domain: 'auth',
+      action: 'provider_session_activate',
+      outcome: 'success',
+      actorUserId: user.id,
+      targetUserId: user.id,
+      statusCode: 200,
+      metadata: {
+        providerExternalId: consumed.providerExternalId,
+        providerSessionId: providerSession.id,
+        userSessionId: persistedSession.id,
+        scopesCount: providerSession.scopes.length,
+      },
+    });
+
+    recordAuditEvent(req, {
+      domain: 'auth',
       action: 'provider_bridge_consume_launch_code',
+      outcome: 'success',
+      actorUserId: user.id,
+      targetUserId: user.id,
+      statusCode: 200,
+      metadata: {
+        providerExternalId: consumed.providerExternalId,
+        providerSessionId: providerSession.id,
+        userSessionId: persistedSession.id,
+      },
+    });
+
+    recordAuditEvent(req, {
+      domain: 'auth',
+      action: 'provider_auth_callback_success',
       outcome: 'success',
       actorUserId: user.id,
       targetUserId: user.id,

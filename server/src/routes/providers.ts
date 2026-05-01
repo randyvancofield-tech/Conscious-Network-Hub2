@@ -1,6 +1,9 @@
 import { Router, Request, Response } from 'express';
 import { getAuthenticatedUserId, requireCanonicalIdentity } from '../middleware';
 import { getPrisma } from '../services/prismaClient';
+import { recordAuditEvent } from '../services/auditTelemetry';
+import { localStore } from '../services/persistenceStore';
+import { isProviderAccessActive } from '../services/providerAccess';
 
 const providersRouter = Router();
 const userRequestsRouter = Router();
@@ -41,7 +44,12 @@ providersRouter.get('/', async (_req: Request, res: Response): Promise<void> => 
   try {
     const db = getPrisma() as any;
     const providers = await db.user.findMany({
-      where: { role: 'provider' },
+      where: {
+        role: 'provider',
+        providerApproved: true,
+        providerApprovalStatus: 'approved',
+        providerRevokedAt: null,
+      },
       orderBy: { updatedAt: 'desc' },
     });
     res.json({ success: true, providers: providers.map(toProviderResponse) });
@@ -74,7 +82,13 @@ providersRouter.post('/:id/request', requireCanonicalIdentity, async (req: Reque
   try {
     const db = getPrisma() as any;
     const provider = await db.user.findUnique({ where: { id: providerId } });
-    if (!provider || provider.role !== 'provider') {
+    if (
+      !provider ||
+      provider.role !== 'provider' ||
+      provider.providerApproved !== true ||
+      provider.providerApprovalStatus !== 'approved' ||
+      provider.providerRevokedAt
+    ) {
       res.status(404).json({ error: 'Provider not found' });
       return;
     }
@@ -87,6 +101,19 @@ providersRouter.post('/:id/request', requireCanonicalIdentity, async (req: Reque
         status: 'pending',
       },
       include: { provider: true },
+    });
+
+    recordAuditEvent(req, {
+      domain: 'social',
+      action: 'provider_anchor_request_create',
+      outcome: 'success',
+      actorUserId: userId,
+      targetUserId: providerId,
+      statusCode: 201,
+      metadata: {
+        requestId: request.id,
+        status: request.status,
+      },
     });
 
     res.status(201).json({ success: true, request: toAnchorLinkRequestResponse(request) });
@@ -126,8 +153,8 @@ providerRequestsRouter.get('/', requireCanonicalIdentity, async (req: Request, r
 
   try {
     const db = getPrisma() as any;
-    const provider = await db.user.findUnique({ where: { id: providerId } });
-    if (!provider || provider.role !== 'provider') {
+    const provider = await localStore.getUserById(providerId);
+    if (!isProviderAccessActive(provider)) {
       res.status(403).json({ error: 'Provider role required' });
       return;
     }
@@ -161,6 +188,12 @@ providerRequestsRouter.patch('/:id', requireCanonicalIdentity, async (req: Reque
 
   try {
     const db = getPrisma() as any;
+    const provider = await localStore.getUserById(providerId);
+    if (!isProviderAccessActive(provider)) {
+      res.status(403).json({ error: 'Provider role required' });
+      return;
+    }
+
     const existing = await db.anchorLinkRequest.findUnique({ where: { id: requestId } });
     if (!existing || existing.providerId !== providerId) {
       res.status(404).json({ error: 'Provider request not found' });
@@ -171,6 +204,18 @@ providerRequestsRouter.patch('/:id', requireCanonicalIdentity, async (req: Reque
       where: { id: requestId },
       data: { status },
       include: { user: true, provider: true },
+    });
+    recordAuditEvent(req, {
+      domain: 'social',
+      action: 'provider_anchor_request_update',
+      outcome: 'success',
+      actorUserId: providerId,
+      targetUserId: existing.userId,
+      statusCode: 200,
+      metadata: {
+        requestId,
+        status,
+      },
     });
     res.json({ success: true, request: toAnchorLinkRequestResponse(request) });
   } catch (error) {
