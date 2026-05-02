@@ -1,4 +1,4 @@
-import { Shield, Brain, GraduationCap, Building2, Layout, UserCircle, Briefcase, CreditCard, BookOpen, MessageSquareShare, Video, Users } from 'lucide-react';
+import { Shield, Brain, GraduationCap, Building2, Layout, UserCircle, Briefcase, CreditCard, BookOpen, MessageSquareShare, Video, Users, ShieldCheck } from 'lucide-react';
 
 export const NAVIGATION_ITEMS = [
   { id: 'dashboard', label: 'Portal Home', icon: <Layout className="w-5 h-5" /> },
@@ -9,6 +9,7 @@ export const NAVIGATION_ITEMS = [
   { id: 'providers', label: 'Providers Market', icon: <Briefcase className="w-5 h-5" /> },
   { id: 'profile', label: 'My Conscious Identity', icon: <UserCircle className="w-5 h-5" /> },
   { id: 'membership', label: 'Memberships', icon: <CreditCard className="w-5 h-5" /> },
+  { id: 'admin', label: 'Admin Console', icon: <ShieldCheck className="w-5 h-5" /> },
 ];
 
 export const CORE_COMPONENTS = [

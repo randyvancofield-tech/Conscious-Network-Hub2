@@ -25,7 +25,16 @@ export interface VerifiedBridgeAuthTokenPayload extends BridgeAuthTokenPayload {
   exp?: number;
 }
 
+export interface AdminElevationTokenPayload {
+  purpose: 'admin:elevation';
+  userId: string;
+  sessionId?: string;
+  issuedAt: number;
+  expiresAt: number;
+}
+
 const DEFAULT_SESSION_TTL_SECONDS = 60 * 60 * 24 * 7; // 7 days
+const DEFAULT_ADMIN_ELEVATION_TTL_SECONDS = 10 * 60; // 10 minutes
 const DEFAULT_BCRYPT_ROUNDS = 12;
 const PASSWORD_HASH_PREFIX = 'scrypt';
 const PASSWORD_KEY_LEN = 64;
@@ -44,6 +53,13 @@ export const resolveSessionTtlSeconds = (): number => {
 
 export const resolveSessionExpiry = (issuedAtMs = Date.now()): number =>
   issuedAtMs + resolveSessionTtlSeconds() * 1000;
+
+export const resolveAdminElevationTtlSeconds = (): number => {
+  const ttlSecondsRaw = Number(process.env.ADMIN_ELEVATION_TTL_SECONDS);
+  return Number.isFinite(ttlSecondsRaw) && ttlSecondsRaw > 0 && ttlSecondsRaw <= 3600
+    ? Math.floor(ttlSecondsRaw)
+    : DEFAULT_ADMIN_ELEVATION_TTL_SECONDS;
+};
 
 const toBase64Url = (value: string): string =>
   Buffer.from(value, 'utf8')
@@ -66,6 +82,35 @@ const signSegment = (segment: string): string =>
     .replace(/\+/g, '-')
     .replace(/\//g, '_')
     .replace(/=+$/g, '');
+
+const createSignedPayloadToken = (payload: object): string => {
+  const payloadSegment = toBase64Url(JSON.stringify(payload));
+  const signatureSegment = signSegment(payloadSegment);
+  return `${payloadSegment}.${signatureSegment}`;
+};
+
+const verifySignedPayloadToken = <T extends Record<string, unknown>>(token: string): T | null => {
+  if (!token || typeof token !== 'string') return null;
+  const segments = token.split('.');
+  if (segments.length !== 2) return null;
+
+  const [payloadSegment, signatureSegment] = segments;
+  const expectedSignature = signSegment(payloadSegment);
+  const providedBuffer = Buffer.from(signatureSegment, 'utf8');
+  const expectedBuffer = Buffer.from(expectedSignature, 'utf8');
+  if (
+    providedBuffer.length !== expectedBuffer.length ||
+    !crypto.timingSafeEqual(providedBuffer, expectedBuffer)
+  ) {
+    return null;
+  }
+
+  try {
+    return JSON.parse(fromBase64Url(payloadSegment)) as T;
+  } catch {
+    return null;
+  }
+};
 
 const legacySha256 = (password: string): string =>
   crypto.createHash('sha256').update(password).digest('hex');
@@ -154,10 +199,37 @@ export const createSessionToken = (
     expiresAt,
   };
 
-  const payloadSegment = toBase64Url(JSON.stringify(payload));
-  const signatureSegment = signSegment(payloadSegment);
   return {
-    token: `${payloadSegment}.${signatureSegment}`,
+    token: createSignedPayloadToken(payload),
+    expiresAt,
+  };
+};
+
+export const createAdminElevationToken = (
+  userId: string,
+  options?: {
+    sessionId?: string | null;
+    expiresAt?: number | null;
+  }
+): { token: string; expiresAt: number } => {
+  const now = Date.now();
+  const providedExpiresAt = Number(options?.expiresAt);
+  const expiresAt =
+    Number.isFinite(providedExpiresAt) && providedExpiresAt > now
+      ? providedExpiresAt
+      : now + resolveAdminElevationTtlSeconds() * 1000;
+  const sessionId = String(options?.sessionId || '').trim() || undefined;
+
+  const payload: AdminElevationTokenPayload = {
+    purpose: 'admin:elevation',
+    userId,
+    ...(sessionId ? { sessionId } : {}),
+    issuedAt: now,
+    expiresAt,
+  };
+
+  return {
+    token: createSignedPayloadToken(payload),
     expiresAt,
   };
 };
@@ -172,33 +244,29 @@ export const createBridgeAuthToken = (payload: BridgeAuthTokenPayload): string =
 };
 
 export const verifySessionToken = (token: string): SessionTokenPayload | null => {
-  if (!token || typeof token !== 'string') return null;
-  const segments = token.split('.');
-  if (segments.length !== 2) return null;
-
-  const [payloadSegment, signatureSegment] = segments;
-  const expectedSignature = signSegment(payloadSegment);
-
-  const providedBuffer = Buffer.from(signatureSegment, 'utf8');
-  const expectedBuffer = Buffer.from(expectedSignature, 'utf8');
-  if (
-    providedBuffer.length !== expectedBuffer.length ||
-    !crypto.timingSafeEqual(providedBuffer, expectedBuffer)
-  ) {
+  const parsed = verifySignedPayloadToken<SessionTokenPayload & Record<string, unknown>>(token);
+  if (!parsed?.userId || !parsed?.expiresAt) return null;
+  if (parsed.sessionId !== undefined && String(parsed.sessionId || '').trim().length === 0) {
     return null;
   }
+  if (parsed.expiresAt <= Date.now()) return null;
+  return parsed;
+};
 
-  try {
-    const parsed = JSON.parse(fromBase64Url(payloadSegment)) as SessionTokenPayload;
-    if (!parsed?.userId || !parsed?.expiresAt) return null;
-    if (parsed.sessionId !== undefined && String(parsed.sessionId || '').trim().length === 0) {
-      return null;
-    }
-    if (parsed.expiresAt <= Date.now()) return null;
-    return parsed;
-  } catch {
+export const verifyAdminElevationToken = (
+  token: string
+): AdminElevationTokenPayload | null => {
+  const parsed = verifySignedPayloadToken<AdminElevationTokenPayload & Record<string, unknown>>(
+    token
+  );
+  if (!parsed) return null;
+  if (parsed.purpose !== 'admin:elevation') return null;
+  if (!parsed.userId || !parsed.expiresAt) return null;
+  if (parsed.sessionId !== undefined && String(parsed.sessionId || '').trim().length === 0) {
     return null;
   }
+  if (parsed.expiresAt <= Date.now()) return null;
+  return parsed;
 };
 
 export const verifyBridgeAuthToken = (token: string): VerifiedBridgeAuthTokenPayload | null => {

@@ -13,8 +13,7 @@ const validRequestStatuses = new Set(['pending', 'accepted', 'scheduled', 'close
 
 const toProviderResponse = (user: any) => ({
   id: user.id,
-  name: user.name || user.email,
-  email: user.email,
+  name: user.name || (user.role === 'provider' ? 'Verified Provider' : 'Member'),
   role: user.role,
   providerExternalId: user.providerExternalId || null,
   handle: user.handle || null,

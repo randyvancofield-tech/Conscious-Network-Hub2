@@ -3,7 +3,7 @@ import fs from 'fs';
 import path from 'path';
 import type { Request } from 'express';
 
-export type AuditDomain = 'auth' | 'profile' | 'social';
+export type AuditDomain = 'auth' | 'profile' | 'social' | 'admin' | 'security';
 export type AuditOutcome = 'success' | 'deny' | 'error';
 
 interface AuditEventInput {

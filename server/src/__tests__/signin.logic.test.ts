@@ -222,5 +222,20 @@ describe('Sign-in logic', () => {
     expect(response.body?.error).toBe('Invalid credentials');
     expect(createUserSessionMock).not.toHaveBeenCalled();
   });
-});
 
+  it('requires a wallet verification credential for wallet 2FA accounts', async () => {
+    const email = 'signin.wallet@example.com';
+    const password = 'WalletPass#1234';
+    const user = createMockUser(email, hashPassword(password));
+    user.twoFactorMethod = 'wallet';
+    user.walletDid = 'did:pkh:eip155:1:0x0000000000000000000000000000000000000001';
+    users.set(user.id, user);
+
+    const response = await requestSignIn({ email, password });
+
+    expect(response.status).toBe(202);
+    expect(response.body?.requiresTwoFactor).toBe(true);
+    expect(response.body?.method).toBe('wallet');
+    expect(createUserSessionMock).not.toHaveBeenCalled();
+  });
+});

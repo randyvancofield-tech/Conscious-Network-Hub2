@@ -7,6 +7,7 @@ import {
   needsPasswordRehash,
   verifyPassword,
 } from '../auth';
+import { verifyIdentitySessionToken } from '../auth/identitySession';
 import {
   enforceAuthenticatedUserMatch,
   getAuthenticatedSessionId,
@@ -312,6 +313,7 @@ publicRouter.post('/signin', validateJsonBody(userSignInSchema), async (req: Req
     emailHash = email ? safeLogHash(email) : null;
     const password = String(req.body?.password || '');
     const twoFactorCode = String(req.body?.twoFactorCode || '').trim();
+    const providerToken = String(req.body?.providerToken || '').trim();
     const auditSignIn = (
       outcome: 'success' | 'deny' | 'error',
       statusCode: number,
@@ -390,7 +392,7 @@ publicRouter.post('/signin', validateJsonBody(userSignInSchema), async (req: Req
     }
 
     const role = String(user.role || 'user').trim().toLowerCase();
-    if (role !== 'user') {
+    if (role === 'provider') {
       auditSignIn('deny', 403, 'direct_platform_signin_role_denied', user.id, {
         role,
       });
@@ -468,6 +470,37 @@ publicRouter.post('/signin', validateJsonBody(userSignInSchema), async (req: Req
           pendingPhoneOtpExpiresAt: null,
           pendingPhoneOtpAttempts: 0,
         })) || user;
+    }
+
+    if (user.twoFactorMethod === 'wallet') {
+      if (!user.walletDid) {
+        auditSignIn('deny', 403, 'wallet_2fa_missing_wallet', user.id);
+        return res.status(403).json({
+          error: 'Wallet 2FA is enabled but no wallet DID is configured for this profile',
+        });
+      }
+
+      if (!providerToken) {
+        auditSignIn('deny', 202, 'two_factor_required_wallet', user.id, {
+          twoFactorMethod: 'wallet',
+        });
+        return res.status(202).json({
+          success: false,
+          requiresTwoFactor: true,
+          method: 'wallet',
+          message: 'Address verification credential required to complete sign-in',
+        });
+      }
+
+      const identitySession = verifyIdentitySessionToken(providerToken);
+      const expectedDid = String(user.walletDid || '').trim().toLowerCase();
+      const verifiedDid = String(identitySession?.did || '').trim().toLowerCase();
+      if (!identitySession || identitySession.sub !== user.id || verifiedDid !== expectedDid) {
+        auditSignIn('deny', 401, 'wallet_2fa_invalid_credential', user.id, {
+          twoFactorMethod: 'wallet',
+        });
+        return res.status(401).json({ error: 'Invalid address verification credential' });
+      }
     }
 
     user =

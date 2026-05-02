@@ -185,6 +185,25 @@ export const userWalletEnrollSchema: JsonSchema = {
   },
 };
 
+export const adminElevationSchema: JsonSchema = {
+  type: 'object',
+  additionalProperties: false,
+  properties: {
+    password: { type: 'string', maxLength: 512 },
+    elevationCode: { type: 'string', maxLength: 512 },
+  },
+};
+
+export const adminRoleUpdateSchema: JsonSchema = {
+  type: 'object',
+  additionalProperties: false,
+  required: ['role'],
+  properties: {
+    role: { type: 'string', enum: ['user', 'provider', 'admin'] },
+    reason: { type: 'string', maxLength: 512 },
+  },
+};
+
 export const immersiveSessionEventSchema: JsonSchema = {
   type: 'object',
   additionalProperties: false,

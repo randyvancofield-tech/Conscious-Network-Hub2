@@ -15,6 +15,7 @@ import NotFoundPage from './components/NotFoundPage';
 import AuthCallbackPage from './components/AuthCallbackPage';
 import MusicBox from './components/MusicBox';
 import NotificationsCenter from './components/NotificationsCenter';
+import AdminDashboard from './components/AdminDashboard';
 import { ConsciousIdentity } from './components/community/CommunityLayout';
 import { AppView, UserProfile, Course } from './types';
 import { NAVIGATION_ITEMS } from './constants';
@@ -88,6 +89,8 @@ const routePathForView = (view: AppView, params: Record<string, string> = {}): s
       return '/membership';
     case AppView.NOTIFICATIONS:
       return '/notifications';
+    case AppView.ADMIN_DASHBOARD:
+      return '/admin';
     case AppView.PRIVACY_POLICY:
       return '/privacy-policy';
     case AppView.AI_TRANSPARENCY_POLICY:
@@ -130,6 +133,7 @@ const resolveRoute = (pathname: string, search = ''): RouteState => {
     '/profile': AppView.MY_CONSCIOUS_IDENTITY,
     '/membership': AppView.MEMBERSHIP,
     '/notifications': AppView.NOTIFICATIONS,
+    '/admin': AppView.ADMIN_DASHBOARD,
     '/privacy-policy': AppView.PRIVACY_POLICY,
     '/privacy': AppView.PRIVACY_POLICY,
     '/policies/privacy': AppView.PRIVACY_POLICY,
@@ -171,6 +175,7 @@ const requiresStoredSession = (view: AppView): boolean =>
     AppView.MY_COURSES,
     AppView.MY_CONSCIOUS_IDENTITY,
     AppView.NOTIFICATIONS,
+    AppView.ADMIN_DASHBOARD,
   ].includes(view);
 
 const isGuestAllowedView = (view: AppView): boolean =>
@@ -457,8 +462,11 @@ const App: React.FC = () => {
     const canonicalUser = toCanonicalUser(rawUser);
     return {
       ...canonicalUser,
-      role: 'user',
-      providerExternalId: null,
+      role: canonicalUser.role || 'user',
+      providerExternalId:
+        canonicalUser.role === 'provider' || canonicalUser.role === 'admin'
+          ? canonicalUser.providerExternalId
+          : null,
       tier: canonicalUser.tier,
     };
   };
@@ -490,6 +498,9 @@ const App: React.FC = () => {
 
   const hasProviderRole = (profile: UserProfile | null | undefined): boolean =>
     profile?.role === 'provider' || profile?.role === 'admin';
+
+  const hasAdminRole = (profile: UserProfile | null | undefined): boolean =>
+    profile?.role === 'admin';
 
   const isFreeMembershipTier = (tier: string): boolean => tier === FREE_TIER_NAME;
 
@@ -563,7 +574,7 @@ const App: React.FC = () => {
         const data = await api<{ user: any }>('/user/current');
         const canonicalUser = toSessionUserFromBackend(token, data.user);
         setUser(canonicalUser);
-        if (buildBridgeUserFromToken(token) || hasProviderRole(canonicalUser)) {
+        if (buildBridgeUserFromToken(token) || canonicalUser.role === 'provider') {
           setProviderAuthSession(token, canonicalUser);
         } else {
           setUserAuthSession(token, canonicalUser);
@@ -707,7 +718,7 @@ const App: React.FC = () => {
       const canonicalUser = toSessionUserFromBackend(token, data.user);
       setUser(canonicalUser);
       if (token) {
-        if (buildBridgeUserFromToken(token) || hasProviderRole(canonicalUser)) {
+        if (buildBridgeUserFromToken(token) || canonicalUser.role === 'provider') {
           setProviderAuthSession(token, canonicalUser);
         } else {
           setUserAuthSession(token, canonicalUser);
@@ -1110,7 +1121,7 @@ const App: React.FC = () => {
       : toPlatformUser({ ...user, ...updated });
     setUser(canonicalUpdated);
     if (token) {
-      if (buildBridgeUserFromToken(token) || hasProviderRole(canonicalUpdated)) {
+      if (buildBridgeUserFromToken(token) || canonicalUpdated.role === 'provider') {
         setProviderAuthSession(token, canonicalUpdated);
       } else {
         setUserAuthSession(token, canonicalUpdated);
@@ -1193,6 +1204,7 @@ const App: React.FC = () => {
     providers: AppView.PROVIDERS,
     profile: AppView.MY_CONSCIOUS_IDENTITY,
     membership: AppView.MEMBERSHIP,
+    admin: AppView.ADMIN_DASHBOARD,
   };
 
   const filteredNavigationItems = useMemo(() => {
@@ -1202,10 +1214,15 @@ const App: React.FC = () => {
         return view ? isGuestAllowedView(view) : false;
       });
     }
+    if (hasAdminRole(user)) {
+      return NAVIGATION_ITEMS;
+    }
     if (!hasConfirmedMembership(user)) {
       return NAVIGATION_ITEMS.filter((item) => item.id === 'membership');
     }
-    return NAVIGATION_ITEMS.filter((item) => canTierAccessNavItem(user.tier, item.id));
+    return NAVIGATION_ITEMS.filter(
+      (item) => item.id !== 'admin' && canTierAccessNavItem(user.tier, item.id)
+    );
   }, [user]);
 
   const renderActiveView = () => {
@@ -1269,7 +1286,7 @@ const App: React.FC = () => {
       );
     }
 
-    if (user && !hasConfirmedMembership(user) && !isNoTierSignedInAllowedView(currentView)) {
+    if (user && !hasAdminRole(user) && !hasConfirmedMembership(user) && !isNoTierSignedInAllowedView(currentView)) {
       return (
         <div className="p-8 max-w-3xl mx-auto">
           <div className="glass-panel p-8 rounded-3xl border border-blue-500/20">
@@ -1294,6 +1311,7 @@ const App: React.FC = () => {
     }
     if (
       user &&
+      !hasAdminRole(user) &&
       hasConfirmedMembership(user) &&
       currentView !== AppView.NOT_FOUND &&
       !canTierAccessView(user.tier, currentView)
@@ -1400,6 +1418,16 @@ const App: React.FC = () => {
         );
       case AppView.NOTIFICATIONS:
         return <NotificationsCenter onBack={() => setCurrentView(AppView.DASHBOARD)} />;
+      case AppView.ADMIN_DASHBOARD:
+        return hasAdminRole(user) ? (
+          <AdminDashboard />
+        ) : (
+          <NotFoundPage
+            path={activePath}
+            onGoHome={() => setCurrentView(AppView.ENTRY)}
+            onGoDashboard={() => setCurrentView(AppView.DASHBOARD)}
+          />
+        );
       case AppView.KNOWLEDGE_PATHWAYS:
         return (
           <KnowledgePathways

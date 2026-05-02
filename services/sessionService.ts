@@ -6,6 +6,7 @@ export const ACTIVE_USER_CACHE_KEY = 'hcn_active_user';
 export const PLATFORM_SESSION_KEY = 'hcn_platform_session';
 export const PROVIDER_SESSION_TOKEN_KEY = 'hcn_provider_session_token';
 export const PROVIDER_SESSION_TOKEN_EVENT = 'hcn:provider-session-token-updated';
+export const ADMIN_ELEVATION_TOKEN_KEY = 'hcn_admin_elevation_token';
 
 type PlatformSessionRole = 'guest' | 'user' | 'provider' | 'admin';
 type PlatformSessionTier = 'free' | 'guided' | 'accelerated';
@@ -117,7 +118,7 @@ export const setGuestSession = (): void => {
 
 export const setUserAuthSession = (token: string, user?: UserProfile | null): void => {
   if (!hasBrowserStorage()) return;
-  const platformUser = user ? { ...user, role: 'user' as const, providerExternalId: null } : null;
+  const platformUser = user ? { ...user, role: user.role || 'user' } : null;
   localStorage.setItem(AUTH_TOKEN_KEY, token);
   localStorage.removeItem(BRIDGE_AUTH_TOKEN_KEY);
   if (platformUser) {
@@ -125,9 +126,9 @@ export const setUserAuthSession = (token: string, user?: UserProfile | null): vo
   }
   writePlatformSession({
     isAuthenticated: true,
-    role: 'user',
+    role: platformUser?.role === 'admin' ? 'admin' : 'user',
     tier: normalizePlatformTier(platformUser?.tier),
-    permissions: [],
+    permissions: platformUser?.role === 'admin' ? ['admin:dashboard'] : [],
   });
 };
 
@@ -173,7 +174,26 @@ export const clearAuthSession = (): void => {
   localStorage.removeItem(BRIDGE_AUTH_TOKEN_KEY);
   localStorage.removeItem(ACTIVE_USER_CACHE_KEY);
   localStorage.removeItem(PLATFORM_SESSION_KEY);
+  if (hasBrowserSessionStorage()) {
+    window.sessionStorage.removeItem(ADMIN_ELEVATION_TOKEN_KEY);
+  }
   setProviderControlSession('');
+};
+
+export const setAdminElevationToken = (token: string): void => {
+  if (!hasBrowserSessionStorage()) return;
+  const normalized = String(token || '').trim();
+  if (normalized) {
+    window.sessionStorage.setItem(ADMIN_ELEVATION_TOKEN_KEY, normalized);
+  } else {
+    window.sessionStorage.removeItem(ADMIN_ELEVATION_TOKEN_KEY);
+  }
+};
+
+export const getAdminElevationToken = (): string | null => {
+  if (!hasBrowserSessionStorage()) return null;
+  const token = String(window.sessionStorage.getItem(ADMIN_ELEVATION_TOKEN_KEY) || '').trim();
+  return token || null;
 };
 
 export const buildBridgeUserFromToken = (token: string): UserProfile | null => {

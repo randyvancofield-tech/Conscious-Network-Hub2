@@ -18,6 +18,7 @@ const NAV_VIEW_BY_ID: Record<string, AppView> = {
   community: AppView.COMMUNITY,
   profile: AppView.MY_CONSCIOUS_IDENTITY,
   membership: AppView.MEMBERSHIP,
+  admin: AppView.ADMIN_DASHBOARD,
 };
 
 const BASE_ACCESS_VIEWS = [
@@ -30,7 +31,7 @@ const BASE_ACCESS_VIEWS = [
   AppView.AI_TRANSPARENCY_POLICY,
   AppView.BLOCKCHAIN_DATA_POLICY,
   AppView.VENDOR_API_GOVERNANCE_POLICY,
-  AppView.NIST_MAPPING_SUMMARY,
+    AppView.NIST_MAPPING_SUMMARY,
     AppView.AI_SAFETY_GOVERNANCE,
     AppView.NOTIFICATIONS,
     AppView.NOT_FOUND,

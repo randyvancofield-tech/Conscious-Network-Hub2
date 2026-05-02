@@ -1,5 +1,5 @@
 import { Request, Response, NextFunction } from 'express';
-import { verifyBridgeAuthToken, verifySessionToken } from './auth';
+import { verifyAdminElevationToken, verifyBridgeAuthToken, verifySessionToken } from './auth';
 import { getUserSessionById, revokeUserSession } from './services/userSessionStore';
 import { localStore } from './services/persistenceStore';
 import { getProviderAccessDenyReason, isProviderAccessActive } from './services/providerAccess';
@@ -13,6 +13,8 @@ export interface AuthenticatedRequest extends Request {
   authWalletAddress?: string;
   authProviderExternalId?: string;
 }
+
+export type PlatformRole = 'guest' | 'user' | 'provider' | 'admin';
 
 /**
  * Input validation middleware
@@ -121,10 +123,7 @@ export function requireCanonicalIdentity(
         return;
       }
 
-      if (
-        (bridgeUser.role === 'provider' || bridgeUser.role === 'admin') &&
-        !isProviderAccessActive(bridgeUser)
-      ) {
+      if (bridgeUser.role === 'provider' && !isProviderAccessActive(bridgeUser)) {
         logIdentityValidationFailure(req, getProviderAccessDenyReason(bridgeUser), {
           userId: bridgeUser.id,
           role: bridgeUser.role,
@@ -197,7 +196,7 @@ export function requireCanonicalIdentity(
       return;
     }
 
-    if ((user.role === 'provider' || user.role === 'admin') && !isProviderAccessActive(user)) {
+    if (user.role === 'provider' && !isProviderAccessActive(user)) {
       if (payload.sessionId) {
         await revokeUserSession(payload.sessionId);
       }
@@ -230,6 +229,74 @@ export const getAuthenticatedUserId = (req: Request): string | null => {
 export const getAuthenticatedSessionId = (req: Request): string | null => {
   const authReq = req as AuthenticatedRequest;
   return authReq.authSessionId || null;
+};
+
+export const getAuthenticatedRole = (req: Request): PlatformRole => {
+  const authReq = req as AuthenticatedRequest;
+  const role = String(authReq.authRole || '').trim().toLowerCase();
+  if (role === 'admin' || role === 'provider' || role === 'user') return role;
+  return 'guest';
+};
+
+export const requireRole = (...allowedRoles: PlatformRole[]) => (
+  req: Request,
+  res: Response,
+  next: NextFunction
+): void => {
+  const role = getAuthenticatedRole(req);
+  if (!allowedRoles.includes(role)) {
+    logIdentityValidationFailure(req, 'role_access_denied', {
+      role,
+      allowedRoles,
+    });
+    res.status(403).json({ error: 'Forbidden: insufficient role' });
+    return;
+  }
+  next();
+};
+
+export const requireAdminRole = requireRole('admin');
+
+export const requireAdminElevation = (
+  req: Request,
+  res: Response,
+  next: NextFunction
+): void => {
+  const authUserId = getAuthenticatedUserId(req);
+  const authSessionId = getAuthenticatedSessionId(req);
+  const role = getAuthenticatedRole(req);
+  if (!authUserId || role !== 'admin') {
+    logIdentityValidationFailure(req, 'admin_elevation_role_denied', {
+      authUserId,
+      role,
+    });
+    res.status(403).json({ error: 'Forbidden: admin role required' });
+    return;
+  }
+
+  const rawToken =
+    String(req.headers['x-admin-elevation-token'] || '').trim() ||
+    String(req.headers['x-admin-secure-token'] || '').trim();
+  const elevation = verifyAdminElevationToken(rawToken);
+  if (!elevation || elevation.userId !== authUserId) {
+    logIdentityValidationFailure(req, 'admin_elevation_missing_or_invalid', {
+      authUserId,
+      role,
+    });
+    res.status(403).json({ error: 'Admin elevation required' });
+    return;
+  }
+
+  if (elevation.sessionId && authSessionId && elevation.sessionId !== authSessionId) {
+    logIdentityValidationFailure(req, 'admin_elevation_session_mismatch', {
+      authUserId,
+      authSessionId,
+    });
+    res.status(403).json({ error: 'Admin elevation session mismatch' });
+    return;
+  }
+
+  next();
 };
 
 export const enforceAuthenticatedUserMatch = (

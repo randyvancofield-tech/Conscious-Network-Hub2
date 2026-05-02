@@ -10,6 +10,7 @@ import {
   healthCheck,
 } from './middleware';
 import aiRoutes from './routes/ai';
+import adminRoutes from './routes/admin';
 import {
   handleStripeWebhook,
   membershipPublicRoutes,
@@ -129,6 +130,8 @@ app.use(
       'X-Bridge-Timestamp',
       'X-Bridge-Signature',
       'X-Bridge-Key-Id',
+      'X-Admin-Elevation-Token',
+      'X-Admin-Secure-Token',
     ],
     credentials: true,
     maxAge: 86400, // 24 hours
@@ -188,6 +191,7 @@ app.use('/api/user/requests', userRequestsRouter);
 app.use('/api/membership', membershipProtectedRoutes);
 app.use('/api/courses', coursesProtectedRoutes);
 app.use('/api/ai', aiRoutes);
+app.use('/api/admin', adminRoutes);
 app.use('/api/upload', uploadProtectedRoutes);
 app.use('/api/reflection', reflectionRoutes);
 app.use('/api/social', socialRoutes);
