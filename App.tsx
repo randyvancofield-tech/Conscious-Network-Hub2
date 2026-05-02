@@ -165,26 +165,46 @@ const getInitialRoute = (): RouteState => {
   return resolveRoute(window.location.pathname, window.location.search);
 };
 
-const requiresConfirmedMembership = (view: AppView): boolean =>
+const requiresStoredSession = (view: AppView): boolean =>
   [
     AppView.DASHBOARD,
-    AppView.CONSCIOUS_MEETINGS,
-    AppView.MEETING_DETAIL,
     AppView.MY_COURSES,
     AppView.MY_CONSCIOUS_IDENTITY,
     AppView.NOTIFICATIONS,
   ].includes(view);
 
-const requiresStoredSession = (view: AppView): boolean =>
+const isGuestAllowedView = (view: AppView): boolean =>
   [
-    AppView.DASHBOARD,
+    AppView.ENTRY,
+    AppView.MEMBERSHIP_ACCESS,
+    AppView.MEMBERSHIP,
+    AppView.COMMUNITY,
+    AppView.CONSCIOUS_SOCIAL_LEARNING,
     AppView.CONSCIOUS_MEETINGS,
     AppView.MEETING_DETAIL,
-    AppView.MY_COURSES,
-    AppView.PROVIDERS,
-    AppView.PROVIDER_DETAIL,
-    AppView.MY_CONSCIOUS_IDENTITY,
-    AppView.NOTIFICATIONS,
+    AppView.KNOWLEDGE_PATHWAYS,
+    AppView.COURSE_DETAIL,
+    AppView.PRIVACY_POLICY,
+    AppView.AI_TRANSPARENCY_POLICY,
+    AppView.BLOCKCHAIN_DATA_POLICY,
+    AppView.VENDOR_API_GOVERNANCE_POLICY,
+    AppView.NIST_MAPPING_SUMMARY,
+    AppView.AI_SAFETY_GOVERNANCE,
+    AppView.NOT_FOUND,
+  ].includes(view);
+
+const isNoTierSignedInAllowedView = (view: AppView): boolean =>
+  [
+    AppView.ENTRY,
+    AppView.MEMBERSHIP_ACCESS,
+    AppView.MEMBERSHIP,
+    AppView.PRIVACY_POLICY,
+    AppView.AI_TRANSPARENCY_POLICY,
+    AppView.BLOCKCHAIN_DATA_POLICY,
+    AppView.VENDOR_API_GOVERNANCE_POLICY,
+    AppView.NIST_MAPPING_SUMMARY,
+    AppView.AI_SAFETY_GOVERNANCE,
+    AppView.NOT_FOUND,
   ].includes(view);
 
 const App: React.FC = () => {
@@ -550,7 +570,12 @@ const App: React.FC = () => {
         }
         void refreshUserCourses();
         setSelectedTier(canonicalUser.tier || FREE_TIER_NAME);
-        setIsSelectingTier(false);
+        const needsMembershipSelection = !hasConfirmedMembership(canonicalUser);
+        setIsSelectingTier(needsMembershipSelection);
+        if (needsMembershipSelection && !isNoTierSignedInAllowedView(initialRoute.view)) {
+          setMembershipNotice('Select a membership tier to continue.');
+          setCurrentView(AppView.MEMBERSHIP_ACCESS, {}, { replace: true });
+        }
       } catch {
         const bridgeUser = buildBridgeUserFromToken(token);
         if (bridgeUser) {
@@ -688,6 +713,7 @@ const App: React.FC = () => {
           setUserAuthSession(token, canonicalUser);
         }
       }
+      setSelectedTier(canonicalUser.tier || FREE_TIER_NAME);
       return canonicalUser;
     } catch {
       setGuestSession();
@@ -788,8 +814,8 @@ const App: React.FC = () => {
       setTwoFactorCodeInput('');
       setProviderTokenInput('');
       closeModals();
-      setCurrentView(needsMembershipSelection ? AppView.MEMBERSHIP_ACCESS : AppView.ENTRY, {}, { replace: true });
-      setSidebarOpen(false);
+      setCurrentView(needsMembershipSelection ? AppView.MEMBERSHIP_ACCESS : AppView.DASHBOARD, {}, { replace: true });
+      setSidebarOpen(!needsMembershipSelection && window.innerWidth >= 1024);
     } catch (error) {
       if (error instanceof ApiError) {
         const data = error.data as any;
@@ -866,9 +892,9 @@ const App: React.FC = () => {
       setMembershipCheckoutPending(false);
       setMembershipNotice(needsMembershipSelection ? 'Select a membership tier to continue.' : '');
       closeModals();
-      setCurrentView(needsMembershipSelection ? AppView.MEMBERSHIP_ACCESS : AppView.ENTRY, {}, { replace: true });
+      setCurrentView(needsMembershipSelection ? AppView.MEMBERSHIP_ACCESS : AppView.DASHBOARD, {}, { replace: true });
       setIsSelectingTier(needsMembershipSelection);
-      setSidebarOpen(false);
+      setSidebarOpen(!needsMembershipSelection && window.innerWidth >= 1024);
     } catch (error) {
       if (error instanceof ApiError) {
         const data = error.data as any;
@@ -1170,12 +1196,20 @@ const App: React.FC = () => {
   };
 
   const filteredNavigationItems = useMemo(() => {
-    if (!user) return NAVIGATION_ITEMS;
+    if (!user) {
+      return NAVIGATION_ITEMS.filter((item) => {
+        const view = navViewMap[item.id];
+        return view ? isGuestAllowedView(view) : false;
+      });
+    }
+    if (!hasConfirmedMembership(user)) {
+      return NAVIGATION_ITEMS.filter((item) => item.id === 'membership');
+    }
     return NAVIGATION_ITEMS.filter((item) => canTierAccessNavItem(user.tier, item.id));
   }, [user]);
 
   const renderActiveView = () => {
-    if (requiresStoredSession(currentView) && (!getAuthToken() || !user)) {
+    if (!user && !isGuestAllowedView(currentView)) {
       return (
         <div className="p-4 sm:p-8 max-w-3xl mx-auto">
           <div className="glass-panel p-6 sm:p-8 rounded-3xl border border-blue-500/20">
@@ -1183,7 +1217,7 @@ const App: React.FC = () => {
               Session Required
             </h2>
             <p className="text-slate-300 text-sm leading-relaxed mb-6">
-              This platform area requires a signed provider or member session token before access.
+              This platform area requires a signed user session before access.
             </p>
             <div className="flex flex-col sm:flex-row gap-3">
               <button
@@ -1209,7 +1243,33 @@ const App: React.FC = () => {
       );
     }
 
-    if (user && !hasConfirmedMembership(user) && requiresConfirmedMembership(currentView)) {
+    if (requiresStoredSession(currentView) && (!getAuthToken() || !user)) {
+      return (
+        <div className="p-4 sm:p-8 max-w-3xl mx-auto">
+          <div className="glass-panel p-6 sm:p-8 rounded-3xl border border-blue-500/20">
+            <h2 className="text-2xl font-black text-white uppercase tracking-tight mb-4">
+              Session Required
+            </h2>
+            <p className="text-slate-300 text-sm leading-relaxed mb-6">
+              This platform area requires a signed user session before access.
+            </p>
+            <button
+              onClick={() => {
+                setPendingTwoFactorMethod(null);
+                setTwoFactorCodeInput('');
+                setProviderTokenInput('');
+                setSigninModalOpen(true);
+              }}
+              className="px-5 py-3 bg-blue-600 hover:bg-blue-500 text-white rounded-xl text-xs font-black uppercase tracking-widest transition-colors"
+            >
+              Sign In
+            </button>
+          </div>
+        </div>
+      );
+    }
+
+    if (user && !hasConfirmedMembership(user) && !isNoTierSignedInAllowedView(currentView)) {
       return (
         <div className="p-8 max-w-3xl mx-auto">
           <div className="glass-panel p-8 rounded-3xl border border-blue-500/20">
@@ -1232,7 +1292,12 @@ const App: React.FC = () => {
         </div>
       );
     }
-    if (user && currentView !== AppView.NOT_FOUND && !canTierAccessView(user.tier, currentView)) {
+    if (
+      user &&
+      hasConfirmedMembership(user) &&
+      currentView !== AppView.NOT_FOUND &&
+      !canTierAccessView(user.tier, currentView)
+    ) {
       return (
         <div className="p-4 sm:p-8 max-w-3xl mx-auto">
           <div className="glass-panel p-6 sm:p-8 rounded-3xl border border-blue-500/20">
@@ -2081,7 +2146,7 @@ const App: React.FC = () => {
                           required
                         />
                         <p className="text-[9px] text-slate-400 uppercase tracking-widest px-1">
-                          Sign in later by providing a valid provider session credential from identity verification.
+                          Sign in later with a valid address verification credential from Profile Security.
                         </p>
                       </div>
                     )}
@@ -2107,7 +2172,7 @@ const App: React.FC = () => {
                 )}
                 {isSigninModalOpen && pendingTwoFactorMethod === 'wallet' && (
                   <div className="space-y-3">
-                    <label className="text-[9px] font-black text-slate-500 uppercase tracking-widest ml-2">Address Session Credential</label>
+                    <label className="text-[9px] font-black text-slate-500 uppercase tracking-widest ml-2">Address Verification Credential</label>
                     <input
                       type="text"
                       value={providerTokenInput}

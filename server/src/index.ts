@@ -92,11 +92,20 @@ app.use(helmet());
 // Trust proxy for rate limiting (safe for local dev)
 app.set('trust proxy', 1);
 
-const allowedOrigins = [
-  'https://conscious-network-hub.base44.app',
-  'https://conscious-network.org',
-  'http://localhost:3000',
-];
+const configuredCorsOrigins = String(process.env.CORS_ORIGINS || '')
+  .split(',')
+  .map((origin) => origin.trim().replace(/\/+$/, ''))
+  .filter(Boolean);
+
+const allowedOrigins = Array.from(
+  new Set([
+    'https://conscious-network-hub.base44.app',
+    'https://conscious-network.org',
+    'http://localhost:3000',
+    'http://localhost:5173',
+    ...configuredCorsOrigins,
+  ])
+);
 
 app.use(
   cors({
@@ -104,7 +113,8 @@ app.use(
       // Allow requests with no origin (like curl, mobile apps, or server-side scripts).
       if (!origin) return callback(null, true);
 
-      if (allowedOrigins.includes(origin)) {
+      const normalizedOrigin = origin.replace(/\/+$/, '');
+      if (allowedOrigins.includes(normalizedOrigin)) {
         return callback(null, true);
       }
 
@@ -112,7 +122,14 @@ app.use(
       return callback(null, false);
     },
     methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
-    allowedHeaders: ['Content-Type', 'Authorization'],
+    allowedHeaders: [
+      'Content-Type',
+      'Authorization',
+      'X-Bridge-Issuer',
+      'X-Bridge-Timestamp',
+      'X-Bridge-Signature',
+      'X-Bridge-Key-Id',
+    ],
     credentials: true,
     maxAge: 86400, // 24 hours
   })

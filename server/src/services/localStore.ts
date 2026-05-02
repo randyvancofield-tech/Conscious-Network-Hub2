@@ -142,6 +142,7 @@ interface ProviderInviteGroupRow {
 
 interface ProviderBridgeLaunchRow {
   id: string;
+  providerId?: string | null;
   providerExternalId: string;
   email: string;
   name: string;
@@ -330,6 +331,7 @@ export interface LocalProviderInviteGroupRecord {
 
 export interface LocalProviderBridgeLaunchRecord {
   id: string;
+  providerId: string | null;
   providerExternalId: string;
   email: string;
   name: string;
@@ -468,6 +470,7 @@ interface UpsertProviderInviteGroupInput {
 
 interface CreateProviderBridgeLaunchInput {
   id: string;
+  providerId?: string | null;
   providerExternalId: string;
   email: string;
   name: string;
@@ -874,6 +877,7 @@ const rowToProviderBridgeLaunch = (
 
   return {
     id: row.id,
+    providerId: String(row.providerId || '').trim() || null,
     providerExternalId: row.providerExternalId,
     email: row.email,
     name: row.name,
@@ -1426,6 +1430,7 @@ export const localStore = {
     const store = loadStore();
     const row: ProviderBridgeLaunchRow = {
       id: String(input.id || '').trim(),
+      providerId: String(input.providerId || '').trim() || null,
       providerExternalId: String(input.providerExternalId || '').trim(),
       email: normalizeEmail(input.email),
       name: String(input.name || '').trim() || 'Provider',

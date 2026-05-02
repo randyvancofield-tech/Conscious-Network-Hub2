@@ -233,7 +233,17 @@ export const immersiveSessionEventSchema: JsonSchema = {
 export const providerBridgeIssueLaunchCodeSchema: JsonSchema = {
   type: 'object',
   additionalProperties: false,
-  required: ['providerExternalId', 'email', 'name', 'role', 'walletAddress', 'walletDid', 'jti', 'aud'],
+  required: [
+    'providerExternalId',
+    'email',
+    'name',
+    'role',
+    'walletAddress',
+    'walletDid',
+    'walletSignature',
+    'jti',
+    'aud',
+  ],
   properties: {
     providerExternalId: { type: 'string', minLength: 1, maxLength: 256 },
     email: { type: 'string', minLength: 3, maxLength: 320 },
@@ -243,6 +253,7 @@ export const providerBridgeIssueLaunchCodeSchema: JsonSchema = {
     providerApproved: { type: 'boolean' },
     walletAddress: { type: 'string', minLength: 1, maxLength: 128 },
     walletDid: { type: 'string', minLength: 3, maxLength: 512 },
+    walletSignature: { type: 'string', minLength: 16, maxLength: 2048 },
     jti: { type: 'string', minLength: 8, maxLength: 256 },
     aud: { type: 'string', minLength: 1, maxLength: 256 },
     scopes: {

@@ -274,6 +274,7 @@ const toLocalProviderInviteGroup = (row: any): LocalProviderInviteGroupRecord =>
 
 const toLocalProviderBridgeLaunch = (row: any): LocalProviderBridgeLaunchRecord => ({
   id: row.id,
+  providerId: toNullableString(row.providerId),
   providerExternalId: row.providerExternalId,
   email: row.email,
   name: row.name,
@@ -937,6 +938,7 @@ export const localStore = {
       const row = await db.providerBridgeLaunch.create({
         data: {
           id: input.id,
+          providerId: toNullableString(input.providerId),
           providerExternalId: input.providerExternalId,
           email: input.email.trim().toLowerCase(),
           name: input.name.trim() || 'Provider',

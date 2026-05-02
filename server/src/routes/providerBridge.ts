@@ -168,6 +168,33 @@ const canonicalBridgeSignaturePayload = (input: {
   ].join('\n');
 };
 
+export const canonicalProviderWalletSignaturePayload = (input: {
+  audience: string;
+  providerExternalId: string;
+  email: string;
+  name: string;
+  role: 'provider';
+  approvalStatus: 'approved';
+  walletAddress: string;
+  walletDid: string;
+  jti: string;
+  scopes: string[];
+}): string => {
+  return [
+    'Conscious Network Provider Launch',
+    `aud=${input.audience}`,
+    `providerExternalId=${input.providerExternalId}`,
+    `email=${input.email}`,
+    `name=${input.name}`,
+    `role=${input.role}`,
+    `approvalStatus=${input.approvalStatus}`,
+    `walletAddress=${input.walletAddress}`,
+    `walletDid=${input.walletDid}`,
+    `jti=${input.jti}`,
+    `scopes=${input.scopes.join(',')}`,
+  ].join('\n');
+};
+
 const canonicalBridgeRevocationSignaturePayload = (input: {
   issuer: string;
   audience: string;
@@ -217,6 +244,7 @@ router.post(
     const providerApproved = normalizeProviderApproved(req.body?.providerApproved);
     const walletAddress = normalizeWalletAddress(req.body?.walletAddress);
     const walletDid = parseDidPkh(req.body?.walletDid);
+    const walletSignature = String(req.body?.walletSignature || '').trim();
     const jti = String(req.body?.jti || '').trim();
     const requestAudience = String(req.body?.aud || '').trim();
     const scopes = normalizeScopes(req.body?.scopes);
@@ -271,6 +299,30 @@ router.post(
       return;
     }
 
+    const walletPayload = canonicalProviderWalletSignaturePayload({
+      audience: requestAudience,
+      providerExternalId,
+      email,
+      name,
+      role,
+      approvalStatus: 'approved',
+      walletAddress,
+      walletDid: walletDid.did,
+      jti,
+      scopes,
+    });
+    let recoveredWalletAddress: string;
+    try {
+      recoveredWalletAddress = ethers.getAddress(ethers.verifyMessage(walletPayload, walletSignature));
+    } catch {
+      deny(401, 'Invalid provider wallet signature');
+      return;
+    }
+    if (recoveredWalletAddress.toLowerCase() !== walletAddress.toLowerCase()) {
+      deny(401, 'Provider wallet signature/address mismatch');
+      return;
+    }
+
     if (!headerIssuer || headerIssuer !== issuer) {
       deny(401, 'Invalid bridge issuer');
       return;
@@ -322,12 +374,38 @@ router.post(
       return;
     }
 
+    const providerUser = await upsertBridgeProviderUser({
+      providerExternalId,
+      email,
+      name,
+      role: 'provider',
+      walletAddress,
+      walletDid: walletDid.did,
+    });
+    if (!providerUser) {
+      recordAuditEvent(req, {
+        domain: 'auth',
+        action: 'provider_bridge_issue_launch_code',
+        outcome: 'error',
+        statusCode: 500,
+        metadata: {
+          reason: 'provider_user_upsert_failed',
+          providerExternalId,
+          jti,
+          keyId: headerKeyId,
+        },
+      });
+      res.status(500).json({ error: 'Failed to establish provider user' });
+      return;
+    }
+
     const now = Date.now();
     const launchCode = `pbl_${crypto.randomUUID()}`;
     const expiresAt = new Date(now + BRIDGE_CODE_TTL_MS);
 
     await localStore.createProviderBridgeLaunch({
       id: launchCode,
+      providerId: providerUser.id,
       providerExternalId,
       email,
       name,
@@ -350,6 +428,7 @@ router.post(
       statusCode: 201,
       metadata: {
         providerExternalId,
+        providerUserId: providerUser.id,
         jti,
         expiresAt: expiresAt.toISOString(),
         walletChainId: walletDid.chainId,
