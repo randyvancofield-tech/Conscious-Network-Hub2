@@ -33,6 +33,7 @@ const router = Router();
 const BRIDGE_CODE_TTL_MS = 120 * 1000;
 const BRIDGE_TIMESTAMP_SKEW_MS = 60 * 1000;
 const DEFAULT_PROVIDER_SCOPES = ['provider:read', 'provider:host'];
+const BASE44_PROVIDER_WALLET_MESSAGE = 'Verify provider access to Conscious Network Hub';
 
 const issueLaunchLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
@@ -221,6 +222,20 @@ const canonicalBridgeRevocationSignaturePayload = (input: {
   ].join('\n');
 };
 
+const recoverSignedWalletAddress = (
+  payloads: string[],
+  signature: string
+): string | null => {
+  for (const payload of payloads) {
+    try {
+      return ethers.getAddress(ethers.verifyMessage(payload, signature));
+    } catch {
+      // Try the next supported bridge wallet message.
+    }
+  }
+  return null;
+};
+
 router.post(
   '/provider/issue-launch-code',
   issueLaunchLimiter,
@@ -311,10 +326,11 @@ router.post(
       jti,
       scopes,
     });
-    let recoveredWalletAddress: string;
-    try {
-      recoveredWalletAddress = ethers.getAddress(ethers.verifyMessage(walletPayload, walletSignature));
-    } catch {
+    const recoveredWalletAddress = recoverSignedWalletAddress(
+      [BASE44_PROVIDER_WALLET_MESSAGE, walletPayload],
+      walletSignature
+    );
+    if (!recoveredWalletAddress) {
       deny(401, 'Invalid provider wallet signature');
       return;
     }
