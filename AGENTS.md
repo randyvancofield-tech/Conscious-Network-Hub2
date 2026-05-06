@@ -2,7 +2,9 @@
 
 ## Project Snapshot
 
-Conscious Network Hub is a full-stack TypeScript application with a React frontend and an Express backend. Authentication and user persistence are implemented in the backend with Prisma and PostgreSQL.
+Conscious Network Hub is a full-stack TypeScript application with a React + Vite frontend and an Express backend. Authentication and user persistence are implemented in the backend with signed session tokens, persisted session records, Prisma, and PostgreSQL.
+
+This checkout is not the Base44-style `entities/` + `src/App.jsx` layout. The active app uses root-level `App.tsx`/`index.tsx`, root `components/` and `services/`, and a separate `server/` package.
 
 ## Tech Stack
 
@@ -13,14 +15,17 @@ Conscious Network Hub is a full-stack TypeScript application with a React fronte
 - Security: Helmet, CORS allowlist, request validation, rate limiting
 - Testing: Jest (integration tests for core persistence/auth loops)
 - Deployment: Google Cloud Run
+- Contracts: Solidity contract package under `contracts/`
+- Provider launch support: Base44 function material under `base44/functions/providerLaunch/`
 
 ## Architecture
 
 1. Frontend sends requests to backend API routes (`/api/*`) using `fetch`.
-2. Signup/signin calls hit backend user routes and return a signed auth token.
-3. Frontend stores token in localStorage and sends it in `Authorization: Bearer ...`.
-4. Backend validates token + persisted session before protected route access.
-5. All user/profile/post/session writes flow through Prisma to PostgreSQL.
+2. `services/apiClient.ts` attaches the stored auth token as `Authorization: Bearer ...` unless a caller opts out.
+3. Signup/signin calls hit backend user routes and return a signed auth token plus canonical user data.
+4. Frontend session state is managed in `services/sessionService.ts` using localStorage-backed token and user cache keys.
+5. Backend validates the signed token plus persisted session before protected route access.
+6. User/profile/post/session/provider writes flow through backend services, with Prisma/PostgreSQL as the canonical persistent store.
 
 ## Naming Conventions
 
@@ -44,23 +49,66 @@ Conscious Network Hub is a full-stack TypeScript application with a React fronte
   - Verifies password hash
   - Enforces lockout/2FA policy
   - Creates persisted session + signed token
+- Token creation/verification helpers: `server/src/auth.ts` (`createSessionToken`, `verifySessionToken`)
+- Persisted session store: `server/src/services/userSessionStore.ts`, backed by local/persistence store implementations
 - Session validation middleware: `server/src/middleware.ts` (`requireCanonicalIdentity`)
-- Logout endpoint: `POST /api/user/logout` revokes persisted session
+- Protected-route identity helpers: `getAuthenticatedUserId(req)` and `enforceAuthenticatedUserMatch(...)`
+- Logout endpoint: `POST /api/user/logout` revokes the active persisted session
+- Admin elevation: `server/src/routes/admin.ts` requires canonical identity, admin role, password verification, and short-lived elevation token checks for sensitive operations
+- Provider auth is separate from member auth: provider DID/session routes live in `server/src/routes/providerAuth.ts`, `providerBridge.ts`, and `providerSession.ts`
 
-## File Structure (Auth/Persistence-Relevant)
+## Current Workspace Structure
+
+- `App.tsx`, `index.tsx`, `constants.tsx`, `types.ts`: root frontend entry and shared app types/constants
+- `components/`: React UI screens and shared UI primitives
+- `services/`: browser-side API, session, cache, analytics, tier access, security, and platform data helpers
+- `src/assets/`: frontend static assets such as brand imagery
+- `src/knowledge/`: packaged knowledge data used by the app
+- `server/`: Express API package, Prisma schema/migrations, tests, deployment scripts, backend services, and routes
+- `contracts/`: Solidity contract package and deployment/compile tooling
+- `base44/functions/providerLaunch/`: provider launch function scaffold and frontend example
+- `docs/`: architecture, privacy, compliance, cleanup, backend mapping, and archived implementation notes
+- `public/`: public images and video assets
+- `.agents/`: local Codex skills/plugins and agent configuration
+
+## Auth/Persistence-Relevant Files
 
 - `App.tsx`
+- `services/apiClient.ts`
 - `services/sessionService.ts`
 - `server/src/index.ts`
 - `server/src/middleware.ts`
 - `server/src/auth.ts`
 - `server/src/auth/identitySession.ts`
+- `server/src/auth/providerToken.ts`
 - `server/src/routes/user.ts`
 - `server/src/routes/admin.ts`
+- `server/src/routes/authBridge.ts`
+- `server/src/routes/providerAuth.ts`
+- `server/src/routes/providerBridge.ts`
+- `server/src/routes/providerSession.ts`
 - `server/src/services/persistenceStore.ts`
+- `server/src/services/localStore.ts`
 - `server/src/services/userSessionStore.ts`
+- `server/src/services/providerSessionStore.ts`
+- `server/src/services/providerAccess.ts`
+- `server/src/services/bridgeProviderUser.ts`
 - `server/src/services/auditTelemetry.ts`
 - `server/prisma/schema.prisma`
+
+## Backend Route Map
+
+- Identity/auth/user: `user.ts`, `admin.ts`, `authBridge.ts`, `identitySecurity.ts`, `integrity.ts`
+- Provider flows: `providers.ts`, `providerAuth.ts`, `providerBridge.ts`, `providerSession.ts`
+- Member features: `membership.ts`, `courses.ts`, `userCourses.ts`, `reflection.ts`, `social.ts`, `meeting.ts`
+- Platform services: `ai.ts`, `immersive.ts`, `upload.ts`
+
+## Backend Service Map
+
+- Persistence/session: `persistenceStore.ts`, `localStore.ts`, `prismaClient.ts`, `userSessionStore.ts`, `providerSessionStore.ts`
+- Provider governance: `providerAccess.ts`, `providerDid.ts`, `bridgeProviderUser.ts`
+- Security/privacy: `auditTelemetry.ts`, `privacyGuard.ts`, `sensitiveDataPolicy.ts`, `profileNormalization.ts`, `userProfilePatch.ts`
+- Integrations/content: `openAiService.ts`, `vertexAiService.ts`, `emailService.ts`, `googleSheetsMirror.ts`, `knowledgeService.ts`, `socialStore.ts`, `uploadBlobStore.ts`
 
 ## Security Conventions For AI-Assisted Development
 

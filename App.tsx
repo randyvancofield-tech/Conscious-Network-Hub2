@@ -1659,18 +1659,26 @@ const App: React.FC = () => {
                     Network Hub
                   </span>
                 </h1>
-                <p className="portal-entry-copy break-words text-base xs:text-lg sm:text-xl md:text-2xl text-blue-100/70 max-w-2xl mx-auto leading-relaxed font-light drop-shadow-md px-2 sm:px-0">
-                  Restoring autonomy and protecting identity through a community-centered decentralized social learning infrastructure.
+                <p className="portal-entry-copy break-words text-base xs:text-lg sm:text-xl md:text-2xl text-blue-100/70 max-w-3xl mx-auto leading-relaxed font-light drop-shadow-md px-2 sm:px-0">
+                  Ethical Infrastructure for a new era of human development, where spiritual, mental and educational growth are powered by data sovereignty.
                 </p>
               </div>
 
               <div className="flex justify-center pt-6 sm:pt-8 md:pt-10">
                 <button 
                   onClick={handleEnterHub}
-                  className="portal-entry-primary group relative w-full max-w-full min-w-0 sm:w-auto px-4 sm:px-12 md:px-16 lg:px-20 py-4 sm:py-5 md:py-6 lg:py-7 bg-blue-600 hover:bg-blue-500 text-white rounded-lg sm:rounded-xl md:rounded-[1.5rem] lg:rounded-[2rem] font-black text-sm sm:text-lg md:text-xl lg:text-2xl transition-all shadow-[0_0_60px_rgba(37,99,235,0.3)] hover:-translate-y-2 active:scale-95 flex items-center justify-center gap-3 sm:gap-4 overflow-hidden tracking-wider"
+                  className="portal-entry-primary group relative w-full max-w-full min-w-0 sm:w-auto px-4 sm:px-12 md:px-16 lg:px-20 py-4 sm:py-5 md:py-6 lg:py-7 bg-blue-600 hover:bg-blue-500 text-white rounded-lg sm:rounded-xl md:rounded-[1.5rem] lg:rounded-[2rem] transition-all shadow-[0_0_60px_rgba(37,99,235,0.3)] hover:-translate-y-2 active:scale-95 flex items-center justify-center gap-3 sm:gap-4 overflow-hidden"
                 >
                   <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/10 to-transparent -translate-x-full group-hover:translate-x-full transition-transform duration-1000" />
-                  ENTER PORTAL <ChevronRight className="w-5 h-5 sm:w-6 sm:h-6 md:w-7 md:h-7 lg:w-8 lg:h-8 group-hover:translate-x-2 transition-transform" />
+                  <span className="relative z-10 flex min-w-0 flex-col items-center text-center leading-tight">
+                    <span className="text-sm sm:text-lg md:text-xl lg:text-2xl font-black tracking-wider uppercase">
+                      Conscious Network Hub
+                    </span>
+                    <span className="mt-1 text-[10px] sm:text-xs md:text-sm font-bold uppercase tracking-[0.25em] text-blue-100/80">
+                      Enter the live community platform
+                    </span>
+                  </span>
+                  <ChevronRight className="relative z-10 w-5 h-5 sm:w-6 sm:h-6 md:w-7 md:h-7 lg:w-8 lg:h-8 flex-shrink-0 group-hover:translate-x-2 transition-transform" />
                 </button>
               </div>
               
@@ -1683,6 +1691,45 @@ const App: React.FC = () => {
                     Schedule a Briefing <ChevronRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" />
                   </button>
                 </div>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 sm:gap-5 max-w-3xl mx-auto pt-2">
+                <button
+                  onClick={() => {
+                    window.location.href = '/provider-gateway';
+                  }}
+                  className="group text-left p-5 sm:p-6 rounded-2xl border border-blue-500/20 bg-white/[0.03] hover:bg-blue-500/10 hover:border-blue-400/40 transition-all hover:-translate-y-1 shadow-[0_0_30px_rgba(37,99,235,0.12)]"
+                >
+                  <div className="flex items-start justify-between gap-4">
+                    <div className="min-w-0">
+                      <h2 className="text-sm sm:text-base font-black uppercase tracking-[0.18em] text-white">
+                        Provider Access
+                      </h2>
+                      <p className="mt-2 text-xs sm:text-sm leading-relaxed text-blue-100/65">
+                        Sign in or apply to join as a service provider
+                      </p>
+                    </div>
+                    <Building2 className="w-5 h-5 text-blue-300 flex-shrink-0 group-hover:text-white transition-colors" />
+                  </div>
+                </button>
+
+                <button
+                  type="button"
+                  aria-disabled="true"
+                  className="text-left p-5 sm:p-6 rounded-2xl border border-white/10 bg-white/[0.02] shadow-[0_0_30px_rgba(20,184,166,0.08)] cursor-default"
+                >
+                  <div className="flex items-start justify-between gap-4">
+                    <div className="min-w-0">
+                      <h2 className="text-sm sm:text-base font-black uppercase tracking-[0.18em] text-white">
+                        Conscious Careers
+                      </h2>
+                      <p className="mt-2 text-xs sm:text-sm leading-relaxed text-blue-100/65">
+                        Grant applications & entrepreneurship support
+                      </p>
+                    </div>
+                    <Sparkles className="w-5 h-5 text-teal-300 flex-shrink-0" />
+                  </div>
+                </button>
               </div>
               
               <div className="pt-6 sm:pt-8 md:pt-10 lg:pt-12 flex flex-col xs:flex-row flex-wrap justify-center gap-4 sm:gap-6 md:gap-8 lg:gap-16 opacity-30">
