@@ -1644,8 +1644,8 @@ const App: React.FC = () => {
         )}
 
         {currentView === AppView.ENTRY && (
-          <div className="flex flex-col items-center justify-center min-h-screen p-4 sm:p-6 md:p-8 text-center animate-in fade-in zoom-in duration-1000">
-            <div className="portal-entry-card w-full max-w-[calc(100vw-2rem)] sm:max-w-4xl space-y-6 sm:space-y-8 md:space-y-12 overflow-hidden backdrop-blur-[4px] p-6 sm:p-8 md:p-12 lg:p-16 rounded-2xl sm:rounded-3xl md:rounded-[2.5rem] lg:rounded-[4rem] border border-white/5 bg-white/[0.01] shadow-[0_0_100px_rgba(0,0,0,0.6)]">
+          <div className="flex flex-col items-center justify-center min-h-screen p-4 sm:p-6 md:p-8 pb-28 sm:pb-8 text-center animate-in fade-in zoom-in duration-1000">
+            <div className="portal-entry-card w-full max-w-[calc(100vw-2rem)] sm:max-w-5xl space-y-6 sm:space-y-8 md:space-y-10 overflow-hidden backdrop-blur-[4px] p-6 sm:p-8 md:p-12 lg:p-14 rounded-2xl sm:rounded-3xl md:rounded-[2.5rem] lg:rounded-[4rem] border border-white/5 bg-white/[0.01] shadow-[0_0_100px_rgba(0,0,0,0.6)]">
               <div className="flex justify-center">
                 <div className="p-4 sm:p-6 bg-blue-600/10 rounded-2xl sm:rounded-3xl md:rounded-[2.5rem] border border-blue-500/20 backdrop-blur-3xl shadow-[0_0_30px_rgba(37,99,235,0.2)] animate-pulse">
                   <img src={logo} alt="Conscious Network Hub Logo" className="w-12 h-12 sm:w-14 sm:h-14 md:w-16 md:h-16" />
@@ -1660,75 +1660,72 @@ const App: React.FC = () => {
                   </span>
                 </h1>
                 <p className="portal-entry-copy break-words text-base xs:text-lg sm:text-xl md:text-2xl text-blue-100/70 max-w-3xl mx-auto leading-relaxed font-light drop-shadow-md px-2 sm:px-0">
-                  Ethical Infrastructure for a new era of human development, where spiritual, mental and educational growth are powered by data sovereignty.
+                  Ethical infrastructure for a new era of human development, where spiritual, mental and educational growth are powered by data sovereignty.
                 </p>
               </div>
 
-              <div className="flex justify-center pt-6 sm:pt-8 md:pt-10">
-                <button 
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4 sm:gap-5 max-w-5xl mx-auto pt-2 sm:pt-4">
+                <button
                   onClick={handleEnterHub}
-                  className="portal-entry-primary group relative w-full max-w-full min-w-0 sm:w-auto px-4 sm:px-12 md:px-16 lg:px-20 py-4 sm:py-5 md:py-6 lg:py-7 bg-blue-600 hover:bg-blue-500 text-white rounded-lg sm:rounded-xl md:rounded-[1.5rem] lg:rounded-[2rem] transition-all shadow-[0_0_60px_rgba(37,99,235,0.3)] hover:-translate-y-2 active:scale-95 flex items-center justify-center gap-3 sm:gap-4 overflow-hidden"
+                  className="portal-entry-primary group relative flex min-h-[8.75rem] w-full flex-col justify-between overflow-hidden rounded-2xl border border-blue-500/20 bg-white/[0.03] p-5 text-left shadow-[0_0_30px_rgba(37,99,235,0.12)] transition-all hover:-translate-y-1 hover:border-blue-400/40 hover:bg-blue-500/10 active:scale-[0.98] sm:min-h-[9.5rem] sm:p-6"
                 >
                   <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/10 to-transparent -translate-x-full group-hover:translate-x-full transition-transform duration-1000" />
-                  <span className="relative z-10 flex min-w-0 flex-col items-center text-center leading-tight">
-                    <span className="text-sm sm:text-lg md:text-xl lg:text-2xl font-black tracking-wider uppercase">
-                      Conscious Network Hub
-                    </span>
-                    <span className="mt-1 text-[10px] sm:text-xs md:text-sm font-bold uppercase tracking-[0.25em] text-blue-100/80">
-                      Enter the live community platform
-                    </span>
-                  </span>
-                  <ChevronRight className="relative z-10 w-5 h-5 sm:w-6 sm:h-6 md:w-7 md:h-7 lg:w-8 lg:h-8 flex-shrink-0 group-hover:translate-x-2 transition-transform" />
-                </button>
-              </div>
-              
-              <div className="flex justify-center pt-4">
-                <div className="flex items-center justify-center gap-4">
-                  <button 
-                    onClick={() => window.open('https://calendly.com/randycofield/buildingconnections', '_blank', 'noopener,noreferrer')}
-                    className="group relative px-6 py-3 bg-blue-600 hover:bg-blue-500 text-white rounded-lg font-black text-sm transition-all shadow-[0_0_30px_rgba(37,99,235,0.2)] hover:-translate-y-1 active:scale-95 flex items-center gap-2 border border-blue-500/20"
-                  >
-                    Schedule a Briefing <ChevronRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" />
-                  </button>
-                </div>
-              </div>
-
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 sm:gap-5 max-w-3xl mx-auto pt-2">
-                <button
-                  onClick={() => {
-                    window.location.href = '/provider-gateway';
-                  }}
-                  className="group text-left p-5 sm:p-6 rounded-2xl border border-blue-500/20 bg-white/[0.03] hover:bg-blue-500/10 hover:border-blue-400/40 transition-all hover:-translate-y-1 shadow-[0_0_30px_rgba(37,99,235,0.12)]"
-                >
-                  <div className="flex items-start justify-between gap-4">
+                  <div className="relative z-10 flex items-start justify-between gap-4">
                     <div className="min-w-0">
-                      <h2 className="text-sm sm:text-base font-black uppercase tracking-[0.18em] text-white">
-                        Provider Access
+                      <h2 className="text-sm sm:text-base font-black uppercase tracking-[0.16em] text-white leading-snug">
+                      Conscious Network Hub
                       </h2>
-                      <p className="mt-2 text-xs sm:text-sm leading-relaxed text-blue-100/65">
-                        Sign in or apply to join as a service provider
+                      <p className="mt-3 text-xs sm:text-sm leading-relaxed text-blue-100/65">
+                        Enter the live community platform
                       </p>
                     </div>
-                    <Building2 className="w-5 h-5 text-blue-300 flex-shrink-0 group-hover:text-white transition-colors" />
+                    <ChevronRight className="w-5 h-5 text-blue-300 flex-shrink-0 group-hover:text-white group-hover:translate-x-1 transition-all" />
                   </div>
                 </button>
 
                 <button
                   type="button"
                   aria-disabled="true"
-                  className="text-left p-5 sm:p-6 rounded-2xl border border-white/10 bg-white/[0.02] shadow-[0_0_30px_rgba(20,184,166,0.08)] cursor-default"
+                  className="relative flex min-h-[8.75rem] w-full flex-col justify-between rounded-2xl border border-blue-500/20 bg-white/[0.03] p-5 text-left shadow-[0_0_30px_rgba(37,99,235,0.12)] cursor-default sm:min-h-[9.5rem] sm:p-6"
                 >
                   <div className="flex items-start justify-between gap-4">
                     <div className="min-w-0">
-                      <h2 className="text-sm sm:text-base font-black uppercase tracking-[0.18em] text-white">
+                      <h2 className="text-sm sm:text-base font-black uppercase tracking-[0.16em] text-white leading-snug">
+                        Provider Access
+                      </h2>
+                      <p className="mt-3 text-xs sm:text-sm leading-relaxed text-blue-100/65">
+                        Sign in or apply to join as a service provider
+                      </p>
+                    </div>
+                    <Building2 className="w-5 h-5 text-blue-300 flex-shrink-0" />
+                  </div>
+                </button>
+
+                <button
+                  type="button"
+                  aria-disabled="true"
+                  className="relative flex min-h-[8.75rem] w-full flex-col justify-between rounded-2xl border border-blue-500/20 bg-white/[0.03] p-5 text-left shadow-[0_0_30px_rgba(37,99,235,0.12)] cursor-default sm:min-h-[9.5rem] sm:p-6"
+                >
+                  <div className="flex items-start justify-between gap-4">
+                    <div className="min-w-0">
+                      <h2 className="text-sm sm:text-base font-black uppercase tracking-[0.16em] text-white leading-snug">
                         Conscious Careers
                       </h2>
-                      <p className="mt-2 text-xs sm:text-sm leading-relaxed text-blue-100/65">
+                      <p className="mt-3 text-xs sm:text-sm leading-relaxed text-blue-100/65">
                         Grant applications & entrepreneurship support
                       </p>
                     </div>
                     <Sparkles className="w-5 h-5 text-teal-300 flex-shrink-0" />
                   </div>
+                </button>
+              </div>
+
+              <div className="flex justify-center pt-1 sm:pt-2">
+                <button 
+                  onClick={() => window.open('https://calendly.com/randycofield/buildingconnections', '_blank', 'noopener,noreferrer')}
+                  className="group relative px-5 sm:px-6 py-3 bg-white/[0.04] hover:bg-blue-600/20 text-blue-100 rounded-lg font-black text-xs sm:text-sm transition-all shadow-[0_0_30px_rgba(37,99,235,0.12)] hover:-translate-y-1 active:scale-95 flex items-center gap-2 border border-blue-500/20"
+                >
+                  Schedule a Briefing <ChevronRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" />
                 </button>
               </div>
               
