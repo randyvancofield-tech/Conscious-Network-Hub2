@@ -55,3 +55,7 @@ export const getUserSessionById = async (sessionId: string): Promise<UserSession
 export const revokeUserSession = async (sessionId: string): Promise<void> => {
   await localStore.revokeProviderSession(sessionId);
 };
+
+export const revokeUserSessionsByUserId = async (userId: string): Promise<number> => {
+  return localStore.revokeProviderSessionsByDid(`${USER_SESSION_DID_PREFIX}${userId}`);
+};

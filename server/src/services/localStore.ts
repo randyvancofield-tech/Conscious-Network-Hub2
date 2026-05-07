@@ -65,6 +65,8 @@ interface UserRow {
   pendingPhoneOtpHash: string | null;
   pendingPhoneOtpExpiresAt: NullableIso;
   pendingPhoneOtpAttempts: number;
+  passwordResetTokenHash: string | null;
+  passwordResetExpiresAt: NullableIso;
   failedSignInAttempts: number;
   lockoutUntil: NullableIso;
   createdAt: string;
@@ -254,6 +256,8 @@ export interface LocalUserRecord {
   pendingPhoneOtpHash: string | null;
   pendingPhoneOtpExpiresAt: Date | null;
   pendingPhoneOtpAttempts: number;
+  passwordResetTokenHash: string | null;
+  passwordResetExpiresAt: Date | null;
   failedSignInAttempts: number;
   lockoutUntil: Date | null;
   createdAt: Date;
@@ -412,6 +416,8 @@ interface UpdateUserInput {
   pendingPhoneOtpHash?: string | null;
   pendingPhoneOtpExpiresAt?: Date | null;
   pendingPhoneOtpAttempts?: number;
+  passwordResetTokenHash?: string | null;
+  passwordResetExpiresAt?: Date | null;
   failedSignInAttempts?: number;
   lockoutUntil?: Date | null;
 }
@@ -793,6 +799,8 @@ const rowToUser = (row: UserRow): LocalUserRecord => ({
   pendingPhoneOtpHash: row.pendingPhoneOtpHash,
   pendingPhoneOtpExpiresAt: row.pendingPhoneOtpExpiresAt ? toDate(row.pendingPhoneOtpExpiresAt) : null,
   pendingPhoneOtpAttempts: row.pendingPhoneOtpAttempts,
+  passwordResetTokenHash: row.passwordResetTokenHash || null,
+  passwordResetExpiresAt: row.passwordResetExpiresAt ? toDate(row.passwordResetExpiresAt) : null,
   failedSignInAttempts: row.failedSignInAttempts,
   lockoutUntil: row.lockoutUntil ? toDate(row.lockoutUntil) : null,
   createdAt: toDate(row.createdAt),
@@ -992,6 +1000,14 @@ export const localStore = {
     return row ? rowToUser(row) : null;
   },
 
+  findUserByPasswordResetTokenHash(tokenHash: string): LocalUserRecord | null {
+    const normalized = String(tokenHash || '').trim();
+    if (!normalized) return null;
+    const store = loadStore();
+    const row = store.users.find((user) => user.passwordResetTokenHash === normalized);
+    return row ? rowToUser(row) : null;
+  },
+
   createUser(input: CreateUserInput): LocalUserRecord {
     const store = loadStore();
     const email = normalizeEmail(input.email);
@@ -1045,6 +1061,8 @@ export const localStore = {
       pendingPhoneOtpHash: null,
       pendingPhoneOtpExpiresAt: null,
       pendingPhoneOtpAttempts: 0,
+      passwordResetTokenHash: null,
+      passwordResetExpiresAt: null,
       failedSignInAttempts: 0,
       lockoutUntil: null,
       createdAt: timestamp,
@@ -1155,6 +1173,14 @@ export const localStore = {
     }
     if (updates.pendingPhoneOtpAttempts !== undefined) {
       row.pendingPhoneOtpAttempts = updates.pendingPhoneOtpAttempts;
+    }
+    if (updates.passwordResetTokenHash !== undefined) {
+      row.passwordResetTokenHash = updates.passwordResetTokenHash;
+    }
+    if (updates.passwordResetExpiresAt !== undefined) {
+      row.passwordResetExpiresAt = updates.passwordResetExpiresAt
+        ? updates.passwordResetExpiresAt.toISOString()
+        : null;
     }
     if (updates.failedSignInAttempts !== undefined) {
       row.failedSignInAttempts = updates.failedSignInAttempts;

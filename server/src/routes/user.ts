@@ -19,7 +19,8 @@ import { recordAuditEvent } from '../services/auditTelemetry';
 import { localStore, TwoFactorMethod } from '../services/persistenceStore';
 import { mirrorUserToGoogleSheets } from '../services/googleSheetsMirror';
 import { maskPhoneNumber, maskWalletDid } from '../services/sensitiveDataPolicy';
-import { createUserSession, revokeUserSession } from '../services/userSessionStore';
+import { createUserSession, revokeUserSession, revokeUserSessionsByUserId } from '../services/userSessionStore';
+import emailService from '../services/emailService';
 import {
   normalizeDateOfBirth,
   normalizeOptionalString,
@@ -35,6 +36,8 @@ import { normalizeTier } from '../tierPolicy';
 import { validateJsonBody } from '../validation/jsonSchema';
 import {
   userCreateSchema,
+  userPasswordResetConfirmSchema,
+  userPasswordResetRequestSchema,
   userPhoneEnrollSchema,
   userPrivacyUpdateSchema,
   userProfilePatchSchema,
@@ -50,6 +53,7 @@ const MAX_FAILED_SIGN_IN_ATTEMPTS = 5;
 const LOCKOUT_WINDOW_MS = 15 * 60 * 1000;
 const PHONE_OTP_TTL_MS = 10 * 60 * 1000;
 const MAX_PHONE_OTP_ATTEMPTS = 5;
+const PASSWORD_RESET_TTL_MS = 60 * 60 * 1000;
 const AUTOMATED_PROFILE_PATTERN = /\b(bot|agent|assistant|seed|system)\b/i;
 const PROFILE_STORE_UNAVAILABLE_RESPONSE = {
   error: 'Profile service is currently unavailable. Please retry shortly.',
@@ -94,6 +98,18 @@ const getRequestTraceId = (req: Request): string | null => {
 
 const safeLogHash = (value: string): string =>
   crypto.createHash('sha256').update(value, 'utf8').digest('hex').slice(0, 16);
+
+const hashPasswordResetToken = (token: string): string =>
+  crypto.createHash('sha256').update(token, 'utf8').digest('hex');
+
+const resolveFrontendBaseUrl = (req: Request): string => {
+  const configured = String(process.env.FRONTEND_BASE_URL || '').trim().replace(/\/+$/, '');
+  if (configured) return configured;
+  return getPublicBaseUrl(req);
+};
+
+const buildPasswordResetUrl = (req: Request, token: string): string =>
+  `${resolveFrontendBaseUrl(req)}/reset-password?token=${encodeURIComponent(token)}`;
 
 const logAuthFlowError = (
   req: Request,
@@ -744,6 +760,138 @@ publicRouter.post('/create', validateJsonBody(userCreateSchema), async (req: Req
     return res.status(500).json({ error: 'Failed to create user profile' });
   }
 });
+
+/**
+ * POST /api/user/password-reset/request
+ * Start native password recovery without revealing whether an email exists.
+ */
+publicRouter.post(
+  '/password-reset/request',
+  validateJsonBody(userPasswordResetRequestSchema),
+  async (req: Request, res: Response): Promise<any> => {
+    const normalizedEmail = String(req.body?.email || '').trim().toLowerCase();
+    const emailHash = normalizedEmail ? safeLogHash(normalizedEmail) : null;
+
+    try {
+      const user = normalizedEmail ? await localStore.getUserByEmail(normalizedEmail) : null;
+      let devResetUrl: string | undefined;
+
+      if (user && user.role === 'user') {
+        const token = crypto.randomBytes(32).toString('base64url');
+        const tokenHash = hashPasswordResetToken(token);
+        const expiresAt = new Date(Date.now() + PASSWORD_RESET_TTL_MS);
+        const resetUrl = buildPasswordResetUrl(req, token);
+
+        await localStore.updateUser(user.id, {
+          passwordResetTokenHash: tokenHash,
+          passwordResetExpiresAt: expiresAt,
+        });
+
+        const emailResult = await emailService.send({
+          to: user.email,
+          subject: 'Reset your Conscious Network Hub password',
+          text: [
+            'We received a request to reset your Conscious Network Hub password.',
+            `Open this link within 60 minutes: ${resetUrl}`,
+            'If you did not request this, you can ignore this email.',
+          ].join('\n\n'),
+          html: `
+            <p>We received a request to reset your Conscious Network Hub password.</p>
+            <p><a href="${resetUrl}">Reset your password</a></p>
+            <p>This link expires in 60 minutes. If you did not request this, you can ignore this email.</p>
+          `,
+        });
+
+        if (emailResult?.skipped && process.env.NODE_ENV !== 'production') {
+          devResetUrl = resetUrl;
+          console.log('[AUTH][PASSWORD_RESET][DEV]', { emailHash, resetUrl });
+        }
+
+        recordAuditEvent(req, {
+          domain: 'auth',
+          action: 'password_reset_request',
+          outcome: 'success',
+          statusCode: 200,
+          targetUserId: user.id,
+          metadata: { emailHash, emailSkipped: Boolean(emailResult?.skipped) },
+        });
+      } else {
+        recordAuditEvent(req, {
+          domain: 'auth',
+          action: 'password_reset_request',
+          outcome: 'deny',
+          statusCode: 200,
+          metadata: { emailHash, reason: user ? 'non_direct_user_role' : 'user_not_found' },
+        });
+      }
+
+      return res.json({
+        success: true,
+        message: 'If an account exists for that email, a password reset link has been sent.',
+        ...(devResetUrl ? { devResetUrl } : {}),
+      });
+    } catch (error) {
+      console.error('[AUTH][PASSWORD_RESET] request failed', error);
+      return res.status(500).json({ error: 'Unable to start password reset. Please retry.' });
+    }
+  }
+);
+
+/**
+ * POST /api/user/password-reset/confirm
+ * Complete native password recovery with a valid reset token.
+ */
+publicRouter.post(
+  '/password-reset/confirm',
+  validateJsonBody(userPasswordResetConfirmSchema),
+  async (req: Request, res: Response): Promise<any> => {
+    const token = String(req.body?.token || '').trim();
+    const password = String(req.body?.password || '');
+    const tokenHash = hashPasswordResetToken(token);
+
+    try {
+      const user = await localStore.findUserByPasswordResetTokenHash(tokenHash);
+      if (!user || !user.passwordResetExpiresAt || user.passwordResetExpiresAt.getTime() <= Date.now()) {
+        return res.status(400).json({ error: 'Reset link is invalid or expired' });
+      }
+
+      const passwordValidation = validatePasswordPolicy(user.email, password);
+      if (passwordValidation) {
+        return res.status(400).json({ error: passwordValidation });
+      }
+
+      await localStore.updateUser(user.id, {
+        password: hashPassword(password),
+        passwordFingerprint: computePasswordFingerprint(password),
+        passwordResetTokenHash: null,
+        passwordResetExpiresAt: null,
+        pendingPhoneOtpHash: null,
+        pendingPhoneOtpExpiresAt: null,
+        pendingPhoneOtpAttempts: 0,
+        failedSignInAttempts: 0,
+        lockoutUntil: null,
+      });
+      const sessionsRevoked = await revokeUserSessionsByUserId(user.id);
+
+      recordAuditEvent(req, {
+        domain: 'auth',
+        action: 'password_reset_confirm',
+        outcome: 'success',
+        statusCode: 200,
+        targetUserId: user.id,
+        metadata: { sessionsRevoked },
+      });
+
+      return res.json({
+        success: true,
+        message: 'Password reset complete. You can sign in with your new password.',
+      });
+    } catch (error) {
+      console.error('[AUTH][PASSWORD_RESET] confirm failed', error);
+      return res.status(500).json({ error: 'Unable to reset password. Please retry.' });
+    }
+  }
+);
 
 /**
  * GET /api/user/create/diagnostics

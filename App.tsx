@@ -61,6 +61,8 @@ const routePathForView = (view: AppView, params: Record<string, string> = {}): s
       return '/';
     case AppView.AUTH_CALLBACK:
       return '/auth/callback';
+    case AppView.RESET_PASSWORD:
+      return '/reset-password';
     case AppView.MEMBERSHIP_ACCESS:
       return '/membership-access';
     case AppView.DASHBOARD:
@@ -121,6 +123,7 @@ const resolveRoute = (pathname: string, search = ''): RouteState => {
   const staticRoutes: Record<string, AppView> = {
     '/': AppView.ENTRY,
     '/auth/callback': AppView.AUTH_CALLBACK,
+    '/reset-password': AppView.RESET_PASSWORD,
     '/membership-access': AppView.MEMBERSHIP_ACCESS,
     '/dashboard': AppView.DASHBOARD,
     '/social': AppView.CONSCIOUS_SOCIAL_LEARNING,
@@ -145,7 +148,11 @@ const resolveRoute = (pathname: string, search = ''): RouteState => {
   };
 
   if (staticRoutes[path]) {
-    return { view: staticRoutes[path], params: {}, path };
+    return {
+      view: staticRoutes[path],
+      params: path === '/reset-password' ? { token: params.get('token') || '' } : {},
+      path,
+    };
   }
 
   const segments = path.split('/').filter(Boolean);
@@ -181,6 +188,7 @@ const requiresStoredSession = (view: AppView): boolean =>
 const isGuestAllowedView = (view: AppView): boolean =>
   [
     AppView.ENTRY,
+    AppView.RESET_PASSWORD,
     AppView.MEMBERSHIP_ACCESS,
     AppView.MEMBERSHIP,
     AppView.COMMUNITY,
@@ -238,6 +246,12 @@ const App: React.FC = () => {
   const [twoFactorCodeInput, setTwoFactorCodeInput] = useState('');
   const [providerTokenInput, setProviderTokenInput] = useState('');
   const [pendingTwoFactorMethod, setPendingTwoFactorMethod] = useState<'phone' | 'wallet' | null>(null);
+  const [isPasswordResetRequestOpen, setPasswordResetRequestOpen] = useState(false);
+  const [passwordResetEmailInput, setPasswordResetEmailInput] = useState('');
+  const [passwordResetNotice, setPasswordResetNotice] = useState('');
+  const [isPasswordResetPending, setPasswordResetPending] = useState(false);
+  const [newPasswordInput, setNewPasswordInput] = useState('');
+  const [confirmNewPasswordInput, setConfirmNewPasswordInput] = useState('');
 
   const [isContactModalOpen, setContactModalOpen] = useState(false);
   const [contactName, setContactName] = useState('');
@@ -311,8 +325,7 @@ const App: React.FC = () => {
     }
   ];
 
-  const signupTwoFactorEnabled =
-    String(import.meta.env.VITE_ENABLE_SIGNUP_2FA || '').toLowerCase() === 'true';
+  const signupTwoFactorEnabled = true;
 
   const backendConnectionErrorMessage = (actionLabel: string): string => {
     const target = getBackendBaseUrl() || 'the configured API route';
@@ -935,6 +948,77 @@ const App: React.FC = () => {
     }
   };
 
+  const handlePasswordResetRequest = async (e?: React.FormEvent) => {
+    e?.preventDefault();
+    setPasswordResetPending(true);
+    setPasswordResetNotice('');
+    setError('');
+
+    try {
+      const data = await api<any>('/user/password-reset/request', {
+        method: 'POST',
+        auth: false,
+        body: { email: (passwordResetEmailInput || emailInput).trim().toLowerCase() },
+      });
+      setPasswordResetNotice(
+        data?.message || 'If an account exists for that email, a password reset link has been sent.'
+      );
+      if (data?.devResetUrl) {
+        setPasswordResetNotice(`${data.message} Dev reset URL: ${data.devResetUrl}`);
+      }
+    } catch (error) {
+      setPasswordResetNotice(
+        error instanceof Error ? error.message : 'Unable to start password reset. Please retry.'
+      );
+    } finally {
+      setPasswordResetPending(false);
+    }
+  };
+
+  const handleResetPasswordConfirm = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setPasswordResetPending(true);
+    setPasswordResetNotice('');
+    setError('');
+
+    const token = String(routeParams.token || '').trim();
+    if (!token) {
+      setPasswordResetNotice('Reset link is missing a token.');
+      setPasswordResetPending(false);
+      return;
+    }
+    if (newPasswordInput !== confirmNewPasswordInput) {
+      setPasswordResetNotice('Passwords do not match.');
+      setPasswordResetPending(false);
+      return;
+    }
+
+    const passwordValidation = validatePasswordStrength(emailInput, newPasswordInput);
+    if (passwordValidation) {
+      setPasswordResetNotice(passwordValidation);
+      setPasswordResetPending(false);
+      return;
+    }
+
+    try {
+      const data = await api<any>('/user/password-reset/confirm', {
+        method: 'POST',
+        auth: false,
+        body: { token, password: newPasswordInput },
+      });
+      setPasswordResetNotice(data?.message || 'Password reset complete. You can sign in now.');
+      setNewPasswordInput('');
+      setConfirmNewPasswordInput('');
+      setSigninModalOpen(true);
+    } catch (error) {
+      setPasswordResetNotice(
+        error instanceof Error ? error.message : 'Unable to reset password. Please retry.'
+      );
+    } finally {
+      setPasswordResetPending(false);
+    }
+  };
+
   const handleMembershipTierSelect = async (tier: string) => {
     if (isMembershipCheckoutPending) return;
     if (!user) {
@@ -1051,6 +1135,7 @@ const App: React.FC = () => {
     setError(''); setEmailInput(''); setPasswordInput(''); setConfirmPasswordInput('');
     setTwoFactorMethodInput('none'); setPhoneNumberInput(''); setWalletDidInput('');
     setTwoFactorCodeInput(''); setProviderTokenInput(''); setPendingTwoFactorMethod(null);
+    setPasswordResetRequestOpen(false); setPasswordResetEmailInput(''); setPasswordResetNotice('');
   };
 
   const getPolicyContent = (policy: string) => {
@@ -1338,6 +1423,53 @@ const App: React.FC = () => {
     }
 
     switch (currentView) {
+      case AppView.RESET_PASSWORD:
+        return (
+          <div className="p-4 sm:p-8 max-w-xl mx-auto w-full">
+            <div className="glass-panel p-6 sm:p-8 rounded-3xl border border-blue-500/20">
+              <button onClick={() => setCurrentView(AppView.ENTRY)} className="mb-6 flex items-center gap-2 text-slate-500 hover:text-white transition-colors">
+                <Home className="w-4 h-4" />
+                <span className="text-[10px] font-black uppercase tracking-widest">Portal Entry</span>
+              </button>
+              <h2 className="text-3xl font-black text-white uppercase tracking-tight mb-3">
+                Reset Password
+              </h2>
+              <p className="text-sm leading-6 text-slate-400 mb-6">
+                Enter a new password for your Conscious Network Hub account.
+              </p>
+              <form onSubmit={handleResetPasswordConfirm} className="space-y-4">
+                <input
+                  type="password"
+                  value={newPasswordInput}
+                  onChange={(e) => setNewPasswordInput(e.target.value)}
+                  className="w-full px-5 py-4 bg-white/5 border border-white/10 rounded-2xl text-white outline-none focus:ring-2 focus:ring-blue-500/50 transition-all font-medium text-sm"
+                  required
+                  placeholder="New password"
+                />
+                <input
+                  type="password"
+                  value={confirmNewPasswordInput}
+                  onChange={(e) => setConfirmNewPasswordInput(e.target.value)}
+                  className="w-full px-5 py-4 bg-white/5 border border-white/10 rounded-2xl text-white outline-none focus:ring-2 focus:ring-blue-500/50 transition-all font-medium text-sm"
+                  required
+                  placeholder="Confirm new password"
+                />
+                {passwordResetNotice && (
+                  <p className="rounded-xl border border-blue-400/20 bg-blue-500/10 p-3 text-xs leading-5 text-blue-100">
+                    {passwordResetNotice}
+                  </p>
+                )}
+                <button
+                  type="submit"
+                  disabled={isPasswordResetPending}
+                  className="w-full py-4 bg-blue-600 hover:bg-blue-500 disabled:opacity-60 text-white rounded-2xl font-black text-xs uppercase tracking-widest transition-all shadow-xl"
+                >
+                  {isPasswordResetPending ? 'Resetting...' : 'Reset Password'}
+                </button>
+              </form>
+            </div>
+          </div>
+        );
       case AppView.DASHBOARD: 
         return (
           <Dashboard
@@ -2148,6 +2280,50 @@ const App: React.FC = () => {
                   <label className="text-[9px] font-black text-slate-500 uppercase tracking-widest ml-2">Password</label>
                   <input type="password" value={passwordInput} onChange={e => setPasswordInput(e.target.value)} className="w-full px-5 sm:px-8 py-3 sm:py-4 bg-white/5 border border-white/10 rounded-xl sm:rounded-2xl text-white outline-none focus:ring-2 focus:ring-blue-500/50 transition-all font-medium text-sm" required placeholder="••••••••" />
                 </div>
+                {isSigninModalOpen && (
+                  <div className="space-y-3 rounded-2xl border border-white/10 bg-white/[0.03] p-4">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setPasswordResetRequestOpen((open) => !open);
+                        setPasswordResetEmailInput(emailInput);
+                        setPasswordResetNotice('');
+                      }}
+                      className="text-[10px] font-black uppercase tracking-widest text-blue-300 hover:text-blue-200"
+                    >
+                      Forgot Password?
+                    </button>
+                    {isPasswordResetRequestOpen && (
+                      <div className="space-y-3">
+                        <input
+                          type="email"
+                          value={passwordResetEmailInput}
+                          onChange={(e) => setPasswordResetEmailInput(e.target.value)}
+                          onKeyDown={(e) => {
+                            if (e.key === 'Enter') {
+                              e.preventDefault();
+                              void handlePasswordResetRequest(e);
+                            }
+                          }}
+                          className="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-xl text-white outline-none focus:ring-2 focus:ring-blue-500/50 transition-all font-medium text-sm"
+                          required
+                          placeholder="you@example.com"
+                        />
+                        <button
+                          type="button"
+                          onClick={(event) => handlePasswordResetRequest(event)}
+                          disabled={isPasswordResetPending}
+                          className="w-full py-3 bg-white/5 hover:bg-white/10 disabled:opacity-60 text-white rounded-xl font-black text-[10px] uppercase tracking-widest transition-all border border-white/10"
+                        >
+                          {isPasswordResetPending ? 'Sending...' : 'Send Reset Link'}
+                        </button>
+                        {passwordResetNotice && (
+                          <p className="text-[10px] leading-5 text-blue-100/80">{passwordResetNotice}</p>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                )}
                 {!isSigninModalOpen && (
                   <>
                     <p className="text-[9px] text-blue-300/80 uppercase tracking-widest px-1">
@@ -2158,23 +2334,15 @@ const App: React.FC = () => {
                       <input type="password" value={confirmPasswordInput} onChange={e => setConfirmPasswordInput(e.target.value)} className="w-full px-5 sm:px-8 py-3 sm:py-4 bg-white/5 border border-white/10 rounded-xl sm:rounded-2xl text-white outline-none focus:ring-2 focus:ring-blue-500/50 transition-all font-medium text-sm" required placeholder="********" />
                     </div>
                     <div className="space-y-3">
-                      <label className="text-[9px] font-black text-slate-500 uppercase tracking-widest ml-2">2FA Preference</label>
+                      <label className="text-[9px] font-black text-slate-500 uppercase tracking-widest ml-2">Extra Sign-In Security</label>
                       <select
                         value={twoFactorMethodInput}
                         onChange={(e) => setTwoFactorMethodInput(e.target.value as 'none' | 'phone' | 'wallet')}
                         className="w-full px-5 sm:px-8 py-3 sm:py-4 bg-white/5 border border-white/10 rounded-xl sm:rounded-2xl text-white outline-none focus:ring-2 focus:ring-blue-500/50 transition-all font-medium text-sm"
                       >
                         <option value="none">Password only</option>
-                        <option value="phone" disabled={!signupTwoFactorEnabled}>
-                          {signupTwoFactorEnabled
-                            ? 'Password + Phone OTP'
-                            : 'Password + Phone OTP (temporarily disabled)'}
-                        </option>
-                        <option value="wallet" disabled={!signupTwoFactorEnabled}>
-                          {signupTwoFactorEnabled
-                            ? 'Password + Address Credential'
-                            : 'Password + Address Credential (temporarily disabled)'}
-                        </option>
+                        <option value="phone">Password + phone code</option>
+                        <option value="wallet">Password + address credential</option>
                       </select>
                     </div>
                     {signupTwoFactorEnabled && twoFactorMethodInput === 'phone' && (
@@ -2192,17 +2360,17 @@ const App: React.FC = () => {
                     )}
                     {signupTwoFactorEnabled && twoFactorMethodInput === 'wallet' && (
                       <div className="space-y-3">
-                        <label className="text-[9px] font-black text-slate-500 uppercase tracking-widest ml-2">Wallet DID</label>
+                        <label className="text-[9px] font-black text-slate-500 uppercase tracking-widest ml-2">Address Credential ID</label>
                         <input
                           type="text"
                           value={walletDidInput}
                           onChange={(e) => setWalletDidInput(e.target.value)}
                           className="w-full px-5 sm:px-8 py-3 sm:py-4 bg-white/5 border border-white/10 rounded-xl sm:rounded-2xl text-white outline-none focus:ring-2 focus:ring-blue-500/50 transition-all font-medium text-sm"
-                          placeholder="did:hcn:ed25519:..."
+                          placeholder="did:hcn:..."
                           required
                         />
                         <p className="text-[9px] text-slate-400 uppercase tracking-widest px-1">
-                          Sign in later with a valid address verification credential from Profile Security.
+                          Sign in later with your matching address verification credential from Profile Security.
                         </p>
                       </div>
                     )}

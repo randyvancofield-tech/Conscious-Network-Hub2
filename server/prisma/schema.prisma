@@ -64,6 +64,8 @@ model User {
   pendingPhoneOtpHash      String?
   pendingPhoneOtpExpiresAt DateTime?
   pendingPhoneOtpAttempts  Int       @default(0)
+  passwordResetTokenHash   String?
+  passwordResetExpiresAt   DateTime?
   failedSignInAttempts     Int       @default(0)
   lockoutUntil             DateTime?
 

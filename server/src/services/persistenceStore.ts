@@ -172,6 +172,8 @@ const toLocalUser = (row: any): LocalUserRecord => ({
   pendingPhoneOtpHash: toNullableString(row.pendingPhoneOtpHash),
   pendingPhoneOtpExpiresAt: row.pendingPhoneOtpExpiresAt || null,
   pendingPhoneOtpAttempts: Number(row.pendingPhoneOtpAttempts || 0),
+  passwordResetTokenHash: toNullableString(row.passwordResetTokenHash),
+  passwordResetExpiresAt: row.passwordResetExpiresAt || null,
   failedSignInAttempts: Number(row.failedSignInAttempts || 0),
   lockoutUntil: row.lockoutUntil || null,
   createdAt: row.createdAt,
@@ -382,6 +384,21 @@ export const localStore = {
     }
   },
 
+  async findUserByPasswordResetTokenHash(tokenHash: string): Promise<LocalUserRecord | null> {
+    try {
+      const normalized = String(tokenHash || '').trim();
+      if (!normalized) return null;
+      const row = await ensurePrisma().user.findFirst({
+        where: {
+          passwordResetTokenHash: normalized,
+        } as any,
+      });
+      return row ? toLocalUser(row) : null;
+    } catch (error) {
+      return translatePrismaError(error);
+    }
+  },
+
   async createUser(input: CreateUserInput): Promise<LocalUserRecord> {
     try {
       const row = await ensurePrisma().user.create({
@@ -425,6 +442,8 @@ export const localStore = {
           pendingPhoneOtpHash: null,
           pendingPhoneOtpExpiresAt: null,
           pendingPhoneOtpAttempts: 0,
+          passwordResetTokenHash: null,
+          passwordResetExpiresAt: null,
           failedSignInAttempts: 0,
           lockoutUntil: null,
         } as any,
@@ -536,6 +555,12 @@ export const localStore = {
       }
       if (updates.pendingPhoneOtpAttempts !== undefined) {
         data.pendingPhoneOtpAttempts = updates.pendingPhoneOtpAttempts;
+      }
+      if (updates.passwordResetTokenHash !== undefined) {
+        data.passwordResetTokenHash = updates.passwordResetTokenHash;
+      }
+      if (updates.passwordResetExpiresAt !== undefined) {
+        data.passwordResetExpiresAt = updates.passwordResetExpiresAt;
       }
       if (updates.failedSignInAttempts !== undefined) {
         data.failedSignInAttempts = updates.failedSignInAttempts;

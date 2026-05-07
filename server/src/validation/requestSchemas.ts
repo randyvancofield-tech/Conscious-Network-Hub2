@@ -152,6 +152,25 @@ export const userCreateSchema: JsonSchema = {
   },
 };
 
+export const userPasswordResetRequestSchema: JsonSchema = {
+  type: 'object',
+  additionalProperties: false,
+  required: ['email'],
+  properties: {
+    email: { type: 'string', minLength: 3, maxLength: 320 },
+  },
+};
+
+export const userPasswordResetConfirmSchema: JsonSchema = {
+  type: 'object',
+  additionalProperties: false,
+  required: ['token', 'password'],
+  properties: {
+    token: { type: 'string', minLength: 32, maxLength: 512 },
+    password: { type: 'string', minLength: 1, maxLength: 512 },
+  },
+};
+
 export const userProfilePatchSchema: JsonSchema = {
   type: 'object',
   additionalProperties: false,
