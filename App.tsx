@@ -2001,7 +2001,7 @@ const App: React.FC = () => {
   }
 
   return (
-    <div className="min-h-screen bg-[#05070a] text-slate-200 selection:bg-blue-500/30 flex relative">
+    <div className="app-scroll-root min-h-screen bg-[#05070a] text-slate-200 selection:bg-blue-500/30 flex relative">
       {currentView !== AppView.ENTRY && <ThreeScene />}
       <MusicBox />
 
@@ -2022,11 +2022,11 @@ const App: React.FC = () => {
         </>
       )}
 
-      <div className="relative z-10 w-full h-full flex flex-col overflow-hidden">
+      <div className="relative z-10 w-full min-h-screen flex flex-col overflow-x-hidden">
         
         {hasApiKey === false && (
-          <div className="fixed inset-0 z-[1000] flex items-center justify-center bg-black/90 backdrop-blur-3xl p-6">
-            <div className="glass-panel max-w-md w-full p-10 rounded-[3rem] text-center border-blue-500/20 shadow-2xl">
+          <div className="fixed inset-0 z-[1000] flex items-start sm:items-center justify-center overflow-y-auto custom-scrollbar bg-black/90 backdrop-blur-3xl p-4 sm:p-6">
+            <div className="glass-panel max-w-md w-full p-6 sm:p-10 rounded-[2rem] sm:rounded-[3rem] text-center border-blue-500/20 shadow-2xl my-4 sm:my-8">
               <Key className="w-16 h-16 text-blue-400 mx-auto mb-6" />
               <h2 className="text-3xl font-black text-white uppercase tracking-tighter mb-4">API Node Required</h2>
               <p className="text-slate-400 text-sm leading-relaxed mb-8">
@@ -2045,7 +2045,7 @@ const App: React.FC = () => {
         )}
 
         {currentView === AppView.ENTRY && (
-          <div className="flex flex-col items-center justify-center min-h-screen p-4 sm:p-6 md:p-8 pb-28 sm:pb-8 text-center animate-in fade-in zoom-in duration-1000">
+          <div className="flex flex-col items-center justify-center min-h-screen p-4 sm:p-6 md:p-8 pb-28 sm:pb-8 text-center animate-in fade-in zoom-in duration-1000 overflow-y-auto custom-scrollbar">
             <div className="portal-entry-card w-full max-w-[calc(100vw-2rem)] sm:max-w-5xl space-y-6 sm:space-y-8 md:space-y-10 overflow-hidden backdrop-blur-[4px] p-6 sm:p-8 md:p-12 lg:p-14 rounded-2xl sm:rounded-3xl md:rounded-[2.5rem] lg:rounded-[4rem] border border-white/5 bg-white/[0.01] shadow-[0_0_100px_rgba(0,0,0,0.6)]">
               <div className="flex justify-center">
                 <div className="p-4 sm:p-6 bg-blue-600/10 rounded-2xl sm:rounded-3xl md:rounded-[2.5rem] border border-blue-500/20 backdrop-blur-3xl shadow-[0_0_30px_rgba(37,99,235,0.2)] animate-pulse">
@@ -2155,7 +2155,7 @@ const App: React.FC = () => {
         )}
 
         {currentView === AppView.MEMBERSHIP_ACCESS && (
-          <div className="h-[100dvh] p-4 sm:p-6 md:p-8 lg:p-12 xl:p-20 overflow-y-auto overscroll-y-contain custom-scrollbar animate-in fade-in duration-700 relative z-10">
+          <div className="min-h-[100dvh] max-h-[100dvh] p-4 sm:p-6 md:p-8 lg:p-12 xl:p-20 overflow-y-auto overscroll-y-auto custom-scrollbar animate-in fade-in duration-700 relative z-10 scrollable">
             <div className="max-w-7xl mx-auto space-y-8 sm:space-y-10 md:space-y-12 pb-6 sm:pb-10">
               <button onClick={handleGoHome} className="flex items-center gap-2 sm:gap-3 text-slate-500 hover:text-white transition-colors group">
                 <Home className="w-4 h-4 sm:w-5 sm:h-5" /> <span className="font-bold uppercase tracking-[0.4em] text-[9px] sm:text-[10px]">Portal Entry</span>
@@ -2270,7 +2270,7 @@ const App: React.FC = () => {
         )}
 
         {(currentView !== AppView.ENTRY && currentView !== AppView.MEMBERSHIP_ACCESS) && (
-          <div className="flex flex-1 overflow-hidden animate-in fade-in duration-500 relative z-10">
+          <div className="flex flex-1 min-h-[100dvh] overflow-hidden animate-in fade-in duration-500 relative z-10">
             {isSidebarOpen && (
               <div 
                 className="fixed inset-0 bg-black/80 backdrop-blur-md z-[105] lg:hidden transition-opacity"
@@ -2287,7 +2287,7 @@ const App: React.FC = () => {
                   : 'lg:static lg:translate-x-0 lg:w-0 lg:opacity-0 lg:border-r-0 lg:pointer-events-none'
               }`}
             >
-              <div className="h-full flex flex-col p-10">
+              <div className="h-full flex flex-col p-6 sm:p-8 lg:p-10 overflow-y-auto custom-scrollbar scrollable">
                 <button 
                   onClick={() => setSidebarOpen(false)} 
                   className="absolute top-8 right-8 p-3 hover:bg-white/5 rounded-2xl text-slate-500"
@@ -2304,7 +2304,7 @@ const App: React.FC = () => {
                   </div>
                 </div>
                 
-                <nav className="flex-1 space-y-4">
+                <nav className="flex-1 space-y-4 pr-1">
                   {filteredNavigationItems.map((item) => {
                     const view = navViewMap[item.id];
                     const parentView =
@@ -2363,7 +2363,7 @@ const App: React.FC = () => {
             </aside>
 
             <div className="flex-1 flex flex-col min-h-0 overflow-hidden relative">
-              <header className="h-20 sm:h-24 flex items-center justify-between px-4 sm:px-6 md:px-8 lg:px-12 border-b border-white/5 z-20 backdrop-blur-3xl bg-black/20">
+              <header className="min-h-20 sm:min-h-24 flex items-center justify-between gap-3 px-4 sm:px-6 md:px-8 lg:px-12 border-b border-white/5 z-20 backdrop-blur-3xl bg-black/20">
                 <div className="flex items-center gap-6">
                   {!isSidebarOpen && (
                     <button onClick={toggleSidebar} className="p-3 bg-white/5 hover:bg-white/10 rounded-xl text-slate-400 border border-white/10 shadow-lg">
@@ -2456,10 +2456,10 @@ const App: React.FC = () => {
                 </div>
               </header>
 
-              <main className="flex-1 overflow-y-auto custom-scrollbar p-4 sm:p-6 md:p-8 lg:p-12 relative z-10">
+              <main className="flex-1 min-h-0 overflow-y-auto custom-scrollbar scrollable p-4 sm:p-6 md:p-8 lg:p-12 relative z-10" tabIndex={-1}>
                 {renderActiveView()}
               </main>
-              <footer className="p-4 bg-black/20 backdrop-blur-sm border-t border-white/5">
+              <footer className="shrink-0 max-h-[28dvh] overflow-y-auto custom-scrollbar p-4 bg-black/20 backdrop-blur-sm border-t border-white/5">
                 <div className="max-w-7xl mx-auto flex flex-wrap justify-center gap-4 text-xs">
                   <button onClick={() => setCurrentView(AppView.PRIVACY_POLICY)} className="max-w-full whitespace-normal text-center leading-5 text-slate-400 hover:text-white transition-colors">Privacy Policy</button>
                   <button onClick={() => setCurrentView(AppView.AI_TRANSPARENCY_POLICY)} className="max-w-full whitespace-normal text-center leading-5 text-slate-400 hover:text-white transition-colors">AI Transparency Policy</button>
@@ -2480,8 +2480,8 @@ const App: React.FC = () => {
         />
 
         {isIdentityGuestPromptOpen && !user && (
-          <div className="fixed inset-0 z-[210] flex items-center justify-center p-4 bg-black/95 backdrop-blur-3xl animate-in fade-in duration-300">
-            <div className="glass-panel w-full max-w-lg p-8 sm:p-10 rounded-[2rem] sm:rounded-[2.5rem] relative animate-in zoom-in duration-300 border-blue-500/20">
+          <div className="fixed inset-0 z-[210] flex items-start sm:items-center justify-center p-4 overflow-y-auto custom-scrollbar bg-black/95 backdrop-blur-3xl animate-in fade-in duration-300">
+            <div className="glass-panel w-full max-w-lg p-8 sm:p-10 rounded-[2rem] sm:rounded-[2.5rem] relative animate-in zoom-in duration-300 border-blue-500/20 my-4 sm:my-8 max-h-[calc(100dvh-2rem)] overflow-y-auto custom-scrollbar">
               <button
                 onClick={() => setIdentityGuestPromptOpen(false)}
                 className="absolute top-4 right-4 p-2.5 hover:bg-white/5 rounded-full transition-colors"
@@ -2532,8 +2532,8 @@ const App: React.FC = () => {
         )}
 
         {(isSignupModalOpen || isSigninModalOpen) && (
-          <div className="fixed inset-0 z-[200] flex items-start sm:items-center justify-center p-3 sm:p-4 overflow-y-auto bg-black/95 backdrop-blur-3xl animate-in fade-in duration-300">
-            <div className="glass-panel w-full max-w-md p-6 sm:p-10 md:p-12 rounded-[2rem] sm:rounded-[3rem] relative animate-in zoom-in duration-300 border-blue-500/20 my-4 sm:my-8 max-h-[calc(100dvh-1.5rem)] sm:max-h-[92dvh] overflow-y-auto">
+          <div className="fixed inset-0 z-[200] flex items-start sm:items-center justify-center p-3 sm:p-4 overflow-y-auto custom-scrollbar bg-black/95 backdrop-blur-3xl animate-in fade-in duration-300">
+            <div className="glass-panel w-full max-w-md p-6 sm:p-10 md:p-12 rounded-[2rem] sm:rounded-[3rem] relative animate-in zoom-in duration-300 border-blue-500/20 my-4 sm:my-8 max-h-[calc(100dvh-1.5rem)] sm:max-h-[92dvh] overflow-y-auto custom-scrollbar scrollable">
               <button onClick={closeModals} className="absolute top-4 right-4 sm:top-8 sm:right-8 p-2.5 sm:p-3 hover:bg-white/5 rounded-full transition-colors">
                 <X className="w-5 h-5 text-slate-500" />
               </button>
@@ -2647,8 +2647,8 @@ const App: React.FC = () => {
         )}
 
         {isContactModalOpen && (
-          <div className="fixed inset-0 z-[200] flex items-center justify-center p-4 bg-black/95 backdrop-blur-3xl animate-in fade-in duration-300">
-            <div className="glass-panel w-full max-w-md p-12 rounded-[3rem] relative animate-in zoom-in duration-300 border-blue-500/20">
+          <div className="fixed inset-0 z-[200] flex items-start sm:items-center justify-center p-4 overflow-y-auto custom-scrollbar bg-black/95 backdrop-blur-3xl animate-in fade-in duration-300">
+            <div className="glass-panel w-full max-w-md p-6 sm:p-10 md:p-12 rounded-[2rem] sm:rounded-[3rem] relative animate-in zoom-in duration-300 border-blue-500/20 my-4 sm:my-8 max-h-[calc(100dvh-2rem)] overflow-y-auto custom-scrollbar">
               <button onClick={() => setContactModalOpen(false)} className="absolute top-8 right-8 p-3 hover:bg-white/5 rounded-full transition-colors">
                 <X className="w-5 h-5 text-slate-500" />
               </button>
@@ -2675,8 +2675,8 @@ const App: React.FC = () => {
         )}
 
         {isPolicyModalOpen && (
-          <div className="fixed inset-0 z-[200] flex items-center justify-center p-4 bg-black/95 backdrop-blur-3xl animate-in fade-in duration-300">
-            <div className="glass-panel w-full max-w-4xl p-12 rounded-[3rem] relative animate-in zoom-in duration-300 border-blue-500/20 max-h-[80vh] overflow-y-auto">
+          <div className="fixed inset-0 z-[200] flex items-start sm:items-center justify-center p-4 overflow-y-auto custom-scrollbar bg-black/95 backdrop-blur-3xl animate-in fade-in duration-300">
+            <div className="glass-panel w-full max-w-4xl p-6 sm:p-10 md:p-12 rounded-[2rem] sm:rounded-[3rem] relative animate-in zoom-in duration-300 border-blue-500/20 my-4 sm:my-8 max-h-[calc(100dvh-2rem)] overflow-y-auto custom-scrollbar">
               <button onClick={() => { setIsPolicyModalOpen(false); setSelectedPolicy(null); }} className="absolute top-8 right-8 p-3 hover:bg-white/5 rounded-full transition-colors">
                 <X className="w-5 h-5 text-slate-500" />
               </button>

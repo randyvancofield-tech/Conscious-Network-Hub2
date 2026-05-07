@@ -301,7 +301,7 @@ const IdentitySecurityPanel: React.FC<IdentitySecurityPanelProps> = ({ isOpen, o
         isOpen ? 'translate-x-0' : 'translate-x-full'
       }`}
     >
-      <div className="h-full flex flex-col p-8 overflow-y-auto custom-scrollbar">
+      <div className="h-full flex flex-col p-8 overflow-y-auto custom-scrollbar scrollable">
         <div className="flex justify-between items-center mb-10">
           <div className="flex items-center gap-3">
             <div className="p-3 bg-blue-600 rounded-2xl shadow-lg shadow-blue-900/40">

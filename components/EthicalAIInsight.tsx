@@ -9,6 +9,7 @@ import backendAPI, {
   askEthicalAI, getDailyWisdom, processPlatformIssue, generateSuggestedQuestions,
   getTrendingInsights, EnhancedResponse
 } from '../services/backendApiService';
+import { ApiError } from '../services/apiClient';
 import { securityService } from '../services/securityService';
 import { cacheService, ConversationEntry } from '../services/cacheService';
 import { analyticsService } from '../services/analyticsService';
@@ -27,6 +28,43 @@ interface MessageWithMeta extends ConversationEntry {
   reactions?: { [key: string]: number };
 }
 
+const getActionableAiErrorMessage = (error: unknown): string => {
+  if (error instanceof ApiError) {
+    const data = error.data as any;
+    const code = typeof data?.code === 'string' ? data.code : '';
+
+    if (error.status === 401) {
+      return 'Your session has expired. Please sign in again to use Ethical AI Insight.';
+    }
+
+    if (error.status === 403 && code === 'INITIAL_2FA_REQUIRED') {
+      return 'Complete your required 2FA setup before using Ethical AI Insight.';
+    }
+
+    if (error.status === 403) {
+      return 'Complete your account setup, including free membership activation if prompted, then try Ethical AI Insight again.';
+    }
+
+    if (error.status === 503 || code === 'AI_PROVIDER_UNAVAILABLE') {
+      return 'Ethical AI Insight is temporarily unavailable while the AI provider is being configured. Please try again shortly.';
+    }
+
+    return error.message || `Ethical AI Insight request failed with HTTP ${error.status}.`;
+  }
+
+  const message = error instanceof Error ? error.message : String(error || '');
+  const lowered = message.toLowerCase();
+  if (
+    lowered.includes('failed to fetch') ||
+    lowered.includes('networkerror') ||
+    lowered.includes('cors')
+  ) {
+    return 'Unable to reach Ethical AI Insight. Check your connection and try again.';
+  }
+
+  return message || 'Ethical AI Insight is temporarily unavailable. Please try again.';
+};
+
 const EthicalAIInsight: React.FC<EthicalAIInsightProps> = ({ userEmail, userId = 'default-user' }) => {
   const [viewMode, setViewMode] = useState<ViewMode>('insight');
   const [isCollapsed, setIsCollapsed] = useState(false);
@@ -35,6 +73,8 @@ const EthicalAIInsight: React.FC<EthicalAIInsightProps> = ({ userEmail, userId =
   const [dailyWisdom, setDailyWisdom] = useState<EnhancedResponse | null>(null);
   const [wisdomLoading, setWisdomLoading] = useState(true);
   const [trendingTopics, setTrendingTopics] = useState<string[]>([]);
+  const [insightError, setInsightError] = useState('');
+  const [trendingError, setTrendingError] = useState('');
 
   // Q&A
   const [qaMessages, setQaMessages] = useState<MessageWithMeta[]>([]);
@@ -51,6 +91,7 @@ const EthicalAIInsight: React.FC<EthicalAIInsightProps> = ({ userEmail, userId =
   const [reportCategory, setReportCategory] = useState('bug');
   const [reportLoading, setReportLoading] = useState(false);
   const [reportResult, setReportResult] = useState<any>(null);
+  const [reportError, setReportError] = useState('');
 
   // Analytics
   const [analyticsData, setAnalyticsData] = useState<any>(null);
@@ -88,13 +129,16 @@ const EthicalAIInsight: React.FC<EthicalAIInsightProps> = ({ userEmail, userId =
 
   const loadDailyWisdom = async () => {
     setWisdomLoading(true);
+    setInsightError('');
     try {
       const wisdom = await getDailyWisdom();
       setDailyWisdom(wisdom);
     } catch (error) {
       console.error('Error loading wisdom:', error);
+      const message = getActionableAiErrorMessage(error);
+      setInsightError(message);
       setDailyWisdom({
-        text: 'Daily Wisdom is temporarily unavailable. Please refresh to try again.',
+        text: message,
         groundingChunks: [],
         confidenceScore: 0,
         sourceCount: 0,
@@ -106,11 +150,14 @@ const EthicalAIInsight: React.FC<EthicalAIInsightProps> = ({ userEmail, userId =
   };
 
   const loadTrendingTopics = async () => {
+    setTrendingError('');
     try {
       const insights = await getTrendingInsights();
       setTrendingTopics(insights.topics);
     } catch (error) {
       console.error('Error loading trending:', error);
+      setTrendingTopics([]);
+      setTrendingError(getActionableAiErrorMessage(error));
     }
   };
 
@@ -178,7 +225,7 @@ const EthicalAIInsight: React.FC<EthicalAIInsightProps> = ({ userEmail, userId =
       analyticsService.trackQuestion(sanitized, selectedQACategory, responseTime);
     } catch (error) {
       console.error('Q&A Error:', error);
-      const errorMessage = error instanceof Error ? error.message : 'Sorry — I could not reach the AI service. Please try again.';
+      const errorMessage = getActionableAiErrorMessage(error);
       setQaMessages(prev => [...prev, {
         id: `err_${Date.now()}`,
         role: 'ai',
@@ -256,6 +303,7 @@ const EthicalAIInsight: React.FC<EthicalAIInsightProps> = ({ userEmail, userId =
     }
 
     setReportLoading(true);
+    setReportError('');
     try {
       const result = await processPlatformIssue({
         title: reportTitle,
@@ -280,6 +328,7 @@ const EthicalAIInsight: React.FC<EthicalAIInsightProps> = ({ userEmail, userId =
       setReportDescription('');
     } catch (error) {
       console.error('Report Error:', error);
+      setReportError(getActionableAiErrorMessage(error));
     } finally {
       setReportLoading(false);
     }
@@ -319,7 +368,7 @@ const EthicalAIInsight: React.FC<EthicalAIInsightProps> = ({ userEmail, userId =
   }
 
   return (
-    <div className="glass-panel p-6 md:p-8 rounded-[2.5rem] border-blue-500/10 shadow-2xl space-y-6 animate-in fade-in duration-500 max-h-[90vh] overflow-y-auto flex flex-col">
+    <div className="glass-panel p-5 sm:p-6 md:p-8 rounded-[1.75rem] sm:rounded-[2.5rem] border-blue-500/10 shadow-2xl space-y-6 animate-in fade-in duration-500 max-h-none lg:max-h-[90vh] overflow-visible lg:overflow-y-auto custom-scrollbar flex flex-col">
       {/* Header */}
       <div className="flex items-center justify-between sticky top-0 bg-black/20 -mx-6 -mt-6 px-6 md:px-8 pt-6 pb-4 z-10">
         <div className="flex items-center gap-3">
@@ -394,6 +443,7 @@ const EthicalAIInsight: React.FC<EthicalAIInsightProps> = ({ userEmail, userId =
             onClick={() => {
               setViewMode(btn.mode);
               setReportResult(null);
+              if (btn.mode !== 'report') setReportError('');
               analyticsService.trackViewChange(btn.mode);
             }}
             className={`px-3 md:px-4 py-2 rounded-lg font-bold text-[9px] md:text-[10px] uppercase tracking-widest transition-all ${
@@ -406,6 +456,18 @@ const EthicalAIInsight: React.FC<EthicalAIInsightProps> = ({ userEmail, userId =
           </button>
         ))}
       </div>
+
+      {viewMode === 'insight' && insightError && (
+        <div className="bg-amber-500/10 border border-amber-500/30 text-amber-100 px-4 py-3 rounded-xl text-[10px] leading-relaxed">
+          {insightError}
+        </div>
+      )}
+
+      {viewMode === 'report' && reportError && (
+        <div className="bg-amber-500/10 border border-amber-500/30 text-amber-100 px-4 py-3 rounded-xl text-[10px] leading-relaxed">
+          {reportError}
+        </div>
+      )}
 
       {/* INSIGHT VIEW */}
       {viewMode === 'insight' && (
@@ -467,6 +529,12 @@ const EthicalAIInsight: React.FC<EthicalAIInsightProps> = ({ userEmail, userId =
             </div>
           )}
 
+          {trendingError && trendingTopics.length === 0 && (
+            <div className="bg-white/5 border border-white/10 p-4 rounded-xl text-[9px] text-slate-300 leading-relaxed">
+              {trendingError}
+            </div>
+          )}
+
           <button
             onClick={() => loadDailyWisdom()}
             className="w-full px-4 py-2 bg-blue-600/10 hover:bg-blue-600/20 text-blue-400 rounded-xl text-[9px] font-bold uppercase tracking-widest transition-all flex items-center justify-center gap-2"
@@ -499,7 +567,7 @@ const EthicalAIInsight: React.FC<EthicalAIInsightProps> = ({ userEmail, userId =
             ))}
           </div>
 
-          <div className="flex-1 overflow-y-auto space-y-3 pr-2 custom-scrollbar">
+          <div className="flex-1 min-h-[14rem] max-h-[55dvh] overflow-y-auto space-y-3 pr-2 custom-scrollbar scrollable">
             {qaMessages.length === 0 ? (
               <div className="flex flex-col items-center justify-center h-full text-slate-500 text-center py-8">
                 <MessageSquare className="w-8 h-8 mb-3 opacity-40" />
@@ -721,7 +789,7 @@ const EthicalAIInsight: React.FC<EthicalAIInsightProps> = ({ userEmail, userId =
 
       {/* ANALYTICS VIEW */}
       {viewMode === 'analytics' && (
-        <div className="space-y-4 flex-1 overflow-y-auto">
+        <div className="space-y-4 flex-1 max-h-[60dvh] overflow-y-auto custom-scrollbar scrollable">
           {analyticsData ? (
             <>
               <div className="grid grid-cols-2 gap-3">

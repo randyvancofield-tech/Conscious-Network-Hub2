@@ -41,6 +41,7 @@ const ensureAiAvailability = (res: Response): boolean => {
 
   res.status(503).json({
     error: 'AI service unavailable: no provider is currently configured',
+    code: 'AI_PROVIDER_UNAVAILABLE',
   });
   return false;
 };

@@ -122,8 +122,8 @@ const MyCourses: React.FC<MyCoursesProps> = ({ enrolledCourses, onNavigateToUniv
       )}
 
       {activeCourse && (
-        <div className="fixed inset-0 z-[180] bg-black/80 backdrop-blur-sm p-4 flex items-center justify-center">
-          <div className="glass-panel w-full max-w-3xl rounded-[2rem] border border-white/10 overflow-hidden shadow-2xl animate-in zoom-in duration-300">
+        <div className="fixed inset-0 z-[180] bg-black/80 backdrop-blur-sm p-4 flex items-start sm:items-center justify-center overflow-y-auto custom-scrollbar">
+          <div className="glass-panel w-full max-w-3xl my-4 max-h-[calc(100dvh-2rem)] rounded-[2rem] border border-white/10 overflow-y-auto custom-scrollbar shadow-2xl animate-in zoom-in duration-300">
             <div className="relative h-52 sm:h-64">
               <img src={activeCourse.course.image} alt={activeCourse.course.title} className="w-full h-full object-cover" />
               <div className="absolute inset-0 bg-gradient-to-t from-[#05070a] via-black/30 to-transparent" />

@@ -2375,7 +2375,7 @@ const ConsciousMeetings: React.FC<ConsciousMeetingsProps> = ({ user }) => {
       </header>
 
       {/* Tabs (scrollable on mobile) */}
-      <div className="flex gap-2 p-1 bg-white/5 border border-white/10 rounded-xl sm:rounded-2xl w-full sm:w-fit overflow-x-auto no-scrollbar">
+      <div className="flex gap-2 p-1 bg-white/5 border border-white/10 rounded-xl sm:rounded-2xl w-full sm:w-fit overflow-x-auto custom-scrollbar scrollable-x">
         {[
           { id: 'schedule', label: 'Schedule', icon: <Calendar className="w-3 h-3 sm:w-4 sm:h-4" /> },
           { id: 'lobby', label: 'Live Lobby', icon: <Play className="w-3 h-3 sm:w-4 sm:h-4" /> },
@@ -3110,7 +3110,7 @@ const ConsciousMeetings: React.FC<ConsciousMeetingsProps> = ({ user }) => {
                       placeholder="Invite usernames (comma, space, or newline separated)"
                       className="w-full min-h-[100px] px-4 py-3 bg-white/5 border border-white/10 rounded-xl text-xs text-white focus:outline-none focus:ring-2 focus:ring-blue-500/30 transition-all font-medium"
                     />
-                    <div className="p-3 bg-white/5 border border-white/10 rounded-xl space-y-2 max-h-[160px] overflow-y-auto no-scrollbar">
+                    <div className="p-3 bg-white/5 border border-white/10 rounded-xl space-y-2 max-h-[160px] overflow-y-auto custom-scrollbar scrollable">
                       <p className="text-[8px] sm:text-[9px] text-slate-400 uppercase tracking-widest">
                         Provider Profile Groups
                       </p>
@@ -3482,8 +3482,8 @@ const ConsciousMeetings: React.FC<ConsciousMeetingsProps> = ({ user }) => {
       </div>
 
       {showSynthesisConsentModal && (
-        <div className="fixed inset-0 z-[220] flex items-center justify-center p-3 sm:p-4 bg-black/95 backdrop-blur-3xl animate-in fade-in duration-300">
-          <div className="glass-panel w-full max-w-xl p-6 sm:p-8 rounded-2xl border border-blue-500/30 shadow-2xl space-y-4 sm:space-y-5">
+        <div className="fixed inset-0 z-[220] flex items-start sm:items-center justify-center p-3 sm:p-4 bg-black/95 backdrop-blur-3xl animate-in fade-in duration-300 overflow-y-auto custom-scrollbar">
+          <div className="glass-panel w-full max-w-xl my-4 max-h-[calc(100dvh-2rem)] overflow-y-auto custom-scrollbar p-6 sm:p-8 rounded-2xl border border-blue-500/30 shadow-2xl space-y-4 sm:space-y-5">
             <h3 className="text-lg sm:text-xl font-black text-white uppercase tracking-widest">Enable AI Synthesis?</h3>
             <p className="text-[10px] sm:text-xs text-slate-300 leading-relaxed">
               Security and usage notice: synthesis notes are generated for the live meeting only. Notes are not saved to Conscious Network Hub and are purged when the meeting ends or all participants leave.
@@ -3512,8 +3512,8 @@ const ConsciousMeetings: React.FC<ConsciousMeetingsProps> = ({ user }) => {
       )}
 
       {showBackgroundUploadPolicyModal && (
-        <div className="fixed inset-0 z-[220] flex items-center justify-center p-3 sm:p-4 bg-black/95 backdrop-blur-3xl animate-in fade-in duration-300">
-          <div className="glass-panel w-full max-w-xl p-6 sm:p-8 rounded-2xl border border-blue-500/30 shadow-2xl space-y-4 sm:space-y-5">
+        <div className="fixed inset-0 z-[220] flex items-start sm:items-center justify-center p-3 sm:p-4 bg-black/95 backdrop-blur-3xl animate-in fade-in duration-300 overflow-y-auto custom-scrollbar">
+          <div className="glass-panel w-full max-w-xl my-4 max-h-[calc(100dvh-2rem)] overflow-y-auto custom-scrollbar p-6 sm:p-8 rounded-2xl border border-blue-500/30 shadow-2xl space-y-4 sm:space-y-5">
             <h3 className="text-lg sm:text-xl font-black text-white uppercase tracking-widest">Background Upload Rules</h3>
             <p className="text-[10px] sm:text-xs text-slate-300 leading-relaxed">
               Uploads are temporary for the current meeting session only and are never stored by Conscious Network Hub.
@@ -3546,8 +3546,8 @@ const ConsciousMeetings: React.FC<ConsciousMeetingsProps> = ({ user }) => {
 
       {/* Scheduling Modal */}
       {isSchedulingModalOpen && selectedProvider && (
-        <div className="fixed inset-0 z-[200] flex items-center justify-center p-3 sm:p-4 bg-black/95 backdrop-blur-3xl animate-in fade-in duration-300">
-          <div className="glass-panel w-full max-w-2xl p-6 sm:p-8 md:p-10 rounded-2xl sm:rounded-3xl md:rounded-[2.5rem] lg:rounded-[4rem] relative animate-in zoom-in duration-300 border-blue-500/20 shadow-2xl max-h-[90vh] overflow-y-auto no-scrollbar">
+        <div className="fixed inset-0 z-[200] flex items-start sm:items-center justify-center p-3 sm:p-4 bg-black/95 backdrop-blur-3xl animate-in fade-in duration-300 overflow-y-auto custom-scrollbar">
+          <div className="glass-panel w-full max-w-2xl my-4 p-6 sm:p-8 md:p-10 rounded-2xl sm:rounded-3xl md:rounded-[2.5rem] lg:rounded-[4rem] relative animate-in zoom-in duration-300 border-blue-500/20 shadow-2xl max-h-[calc(100dvh-2rem)] overflow-y-auto custom-scrollbar scrollable">
             <button
               onClick={() => {
                 setSchedulingModalOpen(false);
@@ -3700,8 +3700,8 @@ const ConsciousMeetings: React.FC<ConsciousMeetingsProps> = ({ user }) => {
 
       <style>{`
         .shadow-glow { box-shadow: 0 0 15px rgba(45, 212, 191, 0.4); }
-        .no-scrollbar::-webkit-scrollbar { display: none; }
-        .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+        .no-scrollbar { -ms-overflow-style: auto; scrollbar-width: thin; }
+        .no-scrollbar::-webkit-scrollbar { display: block; width: 8px; height: 8px; }
         @keyframes pulse-meeting {
           0% { transform: scale(1); opacity: 0.5; }
           50% { transform: scale(1.05); opacity: 0.8; }

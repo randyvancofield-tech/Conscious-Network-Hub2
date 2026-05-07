@@ -975,8 +975,8 @@ const SocialLearningHub: React.FC<SocialLearningHubProps> = ({ user }) => {
       </div>
 
       {(profileViewLoading || profileViewError || selectedProfileView) && (
-        <div className="fixed inset-0 z-[190] bg-black/85 backdrop-blur-sm p-4 flex items-center justify-center">
-          <div className="glass-panel w-full max-w-4xl max-h-[90vh] overflow-y-auto rounded-[2rem] border border-white/10 shadow-2xl p-6 sm:p-8 animate-in zoom-in duration-300">
+        <div className="fixed inset-0 z-[190] bg-black/85 backdrop-blur-sm p-4 flex items-start sm:items-center justify-center overflow-y-auto custom-scrollbar">
+          <div className="glass-panel w-full max-w-4xl my-4 max-h-[calc(100dvh-2rem)] overflow-y-auto custom-scrollbar rounded-[2rem] border border-white/10 shadow-2xl p-6 sm:p-8 animate-in zoom-in duration-300">
             <div className="flex items-start justify-between gap-4 mb-6">
               <h4 className="text-2xl sm:text-3xl font-black text-white tracking-tight">User Profile</h4>
               <button

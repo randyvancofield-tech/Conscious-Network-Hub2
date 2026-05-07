@@ -41,8 +41,8 @@ const PaymentConfirmation: React.FC<PaymentConfirmationProps> = ({
   }, [processPayment]);
 
   return (
-    <div className="fixed inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center z-[9999] p-4">
-      <div className="glass-panel rounded-[2rem] p-8 sm:p-12 max-w-md w-full border border-blue-400/30 shadow-2xl">
+    <div className="fixed inset-0 bg-black/80 backdrop-blur-sm flex items-start sm:items-center justify-center z-[9999] p-4 overflow-y-auto custom-scrollbar">
+      <div className="glass-panel rounded-[2rem] p-8 sm:p-12 max-w-md w-full my-4 max-h-[calc(100dvh-2rem)] overflow-y-auto custom-scrollbar border border-blue-400/30 shadow-2xl">
         {status === 'processing' && (
           <div className="space-y-6 text-center">
             <div className="flex justify-center">

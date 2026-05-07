@@ -261,8 +261,8 @@ const CommunityMembers: React.FC = () => {
         </div>
       </header>
 
-      <div className="flex-1 flex flex-col lg:grid lg:grid-cols-3 gap-6 overflow-hidden pb-8">
-        <div className={`lg:col-span-1 flex flex-col space-y-4 overflow-hidden ${selectedMember ? 'hidden lg:flex' : 'flex'}`}>
+      <div className="flex-1 flex flex-col lg:grid lg:grid-cols-3 gap-6 min-h-0 overflow-visible lg:overflow-hidden pb-8">
+        <div className={`lg:col-span-1 flex flex-col space-y-4 min-h-0 overflow-visible lg:overflow-hidden ${selectedMember ? 'hidden lg:flex' : 'flex'}`}>
           <div className="flex items-center justify-between px-2">
             <h3 className="text-[10px] font-black text-slate-500 uppercase tracking-widest flex items-center gap-2">
               <Users className="w-3 h-3" /> MEMBERS ({filteredMembers.length})
@@ -282,7 +282,7 @@ const CommunityMembers: React.FC = () => {
             </div>
           </div>
 
-          <div className="flex-1 overflow-y-auto custom-scrollbar pr-2 space-y-3">
+          <div className="flex-1 overflow-y-auto custom-scrollbar scrollable pr-2 space-y-3">
             {filteredMembers.map((member) => (
               <div
                 key={member.id}
@@ -367,7 +367,7 @@ const CommunityMembers: React.FC = () => {
 
         <div
           className={`lg:col-span-2 glass-panel rounded-[2rem] md:rounded-[3rem] flex flex-col border-white/5 overflow-hidden shadow-2xl bg-black/40 backdrop-blur-3xl min-h-[450px] ${
-            selectedMember ? 'flex h-[100dvh] fixed inset-0 z-[100] lg:relative lg:inset-auto lg:z-0 lg:h-full' : 'hidden lg:flex'
+            selectedMember ? 'flex h-[100dvh] max-h-[100dvh] fixed inset-0 z-[100] lg:relative lg:inset-auto lg:z-0 lg:h-full lg:max-h-none' : 'hidden lg:flex'
           }`}
         >
           {selectedMember ? (
@@ -523,8 +523,8 @@ const CommunityMembers: React.FC = () => {
       </div>
 
       {isMemberInfoOpen && selectedMember && (
-        <div className="fixed inset-0 z-[190] bg-black/85 backdrop-blur-sm p-4 flex items-center justify-center">
-          <div className="glass-panel w-full max-w-xl rounded-[2rem] border border-white/10 p-6 sm:p-8 shadow-2xl animate-in zoom-in duration-300">
+        <div className="fixed inset-0 z-[190] bg-black/85 backdrop-blur-sm p-4 flex items-start sm:items-center justify-center overflow-y-auto custom-scrollbar">
+          <div className="glass-panel w-full max-w-xl my-4 max-h-[calc(100dvh-2rem)] overflow-y-auto custom-scrollbar rounded-[2rem] border border-white/10 p-6 sm:p-8 shadow-2xl animate-in zoom-in duration-300">
             <div className="flex items-start justify-between gap-4 mb-6">
               <div className="flex items-center gap-4 min-w-0">
                 {selectedMember.image ? (
@@ -563,8 +563,8 @@ const CommunityMembers: React.FC = () => {
       )}
 
       {(profileViewLoading || profileViewError || selectedProfileView) && (
-        <div className="fixed inset-0 z-[190] bg-black/85 backdrop-blur-sm p-4 flex items-center justify-center">
-          <div className="glass-panel w-full max-w-4xl max-h-[90vh] overflow-y-auto rounded-[2rem] border border-white/10 shadow-2xl p-6 sm:p-8 animate-in zoom-in duration-300">
+        <div className="fixed inset-0 z-[190] bg-black/85 backdrop-blur-sm p-4 flex items-start sm:items-center justify-center overflow-y-auto custom-scrollbar">
+          <div className="glass-panel w-full max-w-4xl my-4 max-h-[calc(100dvh-2rem)] overflow-y-auto custom-scrollbar rounded-[2rem] border border-white/10 shadow-2xl p-6 sm:p-8 animate-in zoom-in duration-300">
             <div className="flex items-start justify-between gap-4 mb-6">
               <h4 className="text-2xl sm:text-3xl font-black text-white tracking-tight">Member Profile</h4>
               <button

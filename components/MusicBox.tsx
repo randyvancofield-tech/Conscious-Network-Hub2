@@ -602,7 +602,7 @@ const MusicBox: React.FC = () => {
           </button>
         ) : (
           // Expanded View
-          <div className="p-5 space-y-4 bg-gradient-to-b from-transparent via-blue-900/20 to-transparent max-h-[90vh] overflow-y-auto">
+          <div className="p-5 space-y-4 bg-gradient-to-b from-transparent via-blue-900/20 to-transparent max-h-[90vh] overflow-y-auto custom-scrollbar scrollable">
             {/* Current Track Header */}
             <div className="flex items-start justify-between gap-3">
               <div className="flex items-start gap-3 min-w-0 flex-1">
@@ -726,7 +726,7 @@ const MusicBox: React.FC = () => {
                   <Sparkles className="w-4 h-4 text-yellow-300" />
                   Authentic Global Playlist
                 </div>
-                <div className="space-y-2 max-h-80 overflow-y-auto">
+                <div className="space-y-2 max-h-80 overflow-y-auto custom-scrollbar scrollable">
                   {TRACKS.map((track, idx) => (
                     <button
                       key={idx}

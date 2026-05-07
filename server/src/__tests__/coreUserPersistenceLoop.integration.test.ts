@@ -1,6 +1,6 @@
 import express from 'express';
 import http from 'http';
-import { hashPassword } from '../auth';
+import { createSessionToken, hashPassword } from '../auth';
 
 type TwoFactorMethod = 'none' | 'phone' | 'wallet';
 
@@ -392,6 +392,12 @@ const revokeUserSessionMock = jest.fn(async (sessionId: string) => {
   });
 });
 
+const mockIsOpenAIConfigured = jest.fn(() => false);
+const mockChatWithOpenAI = jest.fn(async () => 'Ethical AI test response');
+const mockGetVertexAIService = jest.fn(() => {
+  throw new Error('Vertex not configured');
+});
+
 jest.mock('../services/persistenceStore', () => ({
   localStore: mockLocalStore,
 }));
@@ -419,9 +425,19 @@ jest.mock('../services/providerSessionStore', () => ({
   getProviderSessionById: jest.fn(async () => null),
 }));
 
+jest.mock('../services/openAiService', () => ({
+  isOpenAIConfigured: mockIsOpenAIConfigured,
+  chatWithOpenAI: mockChatWithOpenAI,
+}));
+
+jest.mock('../services/vertexAiService', () => ({
+  getVertexAIService: mockGetVertexAIService,
+}));
+
 const { userPublicRoutes, userProtectedRoutes } = require('../routes/user');
 const socialRoutes = require('../routes/social').default;
 const { uploadPublicRoutes, uploadProtectedRoutes } = require('../routes/upload');
+const aiRoutes = require('../routes/ai').default;
 
 let server: http.Server | null = null;
 let baseUrl = '';
@@ -489,6 +505,7 @@ describe('Core user persistence loop', () => {
     app.use('/api/user', userProtectedRoutes);
     app.use('/api/social', socialRoutes);
     app.use('/api/upload', uploadProtectedRoutes);
+    app.use('/api/ai', aiRoutes);
     app.use('/uploads', uploadPublicRoutes);
 
     server = await new Promise<http.Server>((resolve) => {
@@ -520,6 +537,11 @@ describe('Core user persistence loop', () => {
   beforeEach(() => {
     resetState();
     jest.clearAllMocks();
+    mockIsOpenAIConfigured.mockReturnValue(false);
+    mockChatWithOpenAI.mockResolvedValue('Ethical AI test response');
+    mockGetVertexAIService.mockImplementation(() => {
+      throw new Error('Vertex not configured');
+    });
   });
 
   it('persists profile and uploaded content across logout/login and enforces block boundaries', async () => {
@@ -750,6 +772,75 @@ describe('Core user persistence loop', () => {
       token: String(signin.body?.token || ''),
     });
     expect(privacy.status).toBe(200);
+  });
+
+  it('allows free users with completed initial 2FA to call Ethical AI Insight', async () => {
+    const user = createMockUser('free-ai-user', 'free-ai@example.com', {
+      tier: 'Free / Community Tier',
+      initialTwoFactorRequiredAt: new Date(Date.now() - 1000),
+      initialTwoFactorCompletedAt: new Date(),
+    });
+    users.set(user.id, user);
+    mockIsOpenAIConfigured.mockReturnValue(true);
+    mockChatWithOpenAI.mockResolvedValue('Free tier AI response');
+
+    const token = createSessionToken(user.id).token;
+    const ai = await requestJson({
+      method: 'POST',
+      path: '/api/ai/chat',
+      token,
+      body: {
+        message: 'Can free members use Ethical AI Insight?',
+        context: { category: 'platform', userId: user.id },
+        conversationHistory: [],
+      },
+    });
+
+    expect(ai.status).toBe(200);
+    expect(ai.body?.provider).toBe('openai');
+    expect(ai.body?.reply).toBe('Free tier AI response');
+  });
+
+  it('blocks Ethical AI Insight until required initial 2FA is completed', async () => {
+    const user = createMockUser('pending-ai-user', 'pending-ai@example.com', {
+      tier: 'Free / Community Tier',
+      initialTwoFactorRequiredAt: new Date(),
+      initialTwoFactorCompletedAt: null,
+    });
+    users.set(user.id, user);
+    mockIsOpenAIConfigured.mockReturnValue(true);
+
+    const token = createSessionToken(user.id).token;
+    const ai = await requestJson({
+      method: 'POST',
+      path: '/api/ai/wisdom',
+      token,
+      body: { refreshNonce: 'test' },
+    });
+
+    expect(ai.status).toBe(403);
+    expect(ai.body?.code).toBe('INITIAL_2FA_REQUIRED');
+  });
+
+  it('returns a graceful 503 when no AI provider is configured', async () => {
+    const user = createMockUser('no-ai-provider-user', 'no-provider@example.com', {
+      tier: 'Free / Community Tier',
+      initialTwoFactorRequiredAt: new Date(Date.now() - 1000),
+      initialTwoFactorCompletedAt: new Date(),
+    });
+    users.set(user.id, user);
+    mockIsOpenAIConfigured.mockReturnValue(false);
+
+    const token = createSessionToken(user.id).token;
+    const ai = await requestJson({
+      method: 'POST',
+      path: '/api/ai/wisdom',
+      token,
+      body: { refreshNonce: 'test' },
+    });
+
+    expect(ai.status).toBe(503);
+    expect(ai.body?.code).toBe('AI_PROVIDER_UNAVAILABLE');
   });
 
   it('returns actionable auth recovery when profile persists but session setup fails', async () => {

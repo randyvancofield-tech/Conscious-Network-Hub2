@@ -228,8 +228,8 @@ const ProvidersMarket: React.FC<ProvidersMarketProps> = ({ providerId, onOpenPro
         </div>
 
         {connectionTarget && (
-          <div className="fixed inset-0 z-[180] bg-black/85 backdrop-blur-sm p-4 flex items-center justify-center">
-            <div className="glass-panel w-full max-w-xl rounded-[2rem] border border-white/10 shadow-2xl p-6 sm:p-8 space-y-5 animate-in zoom-in duration-300">
+          <div className="fixed inset-0 z-[180] bg-black/85 backdrop-blur-sm p-4 flex items-start sm:items-center justify-center overflow-y-auto custom-scrollbar">
+            <div className="glass-panel w-full max-w-xl my-4 max-h-[calc(100dvh-2rem)] overflow-y-auto custom-scrollbar rounded-[2rem] border border-white/10 shadow-2xl p-6 sm:p-8 space-y-5 animate-in zoom-in duration-300">
               <h4 className="text-2xl font-black text-white tracking-tight">Access Request</h4>
               <p className="text-sm text-slate-400">
                 Send an introductory message to <span className="text-white font-bold">{connectionTarget.name}</span>.
@@ -287,7 +287,7 @@ const ProvidersMarket: React.FC<ProvidersMarketProps> = ({ providerId, onOpenPro
           </div>
         </div>
 
-        <div className="flex flex-wrap gap-3 pt-4 overflow-x-auto pb-2 no-scrollbar">
+        <div className="flex flex-wrap gap-3 pt-4 overflow-x-auto pb-2 custom-scrollbar scrollable-x">
           {categories.map((cat) => (
             <button
               key={cat}
@@ -430,8 +430,8 @@ const ProvidersMarket: React.FC<ProvidersMarketProps> = ({ providerId, onOpenPro
       </footer>
 
       {selectedProvider && (
-        <div className="fixed inset-0 z-[180] bg-black/85 backdrop-blur-sm p-4 flex items-center justify-center">
-          <div className="glass-panel w-full max-w-3xl rounded-[2.5rem] border border-white/10 overflow-hidden shadow-2xl animate-in zoom-in duration-300">
+        <div className="fixed inset-0 z-[180] bg-black/85 backdrop-blur-sm p-4 flex items-start sm:items-center justify-center overflow-y-auto custom-scrollbar">
+          <div className="glass-panel w-full max-w-3xl my-4 max-h-[calc(100dvh-2rem)] rounded-[2.5rem] border border-white/10 overflow-y-auto custom-scrollbar shadow-2xl animate-in zoom-in duration-300">
             <div className="relative h-64">
               <img src={selectedProvider.image} alt={selectedProvider.name} className="w-full h-full object-cover" />
               <div className="absolute inset-0 bg-gradient-to-t from-[#05070a] via-black/30 to-transparent" />
@@ -485,8 +485,8 @@ const ProvidersMarket: React.FC<ProvidersMarketProps> = ({ providerId, onOpenPro
       )}
 
       {connectionTarget && (
-        <div className="fixed inset-0 z-[180] bg-black/85 backdrop-blur-sm p-4 flex items-center justify-center">
-          <div className="glass-panel w-full max-w-xl rounded-[2rem] border border-white/10 shadow-2xl p-6 sm:p-8 space-y-5 animate-in zoom-in duration-300">
+        <div className="fixed inset-0 z-[180] bg-black/85 backdrop-blur-sm p-4 flex items-start sm:items-center justify-center overflow-y-auto custom-scrollbar">
+          <div className="glass-panel w-full max-w-xl my-4 max-h-[calc(100dvh-2rem)] overflow-y-auto custom-scrollbar rounded-[2rem] border border-white/10 shadow-2xl p-6 sm:p-8 space-y-5 animate-in zoom-in duration-300">
             <h4 className="text-2xl font-black text-white tracking-tight">Anchor Link Request</h4>
             <p className="text-sm text-slate-400">
               Send an introductory message to <span className="text-white font-bold">{connectionTarget.name}</span>.
