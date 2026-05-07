@@ -171,6 +171,15 @@ export const userPasswordResetConfirmSchema: JsonSchema = {
   },
 };
 
+export const userEmailVerificationConfirmSchema: JsonSchema = {
+  type: 'object',
+  additionalProperties: false,
+  required: ['token'],
+  properties: {
+    token: { type: 'string', minLength: 32, maxLength: 512 },
+  },
+};
+
 export const userProfilePatchSchema: JsonSchema = {
   type: 'object',
   additionalProperties: false,

@@ -3,6 +3,7 @@ export enum AppView {
   ENTRY = 'ENTRY',
   AUTH_CALLBACK = 'AUTH_CALLBACK',
   RESET_PASSWORD = 'RESET_PASSWORD',
+  VERIFY_EMAIL = 'VERIFY_EMAIL',
   MEMBERSHIP_ACCESS = 'MEMBERSHIP_ACCESS',
   DASHBOARD = 'DASHBOARD',
   MY_COURSES = 'MY_COURSES',
@@ -90,6 +91,7 @@ export interface UserProfile {
   tier: string | null;
   subscriptionStatus?: string | null;
   identityVerified?: boolean;
+  emailVerified?: boolean;
   reputationScore?: number;
   accessKeyIndex?: number;
   createdAt?: string;

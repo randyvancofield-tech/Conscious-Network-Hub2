@@ -85,6 +85,10 @@ class EmailService {
     }
   }
 
+  configured(): boolean {
+    return this.isConfigured;
+  }
+
   /**
    * Send Issue / Ticket
    */

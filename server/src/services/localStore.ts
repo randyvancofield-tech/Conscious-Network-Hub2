@@ -53,6 +53,9 @@ interface UserRow {
   privacySettings: UserPrivacySettings;
   password: string;
   passwordFingerprint: string | null;
+  emailVerified: boolean;
+  emailVerificationTokenHash: string | null;
+  emailVerificationExpiresAt: NullableIso;
   tier: string;
   subscriptionStatus: string;
   subscriptionStartDate: NullableIso;
@@ -244,6 +247,9 @@ export interface LocalUserRecord {
   privacySettings: UserPrivacySettings;
   password: string;
   passwordFingerprint: string | null;
+  emailVerified: boolean;
+  emailVerificationTokenHash: string | null;
+  emailVerificationExpiresAt: Date | null;
   tier: string;
   subscriptionStatus: string;
   subscriptionStartDate: Date | null;
@@ -405,6 +411,9 @@ interface UpdateUserInput {
   privacySettings?: UserPrivacySettings;
   password?: string;
   passwordFingerprint?: string | null;
+  emailVerified?: boolean;
+  emailVerificationTokenHash?: string | null;
+  emailVerificationExpiresAt?: Date | null;
   tier?: string;
   subscriptionStatus?: string;
   subscriptionStartDate?: Date | null;
@@ -787,6 +796,9 @@ const rowToUser = (row: UserRow): LocalUserRecord => ({
   privacySettings: normalizePrivacySettings(row.privacySettings),
   password: row.password,
   passwordFingerprint: row.passwordFingerprint,
+  emailVerified: row.emailVerified === true,
+  emailVerificationTokenHash: row.emailVerificationTokenHash || null,
+  emailVerificationExpiresAt: row.emailVerificationExpiresAt ? toDate(row.emailVerificationExpiresAt) : null,
   tier: row.tier,
   subscriptionStatus: row.subscriptionStatus,
   subscriptionStartDate: row.subscriptionStartDate ? toDate(row.subscriptionStartDate) : null,
@@ -1008,6 +1020,14 @@ export const localStore = {
     return row ? rowToUser(row) : null;
   },
 
+  findUserByEmailVerificationTokenHash(tokenHash: string): LocalUserRecord | null {
+    const normalized = String(tokenHash || '').trim();
+    if (!normalized) return null;
+    const store = loadStore();
+    const row = store.users.find((user) => user.emailVerificationTokenHash === normalized);
+    return row ? rowToUser(row) : null;
+  },
+
   createUser(input: CreateUserInput): LocalUserRecord {
     const store = loadStore();
     const email = normalizeEmail(input.email);
@@ -1049,6 +1069,9 @@ export const localStore = {
       privacySettings: normalizePrivacySettings(input.privacySettings),
       password: input.password,
       passwordFingerprint: input.passwordFingerprint || null,
+      emailVerified: false,
+      emailVerificationTokenHash: null,
+      emailVerificationExpiresAt: null,
       tier: input.tier,
       subscriptionStatus: 'inactive',
       subscriptionStartDate: null,
@@ -1133,6 +1156,17 @@ export const localStore = {
     if (updates.password !== undefined) row.password = updates.password;
     if (updates.passwordFingerprint !== undefined) {
       row.passwordFingerprint = updates.passwordFingerprint;
+    }
+    if (updates.emailVerified !== undefined) {
+      row.emailVerified = updates.emailVerified === true;
+    }
+    if (updates.emailVerificationTokenHash !== undefined) {
+      row.emailVerificationTokenHash = updates.emailVerificationTokenHash;
+    }
+    if (updates.emailVerificationExpiresAt !== undefined) {
+      row.emailVerificationExpiresAt = updates.emailVerificationExpiresAt
+        ? updates.emailVerificationExpiresAt.toISOString()
+        : null;
     }
     if (updates.tier !== undefined) row.tier = updates.tier;
     if (updates.subscriptionStatus !== undefined) {

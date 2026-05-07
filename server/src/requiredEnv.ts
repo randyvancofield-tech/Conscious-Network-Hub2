@@ -31,6 +31,13 @@ export const REQUIRED_SECRETS = [
 ] as const;
 
 const hasSensitiveDataKey = (): boolean => hasNonEmptyEnv('SENSITIVE_DATA_KEY');
+const hasEmailDeliveryConfig = (): boolean =>
+  (hasNonEmptyEnv('EMAIL_USER') && hasNonEmptyEnv('EMAIL_PASSWORD')) ||
+  (hasNonEmptyEnv('SMTP_HOST') && hasNonEmptyEnv('SMTP_PORT'));
+const hasSmsDeliveryConfig = (): boolean =>
+  hasNonEmptyEnv('TWILIO_ACCOUNT_SID') &&
+  hasNonEmptyEnv('TWILIO_AUTH_TOKEN') &&
+  hasNonEmptyEnv('TWILIO_FROM_NUMBER');
 
 export const resolveAuthTokenSecret = (): string => {
   const primary = trimEnv('AUTH_TOKEN_SECRET');
@@ -114,6 +121,14 @@ export const validateRequiredEnv = (): void => {
     missing.push('BRIDGE_PROVIDER_AUDIENCE');
   }
 
+  if (isProduction && !hasEmailDeliveryConfig()) {
+    missing.push('EMAIL_USER + EMAIL_PASSWORD or SMTP_HOST + SMTP_PORT');
+  }
+
+  if (isProduction && !hasSmsDeliveryConfig()) {
+    missing.push('TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN, TWILIO_FROM_NUMBER');
+  }
+
   if (missing.length > 0) {
     throw new Error(
       `[STARTUP][FATAL] Missing required secrets/environment variables: ${missing.join(', ')}`
@@ -172,4 +187,14 @@ export const logStripeEnvironmentLoaded = (): void => {
   }, {});
 
   console.log('[STARTUP] Stripe environment loaded: OK', JSON.stringify(maskedStatus));
+};
+
+export const logDeliveryEnvironmentLoaded = (): void => {
+  console.log(
+    '[STARTUP] Security delivery environment loaded:',
+    JSON.stringify({
+      email: hasEmailDeliveryConfig() ? 'present' : 'missing',
+      sms: hasSmsDeliveryConfig() ? 'present' : 'missing',
+    })
+  );
 };

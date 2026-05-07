@@ -63,6 +63,8 @@ const routePathForView = (view: AppView, params: Record<string, string> = {}): s
       return '/auth/callback';
     case AppView.RESET_PASSWORD:
       return '/reset-password';
+    case AppView.VERIFY_EMAIL:
+      return '/verify-email';
     case AppView.MEMBERSHIP_ACCESS:
       return '/membership-access';
     case AppView.DASHBOARD:
@@ -124,6 +126,7 @@ const resolveRoute = (pathname: string, search = ''): RouteState => {
     '/': AppView.ENTRY,
     '/auth/callback': AppView.AUTH_CALLBACK,
     '/reset-password': AppView.RESET_PASSWORD,
+    '/verify-email': AppView.VERIFY_EMAIL,
     '/membership-access': AppView.MEMBERSHIP_ACCESS,
     '/dashboard': AppView.DASHBOARD,
     '/social': AppView.CONSCIOUS_SOCIAL_LEARNING,
@@ -150,7 +153,10 @@ const resolveRoute = (pathname: string, search = ''): RouteState => {
   if (staticRoutes[path]) {
     return {
       view: staticRoutes[path],
-      params: path === '/reset-password' ? { token: params.get('token') || '' } : {},
+      params:
+        path === '/reset-password' || path === '/verify-email'
+          ? { token: params.get('token') || '' }
+          : {},
       path,
     };
   }
@@ -189,6 +195,7 @@ const isGuestAllowedView = (view: AppView): boolean =>
   [
     AppView.ENTRY,
     AppView.RESET_PASSWORD,
+    AppView.VERIFY_EMAIL,
     AppView.MEMBERSHIP_ACCESS,
     AppView.MEMBERSHIP,
     AppView.COMMUNITY,
@@ -252,6 +259,8 @@ const App: React.FC = () => {
   const [isPasswordResetPending, setPasswordResetPending] = useState(false);
   const [newPasswordInput, setNewPasswordInput] = useState('');
   const [confirmNewPasswordInput, setConfirmNewPasswordInput] = useState('');
+  const [emailVerificationNotice, setEmailVerificationNotice] = useState('');
+  const [isEmailVerificationPending, setEmailVerificationPending] = useState(false);
 
   const [isContactModalOpen, setContactModalOpen] = useState(false);
   const [contactName, setContactName] = useState('');
@@ -451,6 +460,7 @@ const App: React.FC = () => {
       createdAt: rawUser.createdAt || new Date().toISOString(),
       hasProfile: rawUser.hasProfile ?? false,
       identityVerified: true,
+      emailVerified: rawUser.emailVerified === true,
       reputationScore: rawUser.reputationScore ?? 100,
       accessKeyIndex: rawUser.accessKeyIndex ?? 200,
       avatarUrl: toAbsoluteAssetUrl(rawUser.avatarUrl),
@@ -1019,6 +1029,31 @@ const App: React.FC = () => {
     }
   };
 
+  const handleVerifyEmailConfirm = async () => {
+    setEmailVerificationPending(true);
+    setEmailVerificationNotice('');
+    const token = String(routeParams.token || '').trim();
+    if (!token) {
+      setEmailVerificationNotice('Verification link is missing a token.');
+      setEmailVerificationPending(false);
+      return;
+    }
+    try {
+      const data = await api<any>('/user/email-verification/confirm', {
+        method: 'POST',
+        auth: false,
+        body: { token },
+      });
+      setEmailVerificationNotice(data?.message || 'Email verified. You can continue into the hub.');
+    } catch (error) {
+      setEmailVerificationNotice(
+        error instanceof Error ? error.message : 'Unable to verify email. Please retry.'
+      );
+    } finally {
+      setEmailVerificationPending(false);
+    }
+  };
+
   const handleMembershipTierSelect = async (tier: string) => {
     if (isMembershipCheckoutPending) return;
     if (!user) {
@@ -1467,6 +1502,36 @@ const App: React.FC = () => {
                   {isPasswordResetPending ? 'Resetting...' : 'Reset Password'}
                 </button>
               </form>
+            </div>
+          </div>
+        );
+      case AppView.VERIFY_EMAIL:
+        return (
+          <div className="p-4 sm:p-8 max-w-xl mx-auto w-full">
+            <div className="glass-panel p-6 sm:p-8 rounded-3xl border border-blue-500/20">
+              <button onClick={() => setCurrentView(AppView.ENTRY)} className="mb-6 flex items-center gap-2 text-slate-500 hover:text-white transition-colors">
+                <Home className="w-4 h-4" />
+                <span className="text-[10px] font-black uppercase tracking-widest">Portal Entry</span>
+              </button>
+              <h2 className="text-3xl font-black text-white uppercase tracking-tight mb-3">
+                Verify Email
+              </h2>
+              <p className="text-sm leading-6 text-slate-400 mb-6">
+                Confirm your email address for account recovery and security notifications.
+              </p>
+              {emailVerificationNotice && (
+                <p className="mb-4 rounded-xl border border-blue-400/20 bg-blue-500/10 p-3 text-xs leading-5 text-blue-100">
+                  {emailVerificationNotice}
+                </p>
+              )}
+              <button
+                type="button"
+                onClick={handleVerifyEmailConfirm}
+                disabled={isEmailVerificationPending}
+                className="w-full py-4 bg-blue-600 hover:bg-blue-500 disabled:opacity-60 text-white rounded-2xl font-black text-xs uppercase tracking-widest transition-all shadow-xl"
+              >
+                {isEmailVerificationPending ? 'Verifying...' : 'Verify Email'}
+              </button>
             </div>
           </div>
         );

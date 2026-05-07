@@ -450,6 +450,9 @@ const Profile: React.FC<ProfileProps> = ({ user, onUserUpdate }) => {
       <h3>Security Settings</h3>
       <div style={{ border: '1px solid rgba(255,255,255,0.2)', padding: '12px', borderRadius: '10px', marginBottom: '16px' }}>
         <div style={{ marginBottom: '8px' }}>
+          Email: <strong>{user.emailVerified ? 'Verified' : 'Not verified'}</strong>
+        </div>
+        <div style={{ marginBottom: '8px' }}>
           Current 2FA: <strong>{securityState.twoFactorMethod === 'none' ? 'Disabled' : securityState.twoFactorMethod.toUpperCase()}</strong>
         </div>
         {securityState.phoneNumberMasked && (

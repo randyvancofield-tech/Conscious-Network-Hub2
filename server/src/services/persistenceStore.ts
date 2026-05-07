@@ -160,6 +160,9 @@ const toLocalUser = (row: any): LocalUserRecord => ({
   privacySettings: normalizePrivacySettings(readJsonObject(row.privacySettings ?? null)),
   password: row.password,
   passwordFingerprint: toNullableString(row.passwordFingerprint),
+  emailVerified: row.emailVerified === true,
+  emailVerificationTokenHash: toNullableString(row.emailVerificationTokenHash),
+  emailVerificationExpiresAt: row.emailVerificationExpiresAt || null,
   tier: row.tier,
   subscriptionStatus: row.subscriptionStatus,
   subscriptionStartDate: row.subscriptionStartDate || null,
@@ -399,6 +402,21 @@ export const localStore = {
     }
   },
 
+  async findUserByEmailVerificationTokenHash(tokenHash: string): Promise<LocalUserRecord | null> {
+    try {
+      const normalized = String(tokenHash || '').trim();
+      if (!normalized) return null;
+      const row = await ensurePrisma().user.findFirst({
+        where: {
+          emailVerificationTokenHash: normalized,
+        } as any,
+      });
+      return row ? toLocalUser(row) : null;
+    } catch (error) {
+      return translatePrismaError(error);
+    }
+  },
+
   async createUser(input: CreateUserInput): Promise<LocalUserRecord> {
     try {
       const row = await ensurePrisma().user.create({
@@ -430,6 +448,9 @@ export const localStore = {
           privacySettings: normalizePrivacySettings(undefined),
           password: input.password,
           passwordFingerprint: toNullableString(input.passwordFingerprint),
+          emailVerified: false,
+          emailVerificationTokenHash: null,
+          emailVerificationExpiresAt: null,
           tier: input.tier,
           subscriptionStatus: 'inactive',
           subscriptionStartDate: null,
@@ -527,6 +548,13 @@ export const localStore = {
       if (updates.password !== undefined) data.password = updates.password;
       if (updates.passwordFingerprint !== undefined) {
         data.passwordFingerprint = updates.passwordFingerprint;
+      }
+      if (updates.emailVerified !== undefined) data.emailVerified = updates.emailVerified === true;
+      if (updates.emailVerificationTokenHash !== undefined) {
+        data.emailVerificationTokenHash = updates.emailVerificationTokenHash;
+      }
+      if (updates.emailVerificationExpiresAt !== undefined) {
+        data.emailVerificationExpiresAt = updates.emailVerificationExpiresAt;
       }
       if (updates.tier !== undefined) data.tier = updates.tier;
       if (updates.subscriptionStatus !== undefined) data.subscriptionStatus = updates.subscriptionStatus;

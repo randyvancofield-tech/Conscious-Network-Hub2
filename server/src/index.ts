@@ -35,7 +35,12 @@ import { coursesPublicRoutes, coursesProtectedRoutes } from './routes/courses';
 import userCoursesRoutes from './routes/userCourses';
 import { providersRouter, userRequestsRouter, providerRequestsRouter } from './routes/providers';
 import { initializeVertexAI } from './services/vertexAiService';
-import { hasOpenAiApiKey, logStripeEnvironmentLoaded, validateRequiredEnv } from './requiredEnv';
+import {
+  hasOpenAiApiKey,
+  logDeliveryEnvironmentLoaded,
+  logStripeEnvironmentLoaded,
+  validateRequiredEnv,
+} from './requiredEnv';
 
 // Load environment variables with local override first.
 // Use absolute paths so startup works whether launched from project root or /server.
@@ -47,6 +52,7 @@ dotenv.config({ path: '.env' });
 try {
   validateRequiredEnv();
   logStripeEnvironmentLoaded();
+  logDeliveryEnvironmentLoaded();
 } catch (error) {
   const message =
     error instanceof Error ? error.message : 'Missing required secrets/environment variables';

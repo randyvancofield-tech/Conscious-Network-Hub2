@@ -21,6 +21,7 @@ import { mirrorUserToGoogleSheets } from '../services/googleSheetsMirror';
 import { maskPhoneNumber, maskWalletDid } from '../services/sensitiveDataPolicy';
 import { createUserSession, revokeUserSession, revokeUserSessionsByUserId } from '../services/userSessionStore';
 import emailService from '../services/emailService';
+import smsService from '../services/smsService';
 import {
   normalizeDateOfBirth,
   normalizeOptionalString,
@@ -36,6 +37,7 @@ import { normalizeTier } from '../tierPolicy';
 import { validateJsonBody } from '../validation/jsonSchema';
 import {
   userCreateSchema,
+  userEmailVerificationConfirmSchema,
   userPasswordResetConfirmSchema,
   userPasswordResetRequestSchema,
   userPhoneEnrollSchema,
@@ -52,8 +54,10 @@ const MIN_PASSWORD_LENGTH = 12;
 const MAX_FAILED_SIGN_IN_ATTEMPTS = 5;
 const LOCKOUT_WINDOW_MS = 15 * 60 * 1000;
 const PHONE_OTP_TTL_MS = 10 * 60 * 1000;
+const PHONE_OTP_RESEND_GUARD_MS = 60 * 1000;
 const MAX_PHONE_OTP_ATTEMPTS = 5;
 const PASSWORD_RESET_TTL_MS = 60 * 60 * 1000;
+const EMAIL_VERIFICATION_TTL_MS = 24 * 60 * 60 * 1000;
 const AUTOMATED_PROFILE_PATTERN = /\b(bot|agent|assistant|seed|system)\b/i;
 const PROFILE_STORE_UNAVAILABLE_RESPONSE = {
   error: 'Profile service is currently unavailable. Please retry shortly.',
@@ -102,6 +106,9 @@ const safeLogHash = (value: string): string =>
 const hashPasswordResetToken = (token: string): string =>
   crypto.createHash('sha256').update(token, 'utf8').digest('hex');
 
+const hashEmailVerificationToken = (token: string): string =>
+  crypto.createHash('sha256').update(token, 'utf8').digest('hex');
+
 const resolveFrontendBaseUrl = (req: Request): string => {
   const configured = String(process.env.FRONTEND_BASE_URL || '').trim().replace(/\/+$/, '');
   if (configured) return configured;
@@ -110,6 +117,14 @@ const resolveFrontendBaseUrl = (req: Request): string => {
 
 const buildPasswordResetUrl = (req: Request, token: string): string =>
   `${resolveFrontendBaseUrl(req)}/reset-password?token=${encodeURIComponent(token)}`;
+
+const buildEmailVerificationUrl = (req: Request, token: string): string =>
+  `${resolveFrontendBaseUrl(req)}/verify-email?token=${encodeURIComponent(token)}`;
+
+const getPhoneOtpIssuedAtMs = (expiresAt: Date | null): number | null => {
+  if (!expiresAt) return null;
+  return expiresAt.getTime() - PHONE_OTP_TTL_MS;
+};
 
 const logAuthFlowError = (
   req: Request,
@@ -314,7 +329,41 @@ const toPublicUser = (req: Request, user: any) => ({
   twoFactorMethod: user.twoFactorMethod || 'none',
   phoneNumberMasked: maskPhoneNumber(user.phoneNumber),
   walletDid: maskWalletDid(user.walletDid),
+  emailVerified: user.emailVerified === true,
 });
+
+const sendVerificationEmailForUser = async (
+  req: Request,
+  user: { id: string; email: string; emailVerified?: boolean | null }
+): Promise<{ sent: boolean; devVerificationUrl?: string }> => {
+  if (user.emailVerified) return { sent: false };
+  const token = crypto.randomBytes(32).toString('base64url');
+  const verificationUrl = buildEmailVerificationUrl(req, token);
+  await localStore.updateUser(user.id, {
+    emailVerificationTokenHash: hashEmailVerificationToken(token),
+    emailVerificationExpiresAt: new Date(Date.now() + EMAIL_VERIFICATION_TTL_MS),
+  });
+  const result = await emailService.send({
+    to: user.email,
+    subject: 'Verify your Conscious Network Hub email',
+    text: [
+      'Welcome to Conscious Network Hub.',
+      `Verify your email within 24 hours: ${verificationUrl}`,
+      'If you did not create this account, you can ignore this email.',
+    ].join('\n\n'),
+    html: `
+      <p>Welcome to Conscious Network Hub.</p>
+      <p><a href="${verificationUrl}">Verify your email</a></p>
+      <p>This link expires in 24 hours. If you did not create this account, you can ignore this email.</p>
+    `,
+  });
+  return {
+    sent: true,
+    ...(result?.skipped && process.env.NODE_ENV !== 'production'
+      ? { devVerificationUrl: verificationUrl }
+      : {}),
+  };
+};
 
 /**
  * POST /api/user/signin
@@ -426,9 +475,37 @@ publicRouter.post('/signin', validateJsonBody(userSignInSchema), async (req: Req
       }
 
       if (!twoFactorCode) {
+        const issuedAtMs = getPhoneOtpIssuedAtMs(user.pendingPhoneOtpExpiresAt);
+        if (
+          user.pendingPhoneOtpHash &&
+          user.pendingPhoneOtpExpiresAt &&
+          user.pendingPhoneOtpExpiresAt.getTime() > Date.now() &&
+          issuedAtMs &&
+          Date.now() - issuedAtMs < PHONE_OTP_RESEND_GUARD_MS
+        ) {
+          auditSignIn('deny', 429, 'phone_otp_resend_too_soon', user.id);
+          return res.status(429).json({
+            error: 'A verification code was just sent. Please wait before requesting another code.',
+          });
+        }
+
         const code = crypto.randomInt(0, 1000000).toString().padStart(6, '0');
         const hashedCode = computePasswordFingerprint(`otp:${code}`);
         const expiresAt = new Date(Date.now() + PHONE_OTP_TTL_MS);
+
+        const delivery = await smsService.sendSecurityCode({
+          to: user.phoneNumber,
+          code,
+          purpose: 'signin',
+        });
+        if (!delivery.ok) {
+          auditSignIn('error', 503, 'phone_otp_delivery_failed', user.id, {
+            provider: delivery.provider || null,
+          });
+          return res.status(503).json({
+            error: 'Unable to send phone verification code. Please retry shortly.',
+          });
+        }
 
         await localStore.updateUser(user.id, {
           pendingPhoneOtpHash: hashedCode,
@@ -436,16 +513,17 @@ publicRouter.post('/signin', validateJsonBody(userSignInSchema), async (req: Req
           pendingPhoneOtpAttempts: 0,
         });
 
-        console.log(`[2FA][PHONE][DEV] Sign-in OTP issued for ${maskPhoneNumber(user.phoneNumber)}`);
         auditSignIn('deny', 202, 'two_factor_required_phone', user.id, {
           twoFactorMethod: 'phone',
+          smsProvider: delivery.provider || null,
+          smsSkipped: Boolean(delivery.skipped),
         });
 
         return res.status(202).json({
           success: false,
           requiresTwoFactor: true,
           method: 'phone',
-          message: 'Phone verification code required to complete sign-in',
+          message: 'A phone verification code was sent. Enter it to complete sign-in.',
           ...(process.env.NODE_ENV !== 'production' && { devOtpCode: code }),
         });
       }
@@ -702,6 +780,7 @@ publicRouter.post('/create', validateJsonBody(userCreateSchema), async (req: Req
       sessionId: persistedSession.id,
       expiresAt: persistedSession.expiresAt.getTime(),
     });
+    const verification = await sendVerificationEmailForUser(req, persisted);
     auditCreate('success', 200, 'create_completed', persisted.id);
 
     return res.json({
@@ -719,6 +798,10 @@ publicRouter.post('/create', validateJsonBody(userCreateSchema), async (req: Req
           requiresSymbol: true,
         },
         twoFactorMethod: persisted.twoFactorMethod,
+      },
+      emailVerification: {
+        sent: verification.sent,
+        ...(verification.devVerificationUrl ? { devVerificationUrl: verification.devVerificationUrl } : {}),
       },
     });
   } catch (error) {
@@ -889,6 +972,48 @@ publicRouter.post(
     } catch (error) {
       console.error('[AUTH][PASSWORD_RESET] confirm failed', error);
       return res.status(500).json({ error: 'Unable to reset password. Please retry.' });
+    }
+  }
+);
+
+/**
+ * POST /api/user/email-verification/confirm
+ * Verify a direct platform user's email address.
+ */
+publicRouter.post(
+  '/email-verification/confirm',
+  validateJsonBody(userEmailVerificationConfirmSchema),
+  async (req: Request, res: Response): Promise<any> => {
+    const token = String(req.body?.token || '').trim();
+    const tokenHash = hashEmailVerificationToken(token);
+    try {
+      const user = await localStore.findUserByEmailVerificationTokenHash(tokenHash);
+      if (
+        !user ||
+        !user.emailVerificationExpiresAt ||
+        user.emailVerificationExpiresAt.getTime() <= Date.now()
+      ) {
+        return res.status(400).json({ error: 'Verification link is invalid or expired' });
+      }
+
+      await localStore.updateUser(user.id, {
+        emailVerified: true,
+        emailVerificationTokenHash: null,
+        emailVerificationExpiresAt: null,
+      });
+
+      recordAuditEvent(req, {
+        domain: 'auth',
+        action: 'email_verification_confirm',
+        outcome: 'success',
+        statusCode: 200,
+        targetUserId: user.id,
+      });
+
+      return res.json({ success: true, message: 'Email verified. You can continue into the hub.' });
+    } catch (error) {
+      console.error('[AUTH][EMAIL_VERIFICATION] confirm failed', error);
+      return res.status(500).json({ error: 'Unable to verify email. Please retry.' });
     }
   }
 );
