@@ -21,7 +21,7 @@ import { AppView, UserProfile, Course } from './types';
 import { NAVIGATION_ITEMS } from './constants';
 import { 
   Shield, Menu, X, Search, Bell,
-  ChevronRight, Home, LogOut, Compass, Building2, CheckCircle2, Sparkles, Key
+  ChevronRight, Home, LogOut, Building2, CheckCircle2, Sparkles, Key
 } from 'lucide-react';
 import logo from './src/assets/brand/logo.png';
 import privacyPolicy from './docs/compliance/privacy-policy-draft.md?raw';
@@ -245,6 +245,7 @@ const App: React.FC = () => {
   
   // Membership checkout states
   const [isSelectingTier, setIsSelectingTier] = useState(false);
+  const [isMembershipHelpVisible, setMembershipHelpVisible] = useState(true);
   const [isMembershipCheckoutPending, setMembershipCheckoutPending] = useState(false);
   const [membershipNotice, setMembershipNotice] = useState('');
   const [pendingCheckoutSessionId, setPendingCheckoutSessionId] = useState<string | null>(null);
@@ -287,16 +288,16 @@ const App: React.FC = () => {
     {
       name: FREE_TIER_NAME,
       price: "Free",
-      description: "Provides basic access to community discussions, public posts, and selected events.",
-      access: "Limited; no provider sessions.",
-      ideal: "Individuals exploring the platform; early engagement.",
+      description: "Start your account with community access, public learning areas, and selected events.",
+      access: "Immediate in-platform activation.",
+      ideal: "New members who want a simple starting point before upgrading.",
       color: "blue"
     },
     {
       name: "Guided Tier",
       price: "$22/month",
       description: "Structured access to curated content, thematic learning pathways, and selected provider-led sessions.",
-      access: "Moderate; guided growth experience.",
+      access: "Stripe checkout for monthly membership.",
       ideal: "Individuals seeking clarity, emotional wellness, or spiritual development.",
       color: "teal"
     },
@@ -304,7 +305,7 @@ const App: React.FC = () => {
       name: "Accelerated Tier",
       price: "$44/month",
       description: "Full access to expert-led sessions, live programs, collaborations, and advanced thematic content.",
-      access: "High; personalized growth support.",
+      access: "Stripe checkout for monthly membership.",
       ideal: "Users committed to intentional development and consistent practice.",
       color: "indigo"
     }
@@ -425,7 +426,7 @@ const App: React.FC = () => {
 
     return {
       id: rawUser.id,
-      name: rawUser.name || (rawUser.email ? rawUser.email.split('@')[0] : 'Node'),
+      name: rawUser.name || (rawUser.email ? rawUser.email.split('@')[0] : 'Member'),
       handle: rawUser.handle,
       email: rawUser.email,
       role: ['user', 'provider', 'admin'].includes(String(rawUser?.role || '').toLowerCase())
@@ -854,7 +855,7 @@ const App: React.FC = () => {
       return;
     }
     if (passwordInput !== confirmPasswordInput) {
-      setError('Passwords match error.');
+      setError('Passwords do not match.');
       return;
     }
 
@@ -875,7 +876,7 @@ const App: React.FC = () => {
     }
 
     try {
-      const identityName = normalizedEmail.split('@')[0] || 'Node';
+      const identityName = normalizedEmail.split('@')[0] || 'Member';
       const data = await api<any>('/user/create', {
         method: 'POST',
         auth: false,
@@ -1294,7 +1295,7 @@ const App: React.FC = () => {
               Membership Activation Required
             </h2>
             <p className="text-slate-300 text-sm leading-relaxed">
-              Select a membership tier from Membership Access to unlock your node and enter the hub.
+              Select a membership tier from Membership Access to unlock your account and enter the hub.
             </p>
             <button
               onClick={() => {
@@ -1686,7 +1687,7 @@ const App: React.FC = () => {
                 <button
                   type="button"
                   aria-disabled="true"
-                  className="relative flex min-h-[8.75rem] w-full flex-col justify-between rounded-2xl border border-blue-500/20 bg-white/[0.03] p-5 text-left shadow-[0_0_30px_rgba(37,99,235,0.12)] cursor-default sm:min-h-[9.5rem] sm:p-6"
+                  className="relative flex min-h-[8.75rem] w-full flex-col justify-between rounded-2xl border border-blue-500/20 bg-white/[0.03] p-5 text-left shadow-[0_0_30px_rgba(37,99,235,0.12)] cursor-default opacity-80 sm:min-h-[9.5rem] sm:p-6"
                 >
                   <div className="flex items-start justify-between gap-4">
                     <div className="min-w-0">
@@ -1699,12 +1700,15 @@ const App: React.FC = () => {
                     </div>
                     <Building2 className="w-5 h-5 text-blue-300 flex-shrink-0" />
                   </div>
+                  <span className="mt-4 inline-flex w-fit rounded-full border border-blue-400/20 bg-blue-500/10 px-3 py-1 text-[9px] font-black uppercase tracking-[0.25em] text-blue-100/60">
+                    Coming soon
+                  </span>
                 </button>
 
                 <button
                   type="button"
                   aria-disabled="true"
-                  className="relative flex min-h-[8.75rem] w-full flex-col justify-between rounded-2xl border border-blue-500/20 bg-white/[0.03] p-5 text-left shadow-[0_0_30px_rgba(37,99,235,0.12)] cursor-default sm:min-h-[9.5rem] sm:p-6"
+                  className="relative flex min-h-[8.75rem] w-full flex-col justify-between rounded-2xl border border-blue-500/20 bg-white/[0.03] p-5 text-left shadow-[0_0_30px_rgba(37,99,235,0.12)] cursor-default opacity-80 sm:min-h-[9.5rem] sm:p-6"
                 >
                   <div className="flex items-start justify-between gap-4">
                     <div className="min-w-0">
@@ -1717,6 +1721,9 @@ const App: React.FC = () => {
                     </div>
                     <Sparkles className="w-5 h-5 text-teal-300 flex-shrink-0" />
                   </div>
+                  <span className="mt-4 inline-flex w-fit rounded-full border border-blue-400/20 bg-blue-500/10 px-3 py-1 text-[9px] font-black uppercase tracking-[0.25em] text-blue-100/60">
+                    Coming soon
+                  </span>
                 </button>
               </div>
 
@@ -1756,7 +1763,7 @@ const App: React.FC = () => {
               
               <div className="text-center space-y-3 sm:space-y-4">
                 <h2 className="text-2xl xs:text-3xl sm:text-4xl md:text-5xl lg:text-6xl font-black text-white tracking-tighter">Membership Access</h2>
-                <p className="text-slate-400 text-sm sm:text-base md:text-lg font-light px-2 sm:px-0">Select your level of integration within the decentralized ecosystem.</p>
+                <p className="text-slate-400 text-sm sm:text-base md:text-lg font-light px-2 sm:px-0">Sign in or choose a membership tier to enter Conscious Network Hub.</p>
                 <div className="flex flex-wrap items-center justify-center gap-3 sm:gap-4 pt-3">
                   <button
                     onClick={() => {
@@ -1782,6 +1789,27 @@ const App: React.FC = () => {
                 )}
               </div>
 
+              {isMembershipHelpVisible && (
+                <div className="glass-panel relative rounded-[1.5rem] border border-blue-500/20 bg-blue-500/5 p-5 sm:p-6 shadow-2xl">
+                  <button
+                    type="button"
+                    onClick={() => setMembershipHelpVisible(false)}
+                    className="absolute right-4 top-4 rounded-full p-2 text-slate-500 transition-colors hover:bg-white/5 hover:text-white"
+                    aria-label="Dismiss membership guidance"
+                  >
+                    <X className="h-4 w-4" />
+                  </button>
+                  <div className="max-w-3xl pr-10">
+                    <h3 className="text-sm font-black uppercase tracking-widest text-white">
+                      Quick Start
+                    </h3>
+                    <p className="mt-2 text-sm leading-6 text-slate-300">
+                      Existing users can sign in to continue. New users should choose a tier below to create an account and activate membership access.
+                    </p>
+                  </div>
+                </div>
+              )}
+
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5 sm:gap-7 md:gap-8">
                 {TIERS.map((tier) => (
                   <div key={tier.name} className={`glass-panel p-5 sm:p-8 md:p-10 rounded-[1.75rem] sm:rounded-[2.5rem] border-white/5 hover:border-${tier.color}-500/30 transition-all flex flex-col justify-between group shadow-2xl relative overflow-hidden border-t-4 border-t-${tier.color}-500/20 min-h-[25rem] sm:min-h-[27rem]`}>
@@ -1791,7 +1819,7 @@ const App: React.FC = () => {
                         <h3 className="text-xl sm:text-2xl font-black text-white leading-tight uppercase tracking-tighter">{tier.name}</h3>
                         <span className={`px-3 sm:px-4 py-1 sm:py-1.5 bg-${tier.color}-500/20 text-${tier.color}-400 rounded-full text-[9px] sm:text-[10px] font-black whitespace-nowrap tracking-widest`}>{tier.price}</span>
                       </div>
-                      <p className="text-blue-400/60 text-[8px] sm:text-[9px] font-black uppercase tracking-[0.3em] mb-6 sm:mb-8">Sovereign Node Package</p>
+                      <p className="text-blue-400/60 text-[8px] sm:text-[9px] font-black uppercase tracking-[0.3em] mb-6 sm:mb-8">Membership Option</p>
                       
                       <div className="space-y-4 sm:space-y-6">
                         <div>
@@ -1832,54 +1860,10 @@ const App: React.FC = () => {
                         ? 'Verifying Checkout...'
                         : isFreeMembershipTier(tier.name)
                         ? 'Activate Free Tier'
-                        : `Anchor as ${tier.name.split(' ')[0]}`}
+                        : 'Continue to Checkout'}
                     </button>
                   </div>
                 ))}
-              </div>
-
-              <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 sm:gap-7 md:gap-8 pt-6 sm:pt-8 md:pt-10">
-                <div className="glass-panel p-10 rounded-[2.5rem] flex flex-col sm:flex-row items-center justify-between gap-8 border-l-8 border-cyan-500 shadow-2xl">
-                  <div className="flex items-center gap-6">
-                    <div className="p-5 bg-cyan-500/10 rounded-3xl">
-                      <Building2 className="w-10 h-10 text-cyan-400" />
-                    </div>
-                    <div>
-                      <h4 className="text-xl font-black text-white leading-none uppercase tracking-tighter">Institutional Plan</h4>
-                      <p className="text-[9px] text-cyan-400/60 font-black uppercase tracking-[0.3em] mt-3 mb-4">Enterprise Leadership</p>
-                      <p className="text-sm text-slate-400 max-w-xs leading-relaxed font-light">
-                        Organization-wide leadership development, emotional resilience, and specialized provider cohorts.
-                      </p>
-                    </div>
-                  </div>
-                  <button 
-                    onClick={() => window.open('https://calendly.com/randycofield/buildingconnections', '_blank')}
-                    className="px-10 py-4 bg-cyan-600 hover:bg-cyan-500 text-white rounded-2xl font-black text-xs uppercase tracking-widest transition-all whitespace-nowrap shadow-lg flex items-center gap-2 group"
-                  >
-                    Contact <ChevronRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" />
-                  </button>
-                </div>
-
-                <div className="glass-panel p-10 rounded-[2.5rem] flex flex-col sm:flex-row items-center justify-between gap-8 border-l-8 border-orange-500 shadow-2xl">
-                  <div className="flex items-center gap-6">
-                    <div className="p-5 bg-orange-500/10 rounded-3xl">
-                      <Compass className="w-10 h-10 text-orange-400" />
-                    </div>
-                    <div>
-                      <h4 className="text-xl font-black text-white uppercase tracking-tighter">Explore Platform</h4>
-                      <p className="text-[9px] text-orange-400/60 font-black uppercase tracking-[0.3em] mt-3 mb-4">Guest Access</p>
-                      <p className="text-sm text-slate-400 max-w-xs leading-relaxed font-light">
-                        View the hub as a guest node without a profile. Limited observation only.
-                      </p>
-                    </div>
-                  </div>
-                  <button 
-                    onClick={handleExploreAsGuest}
-                    className="px-10 py-4 bg-orange-600/10 hover:bg-orange-600 text-orange-200 rounded-2xl font-black text-xs uppercase tracking-widest border border-orange-500/30 transition-all flex items-center gap-2 group shadow-xl"
-                  >
-                    Browse Hub <ChevronRight className="w-5 h-5 group-hover:translate-x-1 transition-transform" />
-                  </button>
-                </div>
               </div>
             </div>
           </div>
@@ -2153,15 +2137,15 @@ const App: React.FC = () => {
               <button onClick={closeModals} className="absolute top-4 right-4 sm:top-8 sm:right-8 p-2.5 sm:p-3 hover:bg-white/5 rounded-full transition-colors">
                 <X className="w-5 h-5 text-slate-500" />
               </button>
-              <h3 className="text-2xl sm:text-3xl font-black mb-6 sm:mb-10 text-white uppercase tracking-tighter">{isSigninModalOpen ? 'Sync Node' : 'Initialize Identity'}</h3>
+              <h3 className="text-2xl sm:text-3xl font-black mb-6 sm:mb-10 text-white uppercase tracking-tighter">{isSigninModalOpen ? 'Sign In' : 'Create Account'}</h3>
               <form onSubmit={isSigninModalOpen ? handleSignIn : handleCreateProfile} className="space-y-5 sm:space-y-6">
                 {error && <p className="text-red-400 text-[9px] sm:text-[10px] bg-red-400/10 p-3 sm:p-4 rounded-xl border border-red-400/20 uppercase tracking-widest font-black">{error}</p>}
                 <div className="space-y-3">
-                  <label className="text-[9px] font-black text-slate-500 uppercase tracking-widest ml-2">Node Identifier</label>
-                  <input type="email" value={emailInput} onChange={e => setEmailInput(e.target.value)} className="w-full px-5 sm:px-8 py-3 sm:py-4 bg-white/5 border border-white/10 rounded-xl sm:rounded-2xl text-white outline-none focus:ring-2 focus:ring-blue-500/50 transition-all font-medium text-sm" required placeholder="email@nexus.node" />
+                  <label className="text-[9px] font-black text-slate-500 uppercase tracking-widest ml-2">Email</label>
+                  <input type="email" value={emailInput} onChange={e => setEmailInput(e.target.value)} className="w-full px-5 sm:px-8 py-3 sm:py-4 bg-white/5 border border-white/10 rounded-xl sm:rounded-2xl text-white outline-none focus:ring-2 focus:ring-blue-500/50 transition-all font-medium text-sm" required placeholder="you@example.com" />
                 </div>
                 <div className="space-y-3">
-                  <label className="text-[9px] font-black text-slate-500 uppercase tracking-widest ml-2">Secure Passkey</label>
+                  <label className="text-[9px] font-black text-slate-500 uppercase tracking-widest ml-2">Password</label>
                   <input type="password" value={passwordInput} onChange={e => setPasswordInput(e.target.value)} className="w-full px-5 sm:px-8 py-3 sm:py-4 bg-white/5 border border-white/10 rounded-xl sm:rounded-2xl text-white outline-none focus:ring-2 focus:ring-blue-500/50 transition-all font-medium text-sm" required placeholder="••••••••" />
                 </div>
                 {!isSigninModalOpen && (
@@ -2170,7 +2154,7 @@ const App: React.FC = () => {
                       Password rules: 12+ chars, upper/lowercase, number, symbol, and no email fragments.
                     </p>
                     <div className="space-y-3">
-                      <label className="text-[9px] font-black text-slate-500 uppercase tracking-widest ml-2">Verify Key</label>
+                      <label className="text-[9px] font-black text-slate-500 uppercase tracking-widest ml-2">Confirm Password</label>
                       <input type="password" value={confirmPasswordInput} onChange={e => setConfirmPasswordInput(e.target.value)} className="w-full px-5 sm:px-8 py-3 sm:py-4 bg-white/5 border border-white/10 rounded-xl sm:rounded-2xl text-white outline-none focus:ring-2 focus:ring-blue-500/50 transition-all font-medium text-sm" required placeholder="********" />
                     </div>
                     <div className="space-y-3">
@@ -2256,13 +2240,13 @@ const App: React.FC = () => {
                   </div>
                 )}
                 <button type="submit" className="w-full py-4 sm:py-5 bg-blue-600 hover:bg-blue-500 text-white rounded-xl sm:rounded-2xl font-black text-xs sm:text-sm uppercase tracking-widest transition-all shadow-2xl shadow-blue-900/40 mt-4 sm:mt-6">
-                  {isSigninModalOpen ? (pendingTwoFactorMethod ? 'Verify & Initialize Session' : 'Initialize Session') : 'Create Identity Hash'}
+                  {isSigninModalOpen ? (pendingTwoFactorMethod ? 'Verify & Sign In' : 'Sign In') : 'Create Account'}
                 </button>
               </form>
               <div className="mt-6 sm:mt-8 text-center text-slate-500 text-[9px] sm:text-[10px] font-black uppercase tracking-widest">
-                {isSigninModalOpen ? "New Node?" : "Already Anchored?"}
+                {isSigninModalOpen ? "New user?" : "Already have an account?"}
                 <button onClick={() => { setSigninModalOpen(!isSigninModalOpen); setSignupModalOpen(!isSignupModalOpen); setPendingTwoFactorMethod(null); setTwoFactorCodeInput(''); setProviderTokenInput(''); setError(''); }} className="ml-2 text-blue-400 hover:underline">
-                  {isSigninModalOpen ? 'Register Identity' : 'Sync Existing'}
+                  {isSigninModalOpen ? 'Create Account' : 'Sign In'}
                 </button>
               </div>
             </div>

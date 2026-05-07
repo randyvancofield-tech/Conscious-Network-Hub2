@@ -13,21 +13,20 @@ const publicRouter = Router();
 const protectedRouter = Router();
 
 type StripePriceEnvKey =
-  | 'STRIPE_PRICE_FREE'
   | 'STRIPE_PRICE_GUIDED'
   | 'STRIPE_PRICE_ACCELERATED';
 
 type TierPricing = {
   name: TierValue;
   price: number;
-  stripePriceEnvKey: StripePriceEnvKey;
+  stripePriceEnvKey: StripePriceEnvKey | null;
 };
 
 const TIER_PRICING: Record<TierValue, TierPricing> = {
   [TIER_VALUES.FREE]: {
     name: TIER_VALUES.FREE,
     price: 0,
-    stripePriceEnvKey: 'STRIPE_PRICE_FREE',
+    stripePriceEnvKey: null,
   },
   [TIER_VALUES.GUIDED]: {
     name: TIER_VALUES.GUIDED,
@@ -67,7 +66,7 @@ const STRIPE_UNAVAILABLE_RESPONSE = {
 } as const;
 
 let stripeClient: Stripe | null | undefined;
-const STRIPE_API_VERSION = '2025-04-30.basil' as unknown as Stripe.StripeConfig['apiVersion'];
+const STRIPE_API_VERSION = '2026-04-22.dahlia' as unknown as Stripe.StripeConfig['apiVersion'];
 
 const parseBooleanEnv = (name: string, fallback: boolean): boolean => {
   const raw = String(process.env[name] || '').trim().toLowerCase();
@@ -103,6 +102,7 @@ const parseRequestedTier = (value: unknown): TierValue | null => {
 
 const resolveStripePriceId = (tier: TierValue): string | null => {
   const envKey = TIER_PRICING[tier].stripePriceEnvKey;
+  if (!envKey) return null;
   const priceId = String(process.env[envKey] || '').trim();
   return priceId || null;
 };
@@ -158,7 +158,7 @@ const toPublicTier = (user: any): TierValue | null => {
 const toMembershipUserPayload = (user: any) => ({
   id: user.id,
   email: user.email,
-  name: user.name || (user.email ? String(user.email).split('@')[0] : 'Node'),
+  name: user.name || (user.email ? String(user.email).split('@')[0] : 'Member'),
   tier: toPublicTier(user),
   subscriptionStatus: user.subscriptionStatus,
   subscriptionStartDate: user.subscriptionStartDate,
@@ -582,6 +582,11 @@ const startTierCheckout = async (
     const tier = parseRequestedTier(req.body?.tier);
     if (!tier) {
       return res.status(400).json({ error: 'Invalid tier selected' });
+    }
+    if (tier === TIER_VALUES.FREE) {
+      return res.status(400).json({
+        error: 'Free tier activates directly in the platform and does not use Stripe checkout',
+      });
     }
 
     const user = await localStore.getUserById(authUserId);

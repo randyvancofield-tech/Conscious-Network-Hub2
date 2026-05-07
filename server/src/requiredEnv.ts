@@ -22,7 +22,6 @@ export const REQUIRED_SECRETS = [
   'SENSITIVE_DATA_KEY (production/shared_db)',
   'STRIPE_SECRET_KEY',
   'STRIPE_WEBHOOK_SECRET',
-  'STRIPE_PRICE_FREE',
   'STRIPE_PRICE_GUIDED',
   'STRIPE_PRICE_ACCELERATED',
   'FRONTEND_BASE_URL',
@@ -89,10 +88,6 @@ export const validateRequiredEnv = (): void => {
 
   if (!hasNonEmptyEnv('STRIPE_WEBHOOK_SECRET')) {
     missing.push('STRIPE_WEBHOOK_SECRET');
-  }
-
-  if (!hasNonEmptyEnv('STRIPE_PRICE_FREE')) {
-    missing.push('STRIPE_PRICE_FREE');
   }
 
   if (!hasNonEmptyEnv('STRIPE_PRICE_GUIDED')) {
@@ -167,7 +162,6 @@ export const logStripeEnvironmentLoaded = (): void => {
   const requiredStripeKeys = [
     'STRIPE_SECRET_KEY',
     'STRIPE_WEBHOOK_SECRET',
-    'STRIPE_PRICE_FREE',
     'STRIPE_PRICE_GUIDED',
     'STRIPE_PRICE_ACCELERATED',
     'FRONTEND_BASE_URL',
