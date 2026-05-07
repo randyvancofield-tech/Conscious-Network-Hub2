@@ -247,12 +247,16 @@ const App: React.FC = () => {
   const [passwordInput, setPasswordInput] = useState('');
   const [confirmPasswordInput, setConfirmPasswordInput] = useState('');
   const [error, setError] = useState('');
-  const [twoFactorMethodInput, setTwoFactorMethodInput] = useState<'none' | 'phone' | 'wallet'>('none');
-  const [phoneNumberInput, setPhoneNumberInput] = useState('');
-  const [walletDidInput, setWalletDidInput] = useState('');
   const [twoFactorCodeInput, setTwoFactorCodeInput] = useState('');
   const [providerTokenInput, setProviderTokenInput] = useState('');
   const [pendingTwoFactorMethod, setPendingTwoFactorMethod] = useState<'phone' | 'wallet' | null>(null);
+  const [initialTwoFactorMethod, setInitialTwoFactorMethod] = useState<'phone' | 'wallet'>('phone');
+  const [initialTwoFactorPhoneInput, setInitialTwoFactorPhoneInput] = useState('');
+  const [initialTwoFactorWalletInput, setInitialTwoFactorWalletInput] = useState('');
+  const [initialTwoFactorStatus, setInitialTwoFactorStatus] = useState('');
+  const [initialTwoFactorError, setInitialTwoFactorError] = useState('');
+  const [isInitialTwoFactorSubmitting, setInitialTwoFactorSubmitting] = useState(false);
+  const [initialTwoFactorCompletedNotice, setInitialTwoFactorCompletedNotice] = useState(false);
   const [isPasswordResetRequestOpen, setPasswordResetRequestOpen] = useState(false);
   const [passwordResetEmailInput, setPasswordResetEmailInput] = useState('');
   const [passwordResetNotice, setPasswordResetNotice] = useState('');
@@ -333,8 +337,6 @@ const App: React.FC = () => {
       color: "indigo"
     }
   ];
-
-  const signupTwoFactorEnabled = true;
 
   const backendConnectionErrorMessage = (actionLabel: string): string => {
     const target = getBackendBaseUrl() || 'the configured API route';
@@ -479,6 +481,9 @@ const App: React.FC = () => {
       twoFactorMethod: rawUser.twoFactorMethod || 'none',
       phoneNumberMasked: rawUser.phoneNumberMasked || null,
       walletDid: rawUser.walletDid || null,
+      initialTwoFactorRequired: rawUser.initialTwoFactorRequired === true,
+      initialTwoFactorCompleted: rawUser.initialTwoFactorCompleted === true,
+      canAccessFullPlatform: rawUser.canAccessFullPlatform !== false,
     };
   };
 
@@ -525,6 +530,9 @@ const App: React.FC = () => {
 
   const hasAdminRole = (profile: UserProfile | null | undefined): boolean =>
     profile?.role === 'admin';
+
+  const requiresInitialTwoFactorSetup = (profile: UserProfile | null | undefined): boolean =>
+    profile?.initialTwoFactorRequired === true && profile.initialTwoFactorCompleted !== true;
 
   const isFreeMembershipTier = (tier: string): boolean => tier === FREE_TIER_NAME;
 
@@ -603,8 +611,14 @@ const App: React.FC = () => {
         } else {
           setUserAuthSession(token, canonicalUser);
         }
-        void refreshUserCourses();
         setSelectedTier(canonicalUser.tier || FREE_TIER_NAME);
+        if (requiresInitialTwoFactorSetup(canonicalUser)) {
+          setIsSelectingTier(false);
+          setMembershipNotice('');
+          setCurrentView(AppView.DASHBOARD, {}, { replace: true });
+          return;
+        }
+        void refreshUserCourses();
         const needsMembershipSelection = !hasConfirmedMembership(canonicalUser);
         setIsSelectingTier(needsMembershipSelection);
         if (needsMembershipSelection && !isNoTierSignedInAllowedView(initialRoute.view)) {
@@ -659,14 +673,6 @@ const App: React.FC = () => {
       setIsSelectingTier(true);
     }
   }, []);
-
-  useEffect(() => {
-    if (!signupTwoFactorEnabled && twoFactorMethodInput !== 'none') {
-      setTwoFactorMethodInput('none');
-      setPhoneNumberInput('');
-      setWalletDidInput('');
-    }
-  }, [signupTwoFactorEnabled, twoFactorMethodInput]);
 
   useEffect(() => {
     const controller = new AbortController();
@@ -757,6 +763,64 @@ const App: React.FC = () => {
     }
   };
 
+  const continueAfterInitialTwoFactor = (profile: UserProfile) => {
+    const needsMembershipSelection = !hasConfirmedMembership(profile);
+    setInitialTwoFactorCompletedNotice(false);
+    setInitialTwoFactorStatus('');
+    setInitialTwoFactorError('');
+    setIsSelectingTier(needsMembershipSelection);
+    setMembershipNotice(needsMembershipSelection ? 'Select a membership tier to continue.' : '');
+    setCurrentView(needsMembershipSelection ? AppView.MEMBERSHIP_ACCESS : AppView.DASHBOARD, {}, { replace: true });
+    setSidebarOpen(!needsMembershipSelection && window.innerWidth >= 1024);
+  };
+
+  const handleInitialTwoFactorEnroll = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!user) return;
+
+    const isPhone = initialTwoFactorMethod === 'phone';
+    const endpoint = isPhone ? '/user/2fa/phone/enroll' : '/user/2fa/wallet/enroll';
+    const value = isPhone ? initialTwoFactorPhoneInput.trim() : initialTwoFactorWalletInput.trim();
+    if (!value) {
+      setInitialTwoFactorError(
+        isPhone ? 'Enter a phone number to complete 2FA setup.' : 'Enter an address DID to complete 2FA setup.'
+      );
+      return;
+    }
+
+    setInitialTwoFactorSubmitting(true);
+    setInitialTwoFactorError('');
+    setInitialTwoFactorStatus('Setting up your required account protection...');
+    try {
+      const data = await api<any>(endpoint, {
+        method: 'POST',
+        body: isPhone ? { phoneNumber: value } : { walletDid: value },
+      });
+      const nextUser = data?.user ? toPlatformUser(data.user) : await refreshCanonicalUser();
+      if (!nextUser) {
+        setInitialTwoFactorError('2FA was updated, but your session could not be refreshed. Please sign in again.');
+        setInitialTwoFactorStatus('');
+        return;
+      }
+      const token = getAuthToken();
+      if (token) {
+        setUserAuthSession(token, nextUser);
+      }
+      setUser(nextUser);
+      setInitialTwoFactorCompletedNotice(true);
+      setInitialTwoFactorStatus('Initial 2FA setup complete. You can continue.');
+      setInitialTwoFactorPhoneInput('');
+      setInitialTwoFactorWalletInput('');
+    } catch (error) {
+      setInitialTwoFactorStatus('');
+      setInitialTwoFactorError(
+        error instanceof Error ? error.message : '2FA enrollment failed. Please retry.'
+      );
+    } finally {
+      setInitialTwoFactorSubmitting(false);
+    }
+  };
+
   useEffect(() => {
     if (!pendingCheckoutSessionId) {
       return;
@@ -836,21 +900,39 @@ const App: React.FC = () => {
       }
 
       const canonicalUser = toPlatformUser(data.user);
+      const needsInitialTwoFactorSetup = requiresInitialTwoFactorSetup(canonicalUser);
       const needsMembershipSelection = !hasConfirmedMembership(canonicalUser);
       setUserAuthSession(data.token, canonicalUser);
       setUser(canonicalUser);
-      void refreshUserCourses();
+      if (!needsInitialTwoFactorSetup) {
+        void refreshUserCourses();
+      }
       setSelectedTier(canonicalUser.tier || FREE_TIER_NAME);
-      setIsSelectingTier(needsMembershipSelection);
+      setIsSelectingTier(!needsInitialTwoFactorSetup && needsMembershipSelection);
       setMembershipCheckoutPending(false);
-      setMembershipNotice(needsMembershipSelection ? 'Select a membership tier to continue.' : '');
+      setMembershipNotice(
+        needsInitialTwoFactorSetup
+          ? ''
+          : needsMembershipSelection
+            ? 'Select a membership tier to continue.'
+            : ''
+      );
       setPendingCheckoutSessionId(null);
       setPendingTwoFactorMethod(null);
       setTwoFactorCodeInput('');
       setProviderTokenInput('');
+      setInitialTwoFactorCompletedNotice(false);
       closeModals();
-      setCurrentView(needsMembershipSelection ? AppView.MEMBERSHIP_ACCESS : AppView.DASHBOARD, {}, { replace: true });
-      setSidebarOpen(!needsMembershipSelection && window.innerWidth >= 1024);
+      setCurrentView(
+        needsInitialTwoFactorSetup
+          ? AppView.DASHBOARD
+          : needsMembershipSelection
+            ? AppView.MEMBERSHIP_ACCESS
+            : AppView.DASHBOARD,
+        {},
+        { replace: true }
+      );
+      setSidebarOpen(!needsInitialTwoFactorSetup && !needsMembershipSelection && window.innerWidth >= 1024);
     } catch (error) {
       if (error instanceof ApiError) {
         const data = error.data as any;
@@ -871,12 +953,6 @@ const App: React.FC = () => {
     e.preventDefault();
     setError('');
     const normalizedEmail = emailInput.trim().toLowerCase();
-    if (!signupTwoFactorEnabled && twoFactorMethodInput !== 'none') {
-      setError(
-        'Signup 2FA enrollment is temporarily disabled. Create your profile first, then enable 2FA in Profile Security.'
-      );
-      return;
-    }
     if (passwordInput !== confirmPasswordInput) {
       setError('Passwords do not match.');
       return;
@@ -885,16 +961,6 @@ const App: React.FC = () => {
     const passwordValidation = validatePasswordStrength(emailInput, passwordInput);
     if (passwordValidation) {
       setError(passwordValidation);
-      return;
-    }
-
-    if (twoFactorMethodInput === 'phone' && !phoneNumberInput.trim()) {
-      setError('Phone number is required when phone 2FA is selected.');
-      return;
-    }
-
-    if (twoFactorMethodInput === 'wallet' && !walletDidInput.trim()) {
-      setError('Wallet DID is required when wallet 2FA is selected.');
       return;
     }
 
@@ -907,9 +973,7 @@ const App: React.FC = () => {
           email: normalizedEmail,
           name: identityName,
           password: passwordInput,
-          twoFactorMethod: twoFactorMethodInput,
-          phoneNumber: twoFactorMethodInput === 'phone' ? phoneNumberInput : undefined,
-          walletDid: twoFactorMethodInput === 'wallet' ? walletDidInput : undefined,
+          twoFactorMethod: 'none',
         },
       });
 
@@ -919,17 +983,35 @@ const App: React.FC = () => {
       }
 
       const canonicalUser = toPlatformUser(data.user);
+      const needsInitialTwoFactorSetup = requiresInitialTwoFactorSetup(canonicalUser);
       const needsMembershipSelection = !hasConfirmedMembership(canonicalUser);
       setUserAuthSession(data.token, canonicalUser);
       setUser(canonicalUser);
-      void refreshUserCourses();
+      if (!needsInitialTwoFactorSetup) {
+        void refreshUserCourses();
+      }
       setSelectedTier((currentTier) => currentTier || canonicalUser.tier || FREE_TIER_NAME);
       setMembershipCheckoutPending(false);
-      setMembershipNotice(needsMembershipSelection ? 'Select a membership tier to continue.' : '');
+      setMembershipNotice(
+        needsInitialTwoFactorSetup
+          ? ''
+          : needsMembershipSelection
+            ? 'Select a membership tier to continue.'
+            : ''
+      );
+      setInitialTwoFactorCompletedNotice(false);
       closeModals();
-      setCurrentView(needsMembershipSelection ? AppView.MEMBERSHIP_ACCESS : AppView.DASHBOARD, {}, { replace: true });
-      setIsSelectingTier(needsMembershipSelection);
-      setSidebarOpen(!needsMembershipSelection && window.innerWidth >= 1024);
+      setCurrentView(
+        needsInitialTwoFactorSetup
+          ? AppView.DASHBOARD
+          : needsMembershipSelection
+            ? AppView.MEMBERSHIP_ACCESS
+            : AppView.DASHBOARD,
+        {},
+        { replace: true }
+      );
+      setIsSelectingTier(!needsInitialTwoFactorSetup && needsMembershipSelection);
+      setSidebarOpen(!needsInitialTwoFactorSetup && !needsMembershipSelection && window.innerWidth >= 1024);
     } catch (error) {
       if (error instanceof ApiError) {
         const data = error.data as any;
@@ -1346,6 +1428,123 @@ const App: React.FC = () => {
     );
   }, [user]);
 
+  const renderInitialTwoFactorSetup = () => {
+    const completed = Boolean(user && !requiresInitialTwoFactorSetup(user) && initialTwoFactorCompletedNotice);
+    return (
+      <div className="p-4 sm:p-8 max-w-3xl mx-auto w-full">
+        <div className="glass-panel p-6 sm:p-8 rounded-3xl border border-blue-500/20">
+          <div className="flex items-start gap-4 mb-6">
+            <div className="p-3 rounded-2xl bg-blue-500/10 border border-blue-400/20">
+              {completed ? (
+                <CheckCircle2 className="w-6 h-6 text-emerald-300" />
+              ) : (
+                <Shield className="w-6 h-6 text-blue-300" />
+              )}
+            </div>
+            <div>
+              <h2 className="text-2xl sm:text-3xl font-black text-white uppercase tracking-tight">
+                {completed ? '2FA Setup Complete' : 'Required 2FA Setup'}
+              </h2>
+              <p className="mt-2 text-sm leading-6 text-slate-300">
+                {completed
+                  ? 'Your account now has initial two-factor protection enabled.'
+                  : 'Complete this security step before membership activation or dashboard access.'}
+              </p>
+            </div>
+          </div>
+
+          {!completed ? (
+            <form onSubmit={handleInitialTwoFactorEnroll} className="space-y-5">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <button
+                  type="button"
+                  onClick={() => setInitialTwoFactorMethod('phone')}
+                  className={`p-4 rounded-2xl border text-left transition-colors ${
+                    initialTwoFactorMethod === 'phone'
+                      ? 'border-blue-400/60 bg-blue-500/15 text-white'
+                      : 'border-white/10 bg-white/5 text-slate-300 hover:bg-white/10'
+                  }`}
+                >
+                  <span className="block text-xs font-black uppercase tracking-widest">Phone Code</span>
+                  <span className="block mt-2 text-xs leading-5 text-slate-400">
+                    Use a phone number for sign-in OTP checks.
+                  </span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setInitialTwoFactorMethod('wallet')}
+                  className={`p-4 rounded-2xl border text-left transition-colors ${
+                    initialTwoFactorMethod === 'wallet'
+                      ? 'border-blue-400/60 bg-blue-500/15 text-white'
+                      : 'border-white/10 bg-white/5 text-slate-300 hover:bg-white/10'
+                  }`}
+                >
+                  <span className="block text-xs font-black uppercase tracking-widest">Address Credential</span>
+                  <span className="block mt-2 text-xs leading-5 text-slate-400">
+                    Use a verified address DID for signature-based checks.
+                  </span>
+                </button>
+              </div>
+
+              {initialTwoFactorMethod === 'phone' ? (
+                <div className="space-y-3">
+                  <label className="text-[9px] font-black text-slate-500 uppercase tracking-widest ml-2">Phone Number</label>
+                  <input
+                    type="tel"
+                    value={initialTwoFactorPhoneInput}
+                    onChange={(e) => setInitialTwoFactorPhoneInput(e.target.value)}
+                    className="w-full px-5 py-4 bg-white/5 border border-white/10 rounded-2xl text-white outline-none focus:ring-2 focus:ring-blue-500/50 transition-all font-medium text-sm"
+                    placeholder="+1 555 123 4567"
+                    required
+                  />
+                </div>
+              ) : (
+                <div className="space-y-3">
+                  <label className="text-[9px] font-black text-slate-500 uppercase tracking-widest ml-2">Address DID</label>
+                  <input
+                    type="text"
+                    value={initialTwoFactorWalletInput}
+                    onChange={(e) => setInitialTwoFactorWalletInput(e.target.value)}
+                    className="w-full px-5 py-4 bg-white/5 border border-white/10 rounded-2xl text-white outline-none focus:ring-2 focus:ring-blue-500/50 transition-all font-medium text-sm"
+                    placeholder="did:hcn:..."
+                    required
+                  />
+                </div>
+              )}
+
+              {initialTwoFactorStatus && (
+                <p className="rounded-xl border border-blue-400/20 bg-blue-500/10 p-3 text-xs leading-5 text-blue-100">
+                  {initialTwoFactorStatus}
+                </p>
+              )}
+              {initialTwoFactorError && (
+                <p className="rounded-xl border border-red-400/20 bg-red-500/10 p-3 text-xs leading-5 text-red-100">
+                  {initialTwoFactorError}
+                </p>
+              )}
+
+              <button
+                type="submit"
+                disabled={isInitialTwoFactorSubmitting}
+                className="w-full py-4 bg-blue-600 hover:bg-blue-500 disabled:opacity-60 text-white rounded-2xl font-black text-xs uppercase tracking-widest transition-all shadow-xl"
+              >
+                {isInitialTwoFactorSubmitting ? 'Setting Up...' : 'Complete 2FA Setup'}
+              </button>
+            </form>
+          ) : (
+            <button
+              type="button"
+              onClick={() => user && continueAfterInitialTwoFactor(user)}
+              className="w-full py-4 bg-blue-600 hover:bg-blue-500 text-white rounded-2xl font-black text-xs uppercase tracking-widest transition-all shadow-xl"
+            >
+              Continue
+            </button>
+          )}
+        </div>
+      </div>
+    );
+  };
+
   const renderActiveView = () => {
     if (!user && !isGuestAllowedView(currentView)) {
       return (
@@ -1405,6 +1604,10 @@ const App: React.FC = () => {
           </div>
         </div>
       );
+    }
+
+    if (user && (requiresInitialTwoFactorSetup(user) || initialTwoFactorCompletedNotice)) {
+      return renderInitialTwoFactorSetup();
     }
 
     if (user && !hasAdminRole(user) && !hasConfirmedMembership(user) && !isNoTierSignedInAllowedView(currentView)) {
@@ -2398,52 +2601,9 @@ const App: React.FC = () => {
                       <label className="text-[9px] font-black text-slate-500 uppercase tracking-widest ml-2">Confirm Password</label>
                       <input type="password" value={confirmPasswordInput} onChange={e => setConfirmPasswordInput(e.target.value)} className="w-full px-5 sm:px-8 py-3 sm:py-4 bg-white/5 border border-white/10 rounded-xl sm:rounded-2xl text-white outline-none focus:ring-2 focus:ring-blue-500/50 transition-all font-medium text-sm" required placeholder="********" />
                     </div>
-                    <div className="space-y-3">
-                      <label className="text-[9px] font-black text-slate-500 uppercase tracking-widest ml-2">Extra Sign-In Security</label>
-                      <select
-                        value={twoFactorMethodInput}
-                        onChange={(e) => setTwoFactorMethodInput(e.target.value as 'none' | 'phone' | 'wallet')}
-                        className="w-full px-5 sm:px-8 py-3 sm:py-4 bg-white/5 border border-white/10 rounded-xl sm:rounded-2xl text-white outline-none focus:ring-2 focus:ring-blue-500/50 transition-all font-medium text-sm"
-                      >
-                        <option value="none">Password only</option>
-                        <option value="phone">Password + phone code</option>
-                        <option value="wallet">Password + address credential</option>
-                      </select>
-                    </div>
-                    {signupTwoFactorEnabled && twoFactorMethodInput === 'phone' && (
-                      <div className="space-y-3">
-                        <label className="text-[9px] font-black text-slate-500 uppercase tracking-widest ml-2">Phone Number</label>
-                        <input
-                          type="tel"
-                          value={phoneNumberInput}
-                          onChange={(e) => setPhoneNumberInput(e.target.value)}
-                          className="w-full px-5 sm:px-8 py-3 sm:py-4 bg-white/5 border border-white/10 rounded-xl sm:rounded-2xl text-white outline-none focus:ring-2 focus:ring-blue-500/50 transition-all font-medium text-sm"
-                          placeholder="+1 555 123 4567"
-                          required
-                        />
-                      </div>
-                    )}
-                    {signupTwoFactorEnabled && twoFactorMethodInput === 'wallet' && (
-                      <div className="space-y-3">
-                        <label className="text-[9px] font-black text-slate-500 uppercase tracking-widest ml-2">Address Credential ID</label>
-                        <input
-                          type="text"
-                          value={walletDidInput}
-                          onChange={(e) => setWalletDidInput(e.target.value)}
-                          className="w-full px-5 sm:px-8 py-3 sm:py-4 bg-white/5 border border-white/10 rounded-xl sm:rounded-2xl text-white outline-none focus:ring-2 focus:ring-blue-500/50 transition-all font-medium text-sm"
-                          placeholder="did:hcn:..."
-                          required
-                        />
-                        <p className="text-[9px] text-slate-400 uppercase tracking-widest px-1">
-                          Sign in later with your matching address verification credential from Profile Security.
-                        </p>
-                      </div>
-                    )}
-                    {!signupTwoFactorEnabled && (
-                      <p className="text-[9px] text-amber-300/90 uppercase tracking-widest px-1">
-                        Signup 2FA enrollment is temporarily disabled to prevent lockouts. Enable 2FA after sign-in from Profile Security.
-                      </p>
-                    )}
+                    <p className="text-[9px] text-blue-300/80 uppercase tracking-widest px-1">
+                      After account creation, you will complete required 2FA setup before platform access.
+                    </p>
                   </>
                 )}
                 {isSigninModalOpen && pendingTwoFactorMethod === 'phone' && (

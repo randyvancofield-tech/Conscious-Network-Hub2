@@ -175,6 +175,8 @@ const toLocalUser = (row: any): LocalUserRecord => ({
   pendingPhoneOtpHash: toNullableString(row.pendingPhoneOtpHash),
   pendingPhoneOtpExpiresAt: row.pendingPhoneOtpExpiresAt || null,
   pendingPhoneOtpAttempts: Number(row.pendingPhoneOtpAttempts || 0),
+  initialTwoFactorRequiredAt: row.initialTwoFactorRequiredAt || null,
+  initialTwoFactorCompletedAt: row.initialTwoFactorCompletedAt || null,
   passwordResetTokenHash: toNullableString(row.passwordResetTokenHash),
   passwordResetExpiresAt: row.passwordResetExpiresAt || null,
   failedSignInAttempts: Number(row.failedSignInAttempts || 0),
@@ -463,6 +465,8 @@ export const localStore = {
           pendingPhoneOtpHash: null,
           pendingPhoneOtpExpiresAt: null,
           pendingPhoneOtpAttempts: 0,
+          initialTwoFactorRequiredAt: input.initialTwoFactorRequiredAt || null,
+          initialTwoFactorCompletedAt: input.initialTwoFactorCompletedAt || null,
           passwordResetTokenHash: null,
           passwordResetExpiresAt: null,
           failedSignInAttempts: 0,
@@ -583,6 +587,12 @@ export const localStore = {
       }
       if (updates.pendingPhoneOtpAttempts !== undefined) {
         data.pendingPhoneOtpAttempts = updates.pendingPhoneOtpAttempts;
+      }
+      if (updates.initialTwoFactorRequiredAt !== undefined) {
+        data.initialTwoFactorRequiredAt = updates.initialTwoFactorRequiredAt;
+      }
+      if (updates.initialTwoFactorCompletedAt !== undefined) {
+        data.initialTwoFactorCompletedAt = updates.initialTwoFactorCompletedAt;
       }
       if (updates.passwordResetTokenHash !== undefined) {
         data.passwordResetTokenHash = updates.passwordResetTokenHash;

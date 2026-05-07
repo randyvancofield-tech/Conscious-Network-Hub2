@@ -163,6 +163,9 @@ export interface ProviderBridgeConsumeResult {
     phoneNumberMasked: string | null;
     walletAddress?: string | null;
     walletDid: string | null;
+    initialTwoFactorRequired?: boolean;
+    initialTwoFactorCompleted?: boolean;
+    canAccessFullPlatform?: boolean;
   };
 }
 

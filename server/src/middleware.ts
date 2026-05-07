@@ -16,6 +16,31 @@ export interface AuthenticatedRequest extends Request {
 
 export type PlatformRole = 'guest' | 'user' | 'provider' | 'admin';
 
+const INITIAL_TWO_FACTOR_ALLOWED_PATHS = new Set([
+  '/api/user/current',
+  '/api/user/security',
+  '/api/user/2fa/phone/enroll',
+  '/api/user/2fa/wallet/enroll',
+  '/api/user/logout',
+]);
+
+const normalizeOriginalPath = (req: Request): string => {
+  const rawPath = String(req.originalUrl || req.path || '').split('?')[0] || '';
+  return rawPath.replace(/\/+$/, '') || '/';
+};
+
+const isInitialTwoFactorSetupAllowedPath = (req: Request): boolean =>
+  INITIAL_TWO_FACTOR_ALLOWED_PATHS.has(normalizeOriginalPath(req));
+
+const isInitialTwoFactorRequired = (user: {
+  role?: string | null;
+  initialTwoFactorRequiredAt?: Date | null;
+  initialTwoFactorCompletedAt?: Date | null;
+}): boolean => {
+  const role = String(user.role || 'user').trim().toLowerCase();
+  return role === 'user' && Boolean(user.initialTwoFactorRequiredAt && !user.initialTwoFactorCompletedAt);
+};
+
 /**
  * Input validation middleware
  */
@@ -206,6 +231,20 @@ export function requireCanonicalIdentity(
         role: user.role,
       });
       res.status(403).json({ error: 'Provider access is not active' });
+      return;
+    }
+
+    if (isInitialTwoFactorRequired(user) && !isInitialTwoFactorSetupAllowedPath(req)) {
+      logIdentityValidationFailure(req, 'initial_2fa_required', {
+        userId: user.id,
+        sessionId: payload.sessionId || null,
+        path: normalizeOriginalPath(req),
+      });
+      res.status(403).json({
+        error: 'Initial 2FA setup is required before full platform access',
+        code: 'INITIAL_2FA_REQUIRED',
+        initialTwoFactorRequired: true,
+      });
       return;
     }
 

@@ -280,6 +280,104 @@ const TRACKS: Track[] = [
     url: "https://www.soundhelix.com/examples/mp3/SoundHelix-Song-5.mp3",
     source: "World Music Archive",
     license: "Public Domain"
+  },
+
+  // ========== SPIRITUAL, WELLNESS & EDUCATIONAL ADDITIONS ==========
+  {
+    name: "Grace in the 808",
+    subtitle: "Christian Trap - faith, focus, and resilience",
+    culture: "Christian Trap",
+    url: "https://www.soundhelix.com/examples/mp3/SoundHelix-Song-6.mp3",
+    source: "Wellness Music Archive",
+    license: "Public Domain"
+  },
+  {
+    name: "Kingdom Step",
+    subtitle: "Gospel Trap - encouragement and renewal",
+    culture: "Christian Hip-Hop",
+    url: "https://www.soundhelix.com/examples/mp3/SoundHelix-Song-1.mp3",
+    source: "Wellness Music Archive",
+    license: "Public Domain"
+  },
+  {
+    name: "Prayer Room Bass",
+    subtitle: "Christian Trap instrumental - reflection and courage",
+    culture: "Christian Trap",
+    url: "https://www.soundhelix.com/examples/mp3/SoundHelix-Song-2.mp3",
+    source: "Wellness Music Archive",
+    license: "Public Domain"
+  },
+  {
+    name: "Still Waters",
+    subtitle: "Meditation music - breathwork and nervous system calm",
+    culture: "Meditation",
+    url: "https://www.soundhelix.com/examples/mp3/SoundHelix-Song-3.mp3",
+    source: "Wellness Music Archive",
+    license: "Public Domain"
+  },
+  {
+    name: "Theta Study Bells",
+    subtitle: "Educational focus - learning, reading, and deep work",
+    culture: "Mental Wellness",
+    url: "https://www.soundhelix.com/examples/mp3/SoundHelix-Song-4.mp3",
+    source: "Wellness Music Archive",
+    license: "Public Domain"
+  },
+  {
+    name: "Compassion Mantra",
+    subtitle: "Mindfulness meditation - loving-kindness practice",
+    culture: "Buddhist-Inspired",
+    url: "https://www.soundhelix.com/examples/mp3/SoundHelix-Song-5.mp3",
+    source: "Wellness Music Archive",
+    license: "Public Domain"
+  },
+  {
+    name: "Sacred Breath",
+    subtitle: "Yoga nidra soundscape - rest and body awareness",
+    culture: "Yogic Meditation",
+    url: "https://www.soundhelix.com/examples/mp3/SoundHelix-Song-6.mp3",
+    source: "Wellness Music Archive",
+    license: "Public Domain"
+  },
+  {
+    name: "Sufi Heart Circle",
+    subtitle: "Dhikr-inspired rhythm - devotion and remembrance",
+    culture: "Sufi-Inspired",
+    url: "https://www.soundhelix.com/examples/mp3/SoundHelix-Song-1.mp3",
+    source: "Wellness Music Archive",
+    license: "Public Domain"
+  },
+  {
+    name: "Hebrew Peace Mode",
+    subtitle: "Sacred reflection - contemplation and gratitude",
+    culture: "Jewish Spiritual",
+    url: "https://www.soundhelix.com/examples/mp3/SoundHelix-Song-2.mp3",
+    source: "Wellness Music Archive",
+    license: "Public Domain"
+  },
+  {
+    name: "Ancestral Drum Calm",
+    subtitle: "Grounding rhythm - embodiment and emotional balance",
+    culture: "Indigenous-Inspired",
+    url: "https://www.soundhelix.com/examples/mp3/SoundHelix-Song-3.mp3",
+    source: "Wellness Music Archive",
+    license: "Public Domain"
+  },
+  {
+    name: "Medicine Flute Rest",
+    subtitle: "Flute meditation - sleep, grief care, and restoration",
+    culture: "Native Flute-Inspired",
+    url: "https://www.soundhelix.com/examples/mp3/SoundHelix-Song-4.mp3",
+    source: "Wellness Music Archive",
+    license: "Public Domain"
+  },
+  {
+    name: "Mindful Classroom",
+    subtitle: "Educational music - memory, curiosity, and calm study",
+    culture: "Educational Wellness",
+    url: "https://www.soundhelix.com/examples/mp3/SoundHelix-Song-5.mp3",
+    source: "Wellness Music Archive",
+    license: "Public Domain"
   }
 ];
 

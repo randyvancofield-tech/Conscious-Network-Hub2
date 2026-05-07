@@ -40,6 +40,8 @@ interface MockUser {
   pendingPhoneOtpHash: string | null;
   pendingPhoneOtpExpiresAt: Date | null;
   pendingPhoneOtpAttempts: number;
+  initialTwoFactorRequiredAt: Date | null;
+  initialTwoFactorCompletedAt: Date | null;
   failedSignInAttempts: number;
   lockoutUntil: Date | null;
   createdAt: Date;
@@ -71,6 +73,8 @@ const cloneUser = (user: MockUser): MockUser => ({
   subscriptionStartDate: cloneDate(user.subscriptionStartDate),
   subscriptionEndDate: cloneDate(user.subscriptionEndDate),
   pendingPhoneOtpExpiresAt: cloneDate(user.pendingPhoneOtpExpiresAt),
+  initialTwoFactorRequiredAt: cloneDate(user.initialTwoFactorRequiredAt),
+  initialTwoFactorCompletedAt: cloneDate(user.initialTwoFactorCompletedAt),
   lockoutUntil: cloneDate(user.lockoutUntil),
   createdAt: new Date(user.createdAt.getTime()),
   updatedAt: new Date(user.updatedAt.getTime()),
@@ -121,6 +125,8 @@ const createMockUser = (
     pendingPhoneOtpHash: null,
     pendingPhoneOtpExpiresAt: null,
     pendingPhoneOtpAttempts: 0,
+    initialTwoFactorRequiredAt: null,
+    initialTwoFactorCompletedAt: null,
     failedSignInAttempts: 0,
     lockoutUntil: null,
     createdAt: now,
@@ -183,6 +189,8 @@ const mockLocalStore = {
       phoneNumber: input.phoneNumber || null,
       twoFactorMethod: input.twoFactorMethod || 'none',
       walletDid: input.walletDid || null,
+      initialTwoFactorRequiredAt: input.initialTwoFactorRequiredAt || null,
+      initialTwoFactorCompletedAt: input.initialTwoFactorCompletedAt || null,
     });
     users.set(id, created);
     return cloneUser(created);

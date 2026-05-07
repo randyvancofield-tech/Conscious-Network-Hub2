@@ -1,0 +1,3 @@
+ALTER TABLE "User"
+ADD COLUMN IF NOT EXISTS "initialTwoFactorRequiredAt" TIMESTAMP(3),
+ADD COLUMN IF NOT EXISTS "initialTwoFactorCompletedAt" TIMESTAMP(3);

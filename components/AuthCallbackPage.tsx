@@ -37,6 +37,9 @@ const toProviderLaunchUser = (result: ProviderBridgeConsumeResult): UserProfile 
     twoFactorMethod: rawUser.twoFactorMethod,
     phoneNumberMasked: rawUser.phoneNumberMasked,
     walletDid: rawUser.walletDid,
+    initialTwoFactorRequired: rawUser.initialTwoFactorRequired === true,
+    initialTwoFactorCompleted: rawUser.initialTwoFactorCompleted === true,
+    canAccessFullPlatform: rawUser.canAccessFullPlatform !== false,
   };
 };
 

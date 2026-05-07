@@ -71,6 +71,11 @@ const PROFILE_SESSION_ESTABLISH_FAILED_RESPONSE = {
   retryable: true,
 } as const;
 
+const isInitialTwoFactorRequired = (user: {
+  initialTwoFactorRequiredAt?: Date | null;
+  initialTwoFactorCompletedAt?: Date | null;
+}): boolean => Boolean(user.initialTwoFactorRequiredAt && !user.initialTwoFactorCompletedAt);
+
 const COMMON_PASSWORDS = new Set([
   'password',
   'password123',
@@ -329,6 +334,9 @@ const toPublicUser = (req: Request, user: any) => ({
   twoFactorMethod: user.twoFactorMethod || 'none',
   phoneNumberMasked: maskPhoneNumber(user.phoneNumber),
   walletDid: maskWalletDid(user.walletDid),
+  initialTwoFactorRequired: isInitialTwoFactorRequired(user),
+  initialTwoFactorCompleted: Boolean(user.initialTwoFactorCompletedAt),
+  canAccessFullPlatform: !isInitialTwoFactorRequired(user),
   emailVerified: user.emailVerified === true,
 });
 
@@ -702,16 +710,6 @@ publicRouter.post('/create', validateJsonBody(userCreateSchema), async (req: Req
       return res.status(400).json({ error: passwordPolicyError });
     }
 
-    if (requestedTwoFactor === 'phone' && !requestedPhone) {
-      auditCreate('deny', 400, 'phone_2fa_missing_phone');
-      return res.status(400).json({ error: 'Phone number is required for phone-based 2FA' });
-    }
-
-    if (requestedTwoFactor === 'wallet' && !requestedWalletDid) {
-      auditCreate('deny', 400, 'wallet_2fa_missing_wallet_did');
-      return res.status(400).json({ error: 'walletDid is required for wallet-based 2FA' });
-    }
-
     if (requestedDateOfBirth === 'invalid') {
       auditCreate('deny', 400, 'invalid_date_of_birth');
       return res.status(400).json({ error: 'dateOfBirth must be a valid date string' });
@@ -741,9 +739,11 @@ publicRouter.post('/create', validateJsonBody(userCreateSchema), async (req: Req
       avatarUrl: normalizeOptionalString(req.body?.avatarUrl),
       bannerUrl: normalizeOptionalString(req.body?.bannerUrl),
       profileMedia: requestedProfileMedia,
-      phoneNumber: requestedPhone,
-      twoFactorMethod: requestedTwoFactor,
-      walletDid: requestedWalletDid,
+      phoneNumber: null,
+      twoFactorMethod: 'none',
+      walletDid: null,
+      initialTwoFactorRequiredAt: new Date(),
+      initialTwoFactorCompletedAt: null,
     });
 
     // Persistence verification before granting hub access.
@@ -1472,6 +1472,9 @@ protectedRouter.get('/security', async (req: Request, res: Response): Promise<an
       phoneNumberMasked: maskPhoneNumber(user.phoneNumber),
       walletDid: maskWalletDid(user.walletDid),
       lockoutUntil: user.lockoutUntil,
+      initialTwoFactorRequired: isInitialTwoFactorRequired(user),
+      initialTwoFactorCompleted: Boolean(user.initialTwoFactorCompletedAt),
+      canAccessFullPlatform: !isInitialTwoFactorRequired(user),
     },
   });
 });
@@ -1506,9 +1509,13 @@ protectedRouter.post('/2fa/phone/enroll', validateJsonBody(userPhoneEnrollSchema
     return res.status(400).json({ error: 'Valid phoneNumber is required' });
   }
 
+  const existing = await localStore.getUserById(authUserId);
+  const shouldCompleteInitialTwoFactor =
+    Boolean(existing?.initialTwoFactorRequiredAt) && !existing?.initialTwoFactorCompletedAt;
   const updated = await localStore.updateUser(authUserId, {
     phoneNumber,
     twoFactorMethod: 'phone',
+    ...(shouldCompleteInitialTwoFactor ? { initialTwoFactorCompletedAt: new Date() } : {}),
   });
   if (!updated) {
     recordAuditEvent(req, {
@@ -1537,6 +1544,15 @@ protectedRouter.post('/2fa/phone/enroll', validateJsonBody(userPhoneEnrollSchema
     success: true,
     twoFactorMethod: updated.twoFactorMethod,
     phoneNumberMasked: maskPhoneNumber(phoneNumber),
+    security: {
+      twoFactorMethod: updated.twoFactorMethod,
+      phoneNumberMasked: maskPhoneNumber(phoneNumber),
+      walletDid: maskWalletDid(updated.walletDid),
+      initialTwoFactorRequired: isInitialTwoFactorRequired(updated),
+      initialTwoFactorCompleted: Boolean(updated.initialTwoFactorCompletedAt),
+      canAccessFullPlatform: !isInitialTwoFactorRequired(updated),
+    },
+    user: toPublicUser(req, updated),
   });
 });
 
@@ -1570,9 +1586,13 @@ protectedRouter.post('/2fa/wallet/enroll', validateJsonBody(userWalletEnrollSche
     return res.status(400).json({ error: 'walletDid is required' });
   }
 
+  const existing = await localStore.getUserById(authUserId);
+  const shouldCompleteInitialTwoFactor =
+    Boolean(existing?.initialTwoFactorRequiredAt) && !existing?.initialTwoFactorCompletedAt;
   const updated = await localStore.updateUser(authUserId, {
     walletDid,
     twoFactorMethod: 'wallet',
+    ...(shouldCompleteInitialTwoFactor ? { initialTwoFactorCompletedAt: new Date() } : {}),
   });
   if (!updated) {
     recordAuditEvent(req, {
@@ -1601,6 +1621,15 @@ protectedRouter.post('/2fa/wallet/enroll', validateJsonBody(userWalletEnrollSche
     success: true,
     twoFactorMethod: updated.twoFactorMethod,
     walletDid: maskWalletDid(updated.walletDid),
+    security: {
+      twoFactorMethod: updated.twoFactorMethod,
+      phoneNumberMasked: maskPhoneNumber(updated.phoneNumber),
+      walletDid: maskWalletDid(updated.walletDid),
+      initialTwoFactorRequired: isInitialTwoFactorRequired(updated),
+      initialTwoFactorCompleted: Boolean(updated.initialTwoFactorCompletedAt),
+      canAccessFullPlatform: !isInitialTwoFactorRequired(updated),
+    },
+    user: toPublicUser(req, updated),
   });
 });
 

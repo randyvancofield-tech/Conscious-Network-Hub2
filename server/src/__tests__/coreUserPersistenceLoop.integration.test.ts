@@ -1,5 +1,6 @@
 import express from 'express';
 import http from 'http';
+import { hashPassword } from '../auth';
 
 type TwoFactorMethod = 'none' | 'phone' | 'wallet';
 
@@ -40,6 +41,8 @@ interface MockUser {
   pendingPhoneOtpHash: string | null;
   pendingPhoneOtpExpiresAt: Date | null;
   pendingPhoneOtpAttempts: number;
+  initialTwoFactorRequiredAt: Date | null;
+  initialTwoFactorCompletedAt: Date | null;
   failedSignInAttempts: number;
   lockoutUntil: Date | null;
   createdAt: Date;
@@ -90,6 +93,8 @@ const cloneUser = (user: MockUser): MockUser => ({
   subscriptionStartDate: cloneDate(user.subscriptionStartDate),
   subscriptionEndDate: cloneDate(user.subscriptionEndDate),
   pendingPhoneOtpExpiresAt: cloneDate(user.pendingPhoneOtpExpiresAt),
+  initialTwoFactorRequiredAt: cloneDate(user.initialTwoFactorRequiredAt),
+  initialTwoFactorCompletedAt: cloneDate(user.initialTwoFactorCompletedAt),
   lockoutUntil: cloneDate(user.lockoutUntil),
   createdAt: new Date(user.createdAt.getTime()),
   updatedAt: new Date(user.updatedAt.getTime()),
@@ -141,6 +146,8 @@ const createMockUser = (id: string, email: string, overrides: Partial<MockUser> 
     pendingPhoneOtpHash: null,
     pendingPhoneOtpExpiresAt: null,
     pendingPhoneOtpAttempts: 0,
+    initialTwoFactorRequiredAt: null,
+    initialTwoFactorCompletedAt: null,
     failedSignInAttempts: 0,
     lockoutUntil: null,
     createdAt: now,
@@ -219,6 +226,8 @@ const mockLocalStore = {
       phoneNumber: input.phoneNumber || null,
       twoFactorMethod: input.twoFactorMethod || 'none',
       walletDid: input.walletDid || null,
+      initialTwoFactorRequiredAt: input.initialTwoFactorRequiredAt || null,
+      initialTwoFactorCompletedAt: input.initialTwoFactorCompletedAt || null,
     });
     users.set(id, created);
     return cloneUser(created);
@@ -530,6 +539,25 @@ describe('Core user persistence loop', () => {
     const alphaId = String(createAlpha.body?.user?.id || '');
     expect(alphaToken.length).toBeGreaterThan(20);
     expect(alphaId).toBeTruthy();
+    expect(createAlpha.body?.user?.initialTwoFactorRequired).toBe(true);
+
+    const blockedBeforeSetup = await requestJson({
+      method: 'GET',
+      path: '/api/user/privacy',
+      token: alphaToken,
+    });
+    expect(blockedBeforeSetup.status).toBe(403);
+    expect(blockedBeforeSetup.body?.code).toBe('INITIAL_2FA_REQUIRED');
+
+    const alphaEnroll = await requestJson({
+      method: 'POST',
+      path: '/api/user/2fa/phone/enroll',
+      token: alphaToken,
+      body: { phoneNumber: '+15551234567' },
+    });
+    expect(alphaEnroll.status).toBe(200);
+    expect(alphaEnroll.body?.user?.initialTwoFactorRequired).toBe(false);
+    expect(alphaEnroll.body?.user?.initialTwoFactorCompleted).toBe(true);
 
     const createBeta = await requestJson({
       method: 'POST',
@@ -544,6 +572,14 @@ describe('Core user persistence loop', () => {
     const betaToken = String(createBeta.body?.token || '');
     const betaId = String(createBeta.body?.user?.id || '');
     expect(betaId).toBeTruthy();
+
+    const betaEnroll = await requestJson({
+      method: 'POST',
+      path: '/api/user/2fa/wallet/enroll',
+      token: betaToken,
+      body: { walletDid: 'did:hcn:beta-wallet' },
+    });
+    expect(betaEnroll.status).toBe(200);
 
     const profileUpdate = await requestJson({
       method: 'POST',
@@ -628,8 +664,20 @@ describe('Core user persistence loop', () => {
         password: strongPassword,
       },
     });
-    expect(relogin.status).toBe(200);
-    const alphaTokenAfterLogin = String(relogin.body?.token || '');
+    expect(relogin.status).toBe(202);
+    expect(relogin.body?.requiresTwoFactor).toBe(true);
+
+    const reloginVerified = await requestJson({
+      method: 'POST',
+      path: '/api/user/signin',
+      body: {
+        email: 'alpha@example.com',
+        password: strongPassword,
+        twoFactorCode: relogin.body?.devOtpCode,
+      },
+    });
+    expect(reloginVerified.status).toBe(200);
+    const alphaTokenAfterLogin = String(reloginVerified.body?.token || '');
     expect(alphaTokenAfterLogin.length).toBeGreaterThan(20);
 
     const currentAfterRelogin = await requestJson({
@@ -674,6 +722,34 @@ describe('Core user persistence loop', () => {
     });
     expect(deniedProfileView.status).toBe(403);
     expect(deniedProfileView.body?.error).toBe('Profile is unavailable');
+  });
+
+  it('does not block existing users with null initial 2FA onboarding fields', async () => {
+    const password = 'ExistingPass#1234';
+    const existing = createMockUser('existing-user', 'existing@example.com', {
+      password: hashPassword(password),
+      initialTwoFactorRequiredAt: null,
+      initialTwoFactorCompletedAt: null,
+    });
+    users.set(existing.id, existing);
+
+    const signin = await requestJson({
+      method: 'POST',
+      path: '/api/user/signin',
+      body: {
+        email: existing.email,
+        password,
+      },
+    });
+    expect(signin.status).toBe(200);
+    expect(signin.body?.user?.initialTwoFactorRequired).toBe(false);
+
+    const privacy = await requestJson({
+      method: 'GET',
+      path: '/api/user/privacy',
+      token: String(signin.body?.token || ''),
+    });
+    expect(privacy.status).toBe(200);
   });
 
   it('returns actionable auth recovery when profile persists but session setup fails', async () => {

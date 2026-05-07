@@ -68,6 +68,8 @@ interface UserRow {
   pendingPhoneOtpHash: string | null;
   pendingPhoneOtpExpiresAt: NullableIso;
   pendingPhoneOtpAttempts: number;
+  initialTwoFactorRequiredAt: NullableIso;
+  initialTwoFactorCompletedAt: NullableIso;
   passwordResetTokenHash: string | null;
   passwordResetExpiresAt: NullableIso;
   failedSignInAttempts: number;
@@ -262,6 +264,8 @@ export interface LocalUserRecord {
   pendingPhoneOtpHash: string | null;
   pendingPhoneOtpExpiresAt: Date | null;
   pendingPhoneOtpAttempts: number;
+  initialTwoFactorRequiredAt: Date | null;
+  initialTwoFactorCompletedAt: Date | null;
   passwordResetTokenHash: string | null;
   passwordResetExpiresAt: Date | null;
   failedSignInAttempts: number;
@@ -386,6 +390,8 @@ interface CreateUserInput {
   twoFactorMethod?: TwoFactorMethod;
   walletAddress?: string | null;
   walletDid?: string | null;
+  initialTwoFactorRequiredAt?: Date | null;
+  initialTwoFactorCompletedAt?: Date | null;
 }
 
 interface UpdateUserInput {
@@ -425,6 +431,8 @@ interface UpdateUserInput {
   pendingPhoneOtpHash?: string | null;
   pendingPhoneOtpExpiresAt?: Date | null;
   pendingPhoneOtpAttempts?: number;
+  initialTwoFactorRequiredAt?: Date | null;
+  initialTwoFactorCompletedAt?: Date | null;
   passwordResetTokenHash?: string | null;
   passwordResetExpiresAt?: Date | null;
   failedSignInAttempts?: number;
@@ -811,6 +819,12 @@ const rowToUser = (row: UserRow): LocalUserRecord => ({
   pendingPhoneOtpHash: row.pendingPhoneOtpHash,
   pendingPhoneOtpExpiresAt: row.pendingPhoneOtpExpiresAt ? toDate(row.pendingPhoneOtpExpiresAt) : null,
   pendingPhoneOtpAttempts: row.pendingPhoneOtpAttempts,
+  initialTwoFactorRequiredAt: row.initialTwoFactorRequiredAt
+    ? toDate(row.initialTwoFactorRequiredAt)
+    : null,
+  initialTwoFactorCompletedAt: row.initialTwoFactorCompletedAt
+    ? toDate(row.initialTwoFactorCompletedAt)
+    : null,
   passwordResetTokenHash: row.passwordResetTokenHash || null,
   passwordResetExpiresAt: row.passwordResetExpiresAt ? toDate(row.passwordResetExpiresAt) : null,
   failedSignInAttempts: row.failedSignInAttempts,
@@ -1084,6 +1098,12 @@ export const localStore = {
       pendingPhoneOtpHash: null,
       pendingPhoneOtpExpiresAt: null,
       pendingPhoneOtpAttempts: 0,
+      initialTwoFactorRequiredAt: input.initialTwoFactorRequiredAt
+        ? input.initialTwoFactorRequiredAt.toISOString()
+        : null,
+      initialTwoFactorCompletedAt: input.initialTwoFactorCompletedAt
+        ? input.initialTwoFactorCompletedAt.toISOString()
+        : null,
       passwordResetTokenHash: null,
       passwordResetExpiresAt: null,
       failedSignInAttempts: 0,
@@ -1207,6 +1227,16 @@ export const localStore = {
     }
     if (updates.pendingPhoneOtpAttempts !== undefined) {
       row.pendingPhoneOtpAttempts = updates.pendingPhoneOtpAttempts;
+    }
+    if (updates.initialTwoFactorRequiredAt !== undefined) {
+      row.initialTwoFactorRequiredAt = updates.initialTwoFactorRequiredAt
+        ? updates.initialTwoFactorRequiredAt.toISOString()
+        : null;
+    }
+    if (updates.initialTwoFactorCompletedAt !== undefined) {
+      row.initialTwoFactorCompletedAt = updates.initialTwoFactorCompletedAt
+        ? updates.initialTwoFactorCompletedAt.toISOString()
+        : null;
     }
     if (updates.passwordResetTokenHash !== undefined) {
       row.passwordResetTokenHash = updates.passwordResetTokenHash;

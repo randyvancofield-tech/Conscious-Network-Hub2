@@ -128,4 +128,7 @@ export interface UserProfile {
   twoFactorMethod?: 'none' | 'phone' | 'wallet';
   phoneNumberMasked?: string | null;
   walletDid?: string | null;
+  initialTwoFactorRequired?: boolean;
+  initialTwoFactorCompleted?: boolean;
+  canAccessFullPlatform?: boolean;
 }
