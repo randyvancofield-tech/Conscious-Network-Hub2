@@ -34,5 +34,13 @@ jobs:
       - name: Install contract dependencies
         run: npm --prefix contracts ci
 
+      - name: Generate Prisma Client
+        working-directory: server
+        env:
+          DATABASE_URL: postgresql://postgres:postgres@localhost:5432/postgres
+        run: npx prisma generate
+
       - name: Run workspace checks
+        env:
+          DATABASE_URL: postgresql://postgres:postgres@localhost:5432/postgres
         run: npm run check
