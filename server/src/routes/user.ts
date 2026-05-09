@@ -262,6 +262,68 @@ const toPublicTier = (user: any): string | null => {
   return normalizeTier(rawTier);
 };
 
+const isActiveMembershipStatus = (status: unknown): boolean => {
+  const normalized = String(status || '').trim().toLowerCase();
+  return normalized === 'active' || normalized === 'trialing';
+};
+
+const reconcileUserMembershipProjection = async (user: any): Promise<{
+  user: any;
+  membership: Awaited<ReturnType<typeof localStore.getMembershipByUserId>> | null;
+  hasActiveMembership: boolean;
+  effectiveTier: string | null;
+}> => {
+  const membership = await localStore.getMembershipByUserId(user.id);
+  const membershipTier = membership ? normalizeTier(membership.tier) : null;
+  const membershipIsActive = Boolean(
+    membershipTier && isActiveMembershipStatus(membership?.status)
+  );
+  const userTier = toPublicTier(user);
+  const userMembershipIsActive = Boolean(
+    userTier && isActiveMembershipStatus(user.subscriptionStatus)
+  );
+
+  if (!membershipIsActive) {
+    return {
+      user,
+      membership,
+      hasActiveMembership: userMembershipIsActive,
+      effectiveTier: userTier,
+    };
+  }
+
+  const activeMembership = membership!;
+  const activeMembershipTier = membershipTier!;
+  const needsProjectionUpdate =
+    userTier !== activeMembershipTier ||
+    !isActiveMembershipStatus(user.subscriptionStatus) ||
+    !user.subscriptionStartDate ||
+    Boolean(activeMembership.endDate || user.subscriptionEndDate);
+
+  if (!needsProjectionUpdate) {
+    return {
+      user,
+      membership: activeMembership,
+      hasActiveMembership: true,
+      effectiveTier: activeMembershipTier,
+    };
+  }
+
+  const updated = await localStore.updateUser(user.id, {
+    tier: activeMembershipTier,
+    subscriptionStatus: 'active',
+    subscriptionStartDate: user.subscriptionStartDate || activeMembership.startDate || new Date(),
+    subscriptionEndDate: activeMembership.endDate || null,
+  });
+
+  return {
+    user: updated || user,
+    membership: activeMembership,
+    hasActiveMembership: true,
+    effectiveTier: activeMembershipTier,
+  };
+};
+
 const absolutizeProfileMedia = (
   req: Request,
   profileMedia: unknown,
@@ -350,6 +412,25 @@ const toPublicUser = (req: Request, user: any) => ({
   canAccessFullPlatform: !isInitialTwoFactorRequired(user),
   emailVerified: user.emailVerified === true,
 });
+
+const buildPublicUser = async (req: Request, user: any) => {
+  const reconciled = await reconcileUserMembershipProjection(user);
+  const publicUser = toPublicUser(req, reconciled.user);
+  const membership = reconciled.membership;
+
+  return {
+    ...publicUser,
+    tier: reconciled.effectiveTier,
+    subscriptionStatus:
+      reconciled.hasActiveMembership && !isActiveMembershipStatus(publicUser.subscriptionStatus)
+        ? 'active'
+        : publicUser.subscriptionStatus,
+    membershipStatus: membership?.status || null,
+    hasActiveMembership: reconciled.hasActiveMembership,
+    membershipStartDate: membership?.startDate || null,
+    membershipEndDate: membership?.endDate || null,
+  };
+};
 
 const sendVerificationEmailForUser = async (
   req: Request,
@@ -635,7 +716,7 @@ publicRouter.post('/signin', validateJsonBody(userSignInSchema), async (req: Req
       success: true,
       token: session.token,
       expiresAt: session.expiresAt,
-      user: toPublicUser(req, user),
+      user: await buildPublicUser(req, user),
     });
   } catch (error) {
     const errorCode = (error as Error & { code?: string })?.code;
@@ -800,7 +881,7 @@ publicRouter.post('/create', validateJsonBody(userCreateSchema), async (req: Req
       token: session.token,
       expiresAt: session.expiresAt,
       persistenceVerified: true,
-      user: toPublicUser(req, persisted),
+      user: await buildPublicUser(req, persisted),
       security: {
         passwordPolicy: {
           minLength: MIN_PASSWORD_LENGTH,
@@ -1100,7 +1181,7 @@ protectedRouter.get('/current', async (req: Request, res: Response): Promise<any
 
     return res.json({
       success: true,
-      user: toPublicUser(req, user),
+      user: await buildPublicUser(req, user),
     });
   } catch (error) {
     logAuthFlowError(req, 'current', 'unexpected_exception', error, {

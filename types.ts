@@ -90,6 +90,10 @@ export interface UserProfile {
   passwordHash?: string;
   tier: string | null;
   subscriptionStatus?: string | null;
+  membershipStatus?: string | null;
+  hasActiveMembership?: boolean;
+  membershipStartDate?: string | null;
+  membershipEndDate?: string | null;
   identityVerified?: boolean;
   emailVerified?: boolean;
   reputationScore?: number;

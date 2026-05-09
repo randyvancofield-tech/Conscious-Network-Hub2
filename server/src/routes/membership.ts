@@ -422,10 +422,7 @@ const activateMembershipFromCheckout = async (input: {
   });
 
   const marker = buildSessionMarker(input.checkoutSessionId);
-  const paymentHistory = await localStore.listPaymentsByUserId(input.userId, 50);
-  const paymentAlreadyRecorded = paymentHistory.some((entry) =>
-    String(entry.description || '').includes(marker)
-  );
+  const paymentAlreadyRecorded = await localStore.hasPaymentDescriptionMarker(marker);
 
   if (!paymentAlreadyRecorded) {
     const fallbackAmount = TIER_PRICING[input.tier].price;
@@ -441,10 +438,12 @@ const activateMembershipFromCheckout = async (input: {
     });
   }
 
+  const existingUser = await localStore.getUserById(input.userId);
   const updatedUser = await localStore.updateUser(input.userId, {
     tier: input.tier,
     subscriptionStatus: 'active',
-    subscriptionStartDate: new Date(),
+    subscriptionStartDate:
+      existingUser?.subscriptionStartDate || membership.startDate || new Date(),
     subscriptionEndDate: null,
   });
 

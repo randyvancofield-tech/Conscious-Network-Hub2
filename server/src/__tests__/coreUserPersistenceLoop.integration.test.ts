@@ -64,6 +64,8 @@ interface StoredUpload {
 }
 
 const users = new Map<string, MockUser>();
+const memberships = new Map<string, any>();
+const payments: any[] = [];
 const postsByAuthor = new Map<string, any[]>();
 const follows = new Set<string>();
 const sessions = new Map<string, MockSession>();
@@ -164,6 +166,8 @@ const createMockUser = (id: string, email: string, overrides: Partial<MockUser> 
 
 const resetState = (): void => {
   users.clear();
+  memberships.clear();
+  payments.length = 0;
   postsByAuthor.clear();
   follows.clear();
   sessions.clear();
@@ -222,7 +226,7 @@ const mockLocalStore = {
       },
       password: input.password || '',
       passwordFingerprint: input.passwordFingerprint || null,
-      tier: input.tier || 'Free / Community Tier',
+      tier: input.tier !== undefined ? input.tier : 'Free / Community Tier',
       phoneNumber: input.phoneNumber || null,
       twoFactorMethod: input.twoFactorMethod || 'none',
       walletDid: input.walletDid || null,
@@ -264,6 +268,52 @@ const mockLocalStore = {
 
   async getDiagnostics(): Promise<any> {
     return { generatedAt: new Date().toISOString() };
+  },
+
+  async upsertMembership(input: any): Promise<any> {
+    const existing = memberships.get(input.userId);
+    const now = new Date();
+    const next = {
+      id: existing?.id || `membership-${input.userId}`,
+      userId: input.userId,
+      tier: input.tier,
+      status: input.status,
+      startDate: input.startDate || existing?.startDate || now,
+      endDate: input.endDate || null,
+      createdAt: existing?.createdAt || now,
+      updatedAt: now,
+    };
+    memberships.set(input.userId, next);
+    return { ...next };
+  },
+
+  async getMembershipByUserId(userId: string): Promise<any | null> {
+    const membership = memberships.get(userId);
+    return membership ? { ...membership } : null;
+  },
+
+  async listMembershipsByUserId(userId: string): Promise<any[]> {
+    const membership = memberships.get(userId);
+    return membership ? [{ ...membership }] : [];
+  },
+
+  async createPayment(input: any): Promise<any> {
+    const payment = {
+      id: `payment-${payments.length + 1}`,
+      ...input,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    };
+    payments.push(payment);
+    return { ...payment };
+  },
+
+  async listPaymentsByUserId(userId: string): Promise<any[]> {
+    return payments.filter((payment) => payment.userId === userId).map((payment) => ({ ...payment }));
+  },
+
+  async hasPaymentDescriptionMarker(marker: string): Promise<boolean> {
+    return payments.some((payment) => String(payment.description || '').includes(marker));
   },
 };
 
@@ -745,6 +795,59 @@ describe('Core user persistence loop', () => {
       token: String(signin.body?.token || ''),
     });
     expect(privacy.status).toBe(200);
+  });
+
+  it('reconciles active membership records into current user payload and sign-in routing state', async () => {
+    const password = 'MemberPass#1234';
+    const existing = createMockUser('member-user', 'member@example.com', {
+      password: hashPassword(password),
+      tier: '',
+      subscriptionStatus: 'inactive',
+      subscriptionStartDate: null,
+      subscriptionEndDate: null,
+    });
+    users.set(existing.id, existing);
+
+    const membershipStart = new Date(Date.now() - 60_000);
+    memberships.set(existing.id, {
+      id: 'membership-member-user',
+      userId: existing.id,
+      tier: 'Guided Tier',
+      status: 'active',
+      startDate: membershipStart,
+      endDate: null,
+      createdAt: membershipStart,
+      updatedAt: membershipStart,
+    });
+
+    const signin = await requestJson({
+      method: 'POST',
+      path: '/api/user/signin',
+      body: {
+        email: existing.email,
+        password,
+      },
+    });
+
+    expect(signin.status).toBe(200);
+    expect(signin.body?.user?.tier).toBe('Guided Tier');
+    expect(signin.body?.user?.subscriptionStatus).toBe('active');
+    expect(signin.body?.user?.membershipStatus).toBe('active');
+    expect(signin.body?.user?.hasActiveMembership).toBe(true);
+
+    const projected = users.get(existing.id);
+    expect(projected?.tier).toBe('Guided Tier');
+    expect(projected?.subscriptionStatus).toBe('active');
+
+    const current = await requestJson({
+      method: 'GET',
+      path: '/api/user/current',
+      token: String(signin.body?.token || ''),
+    });
+
+    expect(current.status).toBe(200);
+    expect(current.body?.user?.tier).toBe('Guided Tier');
+    expect(current.body?.user?.hasActiveMembership).toBe(true);
   });
 
   it('allows free users with completed initial 2FA to call Ethical AI Insight', async () => {

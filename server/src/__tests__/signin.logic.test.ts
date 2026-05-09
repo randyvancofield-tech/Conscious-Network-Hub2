@@ -101,6 +101,10 @@ const mockLocalStore = {
     users.set(id, next);
     return cloneUser(next);
   },
+
+  async getMembershipByUserId(): Promise<null> {
+    return null;
+  },
 };
 
 jest.mock('../services/persistenceStore', () => ({

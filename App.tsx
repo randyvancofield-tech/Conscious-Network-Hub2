@@ -460,6 +460,10 @@ const App: React.FC = () => {
       providerExternalId: toNullableTrimmedString(rawUser?.providerExternalId),
       tier: canonicalTier,
       subscriptionStatus,
+      membershipStatus: toNullableTrimmedString(rawUser?.membershipStatus),
+      hasActiveMembership: rawUser?.hasActiveMembership === true,
+      membershipStartDate: toNullableTrimmedString(rawUser?.membershipStartDate),
+      membershipEndDate: toNullableTrimmedString(rawUser?.membershipEndDate),
       createdAt: rawUser.createdAt || new Date().toISOString(),
       hasProfile: rawUser.hasProfile ?? false,
       identityVerified: true,
@@ -524,7 +528,15 @@ const App: React.FC = () => {
   }, []);
 
   const hasConfirmedMembership = (profile: UserProfile | null | undefined): boolean =>
-    Boolean(profile && typeof profile.tier === 'string' && profile.tier.trim().length > 0);
+    Boolean(
+      profile?.hasActiveMembership === true ||
+        (profile &&
+          typeof profile.tier === 'string' &&
+          profile.tier.trim().length > 0 &&
+          ['active', 'trialing'].includes(
+            String(profile.subscriptionStatus || '').trim().toLowerCase()
+          ))
+    );
 
   const hasProviderRole = (profile: UserProfile | null | undefined): boolean =>
     profile?.role === 'provider' || profile?.role === 'admin';
