@@ -127,10 +127,10 @@ export const MEMBERSHIP_TIERS: MembershipTierRecord[] = [
   {
     id: 'free-community',
     name: 'Free / Community Tier',
-    price: 'Free',
-    cadence: 'Community access',
+    price: '$0',
+    cadence: 'per month',
     description: 'Basic participation for public community discovery and selected events.',
-    access: 'Community discussions, public posts, and selected sessions.',
+    access: 'Stripe checkout for $0 monthly membership.',
     ideal: 'Individuals exploring the platform before committing to guided support.',
     features: ['Public social learning', 'Community profile', 'Selected events'],
     checkoutEnabled: true,

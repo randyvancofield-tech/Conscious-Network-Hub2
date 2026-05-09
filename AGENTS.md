@@ -14,7 +14,7 @@ This checkout is not the Base44-style `entities/` + `src/App.jsx` layout. The ac
 - Authentication: Custom signed session tokens + persisted session records
 - Security: Helmet, CORS allowlist, request validation, rate limiting
 - Testing: Jest (integration tests for core persistence/auth loops)
-- Deployment: Google Cloud Run
+- Deployment: Render backend currently; legacy Google Cloud Run scripts/docs may still exist
 - Contracts: Solidity contract package under `contracts/`
 - Provider launch support: Base44 function material under `base44/functions/providerLaunch/`
 

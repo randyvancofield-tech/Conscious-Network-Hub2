@@ -26,11 +26,26 @@ Canonical environment values for the current backend architecture.
 | `server/.env.local` | `RATE_LIMIT_MAX` | `100` | No | Requests per 15 minute window. |
 | `server/.env.local` | `OPENAI_API_KEY` | none | Optional | Required only for `/api/ai/*` success responses. |
 | `server/.env.local` | `ADMIN_DIAGNOSTICS_KEY` | none | Optional | Enables non-local diagnostics access for `/api/user/create/diagnostics`. |
+| Render | `STRIPE_SECRET_KEY` | none | Yes | Live secret or restricted key for the Mercury-connected Stripe account. |
+| Render | `STRIPE_WEBHOOK_SECRET` | none | Yes | Signing secret from the Render webhook endpoint. |
+| Render | `STRIPE_PRICE_FREE` | none | Yes | Live $0/month Free / Community Stripe price ID. |
+| Render | `STRIPE_PRICE_GUIDED` | none | Yes | Live $22/month Guided Stripe price ID. |
+| Render | `STRIPE_PRICE_ACCELERATED` | none | Yes | Live $44/month Accelerated Stripe price ID. |
+| Render | `STRIPE_MODE` | `live` | Yes | Must be `live` in production. |
+| Render | `STRIPE_SUCCESS_URL` | `https://conscious-network.org/?checkout=success&session_id={CHECKOUT_SESSION_ID}` | Yes | Checkout success redirect. |
+| Render | `STRIPE_CANCEL_URL` | `https://conscious-network.org/?checkout=cancel` | Yes | Checkout cancel redirect. |
+| Render | `FRONTEND_BASE_URL` | `https://conscious-network.org` | Yes | Fallback base URL for redirects and links. |
+| Render | `EMAIL_USER` + `EMAIL_PASSWORD`, or `SMTP_HOST` + `SMTP_PORT` | none | No | Deferred for launch; needed only when email verification/password reset are enabled. |
+| Render | `TWILIO_ACCOUNT_SID`, `TWILIO_AUTH_TOKEN`, `TWILIO_FROM_NUMBER` | none | No | Deferred for launch; needed only when user phone 2FA is enabled. |
+| Render | `ENABLE_EMAIL_VERIFICATION` | `false` | No | Keep unset/false for launch mode. |
+| Render | `ENABLE_PASSWORD_RESET` | `false` | No | Keep unset/false for launch mode. |
+| Render | `ENABLE_USER_2FA` | `false` | No | Keep unset/false for launch mode. |
+| Render | `ENABLE_INITIAL_2FA` | `false` | No | Keep unset/false for launch mode. |
 
 ## Hardening Rules
 
 - Do not use local-file persistence modes in runtime environments.
 - Keep all non-`VITE_` secrets out of frontend environment files.
 - Use `npm --prefix server run test:required-secrets` before deploy.
-- Use `npm --prefix server run check:cloudrun` after deploy.
-
+- Current Stripe webhook URL: `https://conscious-network-backend.onrender.com/api/membership/stripe/webhook`.
+- Use Render logs and health checks after deploy. Legacy Cloud Run check scripts remain for historical operations only.

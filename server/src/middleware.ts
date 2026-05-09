@@ -32,11 +32,15 @@ const normalizeOriginalPath = (req: Request): string => {
 const isInitialTwoFactorSetupAllowedPath = (req: Request): boolean =>
   INITIAL_TWO_FACTOR_ALLOWED_PATHS.has(normalizeOriginalPath(req));
 
+const isInitialTwoFactorEnforced = (): boolean =>
+  String(process.env.ENABLE_INITIAL_2FA || '').trim().toLowerCase() === 'true';
+
 const isInitialTwoFactorRequired = (user: {
   role?: string | null;
   initialTwoFactorRequiredAt?: Date | null;
   initialTwoFactorCompletedAt?: Date | null;
 }): boolean => {
+  if (!isInitialTwoFactorEnforced()) return false;
   const role = String(user.role || 'user').trim().toLowerCase();
   return role === 'user' && Boolean(user.initialTwoFactorRequiredAt && !user.initialTwoFactorCompletedAt);
 };

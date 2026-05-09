@@ -4,8 +4,6 @@ import { MEMBERSHIP_TIERS } from '../services/platformData';
 import { UserProfile } from '../types';
 import { ActionButton, PageHeader, PageShell, SurfacePanel } from './ui/PlatformPrimitives';
 
-const FREE_TIER_NAME = 'Free / Community Tier';
-
 type MembershipPageProps = {
   user: UserProfile | null;
   selectedTier: string;
@@ -27,7 +25,7 @@ const MembershipPage: React.FC<MembershipPageProps> = ({
     <PageHeader
       eyebrow="Access architecture"
       title="Membership"
-      description="Select the membership level for your platform account. Free activation is immediate; paid tiers continue through Stripe Checkout."
+      description="Select the membership level for your platform account. All tiers continue through Stripe Checkout, including the $0 community tier."
       actions={
         user ? (
           <div className="rounded-xl border border-white/10 bg-white/5 px-4 py-3 text-xs font-black uppercase tracking-widest text-slate-300">
@@ -49,7 +47,6 @@ const MembershipPage: React.FC<MembershipPageProps> = ({
       {MEMBERSHIP_TIERS.map((tier) => {
         const isCurrent = user?.tier === tier.name;
         const isSelected = selectedTier === tier.name || isCurrent;
-        const isFreeTier = tier.name === FREE_TIER_NAME;
         return (
           <SurfacePanel
             key={tier.id}
@@ -89,7 +86,7 @@ const MembershipPage: React.FC<MembershipPageProps> = ({
                 type="button"
                 className="w-full"
                 disabled={isCheckoutPending || isCurrent}
-                icon={isFreeTier ? <Sparkles className="h-4 w-4" /> : <CreditCard className="h-4 w-4" />}
+                icon={<CreditCard className="h-4 w-4" />}
                 onClick={() => onSelectTier(tier.name)}
               >
                 {isCheckoutPending && isSelected
@@ -98,8 +95,6 @@ const MembershipPage: React.FC<MembershipPageProps> = ({
                   ? 'Current Tier'
                   : !user
                   ? 'Sign In to Continue'
-                  : isFreeTier
-                  ? 'Activate Free Tier'
                   : 'Continue to Checkout'}
               </ActionButton>
               <p className="text-xs leading-5 text-slate-500">{tier.access}</p>

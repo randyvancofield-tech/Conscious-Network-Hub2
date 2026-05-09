@@ -49,6 +49,7 @@ type RouteState = {
 
 const BASE44_PROVIDER_PORTAL_URL = 'https://conscious-network-hub.base44.app';
 const FREE_TIER_NAME = 'Free / Community Tier';
+const ACCOUNT_RECOVERY_UI_ENABLED = false;
 
 const normalizePathname = (pathname: string): string => {
   const normalized = pathname.replace(/\/+$/, '') || '/';
@@ -316,7 +317,7 @@ const App: React.FC = () => {
       name: FREE_TIER_NAME,
       price: "Free",
       description: "Start your account with community access, public learning areas, and selected events.",
-      access: "Immediate in-platform activation.",
+      access: "Stripe checkout for $0 monthly membership.",
       ideal: "New members who want a simple starting point before upgrading.",
       color: "blue"
     },
@@ -531,10 +532,8 @@ const App: React.FC = () => {
   const hasAdminRole = (profile: UserProfile | null | undefined): boolean =>
     profile?.role === 'admin';
 
-  const requiresInitialTwoFactorSetup = (profile: UserProfile | null | undefined): boolean =>
-    profile?.initialTwoFactorRequired === true && profile.initialTwoFactorCompleted !== true;
-
-  const isFreeMembershipTier = (tier: string): boolean => tier === FREE_TIER_NAME;
+  const requiresInitialTwoFactorSetup = (_profile: UserProfile | null | undefined): boolean =>
+    false;
 
   const MIN_PASSWORD_LENGTH = 12;
 
@@ -1164,31 +1163,6 @@ const App: React.FC = () => {
         return;
       }
 
-      if (isFreeMembershipTier(tier)) {
-        const data = await api<any>('/membership/select-free-tier', {
-          method: 'POST',
-          body: { userId: canonicalUser.id, tier },
-        });
-
-        const refreshed = await refreshCanonicalUser();
-        const activatedUser = refreshed || toPlatformUser(data.user || { ...canonicalUser, tier: FREE_TIER_NAME });
-        const token = getAuthToken();
-        setUser(activatedUser);
-        if (token) {
-          setUserAuthSession(token, activatedUser);
-        }
-        void refreshUserCourses();
-        setSelectedTier(activatedUser.tier || FREE_TIER_NAME);
-        setMembershipNotice('');
-        setIsSelectingTier(false);
-        setMembershipCheckoutPending(false);
-        setCurrentView(AppView.DASHBOARD);
-        if (window.innerWidth >= 1024) {
-          setSidebarOpen(true);
-        }
-        return;
-      }
-
       const data = await api<any>('/membership/stripe/create-checkout-session', {
         method: 'POST',
         body: { userId: canonicalUser.id, tier },
@@ -1606,7 +1580,7 @@ const App: React.FC = () => {
       );
     }
 
-    if (user && (requiresInitialTwoFactorSetup(user) || initialTwoFactorCompletedNotice)) {
+    if (user && requiresInitialTwoFactorSetup(user)) {
       return renderInitialTwoFactorSetup();
     }
 
@@ -1673,38 +1647,15 @@ const App: React.FC = () => {
                 Reset Password
               </h2>
               <p className="text-sm leading-6 text-slate-400 mb-6">
-                Enter a new password for your Conscious Network Hub account.
+                Password reset is deferred for launch. Please contact support if you need account help.
               </p>
-              <form onSubmit={handleResetPasswordConfirm} className="space-y-4">
-                <input
-                  type="password"
-                  value={newPasswordInput}
-                  onChange={(e) => setNewPasswordInput(e.target.value)}
-                  className="w-full px-5 py-4 bg-white/5 border border-white/10 rounded-2xl text-white outline-none focus:ring-2 focus:ring-blue-500/50 transition-all font-medium text-sm"
-                  required
-                  placeholder="New password"
-                />
-                <input
-                  type="password"
-                  value={confirmNewPasswordInput}
-                  onChange={(e) => setConfirmNewPasswordInput(e.target.value)}
-                  className="w-full px-5 py-4 bg-white/5 border border-white/10 rounded-2xl text-white outline-none focus:ring-2 focus:ring-blue-500/50 transition-all font-medium text-sm"
-                  required
-                  placeholder="Confirm new password"
-                />
-                {passwordResetNotice && (
-                  <p className="rounded-xl border border-blue-400/20 bg-blue-500/10 p-3 text-xs leading-5 text-blue-100">
-                    {passwordResetNotice}
-                  </p>
-                )}
-                <button
-                  type="submit"
-                  disabled={isPasswordResetPending}
-                  className="w-full py-4 bg-blue-600 hover:bg-blue-500 disabled:opacity-60 text-white rounded-2xl font-black text-xs uppercase tracking-widest transition-all shadow-xl"
-                >
-                  {isPasswordResetPending ? 'Resetting...' : 'Reset Password'}
-                </button>
-              </form>
+              <button
+                type="button"
+                onClick={() => setSigninModalOpen(true)}
+                className="w-full py-4 bg-blue-600 hover:bg-blue-500 text-white rounded-2xl font-black text-xs uppercase tracking-widest transition-all shadow-xl"
+              >
+                Return To Sign In
+              </button>
             </div>
           </div>
         );
@@ -1720,20 +1671,14 @@ const App: React.FC = () => {
                 Verify Email
               </h2>
               <p className="text-sm leading-6 text-slate-400 mb-6">
-                Confirm your email address for account recovery and security notifications.
+                Email verification is deferred for launch. Membership access is handled through sign-in and Stripe checkout.
               </p>
-              {emailVerificationNotice && (
-                <p className="mb-4 rounded-xl border border-blue-400/20 bg-blue-500/10 p-3 text-xs leading-5 text-blue-100">
-                  {emailVerificationNotice}
-                </p>
-              )}
               <button
                 type="button"
-                onClick={handleVerifyEmailConfirm}
-                disabled={isEmailVerificationPending}
+                onClick={() => setCurrentView(AppView.MEMBERSHIP_ACCESS)}
                 className="w-full py-4 bg-blue-600 hover:bg-blue-500 disabled:opacity-60 text-white rounded-2xl font-black text-xs uppercase tracking-widest transition-all shadow-xl"
               >
-                {isEmailVerificationPending ? 'Verifying...' : 'Verify Email'}
+                Continue To Membership
               </button>
             </div>
           </div>
@@ -2258,8 +2203,6 @@ const App: React.FC = () => {
                         ? 'Redirecting to Checkout...'
                         : pendingCheckoutSessionId
                         ? 'Verifying Checkout...'
-                        : isFreeMembershipTier(tier.name)
-                        ? 'Activate Free Tier'
                         : 'Continue to Checkout'}
                     </button>
                   </div>
@@ -2548,7 +2491,7 @@ const App: React.FC = () => {
                   <label className="text-[9px] font-black text-slate-500 uppercase tracking-widest ml-2">Password</label>
                   <input type="password" value={passwordInput} onChange={e => setPasswordInput(e.target.value)} className="w-full px-5 sm:px-8 py-3 sm:py-4 bg-white/5 border border-white/10 rounded-xl sm:rounded-2xl text-white outline-none focus:ring-2 focus:ring-blue-500/50 transition-all font-medium text-sm" required placeholder="••••••••" />
                 </div>
-                {isSigninModalOpen && (
+                {ACCOUNT_RECOVERY_UI_ENABLED && isSigninModalOpen && (
                   <div className="space-y-3 rounded-2xl border border-white/10 bg-white/[0.03] p-4">
                     <button
                       type="button"
@@ -2602,7 +2545,7 @@ const App: React.FC = () => {
                       <input type="password" value={confirmPasswordInput} onChange={e => setConfirmPasswordInput(e.target.value)} className="w-full px-5 sm:px-8 py-3 sm:py-4 bg-white/5 border border-white/10 rounded-xl sm:rounded-2xl text-white outline-none focus:ring-2 focus:ring-blue-500/50 transition-all font-medium text-sm" required placeholder="********" />
                     </div>
                     <p className="text-[9px] text-blue-300/80 uppercase tracking-widest px-1">
-                      After account creation, you will complete required 2FA setup before platform access.
+                      After account creation, choose a membership tier to activate platform access.
                     </p>
                   </>
                 )}

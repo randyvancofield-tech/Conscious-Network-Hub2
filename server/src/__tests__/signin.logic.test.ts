@@ -176,6 +176,7 @@ describe('Sign-in logic', () => {
   beforeEach(() => {
     users.clear();
     nextSessionId = 1;
+    delete process.env.ENABLE_USER_2FA;
     jest.clearAllMocks();
   });
 
@@ -224,6 +225,7 @@ describe('Sign-in logic', () => {
   });
 
   it('requires a wallet verification credential for wallet 2FA accounts', async () => {
+    process.env.ENABLE_USER_2FA = 'true';
     const email = 'signin.wallet@example.com';
     const password = 'WalletPass#1234';
     const user = createMockUser(email, hashPassword(password));

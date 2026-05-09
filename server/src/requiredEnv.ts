@@ -22,8 +22,12 @@ export const REQUIRED_SECRETS = [
   'SENSITIVE_DATA_KEY (production/shared_db)',
   'STRIPE_SECRET_KEY',
   'STRIPE_WEBHOOK_SECRET',
+  'STRIPE_PRICE_FREE',
   'STRIPE_PRICE_GUIDED',
   'STRIPE_PRICE_ACCELERATED',
+  'STRIPE_MODE',
+  'STRIPE_SUCCESS_URL',
+  'STRIPE_CANCEL_URL',
   'FRONTEND_BASE_URL',
   'BRIDGE_PROVIDER_SECRET',
   'BRIDGE_PROVIDER_ISSUER',
@@ -97,12 +101,28 @@ export const validateRequiredEnv = (): void => {
     missing.push('STRIPE_WEBHOOK_SECRET');
   }
 
+  if (!hasNonEmptyEnv('STRIPE_PRICE_FREE')) {
+    missing.push('STRIPE_PRICE_FREE');
+  }
+
   if (!hasNonEmptyEnv('STRIPE_PRICE_GUIDED')) {
     missing.push('STRIPE_PRICE_GUIDED');
   }
 
   if (!hasNonEmptyEnv('STRIPE_PRICE_ACCELERATED')) {
     missing.push('STRIPE_PRICE_ACCELERATED');
+  }
+
+  if (!hasNonEmptyEnv('STRIPE_MODE')) {
+    missing.push('STRIPE_MODE');
+  }
+
+  if (!hasNonEmptyEnv('STRIPE_SUCCESS_URL')) {
+    missing.push('STRIPE_SUCCESS_URL');
+  }
+
+  if (!hasNonEmptyEnv('STRIPE_CANCEL_URL')) {
+    missing.push('STRIPE_CANCEL_URL');
   }
 
   if (!hasNonEmptyEnv('FRONTEND_BASE_URL')) {
@@ -121,14 +141,6 @@ export const validateRequiredEnv = (): void => {
     missing.push('BRIDGE_PROVIDER_AUDIENCE');
   }
 
-  if (isProduction && !hasEmailDeliveryConfig()) {
-    missing.push('EMAIL_USER + EMAIL_PASSWORD or SMTP_HOST + SMTP_PORT');
-  }
-
-  if (isProduction && !hasSmsDeliveryConfig()) {
-    missing.push('TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN, TWILIO_FROM_NUMBER');
-  }
-
   if (missing.length > 0) {
     throw new Error(
       `[STARTUP][FATAL] Missing required secrets/environment variables: ${missing.join(', ')}`
@@ -139,6 +151,11 @@ export const validateRequiredEnv = (): void => {
     throw new Error(
       '[STARTUP][FATAL] Missing required SENSITIVE_DATA_KEY for production/shared_db sensitive-field encryption.'
     );
+  }
+
+  const stripeMode = (trimEnv('STRIPE_MODE') || '').toLowerCase();
+  if (isProduction && stripeMode !== 'live') {
+    throw new Error('[STARTUP][FATAL] STRIPE_MODE must be set to live in production.');
   }
 
   if (requireSharedDbPersistence && persistenceBackend !== 'shared_db') {
@@ -169,6 +186,18 @@ export const validateRequiredEnv = (): void => {
       '[STARTUP][WARN] AUTH_PERSISTENCE_BACKEND=shared_db with non-postgres DATABASE_URL is allowed in non-production only.'
     );
   }
+
+  if (isProduction && !hasEmailDeliveryConfig()) {
+    console.warn(
+      '[STARTUP][WARN] Email delivery is not configured. Email verification and password reset are deferred/unavailable.'
+    );
+  }
+
+  if (isProduction && !hasSmsDeliveryConfig()) {
+    console.warn(
+      '[STARTUP][WARN] SMS delivery is not configured. Phone 2FA is deferred/unavailable.'
+    );
+  }
 };
 
 export const hasOpenAiApiKey = (): boolean => hasNonEmptyEnv('OPENAI_API_KEY');
@@ -177,8 +206,12 @@ export const logStripeEnvironmentLoaded = (): void => {
   const requiredStripeKeys = [
     'STRIPE_SECRET_KEY',
     'STRIPE_WEBHOOK_SECRET',
+    'STRIPE_PRICE_FREE',
     'STRIPE_PRICE_GUIDED',
     'STRIPE_PRICE_ACCELERATED',
+    'STRIPE_MODE',
+    'STRIPE_SUCCESS_URL',
+    'STRIPE_CANCEL_URL',
     'FRONTEND_BASE_URL',
   ] as const;
   const maskedStatus = requiredStripeKeys.reduce<Record<string, string>>((acc, key) => {

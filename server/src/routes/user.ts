@@ -71,10 +71,21 @@ const PROFILE_SESSION_ESTABLISH_FAILED_RESPONSE = {
   retryable: true,
 } as const;
 
+const isLaunchFeatureEnabled = (name: string): boolean =>
+  String(process.env[name] || '').trim().toLowerCase() === 'true';
+
+const isInitialTwoFactorEnforced = (): boolean => isLaunchFeatureEnabled('ENABLE_INITIAL_2FA');
+const isUserTwoFactorEnabled = (): boolean => isLaunchFeatureEnabled('ENABLE_USER_2FA');
+const isEmailVerificationEnabled = (): boolean =>
+  isLaunchFeatureEnabled('ENABLE_EMAIL_VERIFICATION');
+const isPasswordResetEnabled = (): boolean => isLaunchFeatureEnabled('ENABLE_PASSWORD_RESET');
+
 const isInitialTwoFactorRequired = (user: {
   initialTwoFactorRequiredAt?: Date | null;
   initialTwoFactorCompletedAt?: Date | null;
-}): boolean => Boolean(user.initialTwoFactorRequiredAt && !user.initialTwoFactorCompletedAt);
+}): boolean =>
+  isInitialTwoFactorEnforced() &&
+  Boolean(user.initialTwoFactorRequiredAt && !user.initialTwoFactorCompletedAt);
 
 const COMMON_PASSWORDS = new Set([
   'password',
@@ -344,6 +355,7 @@ const sendVerificationEmailForUser = async (
   req: Request,
   user: { id: string; email: string; emailVerified?: boolean | null }
 ): Promise<{ sent: boolean; devVerificationUrl?: string }> => {
+  if (!isEmailVerificationEnabled()) return { sent: false };
   if (user.emailVerified) return { sent: false };
   const token = crypto.randomBytes(32).toString('base64url');
   const verificationUrl = buildEmailVerificationUrl(req, token);
@@ -474,7 +486,7 @@ publicRouter.post('/signin', validateJsonBody(userSignInSchema), async (req: Req
       });
     }
 
-    if (user.twoFactorMethod === 'phone') {
+    if (isUserTwoFactorEnabled() && user.twoFactorMethod === 'phone') {
       if (!user.phoneNumber) {
         auditSignIn('deny', 403, 'phone_2fa_missing_phone', user.id);
         return res.status(403).json({
@@ -574,7 +586,7 @@ publicRouter.post('/signin', validateJsonBody(userSignInSchema), async (req: Req
         })) || user;
     }
 
-    if (user.twoFactorMethod === 'wallet') {
+    if (isUserTwoFactorEnabled() && user.twoFactorMethod === 'wallet') {
       if (!user.walletDid) {
         auditSignIn('deny', 403, 'wallet_2fa_missing_wallet', user.id);
         return res.status(403).json({
@@ -742,7 +754,7 @@ publicRouter.post('/create', validateJsonBody(userCreateSchema), async (req: Req
       phoneNumber: null,
       twoFactorMethod: 'none',
       walletDid: null,
-      initialTwoFactorRequiredAt: new Date(),
+      initialTwoFactorRequiredAt: isInitialTwoFactorEnforced() ? new Date() : null,
       initialTwoFactorCompletedAt: null,
     });
 
@@ -856,6 +868,20 @@ publicRouter.post(
     const emailHash = normalizedEmail ? safeLogHash(normalizedEmail) : null;
 
     try {
+      if (!isPasswordResetEnabled()) {
+        recordAuditEvent(req, {
+          domain: 'auth',
+          action: 'password_reset_request',
+          outcome: 'deny',
+          statusCode: 503,
+          metadata: { emailHash, reason: 'password_reset_deferred_for_launch' },
+        });
+        return res.status(503).json({
+          error: 'Password reset email is deferred for launch. Please contact support.',
+          code: 'PASSWORD_RESET_DEFERRED',
+        });
+      }
+
       const user = normalizedEmail ? await localStore.getUserByEmail(normalizedEmail) : null;
       let devResetUrl: string | undefined;
 
@@ -933,6 +959,13 @@ publicRouter.post(
     const tokenHash = hashPasswordResetToken(token);
 
     try {
+      if (!isPasswordResetEnabled()) {
+        return res.status(503).json({
+          error: 'Password reset is deferred for launch. Please contact support.',
+          code: 'PASSWORD_RESET_DEFERRED',
+        });
+      }
+
       const user = await localStore.findUserByPasswordResetTokenHash(tokenHash);
       if (!user || !user.passwordResetExpiresAt || user.passwordResetExpiresAt.getTime() <= Date.now()) {
         return res.status(400).json({ error: 'Reset link is invalid or expired' });
@@ -987,6 +1020,13 @@ publicRouter.post(
     const token = String(req.body?.token || '').trim();
     const tokenHash = hashEmailVerificationToken(token);
     try {
+      if (!isEmailVerificationEnabled()) {
+        return res.status(503).json({
+          error: 'Email verification is deferred for launch.',
+          code: 'EMAIL_VERIFICATION_DEFERRED',
+        });
+      }
+
       const user = await localStore.findUserByEmailVerificationTokenHash(tokenHash);
       if (
         !user ||
@@ -1484,6 +1524,13 @@ protectedRouter.get('/security', async (req: Request, res: Response): Promise<an
  * Enroll authenticated user in phone-based 2FA.
  */
 protectedRouter.post('/2fa/phone/enroll', validateJsonBody(userPhoneEnrollSchema), async (req: Request, res: Response): Promise<any> => {
+  if (!isUserTwoFactorEnabled()) {
+    return res.status(503).json({
+      error: 'User phone 2FA enrollment is deferred for launch.',
+      code: 'USER_2FA_DEFERRED',
+    });
+  }
+
   const authUserId = getAuthenticatedUserId(req);
   if (!authUserId) {
     recordAuditEvent(req, {
@@ -1561,6 +1608,13 @@ protectedRouter.post('/2fa/phone/enroll', validateJsonBody(userPhoneEnrollSchema
  * Enroll authenticated user in wallet-based 2FA.
  */
 protectedRouter.post('/2fa/wallet/enroll', validateJsonBody(userWalletEnrollSchema), async (req: Request, res: Response): Promise<any> => {
+  if (!isUserTwoFactorEnabled()) {
+    return res.status(503).json({
+      error: 'User wallet 2FA enrollment is deferred for launch.',
+      code: 'USER_2FA_DEFERRED',
+    });
+  }
+
   const authUserId = getAuthenticatedUserId(req);
   if (!authUserId) {
     recordAuditEvent(req, {

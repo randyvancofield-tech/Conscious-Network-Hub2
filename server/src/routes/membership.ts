@@ -13,6 +13,7 @@ const publicRouter = Router();
 const protectedRouter = Router();
 
 type StripePriceEnvKey =
+  | 'STRIPE_PRICE_FREE'
   | 'STRIPE_PRICE_GUIDED'
   | 'STRIPE_PRICE_ACCELERATED';
 
@@ -26,7 +27,7 @@ const TIER_PRICING: Record<TierValue, TierPricing> = {
   [TIER_VALUES.FREE]: {
     name: TIER_VALUES.FREE,
     price: 0,
-    stripePriceEnvKey: null,
+    stripePriceEnvKey: 'STRIPE_PRICE_FREE',
   },
   [TIER_VALUES.GUIDED]: {
     name: TIER_VALUES.GUIDED,
@@ -485,80 +486,24 @@ const createCheckoutSessionForTier = async (input: {
     cancel_url: resolveCancelUrl(),
     client_reference_id: input.userId,
     customer_email: input.email,
+    payment_method_collection: 'if_required',
     metadata: {
       userId: input.userId,
       tier: input.tier,
       stripeMode: String(process.env.STRIPE_MODE || '').trim() || 'unspecified',
+    },
+    subscription_data: {
+      metadata: {
+        userId: input.userId,
+        tier: input.tier,
+        stripeMode: String(process.env.STRIPE_MODE || '').trim() || 'unspecified',
+      },
     },
     automatic_tax: {
       enabled: parseBooleanEnv('STRIPE_AUTOMATIC_TAX', false),
     },
     allow_promotion_codes: parseBooleanEnv('STRIPE_ALLOW_PROMO_CODES', false),
   });
-};
-
-const activateFreeTier = async (
-  req: Request,
-  res: Response
-): Promise<Response | void> => {
-  try {
-    const authUserId = getAuthenticatedUserId(req);
-    if (!authUserId) {
-      return res.status(401).json({ error: 'Authentication required' });
-    }
-
-    const requestedBodyUserId = String(req.body?.userId || '').trim();
-    if (
-      requestedBodyUserId &&
-      !enforceAuthenticatedUserMatch(req, res, requestedBodyUserId, 'body.userId')
-    ) {
-      return;
-    }
-
-    const requestedTier = parseRequestedTier(req.body?.tier);
-    if (requestedTier && requestedTier !== TIER_VALUES.FREE) {
-      return res.status(400).json({ error: 'Free tier activation only accepts the free tier' });
-    }
-
-    const user = await localStore.getUserById(authUserId);
-    if (!user) {
-      return res.status(404).json({ error: 'User not found' });
-    }
-
-    const now = new Date();
-    const membership = await upsertMembershipState({
-      userId: authUserId,
-      tier: TIER_VALUES.FREE,
-      status: 'active',
-      startDate: now,
-    });
-
-    const updatedUser = await localStore.updateUser(authUserId, {
-      tier: TIER_VALUES.FREE,
-      subscriptionStatus: 'active',
-      subscriptionStartDate: user.subscriptionStartDate || now,
-      subscriptionEndDate: null,
-    });
-
-    if (!updatedUser) {
-      return res.status(404).json({ error: 'User not found during membership activation' });
-    }
-
-    return res.json({
-      success: true,
-      message: 'Free membership activated successfully',
-      membership: {
-        id: membership.id,
-        tier: membership.tier,
-        status: membership.status,
-        startDate: membership.startDate,
-      },
-      user: toMembershipUserPayload(updatedUser),
-    });
-  } catch (error) {
-    console.error('Error activating free membership tier:', error);
-    return res.status(500).json({ error: 'Failed to activate free membership tier' });
-  }
 };
 
 const startTierCheckout = async (
@@ -583,12 +528,6 @@ const startTierCheckout = async (
     if (!tier) {
       return res.status(400).json({ error: 'Invalid tier selected' });
     }
-    if (tier === TIER_VALUES.FREE) {
-      return res.status(400).json({
-        error: 'Free tier activates directly in the platform and does not use Stripe checkout',
-      });
-    }
-
     const user = await localStore.getUserById(authUserId);
     if (!user) {
       return res.status(404).json({ error: 'User not found' });
@@ -1184,12 +1123,6 @@ export const handleStripeWebhook = async (
 protectedRouter.use(requireCanonicalIdentity);
 
 /**
- * POST /api/membership/select-free-tier
- * Activate the free/community tier for the authenticated user without Stripe.
- */
-protectedRouter.post('/select-free-tier', activateFreeTier);
-
-/**
  * POST /api/membership/stripe/create-checkout-session
  * Create a Stripe Checkout session for the authenticated user's selected tier.
  */
@@ -1200,11 +1133,6 @@ protectedRouter.post('/stripe/create-checkout-session', startTierCheckout);
  * Confirm Stripe checkout completion and activate membership in persistence store.
  */
 protectedRouter.post('/stripe/confirm-session', confirmStripeCheckoutSession);
-
-/**
- * Backward-compatible alias for payment confirmation.
- */
-protectedRouter.post('/confirm-payment', confirmStripeCheckoutSession);
 
 /**
  * GET /api/membership/status/:userId

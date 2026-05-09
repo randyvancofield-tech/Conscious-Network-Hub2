@@ -47,8 +47,9 @@ Optional integration values:
 
 - `OPENAI_API_KEY`: enables OpenAI-backed AI route responses.
 - `GOOGLE_CLOUD_PROJECT`, `GOOGLE_CLOUD_REGION`, `VERTEX_AI_MODEL`: enable Vertex AI service initialization.
-- `STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET`, `STRIPE_PRICE_*`: enable membership checkout and webhooks.
-- `SMTP_*` / email secrets: enable email delivery.
+- `STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET`, `STRIPE_PRICE_FREE`, `STRIPE_PRICE_GUIDED`, `STRIPE_PRICE_ACCELERATED`, `STRIPE_MODE`, `STRIPE_SUCCESS_URL`, `STRIPE_CANCEL_URL`: enable membership checkout and webhooks.
+- `SMTP_*` / email secrets: enable email delivery when `ENABLE_EMAIL_VERIFICATION` or `ENABLE_PASSWORD_RESET` is true.
+- `TWILIO_*`: enables phone 2FA delivery when `ENABLE_USER_2FA` is true.
 - `HCN_PROFILE_ANCHOR_CONTRACT_ADDRESS`, `HCN_PROFILE_ANCHOR_CHAIN_ID`, RPC keys: enable integrity anchoring.
 
 The canonical environment reference is [docs/ENVIRONMENT_MATRIX.md](../docs/ENVIRONMENT_MATRIX.md).
@@ -99,8 +100,9 @@ curl.exe -sS http://localhost:3001/health
 | `npm run test:required-secrets` | Build and verify required startup secrets. |
 | `npm run test:smoke` | Run local backend smoke checks against a running backend. |
 | `npm run test:curl` | Backwards-compatible alias for `test:smoke`. |
-| `npm run deploy:cloudrun` | Deploy backend to Google Cloud Run through the Node PowerShell launcher. |
-| `npm run check:cloudrun` | Run post-deploy Cloud Run smoke checks through the Node PowerShell launcher. |
+| `npm run check:render` | Run post-deploy smoke checks against the current Render backend. |
+| `npm run deploy:cloudrun` | Legacy Cloud Run deploy helper. Current production backend is Render. |
+| `npm run check:cloudrun` | Legacy Cloud Run smoke helper. Current production backend is Render. |
 
 ## Route Map
 
@@ -167,14 +169,7 @@ Current core suites cover signin logic, auth/user persistence loops, and phase 4
 
 ## Deployment
 
-Cloud Run is the current backend deployment path:
-
-```powershell
-npm run deploy:cloudrun
-npm run check:cloudrun
-```
-
-These scripts use `scripts/run-powershell-script.js`, which looks for `pwsh` first and falls back to Windows PowerShell when available.
+Render is the current backend deployment path at `https://conscious-network-backend.onrender.com`.
 
 See [DEPLOYMENT_RUNBOOK.md](../DEPLOYMENT_RUNBOOK.md) for required secrets, shared DB schema sync, and post-release verification.
 

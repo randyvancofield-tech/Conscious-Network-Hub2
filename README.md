@@ -13,7 +13,7 @@ Conscious Network Hub is a full-stack TypeScript application with a React/Vite f
 - Payments: Stripe membership checkout/webhooks
 - Contracts tooling: Solidity compiler and deployment scripts under `contracts/`
 - Testing: Jest integration tests for backend auth/persistence flows
-- Deployment: Google Cloud Run backend, static frontend hosting for `dist/`
+- Deployment: Render backend, static frontend hosting for `dist/`
 
 ## Start Here
 
@@ -157,19 +157,13 @@ Authentication flow:
 - [Environment Matrix](./docs/ENVIRONMENT_MATRIX.md): frontend/backend env keys
 - [Backend README](./server/README.md): backend routes, auth, persistence, and scripts
 - [Backend Testing](./server/TESTING.md): backend Jest and smoke-test examples
-- [Deployment Runbook](./DEPLOYMENT_RUNBOOK.md): Cloud Run release checks
+- [Deployment Runbook](./DEPLOYMENT_RUNBOOK.md): Render release checks and Stripe webhook setup
 - [Cleanup Baseline](./docs/CLEANUP_BASELINE.md): cleanup inventory, decisions, and progress log
 - [AGENTS.md](./AGENTS.md): agent-facing project/auth guidance
 
 ## Deployment
 
-Backend deployment is currently Google Cloud Run. Use the deployment runbook for exact checks:
-
-```powershell
-cd server
-npm run deploy:cloudrun
-npm run check:cloudrun
-```
+Backend deployment is currently Render at `https://conscious-network-backend.onrender.com`. Use the deployment runbook for exact checks and Stripe webhook setup.
 
 Frontend deployment builds `dist/` from the repo root:
 

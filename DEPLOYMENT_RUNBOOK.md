@@ -1,20 +1,31 @@
 # Deployment Runbook
 
-## Backend (Cloud Run)
+## Backend (Render)
 
-Run from `server/`:
+The current live backend is Render:
 
-```powershell
-npm run deploy:cloudrun
-```
+`https://conscious-network-backend.onrender.com`
 
-The npm script uses `scripts/run-powershell-script.js`, which launches `scripts/deploy-cloudrun.ps1` with `pwsh` when available and falls back to Windows PowerShell.
+Use this endpoint for Stripe webhooks:
 
-This script:
+`https://conscious-network-backend.onrender.com/api/membership/stripe/webhook`
 
-1. Deploys current backend source to `conscious-network-backend`.
-2. Updates env vars with `--update-env-vars` (does not clear unrelated vars).
-3. Ensures:
+Render should be configured with environment values directly in the Render dashboard or a managed secret source. Do not commit secret values.
+
+Required Render Stripe values:
+
+- `STRIPE_SECRET_KEY`
+- `STRIPE_WEBHOOK_SECRET`
+- `STRIPE_PRICE_FREE`
+- `STRIPE_PRICE_GUIDED`
+- `STRIPE_PRICE_ACCELERATED`
+- `STRIPE_MODE=live`
+- `STRIPE_SUCCESS_URL=https://conscious-network.org/?checkout=success&session_id={CHECKOUT_SESSION_ID}`
+- `STRIPE_CANCEL_URL=https://conscious-network.org/?checkout=cancel`
+- `FRONTEND_BASE_URL=https://conscious-network.org`
+
+Render should also ensure:
+
    - `CORS_ORIGINS=https://conscious-network.org,https://higherconscious.network,https://consciousnetwork1.wordpress.com,http://localhost:5173`
    - `FRONTEND_BASE_URL=https://conscious-network.org` (used for redirects, emails, provider bridge)
    - `AUTH_TOKEN_SECRET` is set
@@ -23,8 +34,6 @@ This script:
    - `AUTH_PERSISTENCE_BACKEND=shared_db`
    - `DATABASE_PROVIDER=postgresql`
    - `OPENAI_API_KEY` (optional; required only for `/api/ai/*` routes)
-4. Routes 100% traffic to latest revision.
-5. Runs post-deploy checks.
 
 ### Required Secrets (Backend Startup)
 
@@ -33,17 +42,31 @@ The backend now fails startup if any required secret is missing.
 - `AUTH_TOKEN_SECRET` (preferred; `SESSION_SECRET` is accepted as a legacy alias)
 - `DATABASE_URL`
 - `SENSITIVE_DATA_KEY`
+- `STRIPE_SECRET_KEY`
+- `STRIPE_WEBHOOK_SECRET`
+- `STRIPE_PRICE_FREE`
+- `STRIPE_PRICE_GUIDED`
+- `STRIPE_PRICE_ACCELERATED`
+- `STRIPE_MODE`
+- `STRIPE_SUCCESS_URL`
+- `STRIPE_CANCEL_URL`
+- `FRONTEND_BASE_URL`
 
 Optional for AI routes only:
 
 - `OPENAI_API_KEY`
 
-Other high-risk secrets referenced in code (set only if those integrations are enabled):
+Deferred launch integrations (not required for backend startup):
 
-- `EMAIL_PASSWORD`, `SMTP_PASSWORD`
+- `EMAIL_USER` + `EMAIL_PASSWORD`, or `SMTP_HOST` + `SMTP_PORT`: enables email verification/password reset when the feature flags are enabled.
+- `TWILIO_ACCOUNT_SID`, `TWILIO_AUTH_TOKEN`, `TWILIO_FROM_NUMBER`: enables phone 2FA when user 2FA is enabled.
+- `ENABLE_EMAIL_VERIFICATION=true`: re-enables email verification sends.
+- `ENABLE_PASSWORD_RESET=true`: re-enables native password reset email flow.
+- `ENABLE_USER_2FA=true`: re-enables direct user phone/wallet 2FA enrollment and sign-in challenge handling.
+- `ENABLE_INITIAL_2FA=true`: re-enables required initial 2FA onboarding.
 - `GOOGLE_SHEETS_WEBHOOK_URL`
 
-For Cloud Run, provide secrets via Secret Manager-backed environment variables rather than plain text env values whenever possible.
+For Render, keep secrets in Render environment variables or a managed secret source rather than source control.
 
 ### Shared DB schema sync (required for auth/profile persistence)
 
@@ -60,7 +83,7 @@ This applies the current schema used by `server/src/services/persistenceStore.ts
 ### Backend checks only
 
 ```powershell
-npm run check:cloudrun
+npm run check:render
 ```
 
 Expected:
@@ -84,7 +107,7 @@ npm run build
 Confirm production backend target before deployment:
 
 - `.env.production` must contain:
-  - `VITE_BACKEND_URL=https://conscious-network-backend-181936518282.us-central1.run.app`
+  - `VITE_BACKEND_URL=https://conscious-network-backend.onrender.com`
 
 Deploy `dist/` to the hosting provider for `consciousnetwork1.wordpress.com` using that provider's release workflow.
 
@@ -93,9 +116,13 @@ Deploy `dist/` to the hosting provider for `consciousnetwork1.wordpress.com` usi
 1. Open `https://consciousnetwork1.wordpress.com` in a browser.
 2. In AI Insight, submit a test prompt.
 3. Confirm network request goes to:
-   - `https://conscious-network-backend-181936518282.us-central1.run.app/api/ai/chat`
+   - `https://conscious-network-backend.onrender.com/api/ai/chat`
 4. Confirm response status `200` and no frontend fallback message.
-5. Check Cloud Run logs for latest revision and verify absence of:
+5. Check Render logs for latest deploy and verify absence of:
    - `OPENAI_API_KEY is not set` (when AI routes are expected to be enabled)
    - `Unexpected token` JSON parse errors
    - CORS denials for origin `https://consciousnetwork1.wordpress.com`
+
+## Legacy Cloud Run Scripts
+
+Cloud Run scripts remain in the repository for historical/legacy operations, but they are not the current production Stripe webhook target. Do not use the old Cloud Run URL when configuring Stripe webhooks for CNH launch.

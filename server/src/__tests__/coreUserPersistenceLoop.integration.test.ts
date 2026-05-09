@@ -536,6 +536,10 @@ describe('Core user persistence loop', () => {
 
   beforeEach(() => {
     resetState();
+    delete process.env.ENABLE_INITIAL_2FA;
+    delete process.env.ENABLE_USER_2FA;
+    delete process.env.ENABLE_EMAIL_VERIFICATION;
+    delete process.env.ENABLE_PASSWORD_RESET;
     jest.clearAllMocks();
     mockIsOpenAIConfigured.mockReturnValue(false);
     mockChatWithOpenAI.mockResolvedValue('Ethical AI test response');
@@ -561,25 +565,14 @@ describe('Core user persistence loop', () => {
     const alphaId = String(createAlpha.body?.user?.id || '');
     expect(alphaToken.length).toBeGreaterThan(20);
     expect(alphaId).toBeTruthy();
-    expect(createAlpha.body?.user?.initialTwoFactorRequired).toBe(true);
+    expect(createAlpha.body?.user?.initialTwoFactorRequired).toBe(false);
 
-    const blockedBeforeSetup = await requestJson({
+    const privacyBeforeMembership = await requestJson({
       method: 'GET',
       path: '/api/user/privacy',
       token: alphaToken,
     });
-    expect(blockedBeforeSetup.status).toBe(403);
-    expect(blockedBeforeSetup.body?.code).toBe('INITIAL_2FA_REQUIRED');
-
-    const alphaEnroll = await requestJson({
-      method: 'POST',
-      path: '/api/user/2fa/phone/enroll',
-      token: alphaToken,
-      body: { phoneNumber: '+15551234567' },
-    });
-    expect(alphaEnroll.status).toBe(200);
-    expect(alphaEnroll.body?.user?.initialTwoFactorRequired).toBe(false);
-    expect(alphaEnroll.body?.user?.initialTwoFactorCompleted).toBe(true);
+    expect(privacyBeforeMembership.status).toBe(200);
 
     const createBeta = await requestJson({
       method: 'POST',
@@ -594,14 +587,6 @@ describe('Core user persistence loop', () => {
     const betaToken = String(createBeta.body?.token || '');
     const betaId = String(createBeta.body?.user?.id || '');
     expect(betaId).toBeTruthy();
-
-    const betaEnroll = await requestJson({
-      method: 'POST',
-      path: '/api/user/2fa/wallet/enroll',
-      token: betaToken,
-      body: { walletDid: 'did:hcn:beta-wallet' },
-    });
-    expect(betaEnroll.status).toBe(200);
 
     const profileUpdate = await requestJson({
       method: 'POST',
@@ -686,20 +671,8 @@ describe('Core user persistence loop', () => {
         password: strongPassword,
       },
     });
-    expect(relogin.status).toBe(202);
-    expect(relogin.body?.requiresTwoFactor).toBe(true);
-
-    const reloginVerified = await requestJson({
-      method: 'POST',
-      path: '/api/user/signin',
-      body: {
-        email: 'alpha@example.com',
-        password: strongPassword,
-        twoFactorCode: relogin.body?.devOtpCode,
-      },
-    });
-    expect(reloginVerified.status).toBe(200);
-    const alphaTokenAfterLogin = String(reloginVerified.body?.token || '');
+    expect(relogin.status).toBe(200);
+    const alphaTokenAfterLogin = String(relogin.body?.token || '');
     expect(alphaTokenAfterLogin.length).toBeGreaterThan(20);
 
     const currentAfterRelogin = await requestJson({
@@ -802,6 +775,7 @@ describe('Core user persistence loop', () => {
   });
 
   it('blocks Ethical AI Insight until required initial 2FA is completed', async () => {
+    process.env.ENABLE_INITIAL_2FA = 'true';
     const user = createMockUser('pending-ai-user', 'pending-ai@example.com', {
       tier: 'Free / Community Tier',
       initialTwoFactorRequiredAt: new Date(),
