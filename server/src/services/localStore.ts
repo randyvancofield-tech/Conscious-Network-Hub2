@@ -444,6 +444,7 @@ interface UpsertMembershipInput {
   tier: string;
   status: string;
   startDate?: Date;
+  endDate?: Date | null;
 }
 
 interface CreatePaymentInput {
@@ -1266,12 +1267,16 @@ export const localStore = {
     const existingIndex = store.memberships.findIndex((row) => row.userId === input.userId);
     const timestamp = nowIso();
     const startDateIso = (input.startDate || new Date()).toISOString();
+    const hasEndDateUpdate = input.endDate !== undefined;
 
     if (existingIndex >= 0) {
       const row = store.memberships[existingIndex];
       row.tier = input.tier;
       row.status = input.status;
       row.startDate = startDateIso;
+      if (hasEndDateUpdate) {
+        row.endDate = input.endDate ? input.endDate.toISOString() : null;
+      }
       row.updatedAt = timestamp;
       store.memberships[existingIndex] = row;
       saveStore(store);
@@ -1284,7 +1289,7 @@ export const localStore = {
       tier: input.tier,
       status: input.status,
       startDate: startDateIso,
-      endDate: null,
+      endDate: input.endDate ? input.endDate.toISOString() : null,
       createdAt: timestamp,
       updatedAt: timestamp,
     };

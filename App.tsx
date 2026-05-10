@@ -530,12 +530,8 @@ const App: React.FC = () => {
   const hasConfirmedMembership = (profile: UserProfile | null | undefined): boolean =>
     Boolean(
       profile?.hasActiveMembership === true ||
-        (profile &&
-          typeof profile.tier === 'string' &&
-          profile.tier.trim().length > 0 &&
-          ['active', 'trialing'].includes(
-            String(profile.subscriptionStatus || '').trim().toLowerCase()
-          ))
+        profile?.role === 'provider' ||
+        profile?.role === 'admin'
     );
 
   const hasProviderRole = (profile: UserProfile | null | undefined): boolean =>

@@ -326,6 +326,7 @@ const upsertMembershipState = async (input: {
   tier: TierValue;
   status: string;
   startDate?: Date | null;
+  endDate?: Date | null;
 }): Promise<Awaited<ReturnType<typeof localStore.upsertMembership>>> => {
   const existing = await localStore.getMembershipByUserId(input.userId);
   const startDate = existing?.startDate || input.startDate || new Date();
@@ -334,6 +335,7 @@ const upsertMembershipState = async (input: {
     tier: input.tier,
     status: input.status,
     startDate,
+    endDate: input.endDate ?? null,
   });
 };
 
@@ -419,6 +421,7 @@ const activateMembershipFromCheckout = async (input: {
     tier: input.tier,
     status: 'active',
     startDate: new Date(),
+    endDate: null,
   });
 
   const marker = buildSessionMarker(input.checkoutSessionId);
@@ -444,7 +447,7 @@ const activateMembershipFromCheckout = async (input: {
     subscriptionStatus: 'active',
     subscriptionStartDate:
       existingUser?.subscriptionStartDate || membership.startDate || new Date(),
-    subscriptionEndDate: null,
+    subscriptionEndDate: membership.endDate || null,
   });
 
   if (!updatedUser) {
@@ -751,13 +754,14 @@ const handleSubscriptionUpdatedWebhookEvent = async (
     tier,
     status: toMembershipStatus(stripeStatus),
     startDate: periodStart,
+    endDate: periodEnd,
   });
 
   const updatedUser = await localStore.updateUser(resolved.userId, {
     tier,
     subscriptionStatus: toUserSubscriptionStatus(stripeStatus),
     subscriptionStartDate: periodStart || resolved.user.subscriptionStartDate || new Date(),
-    subscriptionEndDate: periodEnd ?? resolved.user.subscriptionEndDate ?? null,
+    subscriptionEndDate: membership.endDate || null,
   });
   if (!updatedUser) {
     throw new Error('User not found while syncing subscription.updated');
@@ -804,12 +808,13 @@ const handleSubscriptionDeletedWebhookEvent = async (
     tier: TIER_VALUES.FREE,
     status: 'cancelled',
     startDate: resolved.user.subscriptionStartDate || new Date(),
+    endDate: periodEnd,
   });
 
   const updatedUser = await localStore.updateUser(resolved.userId, {
     tier: TIER_VALUES.FREE,
     subscriptionStatus: 'cancelled',
-    subscriptionEndDate: periodEnd,
+    subscriptionEndDate: membership.endDate || null,
   });
   if (!updatedUser) {
     throw new Error('User not found while syncing subscription.deleted');
@@ -871,13 +876,14 @@ const handleInvoicePaymentSucceededWebhookEvent = async (
     tier,
     status: 'active',
     startDate: periodStart,
+    endDate: periodEnd,
   });
 
   const updatedUser = await localStore.updateUser(resolved.userId, {
     tier,
     subscriptionStatus: 'active',
     subscriptionStartDate: periodStart || resolved.user.subscriptionStartDate || new Date(),
-    subscriptionEndDate: periodEnd ?? resolved.user.subscriptionEndDate ?? null,
+    subscriptionEndDate: membership.endDate || null,
   });
   if (!updatedUser) {
     throw new Error('User not found while syncing invoice.payment_succeeded');
@@ -949,12 +955,13 @@ const handleInvoicePaymentFailedWebhookEvent = async (
     tier,
     status: 'past_due',
     startDate: periodStart,
+    endDate: periodEnd,
   });
 
   const updatedUser = await localStore.updateUser(resolved.userId, {
     tier,
     subscriptionStatus: 'past_due',
-    subscriptionEndDate: periodEnd ?? resolved.user.subscriptionEndDate ?? null,
+    subscriptionEndDate: membership.endDate || null,
   });
   if (!updatedUser) {
     throw new Error('User not found while syncing invoice.payment_failed');

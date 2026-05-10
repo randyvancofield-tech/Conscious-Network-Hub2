@@ -620,19 +620,25 @@ export const localStore = {
 
   async upsertMembership(input: UpsertMembershipInput): Promise<LocalMembershipRecord> {
     try {
+      const data: Record<string, unknown> = {
+        tier: input.tier,
+        status: input.status,
+        startDate: input.startDate || new Date(),
+      };
+      if (input.endDate !== undefined) {
+        data.endDate = input.endDate || null;
+      }
+
       const row = await ensurePrisma().membership.upsert({
         where: { userId: input.userId },
-        update: {
-          tier: input.tier,
-          status: input.status,
-          startDate: input.startDate || new Date(),
-        },
+        update: data,
         create: {
           id: crypto.randomUUID(),
           userId: input.userId,
           tier: input.tier,
           status: input.status,
           startDate: input.startDate || new Date(),
+          endDate: input.endDate || null,
         },
       });
       return toLocalMembership(row);

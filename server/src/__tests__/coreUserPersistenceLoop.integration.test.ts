@@ -850,6 +850,39 @@ describe('Core user persistence loop', () => {
     expect(current.body?.user?.hasActiveMembership).toBe(true);
   });
 
+  it('does not trust stale active user projection without a canonical membership row', async () => {
+    const password = 'MemberPass#1234';
+    const existing = createMockUser('stale-member-user', 'stale-member@example.com', {
+      password: hashPassword(password),
+      tier: 'Accelerated Tier',
+      subscriptionStatus: 'active',
+      subscriptionStartDate: new Date(Date.now() - 60_000),
+      subscriptionEndDate: null,
+    });
+    users.set(existing.id, existing);
+
+    const signin = await requestJson({
+      method: 'POST',
+      path: '/api/user/signin',
+      body: {
+        email: existing.email,
+        password,
+      },
+    });
+
+    expect(signin.status).toBe(200);
+    expect(signin.body?.user?.tier).toBe(null);
+    expect(signin.body?.user?.subscriptionStatus).toBe('inactive');
+    expect(signin.body?.user?.membershipStatus).toBe(null);
+    expect(signin.body?.user?.hasActiveMembership).toBe(false);
+
+    const projected = users.get(existing.id);
+    expect(projected?.tier).toBe('');
+    expect(projected?.subscriptionStatus).toBe('inactive');
+    expect(projected?.subscriptionStartDate).toBe(null);
+    expect(projected?.subscriptionEndDate).toBe(null);
+  });
+
   it('allows free users with completed initial 2FA to call Ethical AI Insight', async () => {
     const user = createMockUser('free-ai-user', 'free-ai@example.com', {
       tier: 'Free / Community Tier',
