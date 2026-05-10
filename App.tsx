@@ -341,9 +341,11 @@ const App: React.FC = () => {
   const [isMembershipCheckoutPending, setMembershipCheckoutPending] = useState(false);
   const [membershipNotice, setMembershipNotice] = useState('');
   const [pendingCheckoutSessionId, setPendingCheckoutSessionId] = useState<string | null>(null);
+  const [isMembershipAuthGuardChecking, setMembershipAuthGuardChecking] = useState(false);
   const [hoveredMembershipPath, setHoveredMembershipPath] = useState<string | null>(null);
   const [membershipMobileStep, setMembershipMobileStep] = useState(0);
   const membershipTierRefs = useRef<(HTMLDivElement | null)[]>([]);
+  const membershipAuthGuardInFlightRef = useRef(false);
   const [contactMessage, setContactMessage] = useState('');
 
   const [isPolicyModalOpen, setIsPolicyModalOpen] = useState(false);
@@ -680,7 +682,7 @@ const App: React.FC = () => {
       }
 
       try {
-        const data = await api<{ user: any }>('/user/current');
+        const data = await api<{ user: any }>('/user/current', { cache: 'no-store' });
         const canonicalUser = toSessionUserFromBackend(token, data.user);
         setUser(canonicalUser);
         if (buildBridgeUserFromToken(token) || canonicalUser.role === 'provider') {
@@ -698,6 +700,17 @@ const App: React.FC = () => {
         void refreshUserCourses();
         const needsMembershipSelection = !hasConfirmedMembership(canonicalUser);
         setIsSelectingTier(needsMembershipSelection);
+        if (!needsMembershipSelection && initialRoute.view === AppView.MEMBERSHIP_ACCESS) {
+          setStoredPendingCheckoutSessionId(null);
+          setPendingCheckoutSessionId(null);
+          setMembershipCheckoutPending(false);
+          setMembershipNotice('');
+          setCurrentView(AppView.DASHBOARD, {}, { replace: true });
+          if (window.innerWidth >= 1024) {
+            setSidebarOpen(true);
+          }
+          return;
+        }
         if (needsMembershipSelection && !isNoTierSignedInAllowedView(initialRoute.view)) {
           setMembershipNotice('Select a membership tier to continue.');
           setCurrentView(AppView.MEMBERSHIP_ACCESS, {}, { replace: true });
@@ -890,7 +903,7 @@ const App: React.FC = () => {
 
   const refreshCanonicalUser = async (): Promise<UserProfile | null> => {
     try {
-      const data = await api<{ user: any }>('/user/current');
+      const data = await api<{ user: any }>('/user/current', { cache: 'no-store' });
       const token = getAuthToken();
       const canonicalUser = toSessionUserFromBackend(token, data.user);
       setUser(canonicalUser);
@@ -909,6 +922,88 @@ const App: React.FC = () => {
       return null;
     }
   };
+
+  const routeActiveMemberToDashboard = (profile: UserProfile): boolean => {
+    if (!hasConfirmedMembership(profile)) {
+      return false;
+    }
+
+    setSelectedTier(profile.tier || FREE_TIER_NAME);
+    setIsSelectingTier(false);
+    setMembershipCheckoutPending(false);
+    setMembershipNotice('');
+    setStoredPendingCheckoutSessionId(null);
+    setPendingCheckoutSessionId(null);
+    setCurrentView(AppView.DASHBOARD, {}, { replace: true });
+    setSidebarOpen(window.innerWidth >= 1024);
+    return true;
+  };
+
+  useEffect(() => {
+    if (currentView !== AppView.MEMBERSHIP_ACCESS) {
+      setMembershipAuthGuardChecking(false);
+      return;
+    }
+
+    const token = getAuthToken();
+    if (!token) {
+      setMembershipAuthGuardChecking(false);
+      return;
+    }
+
+    let isCancelled = false;
+
+    if (user && hasConfirmedMembership(user)) {
+      routeActiveMemberToDashboard(user);
+      return;
+    }
+
+    if (membershipAuthGuardInFlightRef.current) {
+      return;
+    }
+
+    membershipAuthGuardInFlightRef.current = true;
+    setMembershipAuthGuardChecking(true);
+    const noticeTimer = window.setTimeout(() => {
+      if (!isCancelled) {
+        setMembershipNotice('Checking membership access...');
+      }
+    }, 150);
+
+    void (async () => {
+      try {
+        const refreshed = await refreshCanonicalUser();
+        if (isCancelled) return;
+
+        if (refreshed && routeActiveMemberToDashboard(refreshed)) {
+          return;
+        }
+
+        if (refreshed) {
+          setIsSelectingTier(true);
+          setMembershipNotice('Select a membership tier to continue.');
+        }
+      } finally {
+        window.clearTimeout(noticeTimer);
+        membershipAuthGuardInFlightRef.current = false;
+        if (!isCancelled) {
+          setMembershipAuthGuardChecking(false);
+        }
+      }
+    })();
+
+    return () => {
+      isCancelled = true;
+      window.clearTimeout(noticeTimer);
+    };
+  }, [
+    currentView,
+    user?.id,
+    user?.hasActiveMembership,
+    user?.membershipStatus,
+    user?.subscriptionStatus,
+    user?.tier,
+  ]);
 
   const continueAfterInitialTwoFactor = (profile: UserProfile) => {
     const needsMembershipSelection = !hasConfirmedMembership(profile);
@@ -1104,6 +1199,11 @@ const App: React.FC = () => {
       setProviderTokenInput('');
       setInitialTwoFactorCompletedNotice(false);
       closeModals();
+      if (!needsInitialTwoFactorSetup && hasConfirmedMembership(canonicalUser)) {
+        routeActiveMemberToDashboard(canonicalUser);
+        return;
+      }
+
       setCurrentView(
         needsInitialTwoFactorSetup
           ? AppView.DASHBOARD
@@ -2318,7 +2418,23 @@ const App: React.FC = () => {
           </div>
         )}
 
-        {currentView === AppView.MEMBERSHIP_ACCESS && (
+        {currentView === AppView.MEMBERSHIP_ACCESS && isMembershipAuthGuardChecking && (
+          <div className="relative z-10 flex min-h-[100dvh] w-full items-center justify-center p-4 sm:p-8">
+            <div className="glass-panel w-full max-w-xl rounded-3xl border border-cyan-300/20 bg-slate-950/40 p-6 text-center shadow-2xl sm:p-8">
+              <div className="mx-auto mb-6 flex h-14 w-14 items-center justify-center rounded-2xl border border-cyan-300/20 bg-cyan-400/10 text-cyan-100">
+                <Sparkles className="h-6 w-6 animate-pulse" />
+              </div>
+              <h2 className="text-2xl font-black uppercase tracking-tight text-white sm:text-3xl">
+                Checking membership access...
+              </h2>
+              <p className="mt-3 text-sm leading-6 text-slate-300">
+                We are refreshing your session against the membership record before showing tier selection.
+              </p>
+            </div>
+          </div>
+        )}
+
+        {currentView === AppView.MEMBERSHIP_ACCESS && !isMembershipAuthGuardChecking && (
           <div className="min-h-[100dvh] max-h-[100dvh] overflow-y-auto overscroll-y-auto custom-scrollbar animate-in fade-in duration-700 relative z-10 scrollable p-4 pt-20 sm:p-6 sm:pt-24 md:p-8 lg:p-12 xl:p-20">
             <svg
               className={`pointer-events-none absolute inset-0 z-0 hidden h-full w-full transition-opacity duration-500 lg:block ${

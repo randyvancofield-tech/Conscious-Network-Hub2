@@ -119,6 +119,14 @@ const getRequestTraceId = (req: Request): string | null => {
 const safeLogHash = (value: string): string =>
   crypto.createHash('sha256').update(value, 'utf8').digest('hex').slice(0, 16);
 
+const setAuthResponseNoStore = (res: Response): void => {
+  res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, private');
+  res.setHeader('Pragma', 'no-cache');
+  res.setHeader('Expires', '0');
+  res.vary('Authorization');
+  res.vary('Cookie');
+};
+
 const hashPasswordResetToken = (token: string): string =>
   crypto.createHash('sha256').update(token, 'utf8').digest('hex');
 
@@ -498,6 +506,7 @@ const sendVerificationEmailForUser = async (
  * Authenticate an existing user with canonical backend identity.
  */
 publicRouter.post('/signin', validateJsonBody(userSignInSchema), async (req: Request, res: Response): Promise<any> => {
+  setAuthResponseNoStore(res);
   let emailHash: string | null = null;
   try {
     const email = String(req.body?.email || '')
@@ -780,6 +789,7 @@ publicRouter.post('/signin', validateJsonBody(userSignInSchema), async (req: Req
  * Create a new canonical user profile in the database.
  */
 publicRouter.post('/create', validateJsonBody(userCreateSchema), async (req: Request, res: Response): Promise<any> => {
+  setAuthResponseNoStore(res);
   let emailHash: string | null = null;
   try {
     const email = String(req.body?.email || '')
@@ -1193,6 +1203,7 @@ publicRouter.get('/create/diagnostics', async (req: Request, res: Response): Pro
 protectedRouter.use(requireCanonicalIdentity);
 
 protectedRouter.get('/current', async (req: Request, res: Response): Promise<any> => {
+  setAuthResponseNoStore(res);
   try {
     const authUserId = getAuthenticatedUserId(req);
     if (!authUserId) {
