@@ -57,6 +57,8 @@ interface UserRow {
   emailVerificationTokenHash: string | null;
   emailVerificationExpiresAt: NullableIso;
   tier: string;
+  membershipStatus: string | null;
+  stripeId: string | null;
   subscriptionStatus: string;
   subscriptionStartDate: NullableIso;
   subscriptionEndDate: NullableIso;
@@ -253,6 +255,8 @@ export interface LocalUserRecord {
   emailVerificationTokenHash: string | null;
   emailVerificationExpiresAt: Date | null;
   tier: string;
+  membershipStatus: string | null;
+  stripeId: string | null;
   subscriptionStatus: string;
   subscriptionStartDate: Date | null;
   subscriptionEndDate: Date | null;
@@ -421,6 +425,8 @@ interface UpdateUserInput {
   emailVerificationTokenHash?: string | null;
   emailVerificationExpiresAt?: Date | null;
   tier?: string;
+  membershipStatus?: string | null;
+  stripeId?: string | null;
   subscriptionStatus?: string;
   subscriptionStartDate?: Date | null;
   subscriptionEndDate?: Date | null;
@@ -809,6 +815,8 @@ const rowToUser = (row: UserRow): LocalUserRecord => ({
   emailVerificationTokenHash: row.emailVerificationTokenHash || null,
   emailVerificationExpiresAt: row.emailVerificationExpiresAt ? toDate(row.emailVerificationExpiresAt) : null,
   tier: row.tier,
+  membershipStatus: row.membershipStatus || null,
+  stripeId: row.stripeId || null,
   subscriptionStatus: row.subscriptionStatus,
   subscriptionStartDate: row.subscriptionStartDate ? toDate(row.subscriptionStartDate) : null,
   subscriptionEndDate: row.subscriptionEndDate ? toDate(row.subscriptionEndDate) : null,
@@ -1088,6 +1096,8 @@ export const localStore = {
       emailVerificationTokenHash: null,
       emailVerificationExpiresAt: null,
       tier: input.tier,
+      membershipStatus: null,
+      stripeId: null,
       subscriptionStatus: 'inactive',
       subscriptionStartDate: null,
       subscriptionEndDate: null,
@@ -1190,6 +1200,12 @@ export const localStore = {
         : null;
     }
     if (updates.tier !== undefined) row.tier = updates.tier;
+    if (updates.membershipStatus !== undefined) {
+      row.membershipStatus = updates.membershipStatus;
+    }
+    if (updates.stripeId !== undefined) {
+      row.stripeId = updates.stripeId;
+    }
     if (updates.subscriptionStatus !== undefined) {
       row.subscriptionStatus = updates.subscriptionStatus;
     }

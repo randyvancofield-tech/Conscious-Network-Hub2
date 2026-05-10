@@ -49,11 +49,68 @@ type RouteState = {
 
 const BASE44_PROVIDER_PORTAL_URL = 'https://conscious-network-hub.base44.app';
 const FREE_TIER_NAME = 'Free / Community Tier';
+const PENDING_CHECKOUT_SESSION_KEY = 'hcn.pendingCheckoutSessionId';
 const ACCOUNT_RECOVERY_UI_ENABLED = false;
+const MEMBERSHIP_RETURN_PATH_ID = 'return';
+const MEMBERSHIP_MOBILE_STEPS = ['Start', 'Free', 'Guided', 'Accelerated'];
+const MEMBERSHIP_RETURN_INSIGHT = 'The Return – Welcome back, Traveler. Resume your journey.';
+const MEMBERSHIP_INSIGHTS: Record<string, string> = {
+  [FREE_TIER_NAME]:
+    'The Seed – Enter the community and begin your observation. (Instant Stripe Verification → Portal Access).',
+  'Guided Tier':
+    'The Growth – Expand your influence with deeper tools. (Secure Checkout → Dashboard Unlock).',
+  'Accelerated Tier':
+    'The Enlightenment – Full ecosystem mastery. (Premium Access → Direct Entry).',
+};
+const MEMBERSHIP_TIER_COLOR_CLASSES = {
+  blue: {
+    cardBorder: 'hover:border-blue-500/30 border-t-blue-500/20',
+    icon: 'text-blue-400',
+    price: 'bg-blue-500/20 text-blue-300',
+    check: 'text-blue-300',
+    button: 'hover:bg-blue-600 hover:border-blue-500/50',
+    glow: 'shadow-blue-500/20 ring-blue-300/30',
+    insight: 'border-blue-300/20 bg-blue-950/45 text-blue-100',
+  },
+  teal: {
+    cardBorder: 'hover:border-teal-500/30 border-t-teal-500/20',
+    icon: 'text-teal-400',
+    price: 'bg-teal-500/20 text-teal-300',
+    check: 'text-teal-300',
+    button: 'hover:bg-teal-600 hover:border-teal-500/50',
+    glow: 'shadow-teal-500/20 ring-teal-300/30',
+    insight: 'border-teal-300/20 bg-teal-950/45 text-teal-100',
+  },
+  indigo: {
+    cardBorder: 'hover:border-indigo-500/30 border-t-indigo-500/20',
+    icon: 'text-indigo-400',
+    price: 'bg-indigo-500/20 text-indigo-300',
+    check: 'text-indigo-300',
+    button: 'hover:bg-indigo-600 hover:border-indigo-500/50',
+    glow: 'shadow-indigo-500/20 ring-indigo-300/30',
+    insight: 'border-indigo-300/20 bg-indigo-950/45 text-indigo-100',
+  },
+};
 
 const normalizePathname = (pathname: string): string => {
   const normalized = pathname.replace(/\/+$/, '') || '/';
   return normalized.startsWith('/') ? normalized : `/${normalized}`;
+};
+
+const getStoredPendingCheckoutSessionId = (): string | null => {
+  if (typeof window === 'undefined') return null;
+  const value = String(window.sessionStorage.getItem(PENDING_CHECKOUT_SESSION_KEY) || '').trim();
+  return value || null;
+};
+
+const setStoredPendingCheckoutSessionId = (sessionId: string | null): void => {
+  if (typeof window === 'undefined') return;
+  const normalized = String(sessionId || '').trim();
+  if (normalized) {
+    window.sessionStorage.setItem(PENDING_CHECKOUT_SESSION_KEY, normalized);
+  } else {
+    window.sessionStorage.removeItem(PENDING_CHECKOUT_SESSION_KEY);
+  }
 };
 
 const routePathForView = (view: AppView, params: Record<string, string> = {}): string => {
@@ -66,6 +123,8 @@ const routePathForView = (view: AppView, params: Record<string, string> = {}): s
       return '/reset-password';
     case AppView.VERIFY_EMAIL:
       return '/verify-email';
+    case AppView.VERIFY_SESSION:
+      return '/verify-session';
     case AppView.MEMBERSHIP_ACCESS:
       return '/membership-access';
     case AppView.DASHBOARD:
@@ -128,6 +187,7 @@ const resolveRoute = (pathname: string, search = ''): RouteState => {
     '/auth/callback': AppView.AUTH_CALLBACK,
     '/reset-password': AppView.RESET_PASSWORD,
     '/verify-email': AppView.VERIFY_EMAIL,
+    '/verify-session': AppView.VERIFY_SESSION,
     '/membership-access': AppView.MEMBERSHIP_ACCESS,
     '/dashboard': AppView.DASHBOARD,
     '/social': AppView.CONSCIOUS_SOCIAL_LEARNING,
@@ -157,6 +217,8 @@ const resolveRoute = (pathname: string, search = ''): RouteState => {
       params:
         path === '/reset-password' || path === '/verify-email'
           ? { token: params.get('token') || '' }
+          : path === '/verify-session'
+          ? { sessionId: params.get('session_id') || params.get('sessionId') || '' }
           : {},
       path,
     };
@@ -197,6 +259,7 @@ const isGuestAllowedView = (view: AppView): boolean =>
     AppView.ENTRY,
     AppView.RESET_PASSWORD,
     AppView.VERIFY_EMAIL,
+    AppView.VERIFY_SESSION,
     AppView.MEMBERSHIP_ACCESS,
     AppView.MEMBERSHIP,
     AppView.COMMUNITY,
@@ -217,6 +280,7 @@ const isGuestAllowedView = (view: AppView): boolean =>
 const isNoTierSignedInAllowedView = (view: AppView): boolean =>
   [
     AppView.ENTRY,
+    AppView.VERIFY_SESSION,
     AppView.MEMBERSHIP_ACCESS,
     AppView.MEMBERSHIP,
     AppView.PRIVACY_POLICY,
@@ -277,6 +341,9 @@ const App: React.FC = () => {
   const [isMembershipCheckoutPending, setMembershipCheckoutPending] = useState(false);
   const [membershipNotice, setMembershipNotice] = useState('');
   const [pendingCheckoutSessionId, setPendingCheckoutSessionId] = useState<string | null>(null);
+  const [hoveredMembershipPath, setHoveredMembershipPath] = useState<string | null>(null);
+  const [membershipMobileStep, setMembershipMobileStep] = useState(0);
+  const membershipTierRefs = useRef<(HTMLDivElement | null)[]>([]);
   const [contactMessage, setContactMessage] = useState('');
 
   const [isPolicyModalOpen, setIsPolicyModalOpen] = useState(false);
@@ -530,6 +597,9 @@ const App: React.FC = () => {
   const hasConfirmedMembership = (profile: UserProfile | null | undefined): boolean =>
     Boolean(
       profile?.hasActiveMembership === true ||
+        ['active', 'trialing', 'free'].includes(
+          String(profile?.membershipStatus || '').trim().toLowerCase()
+        ) ||
         profile?.role === 'provider' ||
         profile?.role === 'admin'
     );
@@ -658,13 +728,19 @@ const App: React.FC = () => {
     const url = new URL(window.location.href);
     const checkoutState = url.searchParams.get('checkout');
     const checkoutSessionId = url.searchParams.get('session_id');
-    if (!checkoutState) {
+    const routeSessionId =
+      initialRoute.view === AppView.VERIFY_SESSION
+        ? String(initialRoute.params.sessionId || '').trim()
+        : '';
+    const sessionId = checkoutSessionId || routeSessionId;
+    if (!checkoutState && !sessionId) {
       return;
     }
 
     url.searchParams.delete('checkout');
     url.searchParams.delete('session_id');
-    window.history.replaceState({}, document.title, `${url.pathname}${url.search}${url.hash}`);
+    const nextPath = initialRoute.view === AppView.VERIFY_SESSION ? routePathForView(AppView.VERIFY_SESSION) : url.pathname;
+    window.history.replaceState({}, document.title, `${nextPath}${url.search}${url.hash}`);
 
     if (checkoutState === 'cancel') {
       setMembershipNotice('Checkout canceled. Select a tier to continue.');
@@ -673,13 +749,68 @@ const App: React.FC = () => {
       return;
     }
 
-    if (checkoutState === 'success' && checkoutSessionId) {
-      setMembershipNotice('Verifying membership checkout...');
-      setPendingCheckoutSessionId(checkoutSessionId);
-      setCurrentView(AppView.MEMBERSHIP_ACCESS);
+    if ((checkoutState === 'success' || initialRoute.view === AppView.VERIFY_SESSION) && sessionId) {
+      setStoredPendingCheckoutSessionId(sessionId);
+      setMembershipNotice('Redirecting to your platform...');
+      setPendingCheckoutSessionId(sessionId);
+      setCurrentView(AppView.VERIFY_SESSION, {}, { replace: true });
+      setIsSelectingTier(true);
+      return;
+    }
+
+    if (sessionId) {
+      setStoredPendingCheckoutSessionId(sessionId);
+      setMembershipNotice('Redirecting to your platform...');
+      setPendingCheckoutSessionId(sessionId);
+      setCurrentView(AppView.VERIFY_SESSION, {}, { replace: true });
       setIsSelectingTier(true);
     }
   }, []);
+
+  useEffect(() => {
+    const storedCheckoutSessionId = getStoredPendingCheckoutSessionId();
+    if (storedCheckoutSessionId && user && hasConfirmedMembership(user)) {
+      setStoredPendingCheckoutSessionId(null);
+      return;
+    }
+    if (storedCheckoutSessionId && !pendingCheckoutSessionId) {
+      setPendingCheckoutSessionId(storedCheckoutSessionId);
+      setMembershipNotice('Redirecting to your platform...');
+    }
+  }, [pendingCheckoutSessionId, user?.id, user?.hasActiveMembership]);
+
+  useEffect(() => {
+    if (currentView !== AppView.MEMBERSHIP_ACCESS) {
+      setHoveredMembershipPath(null);
+      return;
+    }
+
+    setMembershipMobileStep(0);
+
+    if (typeof IntersectionObserver === 'undefined') return;
+
+    const observer = new IntersectionObserver(
+      (entries) => {
+        const visibleSteps = entries
+          .filter((entry) => entry.isIntersecting)
+          .map((entry) => Number((entry.target as HTMLElement).dataset.membershipStep || '0'))
+          .filter((step) => step > 0);
+
+        if (visibleSteps.length > 0) {
+          setMembershipMobileStep(Math.min(...visibleSteps));
+        }
+      },
+      { rootMargin: '-8% 0px -48% 0px', threshold: [0.25, 0.5, 0.75] }
+    );
+
+    membershipTierRefs.current.forEach((element, index) => {
+      if (!element) return;
+      element.dataset.membershipStep = String(index + 1);
+      observer.observe(element);
+    });
+
+    return () => observer.disconnect();
+  }, [currentView]);
 
   useEffect(() => {
     const controller = new AbortController();
@@ -730,6 +861,15 @@ const App: React.FC = () => {
     setMembershipNotice('');
     setCurrentView(AppView.COMMUNITY);
     if (window.innerWidth >= 1024) setSidebarOpen(true);
+  };
+
+  const openMemberLogin = () => {
+    setSignupModalOpen(false);
+    setSigninModalOpen(true);
+    setPendingTwoFactorMethod(null);
+    setTwoFactorCodeInput('');
+    setProviderTokenInput('');
+    setError('');
   };
 
   const handleOpenIdentityFromSidebar = () => {
@@ -833,9 +973,21 @@ const App: React.FC = () => {
       return;
     }
 
+    const token = getAuthToken();
+    if (!token) {
+      setMembershipCheckoutPending(false);
+      setMembershipNotice('Sign in to finish membership checkout verification.');
+      setSignupModalOpen(false);
+      setSigninModalOpen(true);
+      setCurrentView(AppView.VERIFY_SESSION, {}, { replace: true });
+      setIsSelectingTier(true);
+      return;
+    }
+
     const confirmCheckoutSession = async () => {
       setMembershipCheckoutPending(true);
       setError('');
+      let keepPendingCheckoutSession = false;
 
       try {
         await api('/membership/stripe/confirm-session', {
@@ -845,6 +997,7 @@ const App: React.FC = () => {
 
         const refreshed = await refreshCanonicalUser();
         if (!refreshed) {
+          keepPendingCheckoutSession = true;
           setMembershipNotice('Membership updated, but session refresh failed. Please sign in again.');
           setSignupModalOpen(false);
           setSigninModalOpen(true);
@@ -852,20 +1005,30 @@ const App: React.FC = () => {
         }
 
         setSelectedTier(refreshed.tier || FREE_TIER_NAME);
-        setMembershipNotice('');
-        setIsSelectingTier(false);
-        setCurrentView(AppView.DASHBOARD);
-        if (window.innerWidth >= 1024) {
-          setSidebarOpen(true);
+        if (hasConfirmedMembership(refreshed)) {
+          setStoredPendingCheckoutSessionId(null);
+          setMembershipNotice('');
+          setIsSelectingTier(false);
+          setCurrentView(AppView.DASHBOARD, {}, { replace: true });
+          if (window.innerWidth >= 1024) {
+            setSidebarOpen(true);
+          }
+        } else {
+          keepPendingCheckoutSession = true;
+          setMembershipNotice('Checkout is complete, but membership is still syncing. Please retry shortly.');
+          setCurrentView(AppView.VERIFY_SESSION, {}, { replace: true });
+          setIsSelectingTier(true);
         }
       } catch (error) {
         if (error instanceof ApiError) {
           if (error.status === 401) {
+            keepPendingCheckoutSession = true;
             setGuestSession();
             setUser(null);
             setSignupModalOpen(false);
             setSigninModalOpen(true);
             setMembershipNotice('Session expired during checkout verification. Please sign in again.');
+            setCurrentView(AppView.VERIFY_SESSION, {}, { replace: true });
             return;
           }
           setMembershipNotice(error.message || 'Unable to verify checkout. Please retry.');
@@ -875,12 +1038,15 @@ const App: React.FC = () => {
         setMembershipNotice('Unable to verify checkout due to a connection issue. Please retry.');
       } finally {
         setMembershipCheckoutPending(false);
-        setPendingCheckoutSessionId(null);
+        if (!keepPendingCheckoutSession) {
+          setStoredPendingCheckoutSessionId(null);
+          setPendingCheckoutSessionId(null);
+        }
       }
     };
 
     void confirmCheckoutSession();
-  }, [pendingCheckoutSessionId]);
+  }, [pendingCheckoutSessionId, user?.id]);
 
   const handleSignIn = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -909,22 +1075,30 @@ const App: React.FC = () => {
       const canonicalUser = toPlatformUser(data.user);
       const needsInitialTwoFactorSetup = requiresInitialTwoFactorSetup(canonicalUser);
       const needsMembershipSelection = !hasConfirmedMembership(canonicalUser);
+      const storedCheckoutSessionId = getStoredPendingCheckoutSessionId();
+      const shouldVerifyStoredCheckout =
+        Boolean(storedCheckoutSessionId) && !needsInitialTwoFactorSetup && needsMembershipSelection;
+      if (storedCheckoutSessionId && !shouldVerifyStoredCheckout) {
+        setStoredPendingCheckoutSessionId(null);
+      }
       setUserAuthSession(data.token, canonicalUser);
       setUser(canonicalUser);
       if (!needsInitialTwoFactorSetup) {
         void refreshUserCourses();
       }
       setSelectedTier(canonicalUser.tier || FREE_TIER_NAME);
-      setIsSelectingTier(!needsInitialTwoFactorSetup && needsMembershipSelection);
-      setMembershipCheckoutPending(false);
+      setIsSelectingTier(!needsInitialTwoFactorSetup && (needsMembershipSelection || shouldVerifyStoredCheckout));
+      setMembershipCheckoutPending(shouldVerifyStoredCheckout);
       setMembershipNotice(
         needsInitialTwoFactorSetup
           ? ''
-          : needsMembershipSelection
+          : shouldVerifyStoredCheckout
+            ? 'Redirecting to your platform...'
+            : needsMembershipSelection
             ? 'Select a membership tier to continue.'
             : ''
       );
-      setPendingCheckoutSessionId(null);
+      setPendingCheckoutSessionId(shouldVerifyStoredCheckout ? storedCheckoutSessionId : null);
       setPendingTwoFactorMethod(null);
       setTwoFactorCodeInput('');
       setProviderTokenInput('');
@@ -933,13 +1107,20 @@ const App: React.FC = () => {
       setCurrentView(
         needsInitialTwoFactorSetup
           ? AppView.DASHBOARD
+          : shouldVerifyStoredCheckout
+            ? AppView.VERIFY_SESSION
           : needsMembershipSelection
             ? AppView.MEMBERSHIP_ACCESS
             : AppView.DASHBOARD,
         {},
         { replace: true }
       );
-      setSidebarOpen(!needsInitialTwoFactorSetup && !needsMembershipSelection && window.innerWidth >= 1024);
+      setSidebarOpen(
+        !needsInitialTwoFactorSetup &&
+          !needsMembershipSelection &&
+          !shouldVerifyStoredCheckout &&
+          window.innerWidth >= 1024
+      );
     } catch (error) {
       if (error instanceof ApiError) {
         const data = error.data as any;
@@ -1175,6 +1356,11 @@ const App: React.FC = () => {
         method: 'POST',
         body: { userId: canonicalUser.id, tier },
       });
+
+      const checkoutSessionId = String(data?.sessionId || '').trim();
+      if (checkoutSessionId) {
+        setStoredPendingCheckoutSessionId(checkoutSessionId);
+      }
 
       const checkoutUrl = String(data?.checkoutUrl || '').trim();
       if (!checkoutUrl) {
@@ -1691,6 +1877,36 @@ const App: React.FC = () => {
             </div>
           </div>
         );
+      case AppView.VERIFY_SESSION:
+        return (
+          <div className="flex min-h-[100dvh] w-full items-center justify-center p-4 sm:p-8">
+            <div className="glass-panel w-full max-w-xl rounded-3xl border border-blue-500/20 p-6 text-center shadow-2xl sm:p-8">
+              <div className="mx-auto mb-6 flex h-14 w-14 items-center justify-center rounded-2xl border border-blue-400/20 bg-blue-500/10 text-blue-200">
+                <Sparkles className="h-6 w-6 animate-pulse" />
+              </div>
+              <h2 className="text-2xl font-black uppercase tracking-tight text-white sm:text-3xl">
+                Redirecting to your platform...
+              </h2>
+              <p className="mt-3 text-sm leading-6 text-slate-300">
+                We are verifying your Stripe checkout and refreshing your membership session.
+              </p>
+              {membershipNotice && (
+                <p className="mt-5 rounded-xl border border-blue-400/20 bg-blue-500/10 p-3 text-xs font-black uppercase tracking-widest text-blue-100">
+                  {membershipNotice}
+                </p>
+              )}
+              {!getAuthToken() && (
+                <button
+                  type="button"
+                  onClick={openMemberLogin}
+                  className="mt-6 w-full rounded-2xl bg-blue-600 px-5 py-4 text-xs font-black uppercase tracking-widest text-white shadow-xl transition-colors hover:bg-blue-500"
+                >
+                  Member Login
+                </button>
+              )}
+            </div>
+          </div>
+        );
       case AppView.DASHBOARD: 
         return (
           <Dashboard
@@ -1762,12 +1978,7 @@ const App: React.FC = () => {
             isCheckoutPending={isMembershipCheckoutPending}
             notice={membershipNotice}
             onSelectTier={handleMembershipTierSelect}
-            onSignIn={() => {
-              setPendingTwoFactorMethod(null);
-              setTwoFactorCodeInput('');
-              setProviderTokenInput('');
-              setSigninModalOpen(true);
-            }}
+            onSignIn={openMemberLogin}
           />
         );
       case AppView.NOTIFICATIONS:
@@ -2108,29 +2319,170 @@ const App: React.FC = () => {
         )}
 
         {currentView === AppView.MEMBERSHIP_ACCESS && (
-          <div className="min-h-[100dvh] max-h-[100dvh] p-4 sm:p-6 md:p-8 lg:p-12 xl:p-20 overflow-y-auto overscroll-y-auto custom-scrollbar animate-in fade-in duration-700 relative z-10 scrollable">
-            <div className="max-w-7xl mx-auto space-y-8 sm:space-y-10 md:space-y-12 pb-6 sm:pb-10">
+          <div className="min-h-[100dvh] max-h-[100dvh] overflow-y-auto overscroll-y-auto custom-scrollbar animate-in fade-in duration-700 relative z-10 scrollable p-4 pt-20 sm:p-6 sm:pt-24 md:p-8 lg:p-12 xl:p-20">
+            <svg
+              className={`pointer-events-none absolute inset-0 z-0 hidden h-full w-full transition-opacity duration-500 lg:block ${
+                hoveredMembershipPath ? 'opacity-100' : 'opacity-70'
+              }`}
+              viewBox="0 0 1200 760"
+              preserveAspectRatio="none"
+              aria-hidden="true"
+            >
+              <defs>
+                <filter id="membershipPathGlow" x="-40%" y="-40%" width="180%" height="180%">
+                  <feGaussianBlur stdDeviation="5" result="coloredBlur" />
+                  <feMerge>
+                    <feMergeNode in="coloredBlur" />
+                    <feMergeNode in="SourceGraphic" />
+                  </feMerge>
+                </filter>
+                <marker id="membershipArrow" viewBox="0 0 12 12" refX="9" refY="6" markerWidth="8" markerHeight="8" orient="auto">
+                  <path d="M2 2 L10 6 L2 10 Z" fill="#bfdbfe" />
+                </marker>
+              </defs>
+
+              <path
+                d="M600 40 C600 110 600 165 600 225"
+                fill="none"
+                stroke="#93c5fd"
+                strokeWidth="2"
+                strokeDasharray="10 18"
+                markerEnd="url(#membershipArrow)"
+                filter="url(#membershipPathGlow)"
+              >
+                <animate attributeName="stroke-dashoffset" from="70" to="0" dur="3s" repeatCount="indefinite" />
+              </path>
+              {[
+                'M600 225 C430 290 300 380 215 565',
+                'M600 225 C600 330 600 430 600 565',
+                'M600 225 C770 290 900 380 985 565',
+              ].map((path) => (
+                <path
+                  key={path}
+                  d={path}
+                  fill="none"
+                  stroke="#5eead4"
+                  strokeWidth="2"
+                  strokeDasharray="8 20"
+                  filter="url(#membershipPathGlow)"
+                >
+                  <animate attributeName="stroke-dashoffset" from="90" to="0" dur="5s" repeatCount="indefinite" />
+                </path>
+              ))}
+              <g className={hoveredMembershipPath === MEMBERSHIP_RETURN_PATH_ID ? 'opacity-100' : 'opacity-40'}>
+                <path
+                  d="M1060 70 C920 92 800 132 700 184 C650 210 625 225 600 247"
+                  fill="none"
+                  stroke="#67e8f9"
+                  strokeWidth="3"
+                  strokeDasharray="4 14"
+                  filter="url(#membershipPathGlow)"
+                >
+                  <animate attributeName="stroke-dashoffset" from="80" to="0" dur="4s" repeatCount="indefinite" />
+                </path>
+              </g>
+              <circle r="6" fill="#dbeafe" filter="url(#membershipPathGlow)">
+                <animateMotion dur="3s" repeatCount="indefinite" path="M600 40 C600 110 600 165 600 225" />
+              </circle>
+              <circle r="4" fill="#99f6e4" filter="url(#membershipPathGlow)">
+                <animateMotion dur="5s" begin="0.6s" repeatCount="indefinite" path="M600 225 C430 290 300 380 215 565" />
+              </circle>
+              <circle r="4" fill="#bfdbfe" filter="url(#membershipPathGlow)">
+                <animateMotion dur="5s" begin="1s" repeatCount="indefinite" path="M600 225 C600 330 600 430 600 565" />
+              </circle>
+              <circle r="4" fill="#c7d2fe" filter="url(#membershipPathGlow)">
+                <animateMotion dur="5s" begin="1.4s" repeatCount="indefinite" path="M600 225 C770 290 900 380 985 565" />
+              </circle>
+            </svg>
+
+            <button
+              type="button"
+              onClick={openMemberLogin}
+              onMouseEnter={() => setHoveredMembershipPath(MEMBERSHIP_RETURN_PATH_ID)}
+              onMouseLeave={() => setHoveredMembershipPath(null)}
+              onFocus={() => setHoveredMembershipPath(MEMBERSHIP_RETURN_PATH_ID)}
+              onBlur={() => setHoveredMembershipPath(null)}
+              className={`fixed right-4 top-4 z-30 rounded-2xl border border-cyan-200/30 bg-slate-950/80 px-4 py-3 text-[10px] font-black uppercase tracking-widest text-white shadow-2xl shadow-blue-950/40 backdrop-blur-xl transition-all hover:bg-cyan-500/20 sm:right-8 sm:top-8 sm:px-5 ${
+                hoveredMembershipPath === MEMBERSHIP_RETURN_PATH_ID
+                  ? 'animate-pulse ring-2 ring-cyan-200/40 shadow-cyan-400/30'
+                  : ''
+              }`}
+            >
+              Member Login
+            </button>
+
+            <div className="relative z-10 mx-auto max-w-7xl space-y-8 pb-6 sm:space-y-10 sm:pb-10 md:space-y-12">
               <button onClick={handleGoHome} className="flex items-center gap-2 sm:gap-3 text-slate-500 hover:text-white transition-colors group">
                 <Home className="w-4 h-4 sm:w-5 sm:h-5" /> <span className="font-bold uppercase tracking-[0.4em] text-[9px] sm:text-[10px]">Portal Entry</span>
               </button>
-              
+
+              <div className="lg:hidden sticky top-16 z-20 mx-auto w-full max-w-sm rounded-2xl border border-white/10 bg-slate-950/85 p-4 shadow-2xl backdrop-blur-xl sm:top-20">
+                <div className="relative space-y-3 pl-6">
+                  <div className="absolute bottom-2 left-1.5 top-2 w-px bg-white/10" />
+                  <div
+                    className="absolute left-1.5 top-2 w-px bg-cyan-300 shadow-[0_0_18px_rgba(103,232,249,0.8)] transition-all duration-500"
+                    style={{
+                      height: `${Math.min(
+                        100,
+                        Math.max(0, (membershipMobileStep / (MEMBERSHIP_MOBILE_STEPS.length - 1)) * 100)
+                      )}%`,
+                    }}
+                  />
+                  {MEMBERSHIP_MOBILE_STEPS.map((step, index) => {
+                    const isActive = index <= membershipMobileStep;
+                    return (
+                      <div key={step} className="relative flex items-center gap-3">
+                        <span
+                          className={`absolute -left-[1.4rem] h-3 w-3 rounded-full border transition-all ${
+                            isActive
+                              ? 'border-cyan-200 bg-cyan-300 shadow-[0_0_14px_rgba(103,232,249,0.7)]'
+                              : 'border-white/20 bg-slate-900'
+                          }`}
+                        />
+                        <span className={`text-[10px] font-black uppercase tracking-widest ${isActive ? 'text-cyan-100' : 'text-slate-500'}`}>
+                          {step}
+                        </span>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+
               <div className="text-center space-y-3 sm:space-y-4">
+                <p className="hidden text-[9px] font-black uppercase tracking-[0.6em] text-blue-300/70 lg:block">
+                  Start Here
+                </p>
                 <h2 className="text-2xl xs:text-3xl sm:text-4xl md:text-5xl lg:text-6xl font-black text-white tracking-tighter">Membership Access</h2>
                 <p className="text-slate-400 text-sm sm:text-base md:text-lg font-light px-2 sm:px-0">Sign in or choose a membership tier to enter Conscious Network Hub.</p>
                 <div className="flex flex-wrap items-center justify-center gap-3 sm:gap-4 pt-3">
-                  <button
-                    onClick={() => {
-                      setSignupModalOpen(false);
-                      setSigninModalOpen(true);
-                      setPendingTwoFactorMethod(null);
-                      setTwoFactorCodeInput('');
-                      setProviderTokenInput('');
-                      setError('');
-                    }}
-                    className="px-6 sm:px-8 py-3 bg-blue-600 hover:bg-blue-500 text-white rounded-xl font-black text-[10px] sm:text-xs uppercase tracking-widest transition-all shadow-xl"
+                  <div
+                    className="relative inline-flex"
+                    onMouseEnter={() => setHoveredMembershipPath(MEMBERSHIP_RETURN_PATH_ID)}
+                    onMouseLeave={() => setHoveredMembershipPath(null)}
+                    onFocus={() => setHoveredMembershipPath(MEMBERSHIP_RETURN_PATH_ID)}
+                    onBlur={() => setHoveredMembershipPath(null)}
                   >
-                    Existing User Sign In
-                  </button>
+                    <button
+                      onClick={openMemberLogin}
+                      className={`px-6 sm:px-8 py-3 bg-slate-950/80 hover:bg-cyan-500/20 text-white rounded-xl font-black text-[10px] sm:text-xs uppercase tracking-widest transition-all shadow-xl border border-cyan-200/30 ${
+                        hoveredMembershipPath === MEMBERSHIP_RETURN_PATH_ID
+                          ? 'animate-pulse ring-2 ring-cyan-200/40 shadow-cyan-400/30'
+                          : ''
+                      }`}
+                    >
+                      Existing Member Sign In
+                    </button>
+                    <div
+                      className={`pointer-events-none absolute left-1/2 top-full z-20 mt-3 hidden w-72 -translate-x-1/2 origin-top rounded-2xl border border-cyan-200/20 bg-slate-950/55 p-4 text-left text-cyan-50 shadow-2xl shadow-cyan-950/40 backdrop-blur-xl transition-all duration-300 lg:block ${
+                        hoveredMembershipPath === MEMBERSHIP_RETURN_PATH_ID
+                          ? 'scale-100 opacity-100'
+                          : 'scale-95 opacity-0'
+                      }`}
+                    >
+                      <p className="text-[9px] font-black uppercase tracking-[0.35em] text-cyan-200/80">Insight</p>
+                      <p className="mt-2 text-xs leading-5 text-cyan-50">{MEMBERSHIP_RETURN_INSIGHT}</p>
+                    </div>
+                  </div>
                 </div>
                 <p className="text-slate-500 text-[10px] sm:text-xs uppercase tracking-wider">
                   New users create accounts by selecting a tier below.
@@ -2157,70 +2509,111 @@ const App: React.FC = () => {
                       Quick Start
                     </h3>
                     <p className="mt-2 text-sm leading-6 text-slate-300">
-                      Existing users can sign in to continue. New users should choose a tier below to create an account and activate membership access.
+                      Existing members can sign in to continue. New users should choose a tier below to create an account and activate membership access.
                     </p>
                   </div>
                 </div>
               )}
 
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5 sm:gap-7 md:gap-8">
-                {TIERS.map((tier) => (
-                  <div key={tier.name} className={`glass-panel p-5 sm:p-8 md:p-10 rounded-[1.75rem] sm:rounded-[2.5rem] border-white/5 hover:border-${tier.color}-500/30 transition-all flex flex-col justify-between group shadow-2xl relative overflow-hidden border-t-4 border-t-${tier.color}-500/20 min-h-[25rem] sm:min-h-[27rem]`}>
-                    <div className={`absolute top-0 right-0 p-4 sm:p-8 opacity-5 group-hover:opacity-10 transition-opacity text-${tier.color}-400`}><Shield className="w-16 h-16 sm:w-24 sm:h-24" /></div>
-                    <div>
-                      <div className="flex justify-between items-start gap-3 mb-2">
-                        <h3 className="text-xl sm:text-2xl font-black text-white leading-tight uppercase tracking-tighter">{tier.name}</h3>
-                        <span className={`px-3 sm:px-4 py-1 sm:py-1.5 bg-${tier.color}-500/20 text-${tier.color}-400 rounded-full text-[9px] sm:text-[10px] font-black whitespace-nowrap tracking-widest`}>{tier.price}</span>
+                {TIERS.map((tier, tierIndex) => {
+                  const tierClasses =
+                    MEMBERSHIP_TIER_COLOR_CLASSES[tier.color as keyof typeof MEMBERSHIP_TIER_COLOR_CLASSES] ||
+                    MEMBERSHIP_TIER_COLOR_CLASSES.blue;
+                  const isFocused = hoveredMembershipPath === tier.name;
+                  const shouldDim = Boolean(hoveredMembershipPath && hoveredMembershipPath !== tier.name);
+                  const tierInsight = MEMBERSHIP_INSIGHTS[tier.name] || MEMBERSHIP_INSIGHTS[FREE_TIER_NAME];
+
+                  return (
+                    <div
+                      key={tier.name}
+                      ref={(element) => {
+                        membershipTierRefs.current[tierIndex] = element;
+                      }}
+                      onMouseEnter={() => setHoveredMembershipPath(tier.name)}
+                      onMouseLeave={() => setHoveredMembershipPath(null)}
+                      onFocus={() => setHoveredMembershipPath(tier.name)}
+                      onBlur={() => setHoveredMembershipPath(null)}
+                      className={`glass-panel group relative flex min-h-[25rem] flex-col justify-between overflow-hidden rounded-[1.75rem] border-white/5 border-t-4 p-5 shadow-2xl transition-all duration-300 sm:min-h-[27rem] sm:rounded-[2.5rem] sm:p-8 md:p-10 ${
+                        tierClasses.cardBorder
+                      } ${
+                        isFocused ? `scale-[1.02] ring-2 ${tierClasses.glow}` : ''
+                      } ${
+                        shouldDim ? 'scale-[0.98] opacity-45 blur-[1px]' : 'opacity-100'
+                      }`}
+                    >
+                      <div
+                        className={`pointer-events-none absolute left-4 right-4 top-4 z-20 hidden origin-top rounded-2xl border p-4 text-left shadow-2xl backdrop-blur-xl transition-all duration-300 lg:block ${
+                          tierClasses.insight
+                        } ${isFocused ? 'scale-100 opacity-100' : 'scale-95 opacity-0 group-hover:scale-100 group-hover:opacity-100'}`}
+                      >
+                        <p className="text-[9px] font-black uppercase tracking-[0.35em] opacity-80">Insight</p>
+                        <p className="mt-2 text-xs leading-5">{tierInsight}</p>
                       </div>
-                      <p className="text-blue-400/60 text-[8px] sm:text-[9px] font-black uppercase tracking-[0.3em] mb-6 sm:mb-8">Membership Option</p>
-                      
-                      <div className="space-y-4 sm:space-y-6">
-                        <div>
-                          <h4 className="text-[9px] font-black text-slate-500 uppercase tracking-widest mb-2">Description</h4>
-                          <p className="text-slate-300 text-xs sm:text-sm leading-relaxed font-light">{tier.description}</p>
+                      <div className={`absolute top-0 right-0 p-4 sm:p-8 opacity-5 group-hover:opacity-10 transition-opacity ${tierClasses.icon}`}>
+                        <Shield className="w-16 h-16 sm:w-24 sm:h-24" />
+                      </div>
+                      <div>
+                        <div className="flex justify-between items-start gap-3 mb-2">
+                          <h3 className="text-xl sm:text-2xl font-black text-white leading-tight uppercase tracking-tighter">{tier.name}</h3>
+                          <span className={`px-3 sm:px-4 py-1 sm:py-1.5 rounded-full text-[9px] sm:text-[10px] font-black whitespace-nowrap tracking-widest ${tierClasses.price}`}>{tier.price}</span>
                         </div>
-                        <div>
-                          <h4 className="text-[9px] font-black text-slate-500 uppercase tracking-widest mb-2">Access Level</h4>
-                          <div className="flex items-center gap-2 sm:gap-3 text-white text-[11px] sm:text-xs font-medium">
-                            <CheckCircle2 className={`w-3.5 h-3.5 sm:w-4 sm:h-4 text-${tier.color}-400 shrink-0`} />
-                            {tier.access}
+                        <p className="text-blue-400/60 text-[8px] sm:text-[9px] font-black uppercase tracking-[0.3em] mb-6 sm:mb-8">Membership Option</p>
+                        
+                        <div className="space-y-4 sm:space-y-6">
+                          <div>
+                            <h4 className="text-[9px] font-black text-slate-500 uppercase tracking-widest mb-2">Description</h4>
+                            <p className="text-slate-300 text-xs sm:text-sm leading-relaxed font-light">{tier.description}</p>
+                          </div>
+                          <div>
+                            <h4 className="text-[9px] font-black text-slate-500 uppercase tracking-widest mb-2">Access Level</h4>
+                            <div className="flex items-center gap-2 sm:gap-3 text-white text-[11px] sm:text-xs font-medium">
+                              <CheckCircle2 className={`w-3.5 h-3.5 sm:w-4 sm:h-4 shrink-0 ${tierClasses.check}`} />
+                              {tier.access}
+                            </div>
+                          </div>
+                          <div>
+                            <h4 className="text-[9px] font-black text-slate-500 uppercase tracking-widest mb-2">Ideal For</h4>
+                            <p className="text-slate-400 text-[10px] sm:text-[11px] italic font-light">{tier.ideal}</p>
                           </div>
                         </div>
-                        <div>
-                          <h4 className="text-[9px] font-black text-slate-500 uppercase tracking-widest mb-2">Ideal For</h4>
-                          <p className="text-slate-400 text-[10px] sm:text-[11px] italic font-light">{tier.ideal}</p>
-                        </div>
                       </div>
+                      <button 
+                        onClick={() => {
+                          if (user) {
+                            handleMembershipTierSelect(tier.name);
+                          } else {
+                            setSelectedTier(tier.name);
+                            setPendingTwoFactorMethod(null);
+                            setTwoFactorCodeInput('');
+                            setProviderTokenInput('');
+                            setSignupModalOpen(true);
+                          }
+                        }}
+                        className={`mt-7 sm:mt-10 w-full py-4 sm:py-5 bg-white/5 text-white rounded-xl sm:rounded-2xl font-black text-[10px] sm:text-xs uppercase tracking-[0.18em] sm:tracking-[0.2em] transition-all shadow-xl border border-white/5 ${tierClasses.button} ${
+                          isFocused ? `animate-pulse bg-white/10 ring-2 ${tierClasses.glow}` : ''
+                        }`}
+                        disabled={isMembershipCheckoutPending || Boolean(pendingCheckoutSessionId)}
+                      >
+                        {isMembershipCheckoutPending
+                          ? 'Redirecting to Checkout...'
+                          : pendingCheckoutSessionId
+                          ? 'Verifying Checkout...'
+                          : 'Continue to Checkout'}
+                      </button>
                     </div>
-                    <button 
-                      onClick={() => {
-                        if (user) {
-                          handleMembershipTierSelect(tier.name);
-                        } else {
-                          setSelectedTier(tier.name);
-                          setPendingTwoFactorMethod(null);
-                          setTwoFactorCodeInput('');
-                          setProviderTokenInput('');
-                          setSignupModalOpen(true);
-                        }
-                      }}
-                      className={`mt-7 sm:mt-10 w-full py-4 sm:py-5 bg-white/5 hover:bg-${tier.color}-600 text-white rounded-xl sm:rounded-2xl font-black text-[10px] sm:text-xs uppercase tracking-[0.18em] sm:tracking-[0.2em] transition-all shadow-xl border border-white/5 hover:border-${tier.color}-500/50`}
-                      disabled={isMembershipCheckoutPending || Boolean(pendingCheckoutSessionId)}
-                    >
-                      {isMembershipCheckoutPending
-                        ? 'Redirecting to Checkout...'
-                        : pendingCheckoutSessionId
-                        ? 'Verifying Checkout...'
-                        : 'Continue to Checkout'}
-                    </button>
-                  </div>
-                ))}
+                  );
+                })}
               </div>
             </div>
           </div>
         )}
 
-        {(currentView !== AppView.ENTRY && currentView !== AppView.MEMBERSHIP_ACCESS) && (
+        {currentView === AppView.VERIFY_SESSION && renderActiveView()}
+
+        {(currentView !== AppView.ENTRY &&
+          currentView !== AppView.MEMBERSHIP_ACCESS &&
+          currentView !== AppView.VERIFY_SESSION) && (
           <div className="flex flex-1 min-h-[100dvh] overflow-hidden animate-in fade-in duration-500 relative z-10">
             {isSidebarOpen && (
               <div 

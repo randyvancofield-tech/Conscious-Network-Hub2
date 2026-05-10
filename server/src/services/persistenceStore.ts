@@ -164,6 +164,8 @@ const toLocalUser = (row: any): LocalUserRecord => ({
   emailVerificationTokenHash: toNullableString(row.emailVerificationTokenHash),
   emailVerificationExpiresAt: row.emailVerificationExpiresAt || null,
   tier: row.tier,
+  membershipStatus: toNullableString(row.membershipStatus),
+  stripeId: toNullableString(row.stripeId),
   subscriptionStatus: row.subscriptionStatus,
   subscriptionStartDate: row.subscriptionStartDate || null,
   subscriptionEndDate: row.subscriptionEndDate || null,
@@ -454,6 +456,8 @@ export const localStore = {
           emailVerificationTokenHash: null,
           emailVerificationExpiresAt: null,
           tier: input.tier,
+          membershipStatus: null,
+          stripeId: null,
           subscriptionStatus: 'inactive',
           subscriptionStartDate: null,
           subscriptionEndDate: null,
@@ -561,6 +565,12 @@ export const localStore = {
         data.emailVerificationExpiresAt = updates.emailVerificationExpiresAt;
       }
       if (updates.tier !== undefined) data.tier = updates.tier;
+      if (updates.membershipStatus !== undefined) {
+        data.membershipStatus = updates.membershipStatus || null;
+      }
+      if (updates.stripeId !== undefined) {
+        data.stripeId = toNullableString(updates.stripeId);
+      }
       if (updates.subscriptionStatus !== undefined) data.subscriptionStatus = updates.subscriptionStatus;
       if (updates.subscriptionStartDate !== undefined) {
         data.subscriptionStartDate = updates.subscriptionStartDate;

@@ -264,7 +264,7 @@ const toPublicTier = (user: any): string | null => {
 
 const isActiveMembershipStatus = (status: unknown): boolean => {
   const normalized = String(status || '').trim().toLowerCase();
-  return normalized === 'active' || normalized === 'trialing';
+  return normalized === 'active' || normalized === 'trialing' || normalized === 'free';
 };
 
 const reconcileUserMembershipProjection = async (user: any): Promise<{
@@ -282,10 +282,12 @@ const reconcileUserMembershipProjection = async (user: any): Promise<{
   if (!membershipIsActive) {
     const desiredTier = membership ? membershipTier : null;
     const desiredStatus = membership ? membershipStatus || 'inactive' : 'inactive';
+    const desiredMembershipStatus = null;
     const desiredStartDate = membership?.startDate || null;
     const desiredEndDate = membership?.endDate || null;
     const needsProjectionUpdate =
       userTier !== desiredTier ||
+      (user.membershipStatus || null) !== desiredMembershipStatus ||
       String(user.subscriptionStatus || '').trim().toLowerCase() !== desiredStatus ||
       (user.subscriptionStartDate || null)?.getTime?.() !== desiredStartDate?.getTime?.() ||
       (user.subscriptionEndDate || null)?.getTime?.() !== desiredEndDate?.getTime?.();
@@ -293,6 +295,7 @@ const reconcileUserMembershipProjection = async (user: any): Promise<{
     const updated = needsProjectionUpdate
       ? await localStore.updateUser(user.id, {
           tier: desiredTier || '',
+          membershipStatus: desiredMembershipStatus,
           subscriptionStatus: desiredStatus,
           subscriptionStartDate: desiredStartDate,
           subscriptionEndDate: desiredEndDate,
@@ -309,8 +312,10 @@ const reconcileUserMembershipProjection = async (user: any): Promise<{
 
   const activeMembership = membership!;
   const activeMembershipTier = membershipTier!;
+  const activeMembershipStatus = membershipStatus || 'active';
   const needsProjectionUpdate =
     userTier !== activeMembershipTier ||
+    user.membershipStatus !== activeMembershipStatus ||
     !isActiveMembershipStatus(user.subscriptionStatus) ||
     !user.subscriptionStartDate ||
     (user.subscriptionStartDate || null)?.getTime?.() !==
@@ -329,6 +334,7 @@ const reconcileUserMembershipProjection = async (user: any): Promise<{
 
   const updated = await localStore.updateUser(user.id, {
     tier: activeMembershipTier,
+    membershipStatus: activeMembershipStatus,
     subscriptionStatus: 'active',
     subscriptionStartDate: activeMembership.startDate || user.subscriptionStartDate || new Date(),
     subscriptionEndDate: activeMembership.endDate || null,
@@ -415,6 +421,7 @@ const toPublicUser = (req: Request, user: any) => ({
   websiteUrl: user.websiteUrl || null,
   privacySettings: normalizePrivacySettings(user.privacySettings),
   tier: toPublicTier(user),
+  membershipStatus: user.membershipStatus || null,
   subscriptionStatus: user.subscriptionStatus,
   subscriptionStartDate: user.subscriptionStartDate,
   subscriptionEndDate: user.subscriptionEndDate,
@@ -443,7 +450,9 @@ const buildPublicUser = async (req: Request, user: any) => {
       reconciled.hasActiveMembership && !isActiveMembershipStatus(publicUser.subscriptionStatus)
         ? 'active'
         : publicUser.subscriptionStatus,
-    membershipStatus: membership?.status || null,
+    membershipStatus: reconciled.hasActiveMembership
+      ? reconciled.user.membershipStatus || membership?.status || null
+      : null,
     hasActiveMembership: reconciled.hasActiveMembership,
     membershipStartDate: membership?.startDate || null,
     membershipEndDate: membership?.endDate || null,

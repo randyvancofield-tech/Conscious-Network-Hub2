@@ -108,18 +108,45 @@ const resolveStripePriceId = (tier: TierValue): string | null => {
   return priceId || null;
 };
 
+const CHECKOUT_SESSION_PLACEHOLDER = '{CHECKOUT_SESSION_ID}';
+
+const buildVerifySessionSuccessUrl = (rawUrl: string): string => {
+  const normalized = rawUrl.trim();
+  if (!normalized) return normalized;
+
+  try {
+    const placeholderless = normalized.replace(CHECKOUT_SESSION_PLACEHOLDER, '');
+    const parsed = new URL(placeholderless);
+    if (!parsed.pathname || parsed.pathname === '/' || parsed.searchParams.has('checkout')) {
+      parsed.pathname = '/verify-session';
+    }
+    parsed.search = '';
+    parsed.hash = '';
+    parsed.searchParams.set('session_id', CHECKOUT_SESSION_PLACEHOLDER);
+    return parsed
+      .toString()
+      .replace('%7BCHECKOUT_SESSION_ID%7D', CHECKOUT_SESSION_PLACEHOLDER);
+  } catch {
+    const base = normalized
+      .replace(CHECKOUT_SESSION_PLACEHOLDER, '')
+      .replace(/[?#].*$/, '')
+      .replace(/\/+$/, '');
+    return `${base || 'https://higherconscious.network'}/verify-session?session_id=${CHECKOUT_SESSION_PLACEHOLDER}`;
+  }
+};
+
 const resolveSuccessUrl = (): string => {
   const configured = String(process.env.STRIPE_SUCCESS_URL || '').trim();
-  if (configured) return configured;
+  if (configured) return buildVerifySessionSuccessUrl(configured);
 
   const frontendBaseUrl = String(process.env.FRONTEND_BASE_URL || '')
     .trim()
     .replace(/\/+$/, '');
   if (frontendBaseUrl) {
-    return `${frontendBaseUrl}/?checkout=success&session_id={CHECKOUT_SESSION_ID}`;
+    return buildVerifySessionSuccessUrl(frontendBaseUrl);
   }
 
-  return 'http://localhost:3000/?checkout=success&session_id={CHECKOUT_SESSION_ID}';
+  return buildVerifySessionSuccessUrl('https://higherconscious.network');
 };
 
 const resolveCancelUrl = (): string => {
@@ -161,6 +188,7 @@ const toMembershipUserPayload = (user: any) => ({
   email: user.email,
   name: user.name || (user.email ? String(user.email).split('@')[0] : 'Member'),
   tier: toPublicTier(user),
+  membershipStatus: user.membershipStatus || null,
   subscriptionStatus: user.subscriptionStatus,
   subscriptionStartDate: user.subscriptionStartDate,
   subscriptionEndDate: user.subscriptionEndDate,
@@ -229,6 +257,15 @@ const toUnixDate = (value: unknown): Date | null => {
   return new Date(value * 1000);
 };
 
+const toStripeId = (value: unknown): string | null => {
+  if (!value) return null;
+  if (typeof value === 'string') return value.trim() || null;
+  if (typeof value === 'object' && typeof (value as { id?: unknown }).id === 'string') {
+    return String((value as { id: string }).id).trim() || null;
+  }
+  return null;
+};
+
 const normalizeStripeStatus = (value: unknown): string =>
   String(value || '')
     .trim()
@@ -245,6 +282,11 @@ const toMembershipStatus = (stripeStatus: string): string => {
   if (stripeStatus === 'past_due' || stripeStatus === 'unpaid') return 'past_due';
   if (stripeStatus === 'canceled' || stripeStatus === 'incomplete_expired') return 'cancelled';
   return stripeStatus || 'inactive';
+};
+
+const isActiveMembershipStatus = (status: unknown): boolean => {
+  const normalized = String(status || '').trim().toLowerCase();
+  return normalized === 'active' || normalized === 'trialing' || normalized === 'free';
 };
 
 const toNormalizedEmail = (value: unknown): string | null => {
@@ -410,6 +452,7 @@ const activateMembershipFromCheckout = async (input: {
   userId: string;
   tier: TierValue;
   checkoutSessionId: string;
+  stripeId?: string | null;
   amountMinor: number | null;
   currency: string | null;
 }): Promise<{
@@ -444,6 +487,8 @@ const activateMembershipFromCheckout = async (input: {
   const existingUser = await localStore.getUserById(input.userId);
   const updatedUser = await localStore.updateUser(input.userId, {
     tier: input.tier,
+    membershipStatus: 'active',
+    stripeId: input.stripeId || undefined,
     subscriptionStatus: 'active',
     subscriptionStartDate:
       existingUser?.subscriptionStartDate || membership.startDate || new Date(),
@@ -632,6 +677,7 @@ const confirmStripeCheckoutSession = async (
       userId: authUserId,
       tier,
       checkoutSessionId: session.id,
+      stripeId: toStripeId(session.customer),
       amountMinor: session.amount_total ?? null,
       currency: session.currency ?? null,
     });
@@ -684,6 +730,7 @@ const handleCheckoutSessionWebhookEvent = async (
     userId,
     tier,
     checkoutSessionId: session.id,
+    stripeId: toStripeId(session.customer),
     amountMinor: session.amount_total ?? null,
     currency: session.currency ?? null,
   });
@@ -759,6 +806,8 @@ const handleSubscriptionUpdatedWebhookEvent = async (
 
   const updatedUser = await localStore.updateUser(resolved.userId, {
     tier,
+    membershipStatus: isActiveMembershipStatus(membership.status) ? membership.status : null,
+    stripeId: toStripeId(subscription.customer) || resolved.user.stripeId || null,
     subscriptionStatus: toUserSubscriptionStatus(stripeStatus),
     subscriptionStartDate: periodStart || resolved.user.subscriptionStartDate || new Date(),
     subscriptionEndDate: membership.endDate || null,
@@ -813,6 +862,8 @@ const handleSubscriptionDeletedWebhookEvent = async (
 
   const updatedUser = await localStore.updateUser(resolved.userId, {
     tier: TIER_VALUES.FREE,
+    membershipStatus: null,
+    stripeId: toStripeId(subscription.customer) || resolved.user.stripeId || null,
     subscriptionStatus: 'cancelled',
     subscriptionEndDate: membership.endDate || null,
   });
@@ -881,6 +932,8 @@ const handleInvoicePaymentSucceededWebhookEvent = async (
 
   const updatedUser = await localStore.updateUser(resolved.userId, {
     tier,
+    membershipStatus: 'active',
+    stripeId: toStripeId(subscription?.customer || invoice.customer) || resolved.user.stripeId || null,
     subscriptionStatus: 'active',
     subscriptionStartDate: periodStart || resolved.user.subscriptionStartDate || new Date(),
     subscriptionEndDate: membership.endDate || null,
@@ -960,6 +1013,8 @@ const handleInvoicePaymentFailedWebhookEvent = async (
 
   const updatedUser = await localStore.updateUser(resolved.userId, {
     tier,
+    membershipStatus: null,
+    stripeId: toStripeId(subscription?.customer || invoice.customer) || resolved.user.stripeId || null,
     subscriptionStatus: 'past_due',
     subscriptionEndDate: membership.endDate || null,
   });

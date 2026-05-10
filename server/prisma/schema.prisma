@@ -54,6 +54,8 @@ model User {
 
   // Membership fields
   tier                  String    @default("Free / Community Tier") @map("membership_tier")
+  membershipStatus      String?   @map("membership_status")
+  stripeId              String?   @map("stripe_id")
   subscriptionStatus    String    @default("inactive")
   subscriptionStartDate DateTime?
   subscriptionEndDate   DateTime?

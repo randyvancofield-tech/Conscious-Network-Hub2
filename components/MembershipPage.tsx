@@ -32,9 +32,14 @@ const MembershipPage: React.FC<MembershipPageProps> = ({
             Active: {user.tier || 'Not selected'}
           </div>
         ) : (
-          <ActionButton type="button" onClick={onSignIn} icon={<LockKeyhole className="h-4 w-4" />}>
-            Sign In
-          </ActionButton>
+          <button
+            type="button"
+            onClick={onSignIn}
+            className="inline-flex items-center gap-2 rounded-2xl border border-blue-300/30 bg-blue-600 px-5 py-3 text-xs font-black uppercase tracking-widest text-white shadow-xl shadow-blue-950/40 transition-colors hover:bg-blue-500"
+          >
+            <LockKeyhole className="h-4 w-4" />
+            Member Login
+          </button>
         )
       }
     />
