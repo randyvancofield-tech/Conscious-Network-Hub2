@@ -11,7 +11,6 @@ interface AuthCallbackPageProps {
 }
 
 type CallbackState = 'loading' | 'success' | 'error';
-const BASE44_PORTAL_URL = 'https://conscious-network-hub.base44.app';
 const INVALID_SESSION_MESSAGE =
   'Your session could not be verified. Please return and reconnect.';
 
@@ -130,10 +129,10 @@ const AuthCallbackPage: React.FC<AuthCallbackPageProps> = ({
         {state === 'error' && (
           <button
             type="button"
-            onClick={() => window.location.assign(BASE44_PORTAL_URL)}
+            onClick={() => window.location.assign('/provider-access')}
             className="w-full px-4 py-3 rounded-xl bg-blue-600 hover:bg-blue-500 text-white text-xs font-black uppercase tracking-widest transition-colors"
           >
-            Return to Portal
+            Return to Provider Access
           </button>
         )}
       </div>

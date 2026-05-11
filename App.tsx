@@ -16,12 +16,13 @@ import AuthCallbackPage from './components/AuthCallbackPage';
 import MusicBox from './components/MusicBox';
 import NotificationsCenter from './components/NotificationsCenter';
 import AdminDashboard from './components/AdminDashboard';
+import ProviderAccessPage from './components/ProviderAccessPage';
 import { ConsciousIdentity } from './components/community/CommunityLayout';
 import { AppView, UserProfile, Course } from './types';
 import { NAVIGATION_ITEMS } from './constants';
 import { 
   Shield, Menu, X, Search, Bell,
-  ChevronRight, Home, LogOut, Building2, CheckCircle2, Sparkles, Key
+  ChevronRight, Home, LogOut, Building2, CheckCircle2, Sparkles, Key, WalletCards, FileText
 } from 'lucide-react';
 import logo from './src/assets/brand/logo.png';
 import privacyPolicy from './docs/compliance/privacy-policy-draft.md?raw';
@@ -47,7 +48,6 @@ type RouteState = {
   path: string;
 };
 
-const BASE44_PROVIDER_PORTAL_URL = 'https://conscious-network-hub.base44.app';
 const FREE_TIER_NAME = 'Free / Community Tier';
 const PENDING_CHECKOUT_SESSION_KEY = 'hcn.pendingCheckoutSessionId';
 const ACCOUNT_RECOVERY_UI_ENABLED = false;
@@ -127,6 +127,12 @@ const routePathForView = (view: AppView, params: Record<string, string> = {}): s
       return '/verify-session';
     case AppView.MEMBERSHIP_ACCESS:
       return '/membership-access';
+    case AppView.PROVIDER_ACCESS:
+      return '/provider-access';
+    case AppView.PROVIDER_SIGN_IN:
+      return '/provider/sign-in';
+    case AppView.PROVIDER_APPLY:
+      return '/provider/apply';
     case AppView.DASHBOARD:
       return '/dashboard';
     case AppView.CONSCIOUS_SOCIAL_LEARNING:
@@ -189,6 +195,10 @@ const resolveRoute = (pathname: string, search = ''): RouteState => {
     '/verify-email': AppView.VERIFY_EMAIL,
     '/verify-session': AppView.VERIFY_SESSION,
     '/membership-access': AppView.MEMBERSHIP_ACCESS,
+    '/provider-access': AppView.PROVIDER_ACCESS,
+    '/provider-gateway': AppView.PROVIDER_ACCESS,
+    '/provider/sign-in': AppView.PROVIDER_SIGN_IN,
+    '/provider/apply': AppView.PROVIDER_APPLY,
     '/dashboard': AppView.DASHBOARD,
     '/social': AppView.CONSCIOUS_SOCIAL_LEARNING,
     '/social-learning': AppView.CONSCIOUS_SOCIAL_LEARNING,
@@ -261,6 +271,9 @@ const isGuestAllowedView = (view: AppView): boolean =>
     AppView.VERIFY_EMAIL,
     AppView.VERIFY_SESSION,
     AppView.MEMBERSHIP_ACCESS,
+    AppView.PROVIDER_ACCESS,
+    AppView.PROVIDER_SIGN_IN,
+    AppView.PROVIDER_APPLY,
     AppView.MEMBERSHIP,
     AppView.COMMUNITY,
     AppView.CONSCIOUS_SOCIAL_LEARNING,
@@ -282,6 +295,9 @@ const isNoTierSignedInAllowedView = (view: AppView): boolean =>
     AppView.ENTRY,
     AppView.VERIFY_SESSION,
     AppView.MEMBERSHIP_ACCESS,
+    AppView.PROVIDER_ACCESS,
+    AppView.PROVIDER_SIGN_IN,
+    AppView.PROVIDER_APPLY,
     AppView.MEMBERSHIP,
     AppView.PRIVACY_POLICY,
     AppView.AI_TRANSPARENCY_POLICY,
@@ -591,11 +607,6 @@ const App: React.FC = () => {
     };
   };
 
-  const isProviderGatewayPath = useMemo(() => {
-    if (typeof window === 'undefined') return false;
-    return window.location.pathname.replace(/\/+$/, '') === '/provider-gateway';
-  }, []);
-
   const hasConfirmedMembership = (profile: UserProfile | null | undefined): boolean =>
     Boolean(
       profile?.hasActiveMembership === true ||
@@ -642,6 +653,10 @@ const App: React.FC = () => {
 
   useEffect(() => {
     const handlePopState = () => {
+      if (normalizePathname(window.location.pathname) === '/provider-gateway') {
+        setCurrentView(AppView.PROVIDER_ACCESS, {}, { replace: true });
+        return;
+      }
       const nextRoute = resolveRoute(window.location.pathname, window.location.search);
       setCurrentViewState(nextRoute.view);
       setRouteParams(nextRoute.params);
@@ -649,6 +664,9 @@ const App: React.FC = () => {
     };
 
     window.addEventListener('popstate', handlePopState);
+    if (normalizePathname(window.location.pathname) === '/provider-gateway') {
+      setCurrentView(AppView.PROVIDER_ACCESS, {}, { replace: true });
+    }
     return () => window.removeEventListener('popstate', handlePopState);
   }, []);
 
@@ -863,6 +881,10 @@ const App: React.FC = () => {
 
   const handleEnterHub = () => {
     setCurrentView(AppView.MEMBERSHIP_ACCESS);
+  };
+
+  const handleEnterProviderAccess = () => {
+    setCurrentView(AppView.PROVIDER_ACCESS);
   };
   
   const handleGoHome = () => setCurrentView(AppView.ENTRY);
@@ -2007,6 +2029,64 @@ const App: React.FC = () => {
             </div>
           </div>
         );
+      case AppView.PROVIDER_ACCESS:
+        return (
+          <ProviderAccessPage
+            onGoHome={() => setCurrentView(AppView.ENTRY)}
+            onSignIn={() => setCurrentView(AppView.PROVIDER_SIGN_IN)}
+            onApply={() => setCurrentView(AppView.PROVIDER_APPLY)}
+          />
+        );
+      case AppView.PROVIDER_SIGN_IN:
+        return (
+          <div className="flex min-h-[100dvh] w-full items-center justify-center bg-[#06110f] p-4 sm:p-8">
+            <div className="glass-panel w-full max-w-xl rounded-3xl border border-emerald-300/20 bg-emerald-400/[0.04] p-6 shadow-2xl sm:p-8">
+              <button
+                type="button"
+                onClick={() => setCurrentView(AppView.PROVIDER_ACCESS)}
+                className="mb-6 flex items-center gap-2 text-[10px] font-black uppercase tracking-widest text-emerald-100/60 transition-colors hover:text-white"
+              >
+                <ChevronRight className="h-4 w-4 rotate-180" />
+                Provider Access
+              </button>
+              <div className="mb-6 flex h-14 w-14 items-center justify-center rounded-2xl border border-emerald-300/20 bg-emerald-400/10 text-emerald-100">
+                <WalletCards className="h-6 w-6" />
+              </div>
+              <h2 className="text-2xl font-black uppercase tracking-tight text-white sm:text-3xl">
+                Provider Wallet Sign In
+              </h2>
+              <p className="mt-3 text-sm leading-6 text-slate-300">
+                Placeholder route for approved providers. Wallet verification and CRM launch logic
+                will be implemented in a later phase.
+              </p>
+            </div>
+          </div>
+        );
+      case AppView.PROVIDER_APPLY:
+        return (
+          <div className="flex min-h-[100dvh] w-full items-center justify-center bg-[#120d05] p-4 sm:p-8">
+            <div className="glass-panel w-full max-w-xl rounded-3xl border border-amber-200/20 bg-amber-400/[0.05] p-6 shadow-2xl sm:p-8">
+              <button
+                type="button"
+                onClick={() => setCurrentView(AppView.PROVIDER_ACCESS)}
+                className="mb-6 flex items-center gap-2 text-[10px] font-black uppercase tracking-widest text-amber-100/60 transition-colors hover:text-white"
+              >
+                <ChevronRight className="h-4 w-4 rotate-180" />
+                Provider Access
+              </button>
+              <div className="mb-6 flex h-14 w-14 items-center justify-center rounded-2xl border border-amber-200/20 bg-amber-400/10 text-amber-100">
+                <FileText className="h-6 w-6" />
+              </div>
+              <h2 className="text-2xl font-black uppercase tracking-tight text-white sm:text-3xl">
+                Provider Application
+              </h2>
+              <p className="mt-3 text-sm leading-6 text-slate-300">
+                Placeholder route for new provider applicants. Application form, status tracking,
+                and discovery call scheduling will be implemented in a later phase.
+              </p>
+            </div>
+          </div>
+        );
       case AppView.DASHBOARD: 
         return (
           <Dashboard
@@ -2251,19 +2331,6 @@ const App: React.FC = () => {
     );
   }
 
-  if (isProviderGatewayPath) {
-    if (typeof window !== 'undefined') {
-      window.location.replace(BASE44_PROVIDER_PORTAL_URL);
-    }
-    return (
-      <div className="min-h-screen w-full bg-slate-950 text-white flex items-center justify-center p-6">
-        <div className="glass-panel w-full max-w-md rounded-3xl border border-blue-500/20 p-8 text-center">
-          <p className="text-sm text-slate-200">Opening provider portal...</p>
-        </div>
-      </div>
-    );
-  }
-
   return (
     <div className="app-scroll-root min-h-screen bg-[#05070a] text-slate-200 selection:bg-blue-500/30 flex relative">
       {currentView !== AppView.ENTRY && <ThreeScene />}
@@ -2350,9 +2417,10 @@ const App: React.FC = () => {
 
                 <button
                   type="button"
-                  aria-disabled="true"
-                  className="relative flex min-h-[8.75rem] w-full flex-col justify-between rounded-2xl border border-blue-500/20 bg-white/[0.03] p-5 text-left shadow-[0_0_30px_rgba(37,99,235,0.12)] cursor-default opacity-80 sm:min-h-[9.5rem] sm:p-6"
+                  onClick={handleEnterProviderAccess}
+                  className="group relative flex min-h-[8.75rem] w-full flex-col justify-between overflow-hidden rounded-2xl border border-emerald-400/20 bg-emerald-500/[0.04] p-5 text-left shadow-[0_0_30px_rgba(16,185,129,0.12)] transition-all hover:-translate-y-1 hover:border-emerald-300/40 hover:bg-emerald-500/10 active:scale-[0.98] sm:min-h-[9.5rem] sm:p-6"
                 >
+                  <div className="absolute inset-0 bg-gradient-to-r from-transparent via-emerald-100/10 to-transparent -translate-x-full group-hover:translate-x-full transition-transform duration-1000" />
                   <div className="flex items-start justify-between gap-4">
                     <div className="min-w-0">
                       <h2 className="text-sm sm:text-base font-black uppercase tracking-[0.16em] text-white leading-snug">
@@ -2362,10 +2430,10 @@ const App: React.FC = () => {
                         Sign in or apply to join as a service provider
                       </p>
                     </div>
-                    <Building2 className="w-5 h-5 text-blue-300 flex-shrink-0" />
+                    <Building2 className="w-5 h-5 text-emerald-200 flex-shrink-0 group-hover:text-white transition-colors" />
                   </div>
-                  <span className="mt-4 inline-flex w-fit rounded-full border border-blue-400/20 bg-blue-500/10 px-3 py-1 text-[9px] font-black uppercase tracking-[0.25em] text-blue-100/60">
-                    Coming soon
+                  <span className="mt-4 inline-flex w-fit rounded-full border border-emerald-300/20 bg-emerald-500/10 px-3 py-1 text-[9px] font-black uppercase tracking-[0.25em] text-emerald-100/70">
+                    Provider Gateway
                   </span>
                 </button>
 
