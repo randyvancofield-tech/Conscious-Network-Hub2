@@ -22,7 +22,7 @@ export const createProviderChallenge = async (did: string): Promise<ProviderChal
   const id = crypto.randomUUID();
   const nonce = crypto.randomBytes(32).toString('hex');
   const statement = [
-    'Higher Conscious Network Provider Authentication Challenge',
+    'Conscious Network Hub Provider Authentication Challenge',
     `Challenge ID: ${id}`,
     `DID: ${did}`,
     `Nonce: ${nonce}`,

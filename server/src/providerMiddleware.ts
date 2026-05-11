@@ -61,7 +61,7 @@ export const requireProviderSession = async (
 
     const providerDid = String(session.did || '').trim();
     if (!providerDid.startsWith(PROVIDER_DID_PREFIX)) {
-      denyProviderRequest(res, 'Provider session is not bridge-bound');
+      denyProviderRequest(res, 'Provider session is not bound to a CNH provider account');
       return;
     }
 

@@ -34,7 +34,6 @@ interface UserRow {
   email: string;
   name: string | null;
   role: UserRole;
-  providerExternalId: string | null;
   providerApprovalStatus: string | null;
   providerApproved: boolean;
   providerRevokedAt: NullableIso;
@@ -149,25 +148,6 @@ interface ProviderInviteGroupRow {
   updatedAt: string;
 }
 
-interface ProviderBridgeLaunchRow {
-  id: string;
-  providerId?: string | null;
-  providerExternalId: string;
-  email: string;
-  name: string;
-  role?: string;
-  approvalStatus?: string | null;
-  providerApproved?: boolean;
-  walletAddress?: string | null;
-  walletDid?: string | null;
-  issuedAt: string;
-  expiresAt: string;
-  consumedAt: NullableIso;
-  jti: string;
-  scopesJson: string;
-  createdAt: string;
-}
-
 interface StoreRow {
   version: number;
   users: UserRow[];
@@ -177,7 +157,6 @@ interface StoreRow {
   providerChallenges: ProviderChallengeRow[];
   providerSessions: ProviderSessionRow[];
   providerInviteGroups: ProviderInviteGroupRow[];
-  providerBridgeLaunches: ProviderBridgeLaunchRow[];
 }
 
 type RecoveryState =
@@ -223,7 +202,6 @@ export interface LocalStoreDiagnostics {
     providerChallenges: number;
     providerSessions: number;
     providerInviteGroups: number;
-    providerBridgeLaunches: number;
   };
 }
 
@@ -232,7 +210,6 @@ export interface LocalUserRecord {
   email: string;
   name: string | null;
   role: UserRole;
-  providerExternalId: string | null;
   providerApprovalStatus: string | null;
   providerApproved: boolean;
   providerRevokedAt: Date | null;
@@ -347,30 +324,10 @@ export interface LocalProviderInviteGroupRecord {
   updatedAt: Date;
 }
 
-export interface LocalProviderBridgeLaunchRecord {
-  id: string;
-  providerId: string | null;
-  providerExternalId: string;
-  email: string;
-  name: string;
-  role: string;
-  approvalStatus: string | null;
-  providerApproved: boolean;
-  walletAddress: string | null;
-  walletDid: string | null;
-  issuedAt: Date;
-  expiresAt: Date;
-  consumedAt: Date | null;
-  jti: string;
-  scopes: string[];
-  createdAt: Date;
-}
-
 interface CreateUserInput {
   email: string;
   name: string;
   role?: UserRole;
-  providerExternalId?: string | null;
   providerApprovalStatus?: string | null;
   providerApproved?: boolean;
   providerRevokedAt?: Date | null;
@@ -401,7 +358,6 @@ interface CreateUserInput {
 interface UpdateUserInput {
   name?: string | null;
   role?: UserRole;
-  providerExternalId?: string | null;
   providerApprovalStatus?: string | null;
   providerApproved?: boolean;
   providerRevokedAt?: Date | null;
@@ -498,24 +454,6 @@ interface UpsertProviderInviteGroupInput {
   updatedAt?: Date;
 }
 
-interface CreateProviderBridgeLaunchInput {
-  id: string;
-  providerId?: string | null;
-  providerExternalId: string;
-  email: string;
-  name: string;
-  issuedAt: Date;
-  expiresAt: Date;
-  jti: string;
-  role: 'provider';
-  approvalStatus: string | null;
-  providerApproved: boolean;
-  walletAddress: string;
-  walletDid: string;
-  scopes: string[];
-  createdAt?: Date;
-}
-
 const STORE_DIR = path.resolve(__dirname, '../../data');
 const STORE_FILE = path.join(STORE_DIR, 'runtime-store.json');
 const STORE_BACKUP_FILE = path.join(STORE_DIR, 'runtime-store.backup.json');
@@ -554,7 +492,6 @@ const createEmptyStore = (): StoreRow => ({
   providerChallenges: [],
   providerSessions: [],
   providerInviteGroups: [],
-  providerBridgeLaunches: [],
 });
 
 const ensureStoreFile = (): void => {
@@ -613,9 +550,6 @@ const parseStore = (raw: string): StoreRow => {
       : [],
     providerInviteGroups: Array.isArray(parsed.providerInviteGroups)
       ? parsed.providerInviteGroups
-      : [],
-    providerBridgeLaunches: Array.isArray(parsed.providerBridgeLaunches)
-      ? parsed.providerBridgeLaunches
       : [],
   };
 };
@@ -792,8 +726,7 @@ const rowToUser = (row: UserRow): LocalUserRecord => ({
   email: row.email,
   name: row.name,
   role: row.role || 'user',
-  providerExternalId: row.providerExternalId || null,
-  providerApprovalStatus: row.providerApprovalStatus || null,
+    providerApprovalStatus: row.providerApprovalStatus || null,
   providerApproved: row.providerApproved === true,
   providerRevokedAt: row.providerRevokedAt ? toDate(row.providerRevokedAt) : null,
   providerAccessUpdatedAt: row.providerAccessUpdatedAt ? toDate(row.providerAccessUpdatedAt) : null,
@@ -908,41 +841,6 @@ const rowToProviderInviteGroup = (
   };
 };
 
-const rowToProviderBridgeLaunch = (
-  row: ProviderBridgeLaunchRow
-): LocalProviderBridgeLaunchRecord => {
-  let parsedScopes: unknown = [];
-  try {
-    parsedScopes = JSON.parse(row.scopesJson || '[]');
-  } catch {
-    parsedScopes = [];
-  }
-
-  return {
-    id: row.id,
-    providerId: String(row.providerId || '').trim() || null,
-    providerExternalId: row.providerExternalId,
-    email: row.email,
-    name: row.name,
-    role: 'provider',
-    approvalStatus: String(row.approvalStatus || '').trim() || null,
-    providerApproved: row.providerApproved === true,
-    walletAddress: String(row.walletAddress || '').trim() || null,
-    walletDid: String(row.walletDid || '').trim() || null,
-    issuedAt: toDate(row.issuedAt),
-    expiresAt: toDate(row.expiresAt),
-    consumedAt: row.consumedAt ? toDate(row.consumedAt) : null,
-    jti: row.jti,
-    scopes: Array.isArray(parsedScopes)
-      ? parsedScopes
-          .filter((entry): entry is string => typeof entry === 'string')
-          .map((entry) => entry.trim())
-          .filter((entry) => entry.length > 0)
-      : [],
-    createdAt: toDate(row.createdAt),
-  };
-};
-
 const uniqueId = (): string => crypto.randomUUID();
 
 const inspectStoreFile = (filePath: string): StoreFileHealth => {
@@ -1010,14 +908,6 @@ export const localStore = {
     return row ? rowToUser(row) : null;
   },
 
-  getUserByProviderExternalId(providerExternalId: string): LocalUserRecord | null {
-    const normalized = String(providerExternalId || '').trim();
-    if (!normalized) return null;
-    const store = loadStore();
-    const row = store.users.find((user) => String(user.providerExternalId || '').trim() === normalized);
-    return row ? rowToUser(row) : null;
-  },
-
   listUsers(limit = 250): LocalUserRecord[] {
     const store = loadStore();
     return store.users
@@ -1067,7 +957,6 @@ export const localStore = {
       email,
       name: input.name || null,
       role: input.role || 'user',
-      providerExternalId: input.providerExternalId?.trim() || null,
       providerApprovalStatus: input.providerApprovalStatus?.trim() || null,
       providerApproved: input.providerApproved === true,
       providerRevokedAt: input.providerRevokedAt ? input.providerRevokedAt.toISOString() : null,
@@ -1137,9 +1026,6 @@ export const localStore = {
 
     if (updates.name !== undefined) row.name = updates.name;
     if (updates.role !== undefined) row.role = updates.role;
-    if (updates.providerExternalId !== undefined) {
-      row.providerExternalId = updates.providerExternalId?.trim() || null;
-    }
     if (updates.providerApprovalStatus !== undefined) {
       row.providerApprovalStatus = updates.providerApprovalStatus?.trim() || null;
     }
@@ -1537,78 +1423,6 @@ export const localStore = {
     return changed;
   },
 
-  createProviderBridgeLaunch(input: CreateProviderBridgeLaunchInput): LocalProviderBridgeLaunchRecord {
-    const store = loadStore();
-    const row: ProviderBridgeLaunchRow = {
-      id: String(input.id || '').trim(),
-      providerId: String(input.providerId || '').trim() || null,
-      providerExternalId: String(input.providerExternalId || '').trim(),
-      email: normalizeEmail(input.email),
-      name: String(input.name || '').trim() || 'Provider',
-      role: 'provider',
-      approvalStatus: input.approvalStatus,
-      providerApproved: input.providerApproved === true,
-      walletAddress: String(input.walletAddress || '').trim(),
-      walletDid: String(input.walletDid || '').trim(),
-      issuedAt: input.issuedAt.toISOString(),
-      expiresAt: input.expiresAt.toISOString(),
-      consumedAt: null,
-      jti: String(input.jti || '').trim(),
-      scopesJson: JSON.stringify(
-        (Array.isArray(input.scopes) ? input.scopes : [])
-          .filter((entry): entry is string => typeof entry === 'string')
-          .map((entry) => entry.trim())
-          .filter((entry) => entry.length > 0)
-          .slice(0, 24)
-      ),
-      createdAt: (input.createdAt || new Date()).toISOString(),
-    };
-
-    const duplicateJti = store.providerBridgeLaunches.find((entry) => entry.jti === row.jti);
-    if (duplicateJti) {
-      const duplicateError = new Error('Duplicate provider bridge jti');
-      (duplicateError as Error & { code?: string }).code = 'DUPLICATE_BRIDGE_JTI';
-      throw duplicateError;
-    }
-
-    store.providerBridgeLaunches = store.providerBridgeLaunches.filter((entry) => entry.id !== row.id);
-    store.providerBridgeLaunches.push(row);
-    saveStore(store);
-    return rowToProviderBridgeLaunch(row);
-  },
-
-  getProviderBridgeLaunchById(id: string): LocalProviderBridgeLaunchRecord | null {
-    const normalizedId = String(id || '').trim();
-    if (!normalizedId) return null;
-    const store = loadStore();
-    const row = store.providerBridgeLaunches.find((entry) => entry.id === normalizedId);
-    return row ? rowToProviderBridgeLaunch(row) : null;
-  },
-
-  getProviderBridgeLaunchByJti(jti: string): LocalProviderBridgeLaunchRecord | null {
-    const normalizedJti = String(jti || '').trim();
-    if (!normalizedJti) return null;
-    const store = loadStore();
-    const row = store.providerBridgeLaunches.find((entry) => entry.jti === normalizedJti);
-    return row ? rowToProviderBridgeLaunch(row) : null;
-  },
-
-  consumeProviderBridgeLaunch(id: string, consumedAt = new Date()): LocalProviderBridgeLaunchRecord | null {
-    const normalizedId = String(id || '').trim();
-    if (!normalizedId) return null;
-
-    const store = loadStore();
-    const row = store.providerBridgeLaunches.find((entry) => entry.id === normalizedId);
-    if (!row) return null;
-    if (row.consumedAt) {
-      return null;
-    }
-
-    row.consumedAt = consumedAt.toISOString();
-    saveStore(store);
-    return rowToProviderBridgeLaunch(row);
-  },
-
   getDiagnostics(): LocalStoreDiagnostics {
     ensureStoreFile();
 
@@ -1644,7 +1458,6 @@ export const localStore = {
         providerChallenges: active?.providerChallenges.length ?? 0,
         providerSessions: active?.providerSessions.length ?? 0,
         providerInviteGroups: active?.providerInviteGroups.length ?? 0,
-        providerBridgeLaunches: active?.providerBridgeLaunches.length ?? 0,
       },
     };
   },

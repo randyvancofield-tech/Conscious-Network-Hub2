@@ -111,7 +111,7 @@ const ProviderApplicationStatusPage: React.FC<ProviderApplicationStatusPageProps
     if (status === 'under_review') return 'Your materials are under review. The discovery link remains available.';
     if (status === 'discovery_scheduled') return 'Your discovery interview is scheduled or being coordinated.';
     if (status === 'needs_more_info') return 'CNH needs additional information before a decision can be made.';
-    if (status === 'approved') return 'Approval is recorded. Provider CRM access still requires wallet verification in a later phase.';
+    if (status === 'approved') return 'Approval is recorded. Sign in through Provider Access to enter provider tools.';
     if (status === 'rejected') return 'This application was not approved for the current provider cohort.';
     return 'Your application is pending review.';
   }, [applicant?.status]);
@@ -148,7 +148,7 @@ const ProviderApplicationStatusPage: React.FC<ProviderApplicationStatusPageProps
               </h1>
               <p className="mt-4 max-w-2xl text-sm leading-7 text-slate-300">
                 Your provider application is currently under review. Provider CRM tools unlock only
-                after approval and wallet verification.
+                after approval through native CNH provider sign-in.
               </p>
             </div>
             <button

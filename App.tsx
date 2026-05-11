@@ -12,7 +12,6 @@ import ConsciousMeetings from './components/ConsciousMeetings';
 import MeetingsPage from './components/MeetingsPage';
 import MembershipPage from './components/MembershipPage';
 import NotFoundPage from './components/NotFoundPage';
-import AuthCallbackPage from './components/AuthCallbackPage';
 import MusicBox from './components/MusicBox';
 import NotificationsCenter from './components/NotificationsCenter';
 import AdminDashboard from './components/AdminDashboard';
@@ -35,16 +34,15 @@ import blockchainDataPolicy from './docs/compliance/blockchain-data-policy-draft
 import vendorApiGovernancePolicy from './docs/compliance/vendor-api-governance-policy-draft.md?raw';
 import nistMappingSummary from './docs/compliance/nist-mapping-summary.md?raw';
 import {
-  buildBridgeUserFromToken,
   getAuthToken,
   getCachedAuthUser,
   setGuestSession,
   setProviderControlSession,
-  setProviderAuthSession,
   setUserAuthSession,
 } from './services/sessionService';
 import { canTierAccessNavItem, canTierAccessView } from './services/tierAccess';
 import { ApiError, api, apiHealth, backendAssetUrl, getBackendBaseUrl } from './services/apiClient';
+import { createNativeProviderControlSession } from './services/backendApiService';
 
 type RouteState = {
   view: AppView;
@@ -121,8 +119,6 @@ const routePathForView = (view: AppView, params: Record<string, string> = {}): s
   switch (view) {
     case AppView.ENTRY:
       return '/';
-    case AppView.AUTH_CALLBACK:
-      return '/auth/callback';
     case AppView.RESET_PASSWORD:
       return '/reset-password';
     case AppView.VERIFY_EMAIL:
@@ -200,13 +196,11 @@ const resolveRoute = (pathname: string, search = ''): RouteState => {
 
   const staticRoutes: Record<string, AppView> = {
     '/': AppView.ENTRY,
-    '/auth/callback': AppView.AUTH_CALLBACK,
     '/reset-password': AppView.RESET_PASSWORD,
     '/verify-email': AppView.VERIFY_EMAIL,
     '/verify-session': AppView.VERIFY_SESSION,
     '/membership-access': AppView.MEMBERSHIP_ACCESS,
     '/provider-access': AppView.PROVIDER_ACCESS,
-    '/provider-gateway': AppView.PROVIDER_ACCESS,
     '/provider/sign-in': AppView.PROVIDER_SIGN_IN,
     '/provider/apply': AppView.PROVIDER_APPLY,
     '/provider/applicant-sign-in': AppView.PROVIDER_APPLICANT_SIGN_IN,
@@ -560,7 +554,6 @@ const App: React.FC = () => {
       role: ['user', 'applicant', 'provider', 'admin'].includes(String(rawUser?.role || '').toLowerCase())
         ? String(rawUser.role).toLowerCase() as 'user' | 'applicant' | 'provider' | 'admin'
         : 'user',
-      providerExternalId: toNullableTrimmedString(rawUser?.providerExternalId),
       tier: canonicalTier,
       subscriptionStatus,
       membershipStatus: toNullableTrimmedString(rawUser?.membershipStatus),
@@ -600,29 +593,13 @@ const App: React.FC = () => {
     return {
       ...canonicalUser,
       role: canonicalUser.role || 'user',
-      providerExternalId:
-        canonicalUser.role === 'provider' || canonicalUser.role === 'admin'
-          ? canonicalUser.providerExternalId
-          : null,
       tier: canonicalUser.tier,
     };
   };
 
   const toSessionUserFromBackend = (token: string | null, rawUser: any): UserProfile => {
     const canonicalUser = toCanonicalUser(rawUser);
-    if (!token) return canonicalUser;
-    const bridgeUser = buildBridgeUserFromToken(token);
-    if (!bridgeUser) return canonicalUser;
-
-    return {
-      ...canonicalUser,
-      role: bridgeUser.role,
-      providerExternalId: canonicalUser.providerExternalId || bridgeUser.providerExternalId,
-      tier: canonicalUser.tier || bridgeUser.tier,
-      subscriptionStatus: canonicalUser.subscriptionStatus || bridgeUser.subscriptionStatus,
-      walletDid: bridgeUser.walletDid,
-      identityVerified: true,
-    };
+    return canonicalUser;
   };
 
   const hasConfirmedMembership = (profile: UserProfile | null | undefined): boolean =>
@@ -674,10 +651,6 @@ const App: React.FC = () => {
 
   useEffect(() => {
     const handlePopState = () => {
-      if (normalizePathname(window.location.pathname) === '/provider-gateway') {
-        setCurrentView(AppView.PROVIDER_ACCESS, {}, { replace: true });
-        return;
-      }
       const nextRoute = resolveRoute(window.location.pathname, window.location.search);
       setCurrentViewState(nextRoute.view);
       setRouteParams(nextRoute.params);
@@ -685,9 +658,6 @@ const App: React.FC = () => {
     };
 
     window.addEventListener('popstate', handlePopState);
-    if (normalizePathname(window.location.pathname) === '/provider-gateway') {
-      setCurrentView(AppView.PROVIDER_ACCESS, {}, { replace: true });
-    }
     return () => window.removeEventListener('popstate', handlePopState);
   }, []);
 
@@ -709,10 +679,6 @@ const App: React.FC = () => {
     if (initialParams.get('externalMeetingInvite')) {
       setCurrentView(AppView.CONSCIOUS_MEETINGS);
     }
-    if (initialRoute.view === AppView.AUTH_CALLBACK) {
-      return;
-    }
-
     const initializeSession = async () => {
       const token = getAuthToken();
       if (!token) {
@@ -724,11 +690,7 @@ const App: React.FC = () => {
         const data = await api<{ user: any }>('/user/current', { cache: 'no-store' });
         const canonicalUser = toSessionUserFromBackend(token, data.user);
         setUser(canonicalUser);
-        if (buildBridgeUserFromToken(token) || canonicalUser.role === 'provider') {
-          setProviderAuthSession(token, canonicalUser);
-        } else {
-          setUserAuthSession(token, canonicalUser);
-        }
+        setUserAuthSession(token, canonicalUser);
         setSelectedTier(canonicalUser.tier || FREE_TIER_NAME);
         if (hasApplicantRole(canonicalUser)) {
           setIsSelectingTier(false);
@@ -772,15 +734,6 @@ const App: React.FC = () => {
           setCurrentView(AppView.MEMBERSHIP_ACCESS, {}, { replace: true });
         }
       } catch {
-        const bridgeUser = buildBridgeUserFromToken(token);
-        if (bridgeUser) {
-          setUser(bridgeUser);
-          setProviderAuthSession(token, bridgeUser);
-          setSelectedTier(bridgeUser.tier || 'Accelerated Tier');
-          setIsSelectingTier(false);
-          setMembershipNotice('');
-          return;
-        }
         setGuestSession();
         setUser(null);
       }
@@ -968,11 +921,7 @@ const App: React.FC = () => {
       const canonicalUser = toSessionUserFromBackend(token, data.user);
       setUser(canonicalUser);
       if (token) {
-        if (buildBridgeUserFromToken(token) || canonicalUser.role === 'provider') {
-          setProviderAuthSession(token, canonicalUser);
-        } else {
-          setUserAuthSession(token, canonicalUser);
-        }
+        setUserAuthSession(token, canonicalUser);
       }
       setSelectedTier(canonicalUser.tier || FREE_TIER_NAME);
       return canonicalUser;
@@ -1353,11 +1302,72 @@ const App: React.FC = () => {
     });
     const canonicalUser = toPlatformUser(data.user);
     if (!hasApplicantRole(canonicalUser)) {
-      throw new Error('This sign-in is only for provider applicants. Approved providers will use wallet sign-in in the provider path.');
+      throw new Error('This sign-in is only for provider applicants. Approved providers should use Provider Access sign-in.');
     }
     setUserAuthSession(data.token, canonicalUser);
     setUser(canonicalUser);
     routeApplicantToStatus(canonicalUser);
+  };
+
+  const handleApprovedProviderSignIn = async (event: React.FormEvent) => {
+    event.preventDefault();
+    setError('');
+    const normalizedEmail = emailInput.trim().toLowerCase();
+
+    try {
+      const data = await api<any>('/user/signin', {
+        method: 'POST',
+        auth: false,
+        body: {
+          email: normalizedEmail,
+          password: passwordInput,
+          twoFactorCode: twoFactorCodeInput,
+          providerToken: providerTokenInput,
+        },
+      });
+
+      if (data?.requiresTwoFactor) {
+        const method = data?.method === 'wallet' ? 'wallet' : 'phone';
+        setPendingTwoFactorMethod(method);
+        setError(data?.message || 'Additional verification is required.');
+        return;
+      }
+
+      const canonicalUser = toPlatformUser(data.user);
+      if (!hasProviderRole(canonicalUser)) {
+        setError('This sign-in is only for approved CNH providers and admins.');
+        return;
+      }
+
+      setUserAuthSession(data.token, canonicalUser);
+      setUser(canonicalUser);
+      setSelectedTier(canonicalUser.tier || 'Accelerated Tier');
+      setIsSelectingTier(false);
+      setMembershipCheckoutPending(false);
+      setMembershipNotice('');
+      setPendingCheckoutSessionId(null);
+      setPendingTwoFactorMethod(null);
+      setTwoFactorCodeInput('');
+      setProviderTokenInput('');
+
+      const providerSession = await createNativeProviderControlSession();
+      if (!providerSession?.token) {
+        setError('Provider account verified, but provider host controls could not be initialized.');
+        return;
+      }
+
+      setProviderControlSession(providerSession.token);
+      setCurrentView(AppView.CONSCIOUS_MEETINGS, {}, { replace: true });
+      setSidebarOpen(window.innerWidth >= 1024);
+    } catch (error) {
+      if (error instanceof ApiError) {
+        setError(error.message || 'Invalid provider credentials.');
+        return;
+      }
+      console.error('Provider sign-in request failed:', error);
+      setHealthStatus('offline');
+      setError(backendConnectionErrorMessage('sign in as a provider'));
+    }
   };
 
   const handleCreateProfile = async (e: React.FormEvent) => {
@@ -1710,46 +1720,11 @@ const App: React.FC = () => {
 
   const updateActiveUser = (updated: UserProfile) => {
     const token = getAuthToken();
-    const canonicalUpdated = buildBridgeUserFromToken(token || '')
-      ? toSessionUserFromBackend(token, { ...user, ...updated })
-      : toPlatformUser({ ...user, ...updated });
+    const canonicalUpdated = toPlatformUser({ ...user, ...updated });
     setUser(canonicalUpdated);
     if (token) {
-      if (buildBridgeUserFromToken(token) || canonicalUpdated.role === 'provider') {
-        setProviderAuthSession(token, canonicalUpdated);
-      } else {
-        setUserAuthSession(token, canonicalUpdated);
-      }
+      setUserAuthSession(token, canonicalUpdated);
     }
-  };
-
-  const handleAuthCallbackAuthenticated = (
-    token: string,
-    authenticatedUser: UserProfile,
-    providerSessionToken?: string
-  ) => {
-    setProviderAuthSession(token, authenticatedUser);
-    if (providerSessionToken) {
-      setProviderControlSession(providerSessionToken);
-    }
-    setUser(authenticatedUser);
-    setSelectedTier(authenticatedUser.tier || 'Accelerated Tier');
-    setMembershipNotice('');
-    setIsSelectingTier(false);
-    setMembershipCheckoutPending(false);
-    setPendingCheckoutSessionId(null);
-    setPendingTwoFactorMethod(null);
-    setTwoFactorCodeInput('');
-    setProviderTokenInput('');
-    setCurrentView(AppView.CONSCIOUS_MEETINGS, {}, { replace: true });
-    if (window.innerWidth >= 1024) {
-      setSidebarOpen(true);
-    }
-  };
-
-  const handleAuthCallbackInvalidToken = () => {
-    setGuestSession();
-    setUser(null);
   };
 
   const handleIdentityComplete = (profileData: Partial<UserProfile>) => {
@@ -2044,7 +2019,7 @@ const App: React.FC = () => {
             </h2>
             <p className="text-slate-300 text-sm leading-relaxed">
               Your provider application is still under review. This area unlocks after approval
-              and wallet verification.
+              through native CNH provider sign-in.
             </p>
             <button
               onClick={() => setCurrentView(AppView.PROVIDER_APPLICATION_STATUS)}
@@ -2197,26 +2172,95 @@ const App: React.FC = () => {
         );
       case AppView.PROVIDER_SIGN_IN:
         return (
-          <div className="flex min-h-[100dvh] w-full items-center justify-center bg-[#06110f] p-4 sm:p-8">
-            <div className="glass-panel w-full max-w-xl rounded-3xl border border-emerald-300/20 bg-emerald-400/[0.04] p-6 shadow-2xl sm:p-8">
+          <div className="flex min-h-[100dvh] w-full items-center justify-center bg-[#05070a] p-4 sm:p-8">
+            <div className="glass-panel w-full max-w-xl rounded-3xl border border-blue-300/20 bg-blue-500/[0.04] p-6 shadow-2xl sm:p-8">
               <button
                 type="button"
                 onClick={() => setCurrentView(AppView.PROVIDER_ACCESS)}
-                className="mb-6 flex items-center gap-2 text-[10px] font-black uppercase tracking-widest text-emerald-100/60 transition-colors hover:text-white"
+                className="mb-6 flex items-center gap-2 text-[10px] font-black uppercase tracking-widest text-blue-100/60 transition-colors hover:text-white"
               >
                 <ChevronRight className="h-4 w-4 rotate-180" />
                 Provider Access
               </button>
-              <div className="mb-6 flex h-14 w-14 items-center justify-center rounded-2xl border border-emerald-300/20 bg-emerald-400/10 text-emerald-100">
+              <div className="mb-6 flex h-14 w-14 items-center justify-center rounded-2xl border border-blue-300/20 bg-blue-500/10 text-blue-100">
                 <WalletCards className="h-6 w-6" />
               </div>
               <h2 className="text-2xl font-black uppercase tracking-tight text-white sm:text-3xl">
-                Provider Wallet Sign In
+                Approved Provider Sign In
               </h2>
               <p className="mt-3 text-sm leading-6 text-slate-300">
-                Placeholder route for approved providers. Wallet verification and CRM launch logic
-                will be implemented in a later phase.
+                Sign in with your approved Conscious Network Hub provider account to initialize
+                native provider host controls.
               </p>
+              <form onSubmit={handleApprovedProviderSignIn} className="mt-7 space-y-5">
+                {error && (
+                  <p className="rounded-xl border border-red-400/20 bg-red-400/10 p-3 text-[10px] font-black uppercase tracking-widest text-red-200">
+                    {error}
+                  </p>
+                )}
+                <label className="block space-y-2">
+                  <span className="text-[10px] font-black uppercase tracking-widest text-slate-500">
+                    Provider email
+                  </span>
+                  <input
+                    type="email"
+                    value={emailInput}
+                    onChange={(event) => setEmailInput(event.target.value)}
+                    className="w-full rounded-2xl border border-white/10 bg-white/[0.06] px-5 py-4 text-sm text-white outline-none transition focus:ring-2 focus:ring-blue-500/40"
+                    required
+                    placeholder="you@example.com"
+                  />
+                </label>
+                <label className="block space-y-2">
+                  <span className="text-[10px] font-black uppercase tracking-widest text-slate-500">
+                    Password
+                  </span>
+                  <input
+                    type="password"
+                    value={passwordInput}
+                    onChange={(event) => setPasswordInput(event.target.value)}
+                    className="w-full rounded-2xl border border-white/10 bg-white/[0.06] px-5 py-4 text-sm text-white outline-none transition focus:ring-2 focus:ring-blue-500/40"
+                    required
+                    placeholder="********"
+                  />
+                </label>
+                {pendingTwoFactorMethod === 'phone' && (
+                  <label className="block space-y-2">
+                    <span className="text-[10px] font-black uppercase tracking-widest text-slate-500">
+                      Phone OTP Code
+                    </span>
+                    <input
+                      type="text"
+                      value={twoFactorCodeInput}
+                      onChange={(event) => setTwoFactorCodeInput(event.target.value)}
+                      className="w-full rounded-2xl border border-white/10 bg-white/[0.06] px-5 py-4 text-sm text-white outline-none transition focus:ring-2 focus:ring-blue-500/40"
+                      required
+                      placeholder="6-digit code"
+                    />
+                  </label>
+                )}
+                {pendingTwoFactorMethod === 'wallet' && (
+                  <label className="block space-y-2">
+                    <span className="text-[10px] font-black uppercase tracking-widest text-slate-500">
+                      Address Verification Credential
+                    </span>
+                    <input
+                      type="text"
+                      value={providerTokenInput}
+                      onChange={(event) => setProviderTokenInput(event.target.value)}
+                      className="w-full rounded-2xl border border-white/10 bg-white/[0.06] px-5 py-4 text-sm text-white outline-none transition focus:ring-2 focus:ring-blue-500/40"
+                      required
+                      placeholder="Paste session credential"
+                    />
+                  </label>
+                )}
+                <button
+                  type="submit"
+                  className="w-full rounded-2xl bg-blue-600 px-5 py-4 text-xs font-black uppercase tracking-widest text-white shadow-xl shadow-blue-950/40 transition hover:bg-blue-500"
+                >
+                  {pendingTwoFactorMethod ? 'Verify & Open Provider Tools' : 'Open Provider Tools'}
+                </button>
+              </form>
             </div>
           </div>
         );
@@ -2488,15 +2532,6 @@ const App: React.FC = () => {
     }
   };
 
-  if (currentView === AppView.AUTH_CALLBACK) {
-    return (
-      <AuthCallbackPage
-        onAuthenticated={handleAuthCallbackAuthenticated}
-        onInvalidToken={handleAuthCallbackInvalidToken}
-      />
-    );
-  }
-
   return (
     <div className="app-scroll-root min-h-screen bg-[#05070a] text-slate-200 selection:bg-blue-500/30 flex relative">
       {currentView !== AppView.ENTRY && <ThreeScene />}
@@ -2599,7 +2634,7 @@ const App: React.FC = () => {
                     <Building2 className="w-5 h-5 text-emerald-200 flex-shrink-0 group-hover:text-white transition-colors" />
                   </div>
                   <span className="mt-4 inline-flex w-fit rounded-full border border-emerald-300/20 bg-emerald-500/10 px-3 py-1 text-[9px] font-black uppercase tracking-[0.25em] text-emerald-100/70">
-                    Provider Gateway
+                    Provider Access
                   </span>
                 </button>
 

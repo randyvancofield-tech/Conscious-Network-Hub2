@@ -2,7 +2,7 @@
 
 Date: 2026-05-02
 
-Status: Findings report only. No remediation edits have been applied yet.
+Status: Historical findings snapshot. Base44/auth-bridge references in this report describe retired/deprecated flows and are not current provider CRM, auth, routing, or launch guidance.
 
 ## Scope
 

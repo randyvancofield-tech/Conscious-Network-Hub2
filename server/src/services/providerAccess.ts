@@ -86,20 +86,3 @@ export const revokeProviderAccessForUser = async (
     userSessionsRevoked,
   };
 };
-
-export const revokeProviderAccessByExternalId = async (
-  providerExternalId: string,
-  input?: {
-    approvalStatus?: string | null;
-  }
-): Promise<{
-  user: LocalUserRecord;
-  providerSessionsRevoked: number;
-  userSessionsRevoked: number;
-} | null> => {
-  const normalizedExternalId = String(providerExternalId || '').trim();
-  if (!normalizedExternalId) return null;
-  const user = await localStore.getUserByProviderExternalId(normalizedExternalId);
-  if (!user) return null;
-  return revokeProviderAccessForUser(user, input);
-};

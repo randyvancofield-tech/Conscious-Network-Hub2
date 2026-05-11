@@ -121,7 +121,7 @@ Routes are mounted in `src/index.ts`.
 | `/api/reflection` | `src/routes/reflection.ts` | Protected |
 | `/api/social` | `src/routes/social.ts` | Protected |
 | `/api/provider/session` | `src/routes/providerSession.ts` | Provider-session protected |
-| `/api/bridge` | `src/routes/providerBridge.ts` | Provider/user bridge |
+| `/api/provider/auth/session` | `src/routes/providerAuth.ts` | Native provider control session |
 | `/api/immersive` | `src/routes/immersive.ts` | Protected |
 | `/api/meeting` | `src/routes/meeting.ts` | Mixed user/provider/guest routers |
 | `/uploads` | `src/routes/upload.ts` | Public upload retrieval |

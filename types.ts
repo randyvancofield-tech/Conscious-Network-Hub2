@@ -1,7 +1,6 @@
 
 export enum AppView {
   ENTRY = 'ENTRY',
-  AUTH_CALLBACK = 'AUTH_CALLBACK',
   RESET_PASSWORD = 'RESET_PASSWORD',
   VERIFY_EMAIL = 'VERIFY_EMAIL',
   VERIFY_SESSION = 'VERIFY_SESSION',
@@ -93,7 +92,6 @@ export interface UserProfile {
   handle?: string;
   email: string;
   role?: 'user' | 'applicant' | 'provider' | 'admin';
-  providerExternalId?: string | null;
   passwordHash?: string;
   tier: string | null;
   subscriptionStatus?: string | null;

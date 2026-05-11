@@ -15,7 +15,6 @@ const toProviderResponse = (user: any) => ({
   id: user.id,
   name: user.name || (user.role === 'provider' ? 'Verified Provider' : 'Member'),
   role: user.role,
-  providerExternalId: user.providerExternalId || null,
   handle: user.handle || null,
   bio: user.bio || '',
   location: user.location || '',

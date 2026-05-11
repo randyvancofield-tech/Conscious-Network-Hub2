@@ -136,36 +136,15 @@ export interface ExternalMeetingJoinResult {
   session: MeetingSessionSummary;
 }
 
-export interface ProviderBridgeConsumeResult {
+export interface NativeProviderSessionResult {
+  token: string;
+  expiresAt: number;
   session: {
-    token: string;
-    expiresAt: number;
-  };
-  providerSession: {
-    token: string;
-    expiresAt: number;
-  };
-  user: {
     id: string;
-    email: string;
-    name: string;
-    role: 'user' | 'applicant' | 'provider' | 'admin';
-    providerExternalId: string | null;
-    providerApprovalStatus?: string | null;
-    providerApproved?: boolean;
-    providerRevokedAt?: string | Date | null;
-    tier: string | null;
-    subscriptionStatus: string | null;
-    createdAt: string;
-    updatedAt: string;
-    twoFactorEnabled: boolean;
-    twoFactorMethod: 'none' | 'phone' | 'wallet';
-    phoneNumberMasked: string | null;
-    walletAddress?: string | null;
-    walletDid: string | null;
-    initialTwoFactorRequired?: boolean;
-    initialTwoFactorCompleted?: boolean;
-    canAccessFullPlatform?: boolean;
+    did: string;
+    scopes: string[];
+    issuedAt: string;
+    expiresAt: string;
   };
 }
 
@@ -371,19 +350,15 @@ class BackendAPIService {
     }
   }
 
-  async consumeProviderLaunchCode(code: string): Promise<ProviderBridgeConsumeResult | null> {
-    const normalized = String(code || '').trim();
-    if (!normalized) return null;
+  async createNativeProviderControlSession(): Promise<NativeProviderSessionResult | null> {
     try {
-      const data = await api<any>('/bridge/provider/consume-launch-code', {
+      const data = await api<any>('/provider/auth/session', {
         method: 'POST',
-        auth: false,
-        body: { code: normalized },
       });
-      if (!data?.session?.token || !data?.providerSession?.token || !data?.user?.id) {
+      if (!data?.token || !data?.session?.id) {
         return null;
       }
-      return data as ProviderBridgeConsumeResult;
+      return data as NativeProviderSessionResult;
     } catch {
       return null;
     }
@@ -939,10 +914,8 @@ export async function getUserDirectory(): Promise<DirectoryUserEntry[]> {
   return backendAPI.getUserDirectory();
 }
 
-export async function consumeProviderLaunchCode(
-  code: string
-): Promise<ProviderBridgeConsumeResult | null> {
-  return backendAPI.consumeProviderLaunchCode(code);
+export async function createNativeProviderControlSession(): Promise<NativeProviderSessionResult | null> {
+  return backendAPI.createNativeProviderControlSession();
 }
 
 export async function listProviderInviteGroups(

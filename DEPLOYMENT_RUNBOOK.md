@@ -27,7 +27,7 @@ Required Render Stripe values:
 Render should also ensure:
 
    - `CORS_ORIGINS=https://conscious-network.org,https://higherconscious.network,https://consciousnetwork1.wordpress.com,http://localhost:5173`
-   - `FRONTEND_BASE_URL=https://conscious-network.org` (used for redirects, emails, provider bridge)
+   - `FRONTEND_BASE_URL=https://conscious-network.org` (used for redirects, emails, and Stripe)
    - `AUTH_TOKEN_SECRET` is set
    - `DATABASE_URL` is the Neon pooled Postgres URL, usually a `-pooler` host (not `file:`)
    - `DATABASE_POOL_MODE=transaction` or `session`, matching the Neon pooler mode

@@ -25,9 +25,6 @@ const BASE_REQUIRED_ENV = {
   STRIPE_SUCCESS_URL: 'http://localhost:3000/verify-session?session_id={CHECKOUT_SESSION_ID}',
   STRIPE_CANCEL_URL: 'http://localhost:3000/membership-access',
   FRONTEND_BASE_URL: 'http://localhost:3000',
-  BRIDGE_PROVIDER_SECRET: 'integration-test-bridge-secret',
-  BRIDGE_PROVIDER_ISSUER: 'integration-test-issuer',
-  BRIDGE_PROVIDER_AUDIENCE: 'integration-test-audience',
 };
 
 const buildEnv = ({ unset = [], set = {} } = {}) => {

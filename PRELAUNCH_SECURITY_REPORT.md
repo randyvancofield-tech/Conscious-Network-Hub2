@@ -124,7 +124,7 @@ Frontend build still reports the existing large bundle warning. This is a perfor
 - Completed 2026-05-02: promoted `randyvancofield@gmail.com` to `admin` through a controlled Prisma script.
 - Store production secrets in the deployment secret manager, not source control.
 - Rotate any secret that may have appeared in git history or shared logs.
-- Verify Base44 provider portal redirects live.
+- Verify native CNH provider access, applicant status, and approved-provider sign-in flows live.
 - Verify Cloud Run/static hosting rewrites deep frontend links to `index.html`.
 - Perform an authenticated deployed smoke test for member, provider, and admin flows.
 - Add route-level authorization regression tests for admin denial, provider queue ownership, reflection ownership, and membership status ownership.

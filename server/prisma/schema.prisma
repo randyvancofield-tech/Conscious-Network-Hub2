@@ -28,6 +28,8 @@ model User {
   email                   String    @unique
   name                    String?
   role                    UserRole  @default(user)
+  // Deprecated legacy bridge column retained only for backward-compatible database reads.
+  // Active CNH provider auth no longer uses external provider identifiers.
   providerExternalId      String?   @unique
   providerApprovalStatus  String?
   providerApproved        Boolean   @default(false) @map("provider_status")
@@ -89,6 +91,7 @@ model User {
   courseEnrollments      UserCourse[]
   anchorLinkRequests     AnchorLinkRequest[]    @relation("AnchorLinkRequester")
   providerAnchorRequests AnchorLinkRequest[]    @relation("AnchorLinkProvider")
+  // Deprecated legacy launch-code relation retained for migration compatibility only.
   providerBridgeLaunches ProviderBridgeLaunch[] @relation("ProviderBridgeLaunchProvider")
   providerApplications    ProviderApplicant[]
 
@@ -231,6 +234,8 @@ model AiInteraction {
   @@index([createdAt])
 }
 
+// Deprecated legacy launch-code table retained for migration compatibility only.
+// Active provider sessions are created from canonical CNH auth via /api/provider/auth/session.
 model ProviderBridgeLaunch {
   id                 String    @id @map("code")
   providerId         String?   @map("provider_id")

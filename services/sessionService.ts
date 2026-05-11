@@ -1,7 +1,7 @@
 import { UserProfile } from '../types';
 
 export const AUTH_TOKEN_KEY = 'hcn_auth_token';
-export const BRIDGE_AUTH_TOKEN_KEY = 'auth_token';
+const LEGACY_EXTERNAL_AUTH_TOKEN_KEY = 'auth_token';
 export const ACTIVE_USER_CACHE_KEY = 'hcn_active_user';
 export const PLATFORM_SESSION_KEY = 'hcn_platform_session';
 export const PROVIDER_SESSION_TOKEN_KEY = 'hcn_provider_session_token';
@@ -80,7 +80,7 @@ const isExpiredToken = (token: string, skewMs = 5000): boolean => {
 
 const getStoredTokenCandidates = (): string[] => {
   if (!hasBrowserStorage()) return [];
-  return [BRIDGE_AUTH_TOKEN_KEY, AUTH_TOKEN_KEY]
+  return [AUTH_TOKEN_KEY]
     .map((key) => localStorage.getItem(key))
     .filter((token): token is string => Boolean(token));
 };
@@ -106,7 +106,7 @@ const writePlatformSession = (session: PlatformSessionState): void => {
 export const setGuestSession = (): void => {
   if (!hasBrowserStorage()) return;
   localStorage.removeItem(AUTH_TOKEN_KEY);
-  localStorage.removeItem(BRIDGE_AUTH_TOKEN_KEY);
+  localStorage.removeItem(LEGACY_EXTERNAL_AUTH_TOKEN_KEY);
   localStorage.removeItem(ACTIVE_USER_CACHE_KEY);
   setProviderControlSession('');
   writePlatformSession({
@@ -120,7 +120,7 @@ export const setUserAuthSession = (token: string, user?: UserProfile | null): vo
   if (!hasBrowserStorage()) return;
   const platformUser = user ? { ...user, role: user.role || 'user' } : null;
   localStorage.setItem(AUTH_TOKEN_KEY, token);
-  localStorage.removeItem(BRIDGE_AUTH_TOKEN_KEY);
+  localStorage.removeItem(LEGACY_EXTERNAL_AUTH_TOKEN_KEY);
   if (platformUser) {
     localStorage.setItem(ACTIVE_USER_CACHE_KEY, JSON.stringify(platformUser));
   }
@@ -129,25 +129,19 @@ export const setUserAuthSession = (token: string, user?: UserProfile | null): vo
       ? 'admin'
       : platformUser?.role === 'applicant'
         ? 'applicant'
-        : 'user';
+        : platformUser?.role === 'provider'
+          ? 'provider'
+          : 'user';
   writePlatformSession({
     isAuthenticated: true,
     role,
     tier: normalizePlatformTier(platformUser?.tier),
-    permissions: platformUser?.role === 'admin' ? ['admin:dashboard'] : [],
-  });
-};
-
-export const setProviderAuthSession = (token: string, user: UserProfile): void => {
-  if (!hasBrowserStorage()) return;
-  localStorage.setItem(AUTH_TOKEN_KEY, token);
-  localStorage.setItem(BRIDGE_AUTH_TOKEN_KEY, token);
-  localStorage.setItem(ACTIVE_USER_CACHE_KEY, JSON.stringify(user));
-  writePlatformSession({
-    isAuthenticated: true,
-    role: user.role === 'admin' ? 'admin' : 'provider',
-    tier: normalizePlatformTier(user.tier),
-    permissions: ['provider:portal'],
+    permissions:
+      platformUser?.role === 'admin'
+        ? ['admin:dashboard', 'provider:portal']
+        : platformUser?.role === 'provider'
+          ? ['provider:portal']
+          : [],
   });
 };
 
@@ -177,7 +171,7 @@ export const getProviderControlSession = (): string | null => {
 export const clearAuthSession = (): void => {
   if (!hasBrowserStorage()) return;
   localStorage.removeItem(AUTH_TOKEN_KEY);
-  localStorage.removeItem(BRIDGE_AUTH_TOKEN_KEY);
+  localStorage.removeItem(LEGACY_EXTERNAL_AUTH_TOKEN_KEY);
   localStorage.removeItem(ACTIVE_USER_CACHE_KEY);
   localStorage.removeItem(PLATFORM_SESSION_KEY);
   if (hasBrowserSessionStorage()) {
@@ -202,48 +196,10 @@ export const getAdminElevationToken = (): string | null => {
   return token || null;
 };
 
-export const buildBridgeUserFromToken = (token: string): UserProfile | null => {
-  if (isExpiredToken(token, 0)) return null;
-
-  const payload = parseAuthTokenPayload(token);
-  if (!payload) return null;
-
-  const role = String(payload.role || '').trim().toLowerCase();
-  if (role !== 'provider' && role !== 'admin') return null;
-
-  const email = String(payload.email || '').trim().toLowerCase();
-  const userId = String(payload.userId || payload.sub || '').trim();
-  const providerExternalId = String(payload.sub || '').trim() || null;
-  const walletAddress = String(payload.walletAddress || payload.walletDid || '').trim();
-  if (!email || !userId || !walletAddress) return null;
-
-  return {
-    id: userId,
-    name: email.split('@')[0] || 'Provider',
-    email,
-    role,
-    providerExternalId,
-    tier: 'Accelerated Tier',
-    subscriptionStatus: 'active',
-    hasProfile: true,
-    identityVerified: true,
-    reputationScore: 100,
-    accessKeyIndex: 200,
-    createdAt: new Date().toISOString(),
-    twoFactorEnabled: false,
-    twoFactorMethod: 'wallet',
-    phoneNumberMasked: null,
-    walletDid: walletAddress,
-  };
-};
-
 export const getCachedAuthUser = (): UserProfile | null => {
   if (!hasBrowserStorage()) return null;
   const token = getAuthToken();
   if (!token) return null;
-
-  const bridgeUser = buildBridgeUserFromToken(token);
-  if (bridgeUser) return bridgeUser;
 
   try {
     const cached = JSON.parse(localStorage.getItem(ACTIVE_USER_CACHE_KEY) || 'null') as

@@ -16,7 +16,7 @@ This checkout is not the Base44-style `entities/` + `src/App.jsx` layout. The ac
 - Testing: Jest (integration tests for core persistence/auth loops)
 - Deployment: Render backend currently; legacy Google Cloud Run scripts/docs may still exist
 - Contracts: Solidity contract package under `contracts/`
-- Provider launch support: Base44 function material under `base44/functions/providerLaunch/`
+- Provider launch support: native CNH provider applicant/auth/admin routes; Base44 launch material is deprecated and not part of active flows
 
 ## Architecture
 
@@ -55,7 +55,7 @@ This checkout is not the Base44-style `entities/` + `src/App.jsx` layout. The ac
 - Protected-route identity helpers: `getAuthenticatedUserId(req)` and `enforceAuthenticatedUserMatch(...)`
 - Logout endpoint: `POST /api/user/logout` revokes the active persisted session
 - Admin elevation: `server/src/routes/admin.ts` requires canonical identity, admin role, password verification, and short-lived elevation token checks for sensitive operations
-- Provider auth is separate from member auth: provider DID/session routes live in `server/src/routes/providerAuth.ts`, `providerBridge.ts`, and `providerSession.ts`
+- Provider auth is separate from member auth: native provider session routes live in `server/src/routes/providerAuth.ts` and `providerSession.ts`
 
 ## Current Workspace Structure
 
@@ -66,7 +66,7 @@ This checkout is not the Base44-style `entities/` + `src/App.jsx` layout. The ac
 - `src/knowledge/`: packaged knowledge data used by the app
 - `server/`: Express API package, Prisma schema/migrations, tests, deployment scripts, backend services, and routes
 - `contracts/`: Solidity contract package and deployment/compile tooling
-- `base44/functions/providerLaunch/`: provider launch function scaffold and frontend example
+- Base44 provider launch scaffolds have been removed from the active workspace; native CNH provider application and review routes are authoritative
 - `docs/`: architecture, privacy, compliance, cleanup, backend mapping, and archived implementation notes
 - `public/`: public images and video assets
 - `.agents/`: local Codex skills/plugins and agent configuration
@@ -83,30 +83,27 @@ This checkout is not the Base44-style `entities/` + `src/App.jsx` layout. The ac
 - `server/src/auth/providerToken.ts`
 - `server/src/routes/user.ts`
 - `server/src/routes/admin.ts`
-- `server/src/routes/authBridge.ts`
 - `server/src/routes/providerAuth.ts`
-- `server/src/routes/providerBridge.ts`
 - `server/src/routes/providerSession.ts`
 - `server/src/services/persistenceStore.ts`
 - `server/src/services/localStore.ts`
 - `server/src/services/userSessionStore.ts`
 - `server/src/services/providerSessionStore.ts`
 - `server/src/services/providerAccess.ts`
-- `server/src/services/bridgeProviderUser.ts`
 - `server/src/services/auditTelemetry.ts`
 - `server/prisma/schema.prisma`
 
 ## Backend Route Map
 
-- Identity/auth/user: `user.ts`, `admin.ts`, `authBridge.ts`, `identitySecurity.ts`, `integrity.ts`
-- Provider flows: `providers.ts`, `providerAuth.ts`, `providerBridge.ts`, `providerSession.ts`
+- Identity/auth/user: `user.ts`, `admin.ts`, `identitySecurity.ts`, `integrity.ts`
+- Provider flows: `providers.ts`, `providerAuth.ts`, `providerSession.ts`
 - Member features: `membership.ts`, `courses.ts`, `userCourses.ts`, `reflection.ts`, `social.ts`, `meeting.ts`
 - Platform services: `ai.ts`, `immersive.ts`, `upload.ts`
 
 ## Backend Service Map
 
 - Persistence/session: `persistenceStore.ts`, `localStore.ts`, `prismaClient.ts`, `userSessionStore.ts`, `providerSessionStore.ts`
-- Provider governance: `providerAccess.ts`, `providerDid.ts`, `bridgeProviderUser.ts`
+- Provider governance: `providerAccess.ts`, `providerDid.ts`
 - Security/privacy: `auditTelemetry.ts`, `privacyGuard.ts`, `sensitiveDataPolicy.ts`, `profileNormalization.ts`, `userProfilePatch.ts`
 - Integrations/content: `openAiService.ts`, `vertexAiService.ts`, `emailService.ts`, `googleSheetsMirror.ts`, `knowledgeService.ts`, `socialStore.ts`, `uploadBlobStore.ts`
 

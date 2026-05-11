@@ -271,7 +271,7 @@ const ProviderApplicationPage: React.FC<ProviderApplicationPageProps> = ({
               Thank you for applying
             </h1>
             <p className="mx-auto mt-4 max-w-2xl text-sm leading-7 text-slate-300">
-              Thank you for applying to become a Higher Conscious Network provider. Your application
+              Thank you for applying to become a Conscious Network Hub provider. Your application
               has been received and is now pending review. Please schedule your discovery interview
               using the link below.
             </p>
@@ -320,12 +320,12 @@ const ProviderApplicationPage: React.FC<ProviderApplicationPageProps> = ({
               New Provider Applicant
             </p>
             <h1 className="mt-3 text-3xl font-black uppercase leading-tight tracking-tight sm:text-5xl">
-              Apply to Join Higher Conscious Network
+              Apply to Join Conscious Network Hub
             </h1>
             <p className="mt-4 text-sm leading-7 text-slate-300">
               Create your applicant account, submit credentials and materials, and enter a
-              restricted review path. Full provider tools remain locked until approval and future
-              wallet verification.
+              restricted review path. Full provider tools remain locked until approval and native
+              CNH provider sign-in.
             </p>
           </div>
 
@@ -484,7 +484,7 @@ const ProviderApplicationPage: React.FC<ProviderApplicationPageProps> = ({
               <TextArea label="How do you balance spiritual, cultural, emotional, and ethical responsibility when supporting others?" value={values.ethicalResponsibility} onChange={(value) => update('ethicalResponsibility', value)} required />
               <TextArea label="Describe your approach to working with people from marginalized or underserved communities." value={values.marginalizedCommunities} onChange={(value) => update('marginalizedCommunities', value)} required />
               <TextArea label="How do you handle disagreement, spiritual diversity, or differing worldviews in a care-based setting?" value={values.worldviewDiversity} onChange={(value) => update('worldviewDiversity', value)} required />
-              <TextArea label="Why do you want to become part of Higher Conscious Network?" value={values.whyHigherConsciousNetwork} onChange={(value) => update('whyHigherConsciousNetwork', value)} required />
+              <TextArea label="Why do you want to become part of Conscious Network Hub?" value={values.whyHigherConsciousNetwork} onChange={(value) => update('whyHigherConsciousNetwork', value)} required />
               <TextArea label="How does your work support healing, empowerment, education, or transformation?" value={values.transformationSupport} onChange={(value) => update('transformationSupport', value)} required />
             </div>
           )}

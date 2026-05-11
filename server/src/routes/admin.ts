@@ -51,7 +51,6 @@ const toAdminUserSummary = (user: any) => ({
   role: normalizeRole(user.role) || 'user',
   tier: user.tier || null,
   subscriptionStatus: user.subscriptionStatus || null,
-  providerExternalId: user.providerExternalId || null,
   providerApprovalStatus: user.providerApprovalStatus || null,
   providerApproved: user.providerApproved === true,
   twoFactorMethod: user.twoFactorMethod || 'none',
@@ -276,6 +275,15 @@ router.patch('/provider-applicants/:id', async (req: Request, res: Response): Pr
     reviewedAt: new Date(),
   });
 
+  if (status === 'approved') {
+    await localStore.updateUser(existing.userId, {
+      role: 'provider',
+      providerApproved: true,
+      providerApprovalStatus: 'approved',
+      providerAccessUpdatedAt: new Date(),
+    });
+  }
+
   recordAuditEvent(req, {
     domain: 'admin',
     action: 'provider_applicant_update',
@@ -288,6 +296,7 @@ router.patch('/provider-applicants/:id', async (req: Request, res: Response): Pr
       previousStatus: existing.status,
       nextStatus: updated.status,
       adminNotesUpdated: adminNotes !== undefined,
+      nativeProviderAccessGranted: status === 'approved',
     },
   });
 

@@ -23,7 +23,6 @@ const NAV_VIEW_BY_ID: Record<string, AppView> = {
 
 const BASE_ACCESS_VIEWS = [
   AppView.ENTRY,
-  AppView.AUTH_CALLBACK,
   AppView.VERIFY_SESSION,
   AppView.MEMBERSHIP_ACCESS,
   AppView.PROVIDER_ACCESS,

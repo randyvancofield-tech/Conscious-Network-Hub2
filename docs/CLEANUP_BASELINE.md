@@ -78,7 +78,7 @@ Routes are mounted in `server/src/index.ts`.
 | `/api/reflection` | `server/src/routes/reflection.ts` | Protected | Reflection CRUD and upload cleanup |
 | `/api/social` | `server/src/routes/social.ts` | Protected | Social profile, posts, likes, follow, feed |
 | `/api/provider/session` | `server/src/routes/providerSession.ts` | Provider session protected | Provider group/session management |
-| `/api/bridge` | `server/src/routes/providerBridge.ts` | Provider/user bridge flow | Provider to user account/session bridge |
+| `/api/provider/auth/session` | `server/src/routes/providerAuth.ts` | Native provider session flow | CNH-authenticated provider/admin control session |
 | `/api/immersive` | `server/src/routes/immersive.ts` | Protected | Immersive interaction audit/state |
 | `/api/meeting` | `server/src/routes/meeting.ts` | Mixed user/provider/guest routers | Meeting participation and provider workflows |
 | `/uploads` | `server/src/routes/upload.ts` | Public | Static/upload retrieval route |

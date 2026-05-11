@@ -3,7 +3,6 @@ import { Prisma, PrismaClient } from '@prisma/client';
 import {
   type LocalMembershipRecord,
   type LocalPaymentRecord,
-  type LocalProviderBridgeLaunchRecord,
   type LocalProviderChallengeRecord,
   type LocalProviderInviteGroupMemberRecord,
   type LocalProviderInviteGroupRecord,
@@ -30,7 +29,6 @@ type CreateReflectionInput = Parameters<StoreApi['createReflection']>[0];
 type CreateProviderChallengeInput = Parameters<StoreApi['createProviderChallenge']>[0];
 type CreateProviderSessionInput = Parameters<StoreApi['createProviderSession']>[0];
 type UpsertProviderInviteGroupInput = Parameters<StoreApi['upsertProviderInviteGroup']>[0];
-type CreateProviderBridgeLaunchInput = Parameters<StoreApi['createProviderBridgeLaunch']>[0];
 
 export const isUsingSharedPersistence = true;
 
@@ -136,7 +134,6 @@ const toLocalUser = (row: any): LocalUserRecord => ({
   email: row.email,
   name: row.name,
   role: (String(row.role || 'user').trim().toLowerCase() || 'user') as LocalUserRecord['role'],
-  providerExternalId: toNullableString(row.providerExternalId),
   providerApprovalStatus: toNullableString(row.providerApprovalStatus),
   providerApproved: row.providerApproved === true,
   providerRevokedAt: row.providerRevokedAt || null,
@@ -280,30 +277,6 @@ const toLocalProviderInviteGroup = (row: any): LocalProviderInviteGroupRecord =>
   updatedAt: row.updatedAt,
 });
 
-const toLocalProviderBridgeLaunch = (row: any): LocalProviderBridgeLaunchRecord => ({
-  id: row.id,
-  providerId: toNullableString(row.providerId),
-  providerExternalId: row.providerExternalId,
-  email: row.email,
-  name: row.name,
-  role: 'provider',
-  approvalStatus: toNullableString(row.approvalStatus),
-  providerApproved: row.providerApproved === true,
-  walletAddress: toNullableString(row.walletAddress),
-  walletDid: toNullableString(row.walletDid),
-  issuedAt: row.issuedAt,
-  expiresAt: row.expiresAt,
-  consumedAt: row.consumedAt || null,
-  jti: row.jti,
-  scopes: Array.isArray(row.scopes)
-    ? row.scopes
-        .filter((entry: unknown): entry is string => typeof entry === 'string')
-        .map((entry: string) => entry.trim())
-        .filter((entry: string) => entry.length > 0)
-    : [],
-  createdAt: row.createdAt,
-});
-
 const ensurePrisma = (): PrismaClient => {
   return getPrisma();
 };
@@ -342,20 +315,6 @@ export const localStore = {
   async getUserById(id: string): Promise<LocalUserRecord | null> {
     try {
       const row = await ensurePrisma().user.findUnique({ where: { id } });
-      return row ? toLocalUser(row) : null;
-    } catch (error) {
-      return translatePrismaError(error);
-    }
-  },
-
-  async getUserByProviderExternalId(providerExternalId: string): Promise<LocalUserRecord | null> {
-    try {
-      const normalized = String(providerExternalId || '').trim();
-      if (!normalized) return null;
-      const db = ensurePrisma() as any;
-      const row = await db.user.findFirst({
-        where: { providerExternalId: normalized } as any,
-      });
       return row ? toLocalUser(row) : null;
     } catch (error) {
       return translatePrismaError(error);
@@ -425,7 +384,6 @@ export const localStore = {
           email: input.email.trim().toLowerCase(),
           name: toNullableString(input.name),
           role: (String(input.role || 'user').trim().toLowerCase() || 'user') as any,
-          providerExternalId: toNullableString(input.providerExternalId),
           providerApprovalStatus: toNullableString(input.providerApprovalStatus),
           providerApproved: input.providerApproved === true,
           providerRevokedAt: input.providerRevokedAt || null,
@@ -486,9 +444,6 @@ export const localStore = {
       if (updates.name !== undefined) data.name = updates.name;
       if (updates.role !== undefined) {
         data.role = (String(updates.role || '').trim().toLowerCase() || 'user') as any;
-      }
-      if (updates.providerExternalId !== undefined) {
-        data.providerExternalId = toNullableString(updates.providerExternalId);
       }
       if (updates.providerApprovalStatus !== undefined) {
         data.providerApprovalStatus = toNullableString(updates.providerApprovalStatus);
@@ -998,86 +953,6 @@ export const localStore = {
     }
   },
 
-  async createProviderBridgeLaunch(
-    input: CreateProviderBridgeLaunchInput
-  ): Promise<LocalProviderBridgeLaunchRecord> {
-    try {
-      const db = ensurePrisma() as any;
-      const scopes = Array.isArray(input.scopes)
-        ? input.scopes
-            .filter((entry): entry is string => typeof entry === 'string')
-            .map((entry) => entry.trim())
-            .filter((entry) => entry.length > 0)
-            .slice(0, 24)
-        : [];
-      const row = await db.providerBridgeLaunch.create({
-        data: {
-          id: input.id,
-          providerId: toNullableString(input.providerId),
-          providerExternalId: input.providerExternalId,
-          email: input.email.trim().toLowerCase(),
-          name: input.name.trim() || 'Provider',
-          role: 'provider',
-          approvalStatus: toNullableString(input.approvalStatus),
-          providerApproved: input.providerApproved === true,
-          walletAddress: toNullableString(input.walletAddress),
-          walletDid: toNullableString(input.walletDid),
-          issuedAt: input.issuedAt,
-          expiresAt: input.expiresAt,
-          consumedAt: null,
-          jti: input.jti,
-          scopes: scopes as unknown as Prisma.InputJsonValue,
-          createdAt: input.createdAt || new Date(),
-        },
-      });
-      return toLocalProviderBridgeLaunch(row);
-    } catch (error) {
-      return translatePrismaError(error);
-    }
-  },
-
-  async getProviderBridgeLaunchById(id: string): Promise<LocalProviderBridgeLaunchRecord | null> {
-    try {
-      const db = ensurePrisma() as any;
-      const row = await db.providerBridgeLaunch.findUnique({ where: { id } });
-      return row ? toLocalProviderBridgeLaunch(row) : null;
-    } catch (error) {
-      return translatePrismaError(error);
-    }
-  },
-
-  async getProviderBridgeLaunchByJti(jti: string): Promise<LocalProviderBridgeLaunchRecord | null> {
-    try {
-      const db = ensurePrisma() as any;
-      const row = await db.providerBridgeLaunch.findUnique({ where: { jti } });
-      return row ? toLocalProviderBridgeLaunch(row) : null;
-    } catch (error) {
-      return translatePrismaError(error);
-    }
-  },
-
-  async consumeProviderBridgeLaunch(
-    id: string,
-    consumedAt = new Date()
-  ): Promise<LocalProviderBridgeLaunchRecord | null> {
-    try {
-      const db = ensurePrisma() as any;
-      const consumed = await db.providerBridgeLaunch.updateMany({
-        where: { id, consumedAt: null },
-        data: { consumedAt },
-      });
-      if (consumed.count !== 1) return null;
-      const row = await db.providerBridgeLaunch.findUnique({ where: { id } });
-      if (!row) return null;
-      return toLocalProviderBridgeLaunch(row);
-    } catch (error) {
-      if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2025') {
-        return null;
-      }
-      return translatePrismaError(error);
-    }
-  },
-
   async getDiagnostics(): Promise<LocalStoreDiagnostics> {
     try {
       const db = ensurePrisma() as any;
@@ -1089,7 +964,6 @@ export const localStore = {
         providerChallenges,
         providerSessions,
         providerInviteGroups,
-        providerBridgeLaunches,
       ] = await db.$transaction([
         db.user.count(),
         db.membership.count(),
@@ -1098,7 +972,6 @@ export const localStore = {
         db.providerChallenge.count(),
         db.providerSession.count(),
         db.providerInviteGroup.count(),
-        db.providerBridgeLaunch.count(),
       ]) as number[];
 
       return {
@@ -1146,7 +1019,6 @@ export const localStore = {
           providerChallenges,
           providerSessions,
           providerInviteGroups,
-          providerBridgeLaunches,
         },
       };
     } catch (error) {
@@ -1158,7 +1030,6 @@ export const localStore = {
 export type {
   LocalMembershipRecord,
   LocalPaymentRecord,
-  LocalProviderBridgeLaunchRecord,
   LocalProviderChallengeRecord,
   LocalProviderInviteGroupMemberRecord,
   LocalProviderInviteGroupRecord,

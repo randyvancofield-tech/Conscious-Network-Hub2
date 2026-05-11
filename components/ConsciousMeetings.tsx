@@ -12,6 +12,7 @@ import * as THREE from 'three';
 import { UserProfile, Provider, Meeting } from '../types';
 import {
   addProviderInviteGroupMember,
+  createNativeProviderControlSession,
   createProviderInviteGroup,
   createProviderMeetingExternalLink,
   createProviderMeetingSession,
@@ -33,6 +34,7 @@ import {
 import {
   PROVIDER_SESSION_TOKEN_EVENT,
   PROVIDER_SESSION_TOKEN_KEY,
+  setProviderControlSession,
 } from '../services/sessionService';
 import type {
   ExternalMeetingPreview,
@@ -623,7 +625,7 @@ const ConsciousMeetings: React.FC<ConsciousMeetingsProps> = ({ user }) => {
   };
 
   const disconnectProviderSessionToken = (
-    statusMessage = 'Provider host session unavailable. Relaunch from your provider gateway.'
+    statusMessage = 'Provider host session unavailable. Sign in through Provider Access to continue.'
   ) => {
     setProviderSessionToken('');
     setProviderInviteGroups([]);
@@ -636,7 +638,7 @@ const ConsciousMeetings: React.FC<ConsciousMeetingsProps> = ({ user }) => {
 
   const hydrateProviderSessionToken = async (
     tokenOverride?: string,
-    source: 'bridge-launch' | 'storage-sync' = 'storage-sync'
+    source: 'native-session' | 'storage-sync' = 'storage-sync'
   ) => {
     const normalized = String(tokenOverride || '').trim();
     if (!normalized) {
@@ -647,14 +649,14 @@ const ConsciousMeetings: React.FC<ConsciousMeetingsProps> = ({ user }) => {
     setIsMeetingOpsBusy(true);
     setProviderSessionToken(normalized);
     setMeetingOpsStatus(
-      source === 'bridge-launch'
-        ? 'Provider bridge session detected. Host controls unlocked.'
-        : 'Restoring provider bridge session...'
+      source === 'native-session'
+        ? 'Native provider session detected. Host controls unlocked.'
+        : 'Restoring native provider session...'
     );
     try {
       await refreshProviderMeetingData(normalized);
-      if (source !== 'bridge-launch') {
-        setMeetingOpsStatus('Provider bridge session active. Host controls unlocked.');
+      if (source !== 'native-session') {
+        setMeetingOpsStatus('Native provider session active. Host controls unlocked.');
       }
     } finally {
       setIsMeetingOpsBusy(false);
@@ -664,7 +666,7 @@ const ConsciousMeetings: React.FC<ConsciousMeetingsProps> = ({ user }) => {
   const createHostedSession = async () => {
     const token = providerSessionToken.trim();
     if (!token) {
-      setMeetingOpsStatus('Launch the Hub from your provider gateway to unlock host controls.');
+      setMeetingOpsStatus('Sign in through Provider Access to unlock host controls.');
       return;
     }
 
@@ -692,7 +694,7 @@ const ConsciousMeetings: React.FC<ConsciousMeetingsProps> = ({ user }) => {
     const token = providerSessionToken.trim();
     const groupName = providerGroupNameInput.trim();
     if (!token) {
-      setMeetingOpsStatus('Launch the Hub from your provider gateway to unlock host controls.');
+      setMeetingOpsStatus('Sign in through Provider Access to unlock host controls.');
       return;
     }
     if (!groupName) {
@@ -721,7 +723,7 @@ const ConsciousMeetings: React.FC<ConsciousMeetingsProps> = ({ user }) => {
     const normalizedUsername = normalizeUsername(providerGroupMemberUsernameInput);
     const targetGroupId = selectedProviderGroupIds[0] || providerInviteGroups[0]?.id || '';
     if (!token) {
-      setMeetingOpsStatus('Launch the Hub from your provider gateway to unlock host controls.');
+      setMeetingOpsStatus('Sign in through Provider Access to unlock host controls.');
       return;
     }
     if (!targetGroupId) {
@@ -1150,7 +1152,7 @@ const ConsciousMeetings: React.FC<ConsciousMeetingsProps> = ({ user }) => {
   const enterImmersiveView = async () => {
     if (isImmersiveStarting || isImmersiveActive) return;
     if (!providerSessionToken.trim()) {
-      const message = 'Provider host access is required. Launch from your provider gateway.';
+      const message = 'Provider host access is required. Sign in through Provider Access.';
       setImmersiveError(message);
       return;
     }
@@ -1530,7 +1532,7 @@ const ConsciousMeetings: React.FC<ConsciousMeetingsProps> = ({ user }) => {
   // Solo Session Functions
   const startSoloSession = async () => {
     if (!providerSessionToken.trim()) {
-      alert('Provider host access is required. Launch from your provider gateway.');
+      alert('Provider host access is required. Sign in through Provider Access.');
       return;
     }
     try {
@@ -1877,11 +1879,11 @@ const ConsciousMeetings: React.FC<ConsciousMeetingsProps> = ({ user }) => {
       const nextToken = String(customEvent.detail?.token || '').trim();
       if (!nextToken) {
         disconnectProviderSessionToken(
-          'Provider host session ended. Relaunch from your provider gateway to host sessions.'
+          'Provider host session ended. Sign in through Provider Access to host sessions.'
         );
         return;
       }
-      void hydrateProviderSessionToken(nextToken, 'bridge-launch');
+      void hydrateProviderSessionToken(nextToken, 'native-session');
     };
 
     const handleStorageUpdate = (event: StorageEvent) => {
@@ -1889,7 +1891,7 @@ const ConsciousMeetings: React.FC<ConsciousMeetingsProps> = ({ user }) => {
       if (event.key !== providerTokenStorageKey) return;
       const nextToken = String(event.newValue || '').trim();
       if (!nextToken) {
-        disconnectProviderSessionToken('Provider host session ended. Relaunch from your provider gateway.');
+        disconnectProviderSessionToken('Provider host session ended. Sign in through Provider Access.');
         return;
       }
       void hydrateProviderSessionToken(nextToken, 'storage-sync');
@@ -1905,6 +1907,29 @@ const ConsciousMeetings: React.FC<ConsciousMeetingsProps> = ({ user }) => {
       window.removeEventListener('storage', handleStorageUpdate);
     };
   }, []);
+
+  useEffect(() => {
+    if (user?.role !== 'provider' && user?.role !== 'admin') return;
+    if (providerSessionToken.trim()) return;
+
+    let cancelled = false;
+    const initializeNativeProviderSession = async () => {
+      setMeetingOpsStatus('Initializing native provider host controls...');
+      const session = await createNativeProviderControlSession();
+      if (cancelled) return;
+      if (!session?.token) {
+        setMeetingOpsStatus('Provider host controls are unavailable for this account.');
+        return;
+      }
+      setProviderControlSession(session.token);
+      await hydrateProviderSessionToken(session.token, 'native-session');
+    };
+
+    void initializeNativeProviderSession();
+    return () => {
+      cancelled = true;
+    };
+  }, [providerSessionToken, user?.id, user?.role]);
 
   useEffect(() => {
     void refreshJoinableSessions();
@@ -2601,7 +2626,7 @@ const ConsciousMeetings: React.FC<ConsciousMeetingsProps> = ({ user }) => {
 
                       {!providerSessionToken.trim() && (
                         <p className="text-[9px] sm:text-[10px] text-amber-300 uppercase tracking-widest text-center">
-                          Provider bridge access is required to host sessions (virtual, solo, and 5D immersive).
+                          Native provider access is required to host sessions (virtual, solo, and 5D immersive).
                         </p>
                       )}
 
@@ -2978,7 +3003,7 @@ const ConsciousMeetings: React.FC<ConsciousMeetingsProps> = ({ user }) => {
 
               <p className="text-[9px] sm:text-[10px] text-slate-400 uppercase tracking-widest">
                 Providers create/start sessions, invite platform users/groups, and issue external guest links.
-                Provider host access is granted only through secure bridge launch from your provider gateway.
+                Provider host access is granted through native CNH provider authentication.
               </p>
 
               <div className="p-3 rounded-xl bg-white/5 border border-white/10">
@@ -2986,11 +3011,11 @@ const ConsciousMeetings: React.FC<ConsciousMeetingsProps> = ({ user }) => {
                   Host Access Status
                 </p>
                 <p className="text-[10px] sm:text-xs font-black uppercase tracking-widest mt-1 text-white">
-                  {providerSessionToken.trim() ? 'Active (Bridge Verified)' : 'Not Active'}
+                  {providerSessionToken.trim() ? 'Active (CNH Verified)' : 'Not Active'}
                 </p>
                 {!providerSessionToken.trim() && (
                   <p className="text-[9px] sm:text-[10px] text-amber-300 uppercase tracking-widest mt-2">
-                    Open the Hub from your provider gateway launch button to unlock host controls.
+                    Sign in through Provider Access to unlock host controls.
                   </p>
                 )}
               </div>

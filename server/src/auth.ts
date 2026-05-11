@@ -1,7 +1,5 @@
 import crypto from 'crypto';
 import bcrypt from 'bcryptjs';
-import jwt from 'jsonwebtoken';
-import type { JwtPayload } from 'jsonwebtoken';
 import { resolveAuthTokenSecret } from './requiredEnv';
 
 export interface SessionTokenPayload {
@@ -9,20 +7,6 @@ export interface SessionTokenPayload {
   sessionId?: string;
   issuedAt: number;
   expiresAt: number;
-}
-
-export interface BridgeAuthTokenPayload {
-  sub: string;
-  userId?: string;
-  email: string;
-  role: 'provider' | 'admin';
-  walletAddress: string;
-}
-
-export interface VerifiedBridgeAuthTokenPayload extends BridgeAuthTokenPayload {
-  userId: string;
-  iat?: number;
-  exp?: number;
 }
 
 export interface AdminElevationTokenPayload {
@@ -38,9 +22,6 @@ const DEFAULT_ADMIN_ELEVATION_TTL_SECONDS = 10 * 60; // 10 minutes
 const DEFAULT_BCRYPT_ROUNDS = 12;
 const PASSWORD_HASH_PREFIX = 'scrypt';
 const PASSWORD_KEY_LEN = 64;
-const BRIDGE_AUTH_ISSUER = 'base44';
-const BRIDGE_AUTH_AUDIENCE = 'conscious-network-hub';
-const BRIDGE_AUTH_EXPIRES_IN = '15m';
 
 const getTokenSecret = (): string => resolveAuthTokenSecret();
 
@@ -234,15 +215,6 @@ export const createAdminElevationToken = (
   };
 };
 
-export const createBridgeAuthToken = (payload: BridgeAuthTokenPayload): string => {
-  return jwt.sign(payload, getTokenSecret(), {
-    algorithm: 'HS256',
-    issuer: BRIDGE_AUTH_ISSUER,
-    audience: BRIDGE_AUTH_AUDIENCE,
-    expiresIn: BRIDGE_AUTH_EXPIRES_IN,
-  });
-};
-
 export const verifySessionToken = (token: string): SessionTokenPayload | null => {
   const parsed = verifySignedPayloadToken<SessionTokenPayload & Record<string, unknown>>(token);
   if (!parsed?.userId || !parsed?.expiresAt) return null;
@@ -267,38 +239,4 @@ export const verifyAdminElevationToken = (
   }
   if (parsed.expiresAt <= Date.now()) return null;
   return parsed;
-};
-
-export const verifyBridgeAuthToken = (token: string): VerifiedBridgeAuthTokenPayload | null => {
-  if (!token || typeof token !== 'string') return null;
-  const segments = token.split('.');
-  if (segments.length !== 3) return null;
-
-  try {
-    const parsed = jwt.verify(token, getTokenSecret(), {
-      issuer: BRIDGE_AUTH_ISSUER,
-      audience: BRIDGE_AUTH_AUDIENCE,
-    }) as JwtPayload & Partial<BridgeAuthTokenPayload>;
-
-    const sub = String(parsed.sub || '').trim();
-    const userId = String(parsed.userId || sub).trim();
-    const email = String(parsed.email || '').trim().toLowerCase();
-    const role = String(parsed.role || '').trim().toLowerCase();
-    const walletAddress = String(parsed.walletAddress || '').trim();
-
-    if (!sub || !userId || !email || !walletAddress) return null;
-    if (role !== 'provider' && role !== 'admin') return null;
-
-    return {
-      sub,
-      userId,
-      email,
-      role,
-      walletAddress,
-      iat: typeof parsed.iat === 'number' ? parsed.iat : undefined,
-      exp: typeof parsed.exp === 'number' ? parsed.exp : undefined,
-    };
-  } catch {
-    return null;
-  }
 };

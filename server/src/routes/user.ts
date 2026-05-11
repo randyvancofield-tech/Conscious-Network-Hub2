@@ -415,7 +415,6 @@ const toPublicUser = (req: Request, user: any) => ({
   email: user.email,
   name: user.name || toIdentityName(user.email),
   role: String(user.role || 'user').trim().toLowerCase(),
-  providerExternalId: user.providerExternalId || null,
   handle: user.handle || null,
   bio: user.bio || null,
   location: user.location || null,

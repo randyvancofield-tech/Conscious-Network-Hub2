@@ -405,7 +405,7 @@ const IdentitySecurityPanel: React.FC<IdentitySecurityPanelProps> = ({ isOpen, o
                 Provider Host Access
               </div>
               <div className="text-[10px] text-slate-400 uppercase tracking-wider leading-relaxed">
-                Provider hosting is granted through secure bridge launch from the Provider Gateway.
+                Provider hosting is granted through native CNH provider authentication.
                 This panel does not issue provider login tokens.
               </div>
             </div>

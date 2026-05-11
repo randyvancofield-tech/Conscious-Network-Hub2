@@ -48,7 +48,7 @@ export const PROVIDER_SURFACE_RECORDS: ProviderSurfaceRecord[] = [
     name: 'Provider Readiness Guide',
     category: 'Provider Onboarding',
     location: 'Global',
-    specialty: 'Identity bridge, service publishing, session readiness',
+    specialty: 'Native identity access, service publishing, session readiness',
     bio: 'A structured provider profile surface used to validate the native CNH marketplace flow while provider records are reviewed.',
     rating: null,
     experience: 'Integration Ready',

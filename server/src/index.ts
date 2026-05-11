@@ -29,8 +29,6 @@ import identitySecurityRoutes from './routes/identitySecurity';
 import integrityRoutes from './routes/integrity';
 import immersiveRoutes from './routes/immersive';
 import meetingRoutes from './routes/meeting';
-import authBridgeRoutes from './routes/authBridge';
-import providerBridgeRoutes from './routes/providerBridge';
 import { coursesPublicRoutes, coursesProtectedRoutes } from './routes/courses';
 import userCoursesRoutes from './routes/userCourses';
 import { providersRouter, userRequestsRouter, providerRequestsRouter } from './routes/providers';
@@ -163,7 +161,6 @@ const configuredCorsOrigins = String(process.env.CORS_ORIGINS || '')
 
 const allowedOrigins = Array.from(
   new Set([
-    'https://conscious-network-hub.base44.app',
     'https://conscious-network.org',
     'https://higherconscious.network',
     'https://www.higherconscious.network',
@@ -191,10 +188,6 @@ app.use(
     allowedHeaders: [
       'Content-Type',
       'Authorization',
-      'X-Bridge-Issuer',
-      'X-Bridge-Timestamp',
-      'X-Bridge-Signature',
-      'X-Bridge-Key-Id',
       'X-Admin-Elevation-Token',
       'X-Admin-Secure-Token',
     ],
@@ -235,9 +228,6 @@ app.use(requestLogger);
 // Health check endpoint (before routes for quick response)
 app.get('/health', healthCheck);
 
-// Legacy Base44 provider bridge. Provider launch now uses /api/bridge/provider/issue-launch-code.
-app.use('/auth', authBridgeRoutes);
-
 // API routes
 // Public routes are mounted first.
 app.use('/api/user', userPublicRoutes);
@@ -264,7 +254,6 @@ app.use('/api/social', socialRoutes);
 app.use('/api/provider/session', providerSessionRoutes);
 app.use('/api/provider/requests', providerRequestsRouter);
 app.use('/api/provider-applicants', providerApplicantProtectedRoutes);
-app.use('/api/bridge', providerBridgeRoutes);
 app.use('/api/immersive', immersiveRoutes);
 app.use('/api/meeting', meetingRoutes);
 app.use('/uploads', uploadPublicRoutes);

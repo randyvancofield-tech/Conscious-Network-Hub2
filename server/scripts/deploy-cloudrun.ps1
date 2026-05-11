@@ -91,7 +91,7 @@ if (-not $FrontendBaseUrl) {
 }
 
 if (-not $FrontendBaseUrl) {
-  throw "FRONTEND_BASE_URL is required for email links, provider bridge, and Stripe redirects. Set -FrontendBaseUrl, FRONTEND_BASE_URL env var, or server/.env.local."
+  throw "FRONTEND_BASE_URL is required for email links and Stripe redirects. Set -FrontendBaseUrl, FRONTEND_BASE_URL env var, or server/.env.local."
 }
 
 if ($DatabaseUrl -match "^\s*file:") {
