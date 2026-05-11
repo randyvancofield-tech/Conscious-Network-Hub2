@@ -12,6 +12,23 @@ const PROD_BACKEND_MISMATCH_PATTERN =
   /Production requires AUTH_PERSISTENCE_BACKEND=shared_db|AUTH_PERSISTENCE_BACKEND must be set to shared_db/i;
 const PROD_DATABASE_URL_MISMATCH_PATTERN =
   /Production requires DATABASE_URL to use postgres:\/\/ or postgresql:\/\/|Shared DB persistence requires DATABASE_URL to use postgres:\/\/ or postgresql:\/\/|AUTH_PERSISTENCE_BACKEND=shared_db requires DATABASE_URL to use postgres:\/\/ or postgresql:\/\//i;
+const PROD_DATABASE_POOLER_MISMATCH_PATTERN =
+  /DATABASE_URL must use the pooled Neon connection string/i;
+
+const BASE_REQUIRED_ENV = {
+  STRIPE_SECRET_KEY: 'sk_test_required_secret_check',
+  STRIPE_WEBHOOK_SECRET: 'whsec_required_secret_check',
+  STRIPE_PRICE_FREE: 'price_required_free',
+  STRIPE_PRICE_GUIDED: 'price_required_guided',
+  STRIPE_PRICE_ACCELERATED: 'price_required_accelerated',
+  STRIPE_MODE: 'test',
+  STRIPE_SUCCESS_URL: 'http://localhost:3000/verify-session?session_id={CHECKOUT_SESSION_ID}',
+  STRIPE_CANCEL_URL: 'http://localhost:3000/membership-access',
+  FRONTEND_BASE_URL: 'http://localhost:3000',
+  BRIDGE_PROVIDER_SECRET: 'integration-test-bridge-secret',
+  BRIDGE_PROVIDER_ISSUER: 'integration-test-issuer',
+  BRIDGE_PROVIDER_AUDIENCE: 'integration-test-audience',
+};
 
 const buildEnv = ({ unset = [], set = {} } = {}) => {
   const env = { ...process.env };
@@ -35,6 +52,7 @@ const runExpectFailure = () =>
   new Promise((resolve, reject) => {
     const env = buildEnv({
       set: {
+        ...BASE_REQUIRED_ENV,
         NODE_ENV: 'test',
         PORT: '3981',
         AUTH_TOKEN_SECRET: '',
@@ -83,6 +101,7 @@ const runExpectSuccess = () =>
     const env = buildEnv({
       unset: ['AUTH_TOKEN_SECRET', 'SESSION_SECRET', 'DATABASE_URL'],
       set: {
+        ...BASE_REQUIRED_ENV,
         NODE_ENV: 'test',
         PORT: String(testPort),
         AUTH_TOKEN_SECRET: 'integration-test-auth-secret',
@@ -127,6 +146,7 @@ const runExpectFailureSharedDbMisconfig = () =>
   new Promise((resolve, reject) => {
     const env = buildEnv({
       set: {
+        ...BASE_REQUIRED_ENV,
         NODE_ENV: 'test',
         PORT: '3983',
         AUTH_TOKEN_SECRET: 'integration-test-auth-secret',
@@ -178,6 +198,8 @@ const runExpectFailureProdBackendMisconfig = () =>
   new Promise((resolve, reject) => {
     const env = buildEnv({
       set: {
+        ...BASE_REQUIRED_ENV,
+        STRIPE_MODE: 'live',
         NODE_ENV: 'production',
         PORT: '3984',
         AUTH_TOKEN_SECRET: 'integration-test-auth-secret',
@@ -229,6 +251,8 @@ const runExpectFailureProdDatabaseUrlMisconfig = () =>
   new Promise((resolve, reject) => {
     const env = buildEnv({
       set: {
+        ...BASE_REQUIRED_ENV,
+        STRIPE_MODE: 'live',
         NODE_ENV: 'production',
         PORT: '3985',
         AUTH_TOKEN_SECRET: 'integration-test-auth-secret',
@@ -276,11 +300,66 @@ const runExpectFailureProdDatabaseUrlMisconfig = () =>
     });
   });
 
+const runExpectFailureProdDatabasePoolerMisconfig = () =>
+  new Promise((resolve, reject) => {
+    const env = buildEnv({
+      set: {
+        ...BASE_REQUIRED_ENV,
+        STRIPE_MODE: 'live',
+        NODE_ENV: 'production',
+        PORT: '3986',
+        AUTH_TOKEN_SECRET: 'integration-test-auth-secret',
+        DATABASE_URL: 'postgresql://user:pass@ep-example.us-east-1.aws.neon.tech/neondb?sslmode=require',
+        DATABASE_POOL_MODE: 'transaction',
+        AUTH_PERSISTENCE_BACKEND: 'shared_db',
+        SENSITIVE_DATA_KEY: 'integration-test-sensitive-key',
+      },
+    });
+
+    const proc = spawn(process.execPath, [ENTRY], { cwd: SERVER_DIR, env });
+    let output = '';
+    const timeout = setTimeout(() => {
+      stopProcess(proc);
+      reject(new Error('Timeout waiting for production pooled Neon DATABASE_URL failure.'));
+    }, 12000);
+
+    proc.stdout.on('data', (chunk) => {
+      output += chunk.toString();
+    });
+    proc.stderr.on('data', (chunk) => {
+      output += chunk.toString();
+    });
+
+    proc.on('exit', (code) => {
+      clearTimeout(timeout);
+      if (code === 0) {
+        reject(
+          new Error(
+            'Expected startup to fail for production direct Neon DATABASE_URL, but it exited with code 0.'
+          )
+        );
+        return;
+      }
+
+      if (!PROD_DATABASE_POOLER_MISMATCH_PATTERN.test(output)) {
+        reject(
+          new Error(
+            `Startup failed, but production pooled Neon validation message was not clear enough.\nOutput:\n${output}`
+          )
+        );
+        return;
+      }
+
+      resolve();
+    });
+  });
+
 const main = async () => {
   await runExpectFailure();
   await runExpectFailureSharedDbMisconfig();
   await runExpectFailureProdBackendMisconfig();
   await runExpectFailureProdDatabaseUrlMisconfig();
+  await runExpectFailureProdDatabasePoolerMisconfig();
   await runExpectSuccess();
   console.log('Required secret startup checks passed.');
 };

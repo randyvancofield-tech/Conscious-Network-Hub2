@@ -12,6 +12,37 @@ const trimEnv = (name: string): string | null => {
 
 const isPostgresUrl = (value: string): boolean => /^postgres(?:ql)?:\/\//i.test(value.trim());
 
+const parseDatabaseUrl = (value: string): URL | null => {
+  try {
+    return new URL(value.trim());
+  } catch {
+    return null;
+  }
+};
+
+const isNeonDatabaseUrl = (value: string): boolean => {
+  const parsed = parseDatabaseUrl(value);
+  return Boolean(parsed?.hostname.toLowerCase().endsWith('.neon.tech'));
+};
+
+const isPooledDatabaseUrl = (value: string): boolean => {
+  const normalized = value.trim().toLowerCase();
+  const parsed = parseDatabaseUrl(value);
+  const host = parsed?.hostname.toLowerCase() || '';
+  return (
+    host.includes('pooler') ||
+    host.includes('pgbouncer') ||
+    normalized.includes('pgbouncer=true') ||
+    normalized.includes('connection_limit=') ||
+    normalized.includes('pool_timeout=')
+  );
+};
+
+const resolveDatabasePoolMode = (): string | null => {
+  const value = trimEnv('DATABASE_POOL_MODE');
+  return value ? value.toLowerCase() : null;
+};
+
 // Required high-risk secrets/environment variables for backend startup.
 // - AUTH_TOKEN_SECRET (or legacy SESSION_SECRET alias)
 // - DATABASE_URL
@@ -77,6 +108,7 @@ export const validateRequiredEnv = (): void => {
   const missing: string[] = [];
   const databaseUrl = trimEnv('DATABASE_URL');
   const persistenceBackend = (trimEnv('AUTH_PERSISTENCE_BACKEND') || '').toLowerCase();
+  const databasePoolMode = resolveDatabasePoolMode();
   const nodeEnv = (trimEnv('NODE_ENV') || '').toLowerCase();
   const isProduction = nodeEnv === 'production';
   const requireSharedDbPersistence = isProduction;
@@ -177,14 +209,34 @@ export const validateRequiredEnv = (): void => {
   }
 
   if (persistenceBackend === 'shared_db' && databaseUrl && !isPostgresUrl(databaseUrl)) {
-    if (isProduction) {
-      throw new Error(
-        '[STARTUP][FATAL] AUTH_PERSISTENCE_BACKEND=shared_db requires DATABASE_URL to use postgres:// or postgresql://'
-      );
-    }
-    console.warn(
-      '[STARTUP][WARN] AUTH_PERSISTENCE_BACKEND=shared_db with non-postgres DATABASE_URL is allowed in non-production only.'
+    throw new Error(
+      '[STARTUP][FATAL] AUTH_PERSISTENCE_BACKEND=shared_db requires DATABASE_URL to use postgres:// or postgresql://'
     );
+  }
+
+  if (databaseUrl && isPostgresUrl(databaseUrl)) {
+    const targetsNeon = isNeonDatabaseUrl(databaseUrl);
+    const usesPooledConnection = isPooledDatabaseUrl(databaseUrl);
+    const hasSupportedPoolMode =
+      databasePoolMode === 'session' || databasePoolMode === 'transaction';
+
+    if ((isProduction || targetsNeon) && !usesPooledConnection) {
+      const message =
+        '[STARTUP][FATAL] DATABASE_URL must use the pooled Neon connection string for production/shared DB runtime.';
+      if (isProduction) {
+        throw new Error(message);
+      }
+      console.warn(message.replace('[FATAL]', '[WARN]'));
+    }
+
+    if ((isProduction || usesPooledConnection || targetsNeon) && !hasSupportedPoolMode) {
+      const message =
+        '[STARTUP][FATAL] DATABASE_POOL_MODE must be set to session or transaction to match the Neon pooler mode.';
+      if (isProduction) {
+        throw new Error(message);
+      }
+      console.warn(message.replace('[FATAL]', '[WARN]'));
+    }
   }
 
   if (isProduction && !hasEmailDeliveryConfig()) {

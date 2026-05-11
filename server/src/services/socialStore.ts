@@ -1,5 +1,6 @@
 import crypto from 'crypto';
 import { Prisma, PrismaClient } from '@prisma/client';
+import { getPrisma } from './prismaClient';
 
 export type SocialPostVisibility = 'public' | 'private';
 export type SocialPostMediaType = 'image' | 'video' | 'file';
@@ -32,8 +33,6 @@ export interface SocialPostRecord {
   updatedAt: Date;
 }
 
-let prisma: PrismaClient | null = null;
-
 const toStoreError = (message: string, cause?: unknown): Error & { code: string } => {
   const error = new Error(message) as Error & { code: string; cause?: unknown };
   error.code = 'STORE_UNAVAILABLE';
@@ -44,10 +43,7 @@ const toStoreError = (message: string, cause?: unknown): Error & { code: string 
 };
 
 const ensurePrisma = (): PrismaClient => {
-  if (!prisma) {
-    prisma = new PrismaClient();
-  }
-  return prisma;
+  return getPrisma();
 };
 
 const normalizeVisibility = (value: unknown): SocialPostVisibility =>

@@ -19,6 +19,7 @@ import {
   protectSensitiveField,
   revealSensitiveField,
 } from './sensitiveDataPolicy';
+import { getPrisma } from './prismaClient';
 
 type StoreApi = typeof LocalFileStoreApi;
 type CreateUserInput = Parameters<StoreApi['createUser']>[0];
@@ -32,8 +33,6 @@ type UpsertProviderInviteGroupInput = Parameters<StoreApi['upsertProviderInviteG
 type CreateProviderBridgeLaunchInput = Parameters<StoreApi['createProviderBridgeLaunch']>[0];
 
 export const isUsingSharedPersistence = true;
-
-let prisma: PrismaClient | null = null;
 
 const storeUnavailableError = (message: string, cause?: unknown): Error & { code: string } => {
   const error = new Error(message) as Error & { code: string; cause?: unknown };
@@ -306,10 +305,7 @@ const toLocalProviderBridgeLaunch = (row: any): LocalProviderBridgeLaunchRecord 
 });
 
 const ensurePrisma = (): PrismaClient => {
-  if (!prisma) {
-    prisma = new PrismaClient();
-  }
-  return prisma;
+  return getPrisma();
 };
 
 const translatePrismaError = (error: unknown): never => {

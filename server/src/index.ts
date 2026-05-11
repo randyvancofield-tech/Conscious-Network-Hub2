@@ -1,4 +1,4 @@
-import express, { Express } from 'express';
+import express, { Express, NextFunction, Request, Response } from 'express';
 import cors from 'cors';
 import helmet from 'helmet';
 import rateLimit from 'express-rate-limit';
@@ -75,6 +75,53 @@ const GOOGLE_CLOUD_REGION = process.env.GOOGLE_CLOUD_REGION;
 const app: Express = express();
 const PORT = Number(process.env.PORT || 8080);
 
+const normalizeHostname = (value: unknown): string => {
+  const raw = String(value || '').trim().toLowerCase();
+  return raw.replace(/^https?:\/\//, '').split('/')[0].split(':')[0].replace(/\.+$/, '');
+};
+
+const hostnameFromUrl = (value: unknown): string | null => {
+  try {
+    const raw = String(value || '').trim();
+    if (!raw) return null;
+    return normalizeHostname(new URL(raw).hostname);
+  } catch {
+    return null;
+  }
+};
+
+const productionHstsHosts = Array.from(
+  new Set(
+    [
+      hostnameFromUrl(process.env.FRONTEND_BASE_URL),
+      ...String(process.env.HSTS_ALLOWED_HOSTS || '')
+        .split(',')
+        .map(normalizeHostname),
+    ].filter((host): host is string => Boolean(host))
+  )
+);
+
+const isProductionRuntime = String(process.env.NODE_ENV || '').trim().toLowerCase() === 'production';
+const hstsMaxAgeSeconds = Number(process.env.HSTS_MAX_AGE_SECONDS || 31536000);
+const hstsHeaderValue = `max-age=${Number.isFinite(hstsMaxAgeSeconds) && hstsMaxAgeSeconds > 0 ? Math.floor(hstsMaxAgeSeconds) : 31536000}; includeSubDomains`;
+
+const isHttpsRequest = (req: Request): boolean => {
+  const forwardedProto = String(req.headers['x-forwarded-proto'] || '')
+    .split(',')[0]
+    .trim()
+    .toLowerCase();
+  return req.secure || forwardedProto === 'https';
+};
+
+const shouldSetProductionHsts = (req: Request): boolean => {
+  if (!isProductionRuntime || productionHstsHosts.length === 0 || !isHttpsRequest(req)) {
+    return false;
+  }
+
+  const requestHost = normalizeHostname(req.headers.host);
+  return productionHstsHosts.includes(requestHost);
+};
+
 // Initialize Vertex AI if possible; in dev we'll attempt init but allow failures
 try {
   if (GOOGLE_CLOUD_PROJECT && GOOGLE_CLOUD_REGION) {
@@ -93,8 +140,14 @@ try {
   console.error('Failed to initialize Vertex AI:', error);
 }
 
-// Security middleware
-app.use(helmet());
+// Security middleware. HSTS is scoped below so local/dev hosts are never pinned.
+app.use(helmet({ strictTransportSecurity: false }));
+app.use((req: Request, res: Response, next: NextFunction) => {
+  if (shouldSetProductionHsts(req)) {
+    res.setHeader('Strict-Transport-Security', hstsHeaderValue);
+  }
+  next();
+});
 
 // Trust proxy for rate limiting (safe for local dev)
 app.set('trust proxy', 1);
@@ -108,6 +161,8 @@ const allowedOrigins = Array.from(
   new Set([
     'https://conscious-network-hub.base44.app',
     'https://conscious-network.org',
+    'https://higherconscious.network',
+    'https://www.higherconscious.network',
     'http://localhost:3000',
     'http://localhost:5173',
     ...configuredCorsOrigins,

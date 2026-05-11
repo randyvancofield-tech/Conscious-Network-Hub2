@@ -15,7 +15,8 @@ Canonical environment values for the current backend architecture.
 
 | File | Key | Default | Required | Notes |
 |---|---|---|---|---|
-| `server/.env.local` | `DATABASE_URL` | `postgresql://...` | Yes | Must be PostgreSQL for runtime startup outside tests. |
+| `server/.env.local` | `DATABASE_URL` | `postgresql://...` | Yes | Must be PostgreSQL for runtime startup outside tests. Production Neon must use the pooled connection string, usually a `-pooler` host. |
+| `server/.env.local` | `DATABASE_POOL_MODE` | `transaction` | Yes for Neon/prod | Set to `transaction` or `session` to match the Neon pooler mode. |
 | `server/.env.local` | `AUTH_PERSISTENCE_BACKEND` | `shared_db` | Yes | Required outside tests. |
 | `server/.env.local` | `DATABASE_PROVIDER` | `postgresql` | No | Optional Prisma hint. |
 | `server/.env.local` | `AUTH_TOKEN_SECRET` | none | Yes | Required for session signing. |
@@ -35,6 +36,9 @@ Canonical environment values for the current backend architecture.
 | Render | `STRIPE_SUCCESS_URL` | `https://conscious-network.org/?checkout=success&session_id={CHECKOUT_SESSION_ID}` | Yes | Checkout success redirect. |
 | Render | `STRIPE_CANCEL_URL` | `https://conscious-network.org/?checkout=cancel` | Yes | Checkout cancel redirect. |
 | Render | `FRONTEND_BASE_URL` | `https://conscious-network.org` | Yes | Fallback base URL for redirects and links. |
+| Render | `DATABASE_POOL_MODE` | `transaction` | Yes | Must match the Neon pooler mode for `DATABASE_URL`. |
+| Render | `HSTS_ALLOWED_HOSTS` | final production API/custom domain host | Yes for custom prod domains | Optional comma-separated override for hosts that should receive Strict-Transport-Security. Defaults to the host from `FRONTEND_BASE_URL`. |
+| Render | `HSTS_MAX_AGE_SECONDS` | `31536000` | No | HSTS max-age for production HTTPS requests on allowed hosts. |
 | Render | `EMAIL_USER` + `EMAIL_PASSWORD`, or `SMTP_HOST` + `SMTP_PORT` | none | No | Deferred for launch; needed only when email verification/password reset are enabled. |
 | Render | `TWILIO_ACCOUNT_SID`, `TWILIO_AUTH_TOKEN`, `TWILIO_FROM_NUMBER` | none | No | Deferred for launch; needed only when user phone 2FA is enabled. |
 | Render | `ENABLE_EMAIL_VERIFICATION` | `false` | No | Keep unset/false for launch mode. |
@@ -45,6 +49,9 @@ Canonical environment values for the current backend architecture.
 ## Hardening Rules
 
 - Do not use local-file persistence modes in runtime environments.
+- Use the Neon pooled `DATABASE_URL` in production/shared DB deployments. Direct Neon hosts are acceptable only for local/manual maintenance flows.
+- Keep a single Prisma client per Node process; pool mode is selected by the Neon URL plus `DATABASE_POOL_MODE`.
+- HSTS is emitted only in production, only over HTTPS, and only for `FRONTEND_BASE_URL`/`HSTS_ALLOWED_HOSTS`.
 - Keep all non-`VITE_` secrets out of frontend environment files.
 - Use `npm --prefix server run test:required-secrets` before deploy.
 - Current Stripe webhook URL: `https://conscious-network-backend.onrender.com/api/membership/stripe/webhook`.

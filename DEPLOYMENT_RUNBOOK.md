@@ -29,10 +29,12 @@ Render should also ensure:
    - `CORS_ORIGINS=https://conscious-network.org,https://higherconscious.network,https://consciousnetwork1.wordpress.com,http://localhost:5173`
    - `FRONTEND_BASE_URL=https://conscious-network.org` (used for redirects, emails, provider bridge)
    - `AUTH_TOKEN_SECRET` is set
-   - `DATABASE_URL` is a shared Postgres URL (not `file:`)
+   - `DATABASE_URL` is the Neon pooled Postgres URL, usually a `-pooler` host (not `file:`)
+   - `DATABASE_POOL_MODE=transaction` or `session`, matching the Neon pooler mode
    - `SENSITIVE_DATA_KEY` is set for sensitive-field encryption
    - `AUTH_PERSISTENCE_BACKEND=shared_db`
    - `DATABASE_PROVIDER=postgresql`
+   - `HSTS_ALLOWED_HOSTS` contains only the final production API/custom domain host when it differs from `FRONTEND_BASE_URL`
    - `OPENAI_API_KEY` (optional; required only for `/api/ai/*` routes)
 
 ### Required Secrets (Backend Startup)

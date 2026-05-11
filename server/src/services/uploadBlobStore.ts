@@ -1,5 +1,6 @@
 import path from 'path';
 import { PrismaClient } from '@prisma/client';
+import { getPrisma } from './prismaClient';
 
 type UploadStorageProvider = 'postgres_large_object';
 
@@ -23,8 +24,6 @@ export interface ResolvedUploadObject {
   mimeType: string;
   sizeBytes: number;
 }
-
-let prisma: PrismaClient | null = null;
 
 const toStoreError = (message: string, cause?: unknown): Error & { code: string } => {
   const error = new Error(message) as Error & { code: string; cause?: unknown };
@@ -71,10 +70,7 @@ const decodePostgresUploadKey = (objectKey: string): PostgresUploadKeyPayload | 
 };
 
 const ensurePrisma = (): PrismaClient => {
-  if (!prisma) {
-    prisma = new PrismaClient();
-  }
-  return prisma;
+  return getPrisma();
 };
 
 const persistPostgresLargeObjectUpload = async (input: {
