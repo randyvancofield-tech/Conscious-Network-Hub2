@@ -149,7 +149,7 @@ export interface ProviderBridgeConsumeResult {
     id: string;
     email: string;
     name: string;
-    role: 'user' | 'provider' | 'admin';
+    role: 'user' | 'applicant' | 'provider' | 'admin';
     providerExternalId: string | null;
     providerApprovalStatus?: string | null;
     providerApproved?: boolean;

@@ -34,6 +34,10 @@ import providerBridgeRoutes from './routes/providerBridge';
 import { coursesPublicRoutes, coursesProtectedRoutes } from './routes/courses';
 import userCoursesRoutes from './routes/userCourses';
 import { providersRouter, userRequestsRouter, providerRequestsRouter } from './routes/providers';
+import {
+  providerApplicantPublicRoutes,
+  providerApplicantProtectedRoutes,
+} from './routes/providerApplicants';
 import { initializeVertexAI } from './services/vertexAiService';
 import {
   hasOpenAiApiKey,
@@ -240,6 +244,7 @@ app.use('/api/user', userPublicRoutes);
 app.use('/api/membership', membershipPublicRoutes);
 app.use('/api/courses', coursesPublicRoutes);
 app.use('/api/providers', providersRouter);
+app.use('/api/provider-applicants', providerApplicantPublicRoutes);
 app.use('/api/provider/auth', providerAuthRoutes);
 app.use('/api/identity-security', identitySecurityRoutes);
 app.use('/api/integrity', integrityRoutes);
@@ -258,6 +263,7 @@ app.use('/api/reflection', reflectionRoutes);
 app.use('/api/social', socialRoutes);
 app.use('/api/provider/session', providerSessionRoutes);
 app.use('/api/provider/requests', providerRequestsRouter);
+app.use('/api/provider-applicants', providerApplicantProtectedRoutes);
 app.use('/api/bridge', providerBridgeRoutes);
 app.use('/api/immersive', immersiveRoutes);
 app.use('/api/meeting', meetingRoutes);

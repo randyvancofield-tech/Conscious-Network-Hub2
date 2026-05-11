@@ -20,7 +20,7 @@ interface ProviderProfile {
   experience: string;
   image: string;
   services?: string[];
-  verificationStatus?: 'base44_pending' | 'verified';
+  verificationStatus?: 'review_pending' | 'verified';
   accessMode?: 'request' | 'invite_only';
 }
 
@@ -40,7 +40,7 @@ const normalizeProvider = (rawProvider: any): ProviderProfile => {
     category,
     location: rawProvider?.location ? String(rawProvider.location) : 'Global',
     specialty: interests.length > 1 ? String(interests.slice(0, 2).join(' / ')) : category,
-    bio: String(rawProvider?.bio || 'This provider has been verified through Base44 and has not published a full profile yet.'),
+    bio: String(rawProvider?.bio || 'This provider has been verified through the CNH review process and has not published a full profile yet.'),
     rating: 0,
     experience: 'Verified',
     image: String(rawProvider?.avatarUrl || rawProvider?.bannerUrl || 'https://images.unsplash.com/photo-1497366754035-f200968a6e72?auto=format&fit=crop&q=80&w=400'),
@@ -213,7 +213,7 @@ const ProvidersMarket: React.FC<ProvidersMarketProps> = ({ providerId, onOpenPro
             <div className="rounded-xl border border-white/10 bg-white/5 p-4">
               <p className="text-[10px] font-black uppercase tracking-widest text-slate-500">Verification</p>
               <p className="mt-1 text-sm font-bold text-white">
-                {routeProvider.verificationStatus === 'verified' ? 'Base44 verified' : 'Base44 connection pending'}
+                {routeProvider.verificationStatus === 'verified' ? 'CNH verified' : 'CNH review pending'}
               </p>
             </div>
             <div className="space-y-3">
@@ -322,7 +322,7 @@ const ProvidersMarket: React.FC<ProvidersMarketProps> = ({ providerId, onOpenPro
       {!isLoading && filteredProviders.length === 0 && (
         <div className="glass-panel p-10 rounded-[2rem] border-white/10 text-center">
           <h3 className="text-lg font-black text-white uppercase tracking-tight">No verified providers available</h3>
-          <p className="text-sm text-slate-400 mt-2">Base44-verified provider accounts will appear here once their user role is set to provider.</p>
+          <p className="text-sm text-slate-400 mt-2">CNH-approved provider accounts will appear here once their user role is set to provider.</p>
         </div>
       )}
 
@@ -376,7 +376,7 @@ const ProvidersMarket: React.FC<ProvidersMarketProps> = ({ providerId, onOpenPro
                       <p className="text-[8px] text-slate-500 font-black uppercase tracking-widest">Verification</p>
                       <div className="flex items-center gap-1 justify-end">
                         <ShieldCheck className="w-3 h-3 text-teal-400" />
-                        <span className="text-[8px] font-black text-teal-400 uppercase">Base44 Validated</span>
+                        <span className="text-[8px] font-black text-teal-400 uppercase">CNH Validated</span>
                       </div>
                     </div>
                   </div>
@@ -416,7 +416,7 @@ const ProvidersMarket: React.FC<ProvidersMarketProps> = ({ providerId, onOpenPro
         <div className="space-y-2">
           <h4 className="text-xl font-black text-white uppercase tracking-tighter">Become a Sovereign Provider</h4>
           <p className="text-slate-400 text-sm font-light max-w-xl">
-            Provider authority is issued through Base44 verification. Approved provider users appear in this market automatically.
+            Provider authority is issued through CNH review and verification. Approved provider users appear in this market automatically.
           </p>
         </div>
         <a
@@ -459,7 +459,7 @@ const ProvidersMarket: React.FC<ProvidersMarketProps> = ({ providerId, onOpenPro
                 </div>
                 <div className="p-3 bg-white/5 border border-white/10 rounded-xl">
                   <p className="text-[9px] uppercase tracking-widest text-slate-500 font-black">Verification</p>
-                  <p className="text-white text-sm mt-1">Base44</p>
+                  <p className="text-white text-sm mt-1">CNH</p>
                 </div>
               </div>
               <div className="flex flex-col sm:flex-row gap-3">

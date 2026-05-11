@@ -17,12 +17,16 @@ import MusicBox from './components/MusicBox';
 import NotificationsCenter from './components/NotificationsCenter';
 import AdminDashboard from './components/AdminDashboard';
 import ProviderAccessPage from './components/ProviderAccessPage';
+import ProviderApplicationPage from './components/ProviderApplicationPage';
+import ProviderApplicantSignInPage from './components/ProviderApplicantSignInPage';
+import ProviderApplicationStatusPage from './components/ProviderApplicationStatusPage';
+import AdminProviderApplicantsPage from './components/AdminProviderApplicantsPage';
 import { ConsciousIdentity } from './components/community/CommunityLayout';
 import { AppView, UserProfile, Course } from './types';
 import { NAVIGATION_ITEMS } from './constants';
 import { 
   Shield, Menu, X, Search, Bell,
-  ChevronRight, Home, LogOut, Building2, CheckCircle2, Sparkles, Key, WalletCards, FileText
+  ChevronRight, Home, LogOut, Building2, CheckCircle2, Sparkles, Key, WalletCards, LockKeyhole
 } from 'lucide-react';
 import logo from './src/assets/brand/logo.png';
 import privacyPolicy from './docs/compliance/privacy-policy-draft.md?raw';
@@ -133,6 +137,10 @@ const routePathForView = (view: AppView, params: Record<string, string> = {}): s
       return '/provider/sign-in';
     case AppView.PROVIDER_APPLY:
       return '/provider/apply';
+    case AppView.PROVIDER_APPLICANT_SIGN_IN:
+      return '/provider/applicant-sign-in';
+    case AppView.PROVIDER_APPLICATION_STATUS:
+      return '/provider/application-status';
     case AppView.DASHBOARD:
       return '/dashboard';
     case AppView.CONSCIOUS_SOCIAL_LEARNING:
@@ -161,6 +169,8 @@ const routePathForView = (view: AppView, params: Record<string, string> = {}): s
       return '/notifications';
     case AppView.ADMIN_DASHBOARD:
       return '/admin';
+    case AppView.ADMIN_PROVIDER_APPLICANTS:
+      return '/admin/provider-applicants';
     case AppView.PRIVACY_POLICY:
       return '/privacy-policy';
     case AppView.AI_TRANSPARENCY_POLICY:
@@ -199,6 +209,8 @@ const resolveRoute = (pathname: string, search = ''): RouteState => {
     '/provider-gateway': AppView.PROVIDER_ACCESS,
     '/provider/sign-in': AppView.PROVIDER_SIGN_IN,
     '/provider/apply': AppView.PROVIDER_APPLY,
+    '/provider/applicant-sign-in': AppView.PROVIDER_APPLICANT_SIGN_IN,
+    '/provider/application-status': AppView.PROVIDER_APPLICATION_STATUS,
     '/dashboard': AppView.DASHBOARD,
     '/social': AppView.CONSCIOUS_SOCIAL_LEARNING,
     '/social-learning': AppView.CONSCIOUS_SOCIAL_LEARNING,
@@ -211,6 +223,7 @@ const resolveRoute = (pathname: string, search = ''): RouteState => {
     '/membership': AppView.MEMBERSHIP,
     '/notifications': AppView.NOTIFICATIONS,
     '/admin': AppView.ADMIN_DASHBOARD,
+    '/admin/provider-applicants': AppView.ADMIN_PROVIDER_APPLICANTS,
     '/privacy-policy': AppView.PRIVACY_POLICY,
     '/privacy': AppView.PRIVACY_POLICY,
     '/policies/privacy': AppView.PRIVACY_POLICY,
@@ -262,6 +275,8 @@ const requiresStoredSession = (view: AppView): boolean =>
     AppView.MY_CONSCIOUS_IDENTITY,
     AppView.NOTIFICATIONS,
     AppView.ADMIN_DASHBOARD,
+    AppView.ADMIN_PROVIDER_APPLICANTS,
+    AppView.PROVIDER_APPLICATION_STATUS,
   ].includes(view);
 
 const isGuestAllowedView = (view: AppView): boolean =>
@@ -274,6 +289,7 @@ const isGuestAllowedView = (view: AppView): boolean =>
     AppView.PROVIDER_ACCESS,
     AppView.PROVIDER_SIGN_IN,
     AppView.PROVIDER_APPLY,
+    AppView.PROVIDER_APPLICANT_SIGN_IN,
     AppView.MEMBERSHIP,
     AppView.COMMUNITY,
     AppView.CONSCIOUS_SOCIAL_LEARNING,
@@ -298,6 +314,8 @@ const isNoTierSignedInAllowedView = (view: AppView): boolean =>
     AppView.PROVIDER_ACCESS,
     AppView.PROVIDER_SIGN_IN,
     AppView.PROVIDER_APPLY,
+    AppView.PROVIDER_APPLICANT_SIGN_IN,
+    AppView.PROVIDER_APPLICATION_STATUS,
     AppView.MEMBERSHIP,
     AppView.PRIVACY_POLICY,
     AppView.AI_TRANSPARENCY_POLICY,
@@ -539,8 +557,8 @@ const App: React.FC = () => {
       name: rawUser.name || (rawUser.email ? rawUser.email.split('@')[0] : 'Member'),
       handle: rawUser.handle,
       email: rawUser.email,
-      role: ['user', 'provider', 'admin'].includes(String(rawUser?.role || '').toLowerCase())
-        ? String(rawUser.role).toLowerCase() as 'user' | 'provider' | 'admin'
+      role: ['user', 'applicant', 'provider', 'admin'].includes(String(rawUser?.role || '').toLowerCase())
+        ? String(rawUser.role).toLowerCase() as 'user' | 'applicant' | 'provider' | 'admin'
         : 'user',
       providerExternalId: toNullableTrimmedString(rawUser?.providerExternalId),
       tier: canonicalTier,
@@ -619,6 +637,9 @@ const App: React.FC = () => {
 
   const hasProviderRole = (profile: UserProfile | null | undefined): boolean =>
     profile?.role === 'provider' || profile?.role === 'admin';
+
+  const hasApplicantRole = (profile: UserProfile | null | undefined): boolean =>
+    profile?.role === 'applicant';
 
   const hasAdminRole = (profile: UserProfile | null | undefined): boolean =>
     profile?.role === 'admin';
@@ -709,6 +730,23 @@ const App: React.FC = () => {
           setUserAuthSession(token, canonicalUser);
         }
         setSelectedTier(canonicalUser.tier || FREE_TIER_NAME);
+        if (hasApplicantRole(canonicalUser)) {
+          setIsSelectingTier(false);
+          setMembershipNotice('');
+          setPendingCheckoutSessionId(null);
+          setStoredPendingCheckoutSessionId(null);
+          if (
+            ![
+              AppView.PROVIDER_ACCESS,
+              AppView.PROVIDER_APPLY,
+              AppView.PROVIDER_APPLICANT_SIGN_IN,
+              AppView.PROVIDER_APPLICATION_STATUS,
+            ].includes(initialRoute.view)
+          ) {
+            setCurrentView(AppView.PROVIDER_APPLICATION_STATUS, {}, { replace: true });
+          }
+          return;
+        }
         if (requiresInitialTwoFactorSetup(canonicalUser)) {
           setIsSelectingTier(false);
           setMembershipNotice('');
@@ -961,6 +999,21 @@ const App: React.FC = () => {
     return true;
   };
 
+  const routeApplicantToStatus = (profile: UserProfile): boolean => {
+    if (!hasApplicantRole(profile)) {
+      return false;
+    }
+    setUser(profile);
+    setIsSelectingTier(false);
+    setMembershipCheckoutPending(false);
+    setMembershipNotice('');
+    setPendingCheckoutSessionId(null);
+    setStoredPendingCheckoutSessionId(null);
+    setCurrentView(AppView.PROVIDER_APPLICATION_STATUS, {}, { replace: true });
+    setSidebarOpen(false);
+    return true;
+  };
+
   useEffect(() => {
     if (currentView !== AppView.MEMBERSHIP_ACCESS) {
       setMembershipAuthGuardChecking(false);
@@ -997,7 +1050,7 @@ const App: React.FC = () => {
         const refreshed = await refreshCanonicalUser();
         if (isCancelled) return;
 
-        if (refreshed && routeActiveMemberToDashboard(refreshed)) {
+        if (refreshed && (routeApplicantToStatus(refreshed) || routeActiveMemberToDashboard(refreshed))) {
           return;
         }
 
@@ -1190,6 +1243,20 @@ const App: React.FC = () => {
       }
 
       const canonicalUser = toPlatformUser(data.user);
+      if (hasApplicantRole(canonicalUser)) {
+        setUserAuthSession(data.token, canonicalUser);
+        setUser(canonicalUser);
+        setSelectedTier(canonicalUser.tier || FREE_TIER_NAME);
+        setPendingTwoFactorMethod(null);
+        setTwoFactorCodeInput('');
+        setProviderTokenInput('');
+        setIsSelectingTier(false);
+        setMembershipCheckoutPending(false);
+        setMembershipNotice('');
+        closeModals();
+        routeApplicantToStatus(canonicalUser);
+        return;
+      }
       const needsInitialTwoFactorSetup = requiresInitialTwoFactorSetup(canonicalUser);
       const needsMembershipSelection = !hasConfirmedMembership(canonicalUser);
       const storedCheckoutSessionId = getStoredPendingCheckoutSessionId();
@@ -1257,6 +1324,40 @@ const App: React.FC = () => {
       setHealthStatus('offline');
       setError(backendConnectionErrorMessage('sign in'));
     }
+  };
+
+  const handleProviderApplicationSubmit = async (formData: FormData): Promise<void> => {
+    const data = await api<any>('/provider-applicants/apply', {
+      method: 'POST',
+      auth: false,
+      body: formData,
+    });
+    const canonicalUser = toPlatformUser(data.user);
+    setUserAuthSession(data.token, canonicalUser);
+    setUser(canonicalUser);
+    setIsSelectingTier(false);
+    setMembershipCheckoutPending(false);
+    setMembershipNotice('');
+    setPendingCheckoutSessionId(null);
+    setSelectedTier(canonicalUser.tier || FREE_TIER_NAME);
+  };
+
+  const handleProviderApplicantSignIn = async (email: string, password: string): Promise<void> => {
+    const data = await api<any>('/user/signin', {
+      method: 'POST',
+      auth: false,
+      body: {
+        email: email.trim().toLowerCase(),
+        password,
+      },
+    });
+    const canonicalUser = toPlatformUser(data.user);
+    if (!hasApplicantRole(canonicalUser)) {
+      throw new Error('This sign-in is only for provider applicants. Approved providers will use wallet sign-in in the provider path.');
+    }
+    setUserAuthSession(data.token, canonicalUser);
+    setUser(canonicalUser);
+    routeApplicantToStatus(canonicalUser);
   };
 
   const handleCreateProfile = async (e: React.FormEvent) => {
@@ -1836,6 +1937,27 @@ const App: React.FC = () => {
   };
 
   const renderActiveView = () => {
+    if (!user && currentView === AppView.PROVIDER_APPLICATION_STATUS) {
+      return (
+        <div className="p-4 sm:p-8 max-w-3xl mx-auto">
+          <div className="glass-panel p-6 sm:p-8 rounded-3xl border border-amber-200/20 bg-amber-400/[0.04]">
+            <h2 className="text-2xl font-black text-white uppercase tracking-tight mb-4">
+              Applicant Session Required
+            </h2>
+            <p className="text-slate-300 text-sm leading-relaxed mb-6">
+              Sign in with your provider applicant credentials to view application status.
+            </p>
+            <button
+              onClick={() => setCurrentView(AppView.PROVIDER_APPLICANT_SIGN_IN)}
+              className="px-5 py-3 bg-amber-500 hover:bg-amber-400 text-slate-950 rounded-xl text-xs font-black uppercase tracking-widest transition-colors"
+            >
+              Applicant Sign In
+            </button>
+          </div>
+        </div>
+      );
+    }
+
     if (!user && !isGuestAllowedView(currentView)) {
       return (
         <div className="p-4 sm:p-8 max-w-3xl mx-auto">
@@ -1898,6 +2020,41 @@ const App: React.FC = () => {
 
     if (user && requiresInitialTwoFactorSetup(user)) {
       return renderInitialTwoFactorSetup();
+    }
+
+    if (
+      user &&
+      hasApplicantRole(user) &&
+      ![
+        AppView.PROVIDER_ACCESS,
+        AppView.PROVIDER_APPLY,
+        AppView.PROVIDER_APPLICANT_SIGN_IN,
+        AppView.PROVIDER_APPLICATION_STATUS,
+        AppView.NOT_FOUND,
+      ].includes(currentView)
+    ) {
+      return (
+        <div className="p-4 sm:p-8 max-w-3xl mx-auto">
+          <div className="glass-panel p-6 sm:p-8 rounded-3xl border border-amber-200/20 bg-amber-400/[0.04]">
+            <div className="mb-5 flex h-12 w-12 items-center justify-center rounded-2xl border border-amber-200/20 bg-amber-400/10 text-amber-100">
+              <LockKeyhole className="h-5 w-5" />
+            </div>
+            <h2 className="text-2xl font-black text-white uppercase tracking-tight mb-4">
+              Provider Review In Progress
+            </h2>
+            <p className="text-slate-300 text-sm leading-relaxed">
+              Your provider application is still under review. This area unlocks after approval
+              and wallet verification.
+            </p>
+            <button
+              onClick={() => setCurrentView(AppView.PROVIDER_APPLICATION_STATUS)}
+              className="mt-6 px-5 py-3 bg-amber-500 hover:bg-amber-400 text-slate-950 rounded-xl text-xs font-black uppercase tracking-widest transition-colors"
+            >
+              View Application Status
+            </button>
+          </div>
+        </div>
+      );
     }
 
     if (user && !hasAdminRole(user) && !hasConfirmedMembership(user) && !isNoTierSignedInAllowedView(currentView)) {
@@ -2035,6 +2192,7 @@ const App: React.FC = () => {
             onGoHome={() => setCurrentView(AppView.ENTRY)}
             onSignIn={() => setCurrentView(AppView.PROVIDER_SIGN_IN)}
             onApply={() => setCurrentView(AppView.PROVIDER_APPLY)}
+            onApplicantSignIn={() => setCurrentView(AppView.PROVIDER_APPLICANT_SIGN_IN)}
           />
         );
       case AppView.PROVIDER_SIGN_IN:
@@ -2064,28 +2222,26 @@ const App: React.FC = () => {
         );
       case AppView.PROVIDER_APPLY:
         return (
-          <div className="flex min-h-[100dvh] w-full items-center justify-center bg-[#120d05] p-4 sm:p-8">
-            <div className="glass-panel w-full max-w-xl rounded-3xl border border-amber-200/20 bg-amber-400/[0.05] p-6 shadow-2xl sm:p-8">
-              <button
-                type="button"
-                onClick={() => setCurrentView(AppView.PROVIDER_ACCESS)}
-                className="mb-6 flex items-center gap-2 text-[10px] font-black uppercase tracking-widest text-amber-100/60 transition-colors hover:text-white"
-              >
-                <ChevronRight className="h-4 w-4 rotate-180" />
-                Provider Access
-              </button>
-              <div className="mb-6 flex h-14 w-14 items-center justify-center rounded-2xl border border-amber-200/20 bg-amber-400/10 text-amber-100">
-                <FileText className="h-6 w-6" />
-              </div>
-              <h2 className="text-2xl font-black uppercase tracking-tight text-white sm:text-3xl">
-                Provider Application
-              </h2>
-              <p className="mt-3 text-sm leading-6 text-slate-300">
-                Placeholder route for new provider applicants. Application form, status tracking,
-                and discovery call scheduling will be implemented in a later phase.
-              </p>
-            </div>
-          </div>
+          <ProviderApplicationPage
+            onBack={() => setCurrentView(AppView.PROVIDER_ACCESS)}
+            onSubmit={handleProviderApplicationSubmit}
+            onViewStatus={() => setCurrentView(AppView.PROVIDER_APPLICATION_STATUS)}
+          />
+        );
+      case AppView.PROVIDER_APPLICANT_SIGN_IN:
+        return (
+          <ProviderApplicantSignInPage
+            onBack={() => setCurrentView(AppView.PROVIDER_ACCESS)}
+            onSignIn={handleProviderApplicantSignIn}
+            onSignedIn={() => setCurrentView(AppView.PROVIDER_APPLICATION_STATUS, {}, { replace: true })}
+          />
+        );
+      case AppView.PROVIDER_APPLICATION_STATUS:
+        return (
+          <ProviderApplicationStatusPage
+            onBack={() => setCurrentView(AppView.PROVIDER_ACCESS)}
+            onSignOut={handleSignOut}
+          />
         );
       case AppView.DASHBOARD: 
         return (
@@ -2166,6 +2322,16 @@ const App: React.FC = () => {
       case AppView.ADMIN_DASHBOARD:
         return hasAdminRole(user) ? (
           <AdminDashboard />
+        ) : (
+          <NotFoundPage
+            path={activePath}
+            onGoHome={() => setCurrentView(AppView.ENTRY)}
+            onGoDashboard={() => setCurrentView(AppView.DASHBOARD)}
+          />
+        );
+      case AppView.ADMIN_PROVIDER_APPLICANTS:
+        return hasAdminRole(user) ? (
+          <AdminProviderApplicantsPage />
         ) : (
           <NotFoundPage
             path={activePath}

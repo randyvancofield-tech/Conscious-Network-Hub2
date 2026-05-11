@@ -8,7 +8,7 @@ export const PROVIDER_SESSION_TOKEN_KEY = 'hcn_provider_session_token';
 export const PROVIDER_SESSION_TOKEN_EVENT = 'hcn:provider-session-token-updated';
 export const ADMIN_ELEVATION_TOKEN_KEY = 'hcn_admin_elevation_token';
 
-type PlatformSessionRole = 'guest' | 'user' | 'provider' | 'admin';
+type PlatformSessionRole = 'guest' | 'user' | 'applicant' | 'provider' | 'admin';
 type PlatformSessionTier = 'free' | 'guided' | 'accelerated';
 
 interface PlatformSessionState {
@@ -124,9 +124,15 @@ export const setUserAuthSession = (token: string, user?: UserProfile | null): vo
   if (platformUser) {
     localStorage.setItem(ACTIVE_USER_CACHE_KEY, JSON.stringify(platformUser));
   }
+  const role: PlatformSessionRole =
+    platformUser?.role === 'admin'
+      ? 'admin'
+      : platformUser?.role === 'applicant'
+        ? 'applicant'
+        : 'user';
   writePlatformSession({
     isAuthenticated: true,
-    role: platformUser?.role === 'admin' ? 'admin' : 'user',
+    role,
     tier: normalizePlatformTier(platformUser?.tier),
     permissions: platformUser?.role === 'admin' ? ['admin:dashboard'] : [],
   });

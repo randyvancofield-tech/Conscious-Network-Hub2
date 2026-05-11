@@ -9,6 +9,8 @@ export enum AppView {
   PROVIDER_ACCESS = 'PROVIDER_ACCESS',
   PROVIDER_SIGN_IN = 'PROVIDER_SIGN_IN',
   PROVIDER_APPLY = 'PROVIDER_APPLY',
+  PROVIDER_APPLICANT_SIGN_IN = 'PROVIDER_APPLICANT_SIGN_IN',
+  PROVIDER_APPLICATION_STATUS = 'PROVIDER_APPLICATION_STATUS',
   DASHBOARD = 'DASHBOARD',
   MY_COURSES = 'MY_COURSES',
   PROVIDERS = 'PROVIDERS',
@@ -29,6 +31,7 @@ export enum AppView {
   AI_SAFETY_GOVERNANCE = 'AI_SAFETY_GOVERNANCE',
   NOTIFICATIONS = 'NOTIFICATIONS',
   ADMIN_DASHBOARD = 'ADMIN_DASHBOARD',
+  ADMIN_PROVIDER_APPLICANTS = 'ADMIN_PROVIDER_APPLICANTS',
   NOT_FOUND = 'NOT_FOUND'
 }
 
@@ -89,7 +92,7 @@ export interface UserProfile {
   name: string;
   handle?: string;
   email: string;
-  role?: 'user' | 'provider' | 'admin';
+  role?: 'user' | 'applicant' | 'provider' | 'admin';
   providerExternalId?: string | null;
   passwordHash?: string;
   tier: string | null;

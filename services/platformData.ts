@@ -10,7 +10,7 @@ export type ProviderSurfaceRecord = {
   rating: number | null;
   experience: string;
   image: string;
-  verificationStatus: 'base44_pending' | 'verified';
+  verificationStatus: 'review_pending' | 'verified';
   accessMode: 'request' | 'invite_only';
   services: string[];
 };
@@ -49,11 +49,11 @@ export const PROVIDER_SURFACE_RECORDS: ProviderSurfaceRecord[] = [
     category: 'Provider Onboarding',
     location: 'Global',
     specialty: 'Identity bridge, service publishing, session readiness',
-    bio: 'A structured provider profile surface used to validate the marketplace flow while Base44 provider records are connected.',
+    bio: 'A structured provider profile surface used to validate the native CNH marketplace flow while provider records are reviewed.',
     rating: null,
     experience: 'Integration Ready',
     image: '/images/provider-readiness.svg',
-    verificationStatus: 'base44_pending',
+    verificationStatus: 'review_pending',
     accessMode: 'request',
     services: ['Provider profile intake', 'Session readiness', 'Service catalog setup'],
   },

@@ -7,7 +7,7 @@ import {
 } from './sensitiveDataPolicy';
 
 export type TwoFactorMethod = 'none' | 'phone' | 'wallet';
-export type UserRole = 'user' | 'provider' | 'admin';
+export type UserRole = 'user' | 'applicant' | 'provider' | 'admin';
 
 type NullableIso = string | null;
 

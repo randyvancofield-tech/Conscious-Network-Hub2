@@ -14,7 +14,7 @@ export interface AuthenticatedRequest extends Request {
   authProviderExternalId?: string;
 }
 
-export type PlatformRole = 'guest' | 'user' | 'provider' | 'admin';
+export type PlatformRole = 'guest' | 'user' | 'applicant' | 'provider' | 'admin';
 
 const INITIAL_TWO_FACTOR_ALLOWED_PATHS = new Set([
   '/api/user/current',
@@ -277,7 +277,7 @@ export const getAuthenticatedSessionId = (req: Request): string | null => {
 export const getAuthenticatedRole = (req: Request): PlatformRole => {
   const authReq = req as AuthenticatedRequest;
   const role = String(authReq.authRole || '').trim().toLowerCase();
-  if (role === 'admin' || role === 'provider' || role === 'user') return role;
+  if (role === 'admin' || role === 'provider' || role === 'applicant' || role === 'user') return role;
   return 'guest';
 };
 

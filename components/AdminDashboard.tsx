@@ -4,7 +4,7 @@ import { api, ApiError } from '../services/apiClient';
 import { getAdminElevationToken, setAdminElevationToken } from '../services/sessionService';
 import { ActionButton, EmptyState, PageHeader, PageShell, SurfacePanel } from './ui/PlatformPrimitives';
 
-type AdminRole = 'user' | 'provider' | 'admin';
+type AdminRole = 'user' | 'applicant' | 'provider' | 'admin';
 
 interface AdminUserSummary {
   id: string;
@@ -158,10 +158,11 @@ const AdminDashboard: React.FC = () => {
 
       {error && <EmptyState title="Admin action failed" description={error} />}
 
-      <div className="grid grid-cols-1 gap-4 md:grid-cols-4">
+      <div className="grid grid-cols-1 gap-4 md:grid-cols-5">
         {[
           ['Users', dashboard.summary.usersTotal],
           ['Members', dashboard.summary.roleCounts.user],
+          ['Applicants', dashboard.summary.roleCounts.applicant],
           ['Providers', dashboard.summary.roleCounts.provider],
           ['Admins', dashboard.summary.roleCounts.admin],
         ].map(([label, value]) => (
@@ -206,6 +207,7 @@ const AdminDashboard: React.FC = () => {
                       className="rounded-lg border border-white/10 bg-slate-950 px-3 py-2 text-xs text-white"
                     >
                       <option value="user">Member</option>
+                      <option value="applicant">Applicant</option>
                       <option value="provider">Provider</option>
                       <option value="admin">Admin</option>
                     </select>

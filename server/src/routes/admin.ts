@@ -18,14 +18,20 @@ import {
   adminElevationSchema,
   adminRoleUpdateSchema,
 } from '../validation/requestSchemas';
+import {
+  PROVIDER_APPLICANT_STATUSES,
+  getProviderApplicantById,
+  listProviderApplicants,
+  updateProviderApplicantReview,
+} from '../services/providerApplicantStore';
 
 const router = Router();
 
-type AdminVisibleRole = 'user' | 'provider' | 'admin';
+type AdminVisibleRole = 'user' | 'applicant' | 'provider' | 'admin';
 
 const normalizeRole = (value: unknown): AdminVisibleRole | null => {
   const role = String(value || '').trim().toLowerCase();
-  if (role === 'user' || role === 'provider' || role === 'admin') return role;
+  if (role === 'user' || role === 'applicant' || role === 'provider' || role === 'admin') return role;
   return null;
 };
 
@@ -146,7 +152,7 @@ router.get('/dashboard', async (req: Request, res: Response): Promise<void> => {
       counts[role] += 1;
       return counts;
     },
-    { user: 0, provider: 0, admin: 0 }
+    { user: 0, applicant: 0, provider: 0, admin: 0 }
   );
 
   recordAuditEvent(req, {
@@ -166,6 +172,7 @@ router.get('/dashboard', async (req: Request, res: Response): Promise<void> => {
     roleModel: {
       guest: ['public:read'],
       member: ['self:read', 'self:update', 'courses:enroll', 'social:write', 'meetings:join'],
+      applicant: ['provider-application:read'],
       admin: ['platform:read', 'users:read', 'roles:update', 'audit:read'],
     },
     summary: {
@@ -196,6 +203,95 @@ router.get('/users', async (req: Request, res: Response): Promise<void> => {
     success: true,
     users: users.map(toAdminUserSummary),
   });
+});
+
+router.get('/provider-applicants', async (req: Request, res: Response): Promise<void> => {
+  const actorUserId = getAuthenticatedUserId(req);
+  const status = String(req.query.status || '').trim().toLowerCase();
+  const limit = Math.min(Math.max(Number(req.query.limit || 250), 1), 500);
+  const applicants = await listProviderApplicants({
+    status: PROVIDER_APPLICANT_STATUSES.includes(status as any) ? status : undefined,
+    limit,
+  });
+
+  recordAuditEvent(req, {
+    domain: 'admin',
+    action: 'provider_applicants_list',
+    outcome: 'success',
+    actorUserId,
+    statusCode: 200,
+    metadata: { status: status || null, returned: applicants.length },
+  });
+
+  res.json({
+    success: true,
+    statuses: PROVIDER_APPLICANT_STATUSES,
+    applicants,
+  });
+});
+
+router.get('/provider-applicants/:id', async (req: Request, res: Response): Promise<void> => {
+  const actorUserId = getAuthenticatedUserId(req);
+  const id = String(req.params.id || '').trim();
+  const applicant = await getProviderApplicantById(id);
+  if (!applicant) {
+    res.status(404).json({ error: 'Provider applicant not found' });
+    return;
+  }
+
+  recordAuditEvent(req, {
+    domain: 'admin',
+    action: 'provider_applicant_view',
+    outcome: 'success',
+    actorUserId,
+    targetUserId: applicant.userId,
+    statusCode: 200,
+    metadata: { applicantId: applicant.id, status: applicant.status },
+  });
+
+  res.json({ success: true, applicant });
+});
+
+router.patch('/provider-applicants/:id', async (req: Request, res: Response): Promise<void> => {
+  const actorUserId = getAuthenticatedUserId(req);
+  const id = String(req.params.id || '').trim();
+  const status = String(req.body?.status || '').trim().toLowerCase();
+  const adminNotes =
+    req.body?.adminNotes === undefined ? undefined : String(req.body?.adminNotes || '').trim();
+
+  if (status && !PROVIDER_APPLICANT_STATUSES.includes(status as any)) {
+    res.status(400).json({ error: 'Invalid provider applicant status' });
+    return;
+  }
+
+  const existing = await getProviderApplicantById(id);
+  if (!existing) {
+    res.status(404).json({ error: 'Provider applicant not found' });
+    return;
+  }
+
+  const updated = await updateProviderApplicantReview(id, {
+    ...(status ? { status } : {}),
+    ...(adminNotes !== undefined ? { adminNotes } : {}),
+    reviewedAt: new Date(),
+  });
+
+  recordAuditEvent(req, {
+    domain: 'admin',
+    action: 'provider_applicant_update',
+    outcome: 'success',
+    actorUserId,
+    targetUserId: existing.userId,
+    statusCode: 200,
+    metadata: {
+      applicantId: id,
+      previousStatus: existing.status,
+      nextStatus: updated.status,
+      adminNotesUpdated: adminNotes !== undefined,
+    },
+  });
+
+  res.json({ success: true, applicant: updated });
 });
 
 router.patch(

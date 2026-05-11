@@ -227,7 +227,7 @@ export const adminRoleUpdateSchema: JsonSchema = {
   additionalProperties: false,
   required: ['role'],
   properties: {
-    role: { type: 'string', enum: ['user', 'provider', 'admin'] },
+    role: { type: 'string', enum: ['user', 'applicant', 'provider', 'admin'] },
     reason: { type: 'string', maxLength: 512 },
   },
 };
