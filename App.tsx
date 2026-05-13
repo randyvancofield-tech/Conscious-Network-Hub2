@@ -22,6 +22,7 @@ import ProviderApplicationStatusPage from './components/ProviderApplicationStatu
 import AdminProviderApplicantsPage from './components/AdminProviderApplicantsPage';
 import ConsciousCareersPage from './components/ConsciousCareersPage';
 import GrantApplicationPage from './components/GrantApplicationPage';
+import EntrepreneurshipSupportPage from './components/EntrepreneurshipSupportPage';
 import { ConsciousIdentity } from './components/community/CommunityLayout';
 import { AppView, UserProfile, Course } from './types';
 import { NAVIGATION_ITEMS } from './constants';
@@ -144,6 +145,8 @@ const routePathForView = (view: AppView, params: Record<string, string> = {}): s
       return '/conscious-careers';
     case AppView.GRANT_APPLICATION:
       return '/conscious-careers/grant-application';
+    case AppView.ENTREPRENEURSHIP_SUPPORT:
+      return '/conscious-careers/entrepreneurship-support';
     case AppView.DASHBOARD:
       return '/dashboard';
     case AppView.CONSCIOUS_SOCIAL_LEARNING:
@@ -218,6 +221,8 @@ const resolveRoute = (pathname: string, search = ''): RouteState => {
     '/careers': AppView.CONSCIOUS_CAREERS,
     '/conscious-careers/grant-application': AppView.GRANT_APPLICATION,
     '/careers/grant-application': AppView.GRANT_APPLICATION,
+    '/conscious-careers/entrepreneurship-support': AppView.ENTREPRENEURSHIP_SUPPORT,
+    '/careers/entrepreneurship-support': AppView.ENTREPRENEURSHIP_SUPPORT,
     '/dashboard': AppView.DASHBOARD,
     '/social': AppView.CONSCIOUS_SOCIAL_LEARNING,
     '/social-learning': AppView.CONSCIOUS_SOCIAL_LEARNING,
@@ -301,6 +306,7 @@ const isGuestAllowedView = (view: AppView): boolean =>
     AppView.PROVIDER_APPLY,
     AppView.PROVIDER_APPLICANT_SIGN_IN,
     AppView.CONSCIOUS_CAREERS,
+    AppView.ENTREPRENEURSHIP_SUPPORT,
     AppView.MEMBERSHIP,
     AppView.COMMUNITY,
     AppView.CONSCIOUS_SOCIAL_LEARNING,
@@ -330,6 +336,7 @@ const isNoTierSignedInAllowedView = (view: AppView): boolean =>
     AppView.PROVIDER_APPLICATION_STATUS,
     AppView.CONSCIOUS_CAREERS,
     AppView.GRANT_APPLICATION,
+    AppView.ENTREPRENEURSHIP_SUPPORT,
     AppView.MEMBERSHIP,
     AppView.PRIVACY_POLICY,
     AppView.TERMS_OF_SERVICE,
@@ -342,7 +349,11 @@ const isNoTierSignedInAllowedView = (view: AppView): boolean =>
   ].includes(view);
 
 const shouldPreserveNoTierViewAfterAuth = (view: AppView): boolean =>
-  [AppView.CONSCIOUS_CAREERS, AppView.GRANT_APPLICATION].includes(view);
+  [
+    AppView.CONSCIOUS_CAREERS,
+    AppView.GRANT_APPLICATION,
+    AppView.ENTREPRENEURSHIP_SUPPORT,
+  ].includes(view);
 
 const isProviderPublicView = (view: AppView): boolean =>
   [
@@ -357,6 +368,7 @@ const isCareersPublicView = (view: AppView): boolean =>
   [
     AppView.CONSCIOUS_CAREERS,
     AppView.GRANT_APPLICATION,
+    AppView.ENTREPRENEURSHIP_SUPPORT,
   ].includes(view);
 
 const App: React.FC = () => {
@@ -365,6 +377,13 @@ const App: React.FC = () => {
   const [routeParams, setRouteParams] = useState<Record<string, string>>(initialRoute.params);
   const [activePath, setActivePath] = useState(initialRoute.path);
   const [isSidebarOpen, setSidebarOpen] = useState(false);
+  const [isCareersMenuOpen, setCareersMenuOpen] = useState(
+    [
+      AppView.CONSCIOUS_CAREERS,
+      AppView.GRANT_APPLICATION,
+      AppView.ENTREPRENEURSHIP_SUPPORT,
+    ].includes(initialRoute.view)
+  );
   const [user, setUser] = useState<UserProfile | null>(() => getCachedAuthUser());
   const [enrolledCourses, setEnrolledCourses] = useState<Course[]>([]);
   
@@ -1254,10 +1273,8 @@ const App: React.FC = () => {
       const storedCheckoutSessionId = getStoredPendingCheckoutSessionId();
       const shouldVerifyStoredCheckout =
         Boolean(storedCheckoutSessionId) && !needsInitialTwoFactorSetup && needsMembershipSelection;
-      const preserveNoTierView =
-        !needsInitialTwoFactorSetup &&
-        needsMembershipSelection &&
-        shouldPreserveNoTierViewAfterAuth(currentView);
+      const preserveCareersView =
+        !needsInitialTwoFactorSetup && shouldPreserveNoTierViewAfterAuth(currentView);
       if (storedCheckoutSessionId && !shouldVerifyStoredCheckout) {
         setStoredPendingCheckoutSessionId(null);
       }
@@ -1269,7 +1286,7 @@ const App: React.FC = () => {
       setSelectedTier(canonicalUser.tier || FREE_TIER_NAME);
       setIsSelectingTier(
         !needsInitialTwoFactorSetup &&
-          !preserveNoTierView &&
+          !preserveCareersView &&
           (needsMembershipSelection || shouldVerifyStoredCheckout)
       );
       setMembershipCheckoutPending(shouldVerifyStoredCheckout);
@@ -1278,7 +1295,7 @@ const App: React.FC = () => {
           ? ''
           : shouldVerifyStoredCheckout
             ? 'Redirecting to your platform...'
-            : preserveNoTierView
+            : preserveCareersView
             ? ''
             : needsMembershipSelection
             ? 'Select a membership tier to continue.'
@@ -1290,6 +1307,11 @@ const App: React.FC = () => {
       setProviderTokenInput('');
       setInitialTwoFactorCompletedNotice(false);
       closeModals();
+      if (preserveCareersView) {
+        setCurrentView(currentView, {}, { replace: true });
+        setSidebarOpen(window.innerWidth >= 1024);
+        return;
+      }
       if (!needsInitialTwoFactorSetup && hasConfirmedMembership(canonicalUser)) {
         routeActiveMemberToDashboard(canonicalUser);
         return;
@@ -1300,7 +1322,7 @@ const App: React.FC = () => {
           ? AppView.DASHBOARD
           : shouldVerifyStoredCheckout
             ? AppView.VERIFY_SESSION
-          : preserveNoTierView
+          : preserveCareersView
             ? currentView
           : needsMembershipSelection
             ? AppView.MEMBERSHIP_ACCESS
@@ -1468,10 +1490,8 @@ const App: React.FC = () => {
       const canonicalUser = toPlatformUser(data.user);
       const needsInitialTwoFactorSetup = requiresInitialTwoFactorSetup(canonicalUser);
       const needsMembershipSelection = !hasConfirmedMembership(canonicalUser);
-      const preserveNoTierView =
-        !needsInitialTwoFactorSetup &&
-        needsMembershipSelection &&
-        shouldPreserveNoTierViewAfterAuth(currentView);
+      const preserveCareersView =
+        !needsInitialTwoFactorSetup && shouldPreserveNoTierViewAfterAuth(currentView);
       setUserAuthSession(data.token, canonicalUser);
       setUser(canonicalUser);
       if (!needsInitialTwoFactorSetup) {
@@ -1482,7 +1502,7 @@ const App: React.FC = () => {
       setMembershipNotice(
         needsInitialTwoFactorSetup
           ? ''
-          : preserveNoTierView
+          : preserveCareersView
             ? ''
           : needsMembershipSelection
             ? 'Select a membership tier to continue.'
@@ -1493,7 +1513,7 @@ const App: React.FC = () => {
       setCurrentView(
         needsInitialTwoFactorSetup
           ? AppView.DASHBOARD
-          : preserveNoTierView
+          : preserveCareersView
             ? currentView
           : needsMembershipSelection
             ? AppView.MEMBERSHIP_ACCESS
@@ -1501,7 +1521,7 @@ const App: React.FC = () => {
         {},
         { replace: true }
       );
-      setIsSelectingTier(!needsInitialTwoFactorSetup && needsMembershipSelection && !preserveNoTierView);
+      setIsSelectingTier(!needsInitialTwoFactorSetup && needsMembershipSelection && !preserveCareersView);
       setSidebarOpen(!needsInitialTwoFactorSetup && !needsMembershipSelection && window.innerWidth >= 1024);
     } catch (error) {
       if (error instanceof ApiError) {
@@ -1842,6 +1862,7 @@ const App: React.FC = () => {
     'my-courses': AppView.MY_COURSES,
     courses: AppView.KNOWLEDGE_PATHWAYS,
     providers: AppView.PROVIDERS,
+    careers: AppView.CONSCIOUS_CAREERS,
     profile: AppView.MY_CONSCIOUS_IDENTITY,
     membership: AppView.MEMBERSHIP,
     admin: AppView.ADMIN_DASHBOARD,
@@ -1858,7 +1879,7 @@ const App: React.FC = () => {
       return NAVIGATION_ITEMS;
     }
     if (!hasConfirmedMembership(user)) {
-      return NAVIGATION_ITEMS.filter((item) => item.id === 'membership');
+      return NAVIGATION_ITEMS.filter((item) => item.id === 'membership' || item.id === 'careers');
     }
     return NAVIGATION_ITEMS.filter(
       (item) => item.id !== 'admin' && canTierAccessNavItem(user.tier, item.id)
@@ -2361,8 +2382,9 @@ const App: React.FC = () => {
       case AppView.CONSCIOUS_CAREERS:
         return (
           <ConsciousCareersPage
-            onGoHome={() => setCurrentView(AppView.ENTRY)}
+            onGoHome={() => setCurrentView(user ? AppView.DASHBOARD : AppView.ENTRY)}
             onGrantApplication={() => setCurrentView(AppView.GRANT_APPLICATION)}
+            onEntrepreneurshipSupport={() => setCurrentView(AppView.ENTREPRENEURSHIP_SUPPORT)}
           />
         );
       case AppView.GRANT_APPLICATION:
@@ -2371,6 +2393,12 @@ const App: React.FC = () => {
             user={user}
             onBack={() => setCurrentView(AppView.CONSCIOUS_CAREERS)}
             onSubmit={handleGrantApplicationSubmit}
+          />
+        );
+      case AppView.ENTREPRENEURSHIP_SUPPORT:
+        return (
+          <EntrepreneurshipSupportPage
+            onBack={() => setCurrentView(AppView.CONSCIOUS_CAREERS)}
           />
         );
       case AppView.DASHBOARD:
@@ -2631,7 +2659,7 @@ const App: React.FC = () => {
   };
 
   const isProviderPublicExperience = isProviderPublicView(currentView);
-  const isCareersPublicExperience = isCareersPublicView(currentView);
+  const isCareersPublicExperience = !user && isCareersPublicView(currentView);
 
   return (
     <div className="app-scroll-root min-h-screen bg-[#05070a] text-slate-200 selection:bg-blue-500/30 flex relative">
@@ -3151,8 +3179,82 @@ const App: React.FC = () => {
                           ? AppView.KNOWLEDGE_PATHWAYS
                           : currentView === AppView.MEETING_DETAIL
                             ? AppView.CONSCIOUS_MEETINGS
+                            : [
+                                AppView.GRANT_APPLICATION,
+                                AppView.ENTREPRENEURSHIP_SUPPORT,
+                              ].includes(currentView)
+                              ? AppView.CONSCIOUS_CAREERS
                             : currentView;
                     const isActive = parentView === view;
+                    if (item.id === 'careers') {
+                      const careersSubItems = [
+                        {
+                          id: 'grant-application',
+                          label: 'Grant Application',
+                          view: AppView.GRANT_APPLICATION,
+                          badge: 'Apply',
+                        },
+                        {
+                          id: 'entrepreneurship-support',
+                          label: 'Entrepreneurship Support',
+                          view: AppView.ENTREPRENEURSHIP_SUPPORT,
+                          badge: 'Soon',
+                        },
+                      ];
+
+                      return (
+                        <div key={item.id} className="space-y-2">
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setCareersMenuOpen((open) => !open);
+                              setCurrentView(AppView.CONSCIOUS_CAREERS);
+                            }}
+                            aria-expanded={isCareersMenuOpen}
+                            className={`w-full flex items-center gap-5 px-6 py-4 rounded-2xl transition-all group ${isActive ? 'bg-blue-600/15 text-blue-400 border border-blue-500/20 shadow-lg' : 'text-slate-500 hover:bg-white/5 hover:text-white'}`}
+                          >
+                            <span className={`${isActive ? 'text-blue-400' : 'text-slate-600 group-hover:text-blue-400'} transition-colors`}>{item.icon}</span>
+                            <span className="min-w-0 flex-1 text-left text-[10px] font-black tracking-[0.3em] uppercase">{item.label}</span>
+                            <ChevronRight className={`h-4 w-4 transition-transform ${isCareersMenuOpen ? 'rotate-90 text-blue-300' : 'text-slate-600'}`} />
+                          </button>
+
+                          {isCareersMenuOpen && (
+                            <div className="ml-8 space-y-2 border-l border-white/10 pl-4">
+                              {careersSubItems.map((subItem) => {
+                                const isSubActive = currentView === subItem.view;
+                                return (
+                                  <button
+                                    key={subItem.id}
+                                    type="button"
+                                    onClick={() => {
+                                      setCurrentView(subItem.view);
+                                      setCareersMenuOpen(true);
+                                      closeSidebarOnMobile();
+                                    }}
+                                    className={`w-full rounded-xl border px-4 py-3 text-left transition-all ${
+                                      isSubActive
+                                        ? 'border-cyan-300/30 bg-cyan-400/10 text-white'
+                                        : 'border-white/5 bg-white/[0.03] text-slate-500 hover:bg-white/5 hover:text-white'
+                                    }`}
+                                  >
+                                    <span className="flex items-center justify-between gap-3">
+                                      <span className="text-[9px] font-black uppercase tracking-[0.22em]">{subItem.label}</span>
+                                      <span className={`rounded-full px-2 py-1 text-[7px] font-black uppercase tracking-widest ${
+                                        subItem.badge === 'Soon'
+                                          ? 'bg-teal-400/10 text-teal-200'
+                                          : 'bg-blue-400/10 text-blue-200'
+                                      }`}>
+                                        {subItem.badge}
+                                      </span>
+                                    </span>
+                                  </button>
+                                );
+                              })}
+                            </div>
+                          )}
+                        </div>
+                      );
+                    }
                     return (
                       <button
                         key={item.id}

@@ -4,6 +4,7 @@ import { BadgeDollarSign, ChevronRight, Home, Rocket, Shield } from 'lucide-reac
 interface ConsciousCareersPageProps {
   onGoHome: () => void;
   onGrantApplication: () => void;
+  onEntrepreneurshipSupport: () => void;
 }
 
 const CAREERS_RETURN_PATH_ID = 'careers-grants';
@@ -13,6 +14,7 @@ const CAREERS_RETURN_INSIGHT =
 const ConsciousCareersPage: React.FC<ConsciousCareersPageProps> = ({
   onGoHome,
   onGrantApplication,
+  onEntrepreneurshipSupport,
 }) => {
   const [hoveredPath, setHoveredPath] = useState<string | null>(null);
 
@@ -184,7 +186,15 @@ const ConsciousCareersPage: React.FC<ConsciousCareersPageProps> = ({
             </span>
           </button>
 
-          <div className="glass-panel relative flex min-h-[25rem] flex-col justify-between overflow-hidden rounded-[1.75rem] border-white/5 border-t-4 border-t-teal-500/20 p-5 opacity-80 shadow-2xl sm:min-h-[27rem] sm:rounded-[2.5rem] sm:p-8 md:p-10">
+          <button
+            type="button"
+            onClick={onEntrepreneurshipSupport}
+            onMouseEnter={() => setHoveredPath('Entrepreneurship Support')}
+            onMouseLeave={() => setHoveredPath(null)}
+            onFocus={() => setHoveredPath('Entrepreneurship Support')}
+            onBlur={() => setHoveredPath(null)}
+            className="glass-panel group relative flex min-h-[25rem] flex-col justify-between overflow-hidden rounded-[1.75rem] border-white/5 border-t-4 border-t-teal-500/20 p-5 text-left opacity-90 shadow-2xl transition-all duration-300 hover:border-teal-500/30 hover:scale-[1.02] hover:ring-2 hover:ring-teal-300/30 sm:min-h-[27rem] sm:rounded-[2.5rem] sm:p-8 md:p-10"
+          >
             <div className="absolute top-0 right-0 p-4 text-teal-400 opacity-5 sm:p-8">
               <Shield className="w-16 h-16 sm:w-24 sm:h-24" />
             </div>
@@ -203,14 +213,10 @@ const ConsciousCareersPage: React.FC<ConsciousCareersPageProps> = ({
                 </p>
               </div>
             </div>
-            <button
-              type="button"
-              disabled
-              className="mt-7 w-full cursor-not-allowed rounded-xl border border-white/5 bg-white/5 py-4 text-[10px] font-black uppercase tracking-[0.18em] text-slate-400 shadow-xl sm:mt-10 sm:rounded-2xl sm:py-5 sm:text-xs"
-            >
+            <span className="mt-7 flex w-full items-center justify-center rounded-xl border border-white/5 bg-white/5 py-4 text-[10px] font-black uppercase tracking-[0.18em] text-slate-300 shadow-xl transition-all group-hover:border-teal-500/40 group-hover:bg-teal-600/20 group-hover:text-white sm:mt-10 sm:rounded-2xl sm:py-5 sm:text-xs">
               Coming Soon
-            </button>
-          </div>
+            </span>
+          </button>
         </div>
       </div>
     </div>
