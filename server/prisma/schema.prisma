@@ -94,6 +94,7 @@ model User {
   // Deprecated legacy launch-code relation retained for migration compatibility only.
   providerBridgeLaunches ProviderBridgeLaunch[] @relation("ProviderBridgeLaunchProvider")
   providerApplications    ProviderApplicant[]
+  grantApplications       ConsciousCareerGrantApplication[]
 
   @@index([createdAt])
 }
@@ -142,6 +143,33 @@ model ProviderApplicant {
 
   @@index([status])
   @@index([providerCategory])
+  @@index([submittedAt])
+  @@index([createdAt])
+}
+
+model ConsciousCareerGrantApplication {
+  id                  String   @id @default(uuid())
+  userId              String
+  country             String
+  region              String?
+  locality            String?
+  postalCode          String?
+  legalName           String?
+  applicantType       String
+  ventureStage        String
+  requestedAmountUsd  Int
+  useOfFunds          Json
+  answers             Json
+  status              String   @default("submitted")
+  submittedAt         DateTime @default(now())
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([country])
+  @@index([status])
   @@index([submittedAt])
   @@index([createdAt])
 }

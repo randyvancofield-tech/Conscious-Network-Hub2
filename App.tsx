@@ -20,6 +20,8 @@ import ProviderApplicationPage from './components/ProviderApplicationPage';
 import ProviderApplicantSignInPage from './components/ProviderApplicantSignInPage';
 import ProviderApplicationStatusPage from './components/ProviderApplicationStatusPage';
 import AdminProviderApplicantsPage from './components/AdminProviderApplicantsPage';
+import ConsciousCareersPage from './components/ConsciousCareersPage';
+import GrantApplicationPage from './components/GrantApplicationPage';
 import { ConsciousIdentity } from './components/community/CommunityLayout';
 import { AppView, UserProfile, Course } from './types';
 import { NAVIGATION_ITEMS } from './constants';
@@ -138,6 +140,10 @@ const routePathForView = (view: AppView, params: Record<string, string> = {}): s
       return '/provider/applicant-sign-in';
     case AppView.PROVIDER_APPLICATION_STATUS:
       return '/provider/application-status';
+    case AppView.CONSCIOUS_CAREERS:
+      return '/conscious-careers';
+    case AppView.GRANT_APPLICATION:
+      return '/conscious-careers/grant-application';
     case AppView.DASHBOARD:
       return '/dashboard';
     case AppView.CONSCIOUS_SOCIAL_LEARNING:
@@ -208,6 +214,10 @@ const resolveRoute = (pathname: string, search = ''): RouteState => {
     '/provider/apply': AppView.PROVIDER_APPLY,
     '/provider/applicant-sign-in': AppView.PROVIDER_APPLICANT_SIGN_IN,
     '/provider/application-status': AppView.PROVIDER_APPLICATION_STATUS,
+    '/conscious-careers': AppView.CONSCIOUS_CAREERS,
+    '/careers': AppView.CONSCIOUS_CAREERS,
+    '/conscious-careers/grant-application': AppView.GRANT_APPLICATION,
+    '/careers/grant-application': AppView.GRANT_APPLICATION,
     '/dashboard': AppView.DASHBOARD,
     '/social': AppView.CONSCIOUS_SOCIAL_LEARNING,
     '/social-learning': AppView.CONSCIOUS_SOCIAL_LEARNING,
@@ -276,6 +286,7 @@ const requiresStoredSession = (view: AppView): boolean =>
     AppView.ADMIN_DASHBOARD,
     AppView.ADMIN_PROVIDER_APPLICANTS,
     AppView.PROVIDER_APPLICATION_STATUS,
+    AppView.GRANT_APPLICATION,
   ].includes(view);
 
 const isGuestAllowedView = (view: AppView): boolean =>
@@ -289,6 +300,7 @@ const isGuestAllowedView = (view: AppView): boolean =>
     AppView.PROVIDER_SIGN_IN,
     AppView.PROVIDER_APPLY,
     AppView.PROVIDER_APPLICANT_SIGN_IN,
+    AppView.CONSCIOUS_CAREERS,
     AppView.MEMBERSHIP,
     AppView.COMMUNITY,
     AppView.CONSCIOUS_SOCIAL_LEARNING,
@@ -316,6 +328,7 @@ const isNoTierSignedInAllowedView = (view: AppView): boolean =>
     AppView.PROVIDER_APPLY,
     AppView.PROVIDER_APPLICANT_SIGN_IN,
     AppView.PROVIDER_APPLICATION_STATUS,
+    AppView.CONSCIOUS_CAREERS,
     AppView.MEMBERSHIP,
     AppView.PRIVACY_POLICY,
     AppView.TERMS_OF_SERVICE,
@@ -334,6 +347,12 @@ const isProviderPublicView = (view: AppView): boolean =>
     AppView.PROVIDER_APPLY,
     AppView.PROVIDER_APPLICANT_SIGN_IN,
     AppView.PROVIDER_APPLICATION_STATUS,
+  ].includes(view);
+
+const isCareersPublicView = (view: AppView): boolean =>
+  [
+    AppView.CONSCIOUS_CAREERS,
+    AppView.GRANT_APPLICATION,
   ].includes(view);
 
 const App: React.FC = () => {
@@ -893,6 +912,10 @@ const App: React.FC = () => {
   const handleEnterProviderAccess = () => {
     setCurrentView(AppView.PROVIDER_ACCESS);
   };
+
+  const handleEnterConsciousCareers = () => {
+    setCurrentView(AppView.CONSCIOUS_CAREERS);
+  };
   
   const handleGoHome = () => setCurrentView(AppView.ENTRY);
   
@@ -1305,6 +1328,13 @@ const App: React.FC = () => {
     setMembershipNotice('');
     setPendingCheckoutSessionId(null);
     setSelectedTier(canonicalUser.tier || FREE_TIER_NAME);
+  };
+
+  const handleGrantApplicationSubmit = async (payload: Record<string, unknown>): Promise<void> => {
+    await api('/conscious-careers/grant-applications', {
+      method: 'POST',
+      body: payload,
+    });
   };
 
   const handleProviderApplicantSignIn = async (email: string, password: string): Promise<void> => {
@@ -2304,7 +2334,22 @@ const App: React.FC = () => {
             onSignOut={handleSignOut}
           />
         );
-      case AppView.DASHBOARD: 
+      case AppView.CONSCIOUS_CAREERS:
+        return (
+          <ConsciousCareersPage
+            onGoHome={() => setCurrentView(AppView.ENTRY)}
+            onGrantApplication={() => setCurrentView(AppView.GRANT_APPLICATION)}
+          />
+        );
+      case AppView.GRANT_APPLICATION:
+        return (
+          <GrantApplicationPage
+            user={user}
+            onBack={() => setCurrentView(AppView.CONSCIOUS_CAREERS)}
+            onSubmit={handleGrantApplicationSubmit}
+          />
+        );
+      case AppView.DASHBOARD:
         return (
           <Dashboard
             user={user}
@@ -2562,6 +2607,7 @@ const App: React.FC = () => {
   };
 
   const isProviderPublicExperience = isProviderPublicView(currentView);
+  const isCareersPublicExperience = isCareersPublicView(currentView);
 
   return (
     <div className="app-scroll-root min-h-screen bg-[#05070a] text-slate-200 selection:bg-blue-500/30 flex relative">
@@ -2671,9 +2717,10 @@ const App: React.FC = () => {
 
                 <button
                   type="button"
-                  aria-disabled="true"
-                  className="relative flex min-h-[8.75rem] w-full flex-col justify-between rounded-2xl border border-blue-500/20 bg-white/[0.03] p-5 text-left shadow-[0_0_30px_rgba(37,99,235,0.12)] cursor-default opacity-80 sm:min-h-[9.5rem] sm:p-6"
+                  onClick={handleEnterConsciousCareers}
+                  className="group relative flex min-h-[8.75rem] w-full flex-col justify-between overflow-hidden rounded-2xl border border-blue-500/20 bg-white/[0.03] p-5 text-left shadow-[0_0_30px_rgba(37,99,235,0.12)] transition-all hover:-translate-y-1 hover:border-teal-300/40 hover:bg-blue-500/10 active:scale-[0.98] sm:min-h-[9.5rem] sm:p-6"
                 >
+                  <div className="absolute inset-0 bg-gradient-to-r from-transparent via-blue-100/10 to-transparent -translate-x-full group-hover:translate-x-full transition-transform duration-1000" />
                   <div className="flex items-start justify-between gap-4">
                     <div className="min-w-0">
                       <h2 className="text-sm sm:text-base font-black uppercase tracking-[0.16em] text-white leading-snug">
@@ -2683,10 +2730,10 @@ const App: React.FC = () => {
                         Grant applications & entrepreneurship support
                       </p>
                     </div>
-                    <Sparkles className="w-5 h-5 text-teal-300 flex-shrink-0" />
+                    <Sparkles className="w-5 h-5 text-teal-300 flex-shrink-0 group-hover:text-white transition-colors" />
                   </div>
-                  <span className="mt-4 inline-flex w-fit rounded-full border border-blue-400/20 bg-blue-500/10 px-3 py-1 text-[9px] font-black uppercase tracking-[0.25em] text-blue-100/60">
-                    Coming soon
+                  <span className="mt-4 inline-flex w-fit rounded-full border border-blue-400/20 bg-blue-500/10 px-3 py-1 text-[9px] font-black uppercase tracking-[0.25em] text-blue-100/70">
+                    Conscious Careers
                   </span>
                 </button>
               </div>
@@ -3029,10 +3076,13 @@ const App: React.FC = () => {
 
         {isProviderPublicExperience && renderActiveView()}
 
+        {isCareersPublicExperience && renderActiveView()}
+
         {(currentView !== AppView.ENTRY &&
           currentView !== AppView.MEMBERSHIP_ACCESS &&
           currentView !== AppView.VERIFY_SESSION &&
-          !isProviderPublicExperience) && (
+          !isProviderPublicExperience &&
+          !isCareersPublicExperience) && (
           <div className="flex flex-1 min-h-[100dvh] overflow-hidden animate-in fade-in duration-500 relative z-10">
             {isSidebarOpen && (
               <div 
