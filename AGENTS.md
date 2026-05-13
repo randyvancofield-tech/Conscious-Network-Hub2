@@ -47,8 +47,10 @@ This checkout is not the Base44-style `entities/` + `src/App.jsx` layout. The ac
 - Signin backend handler: `server/src/routes/user.ts`:
   - Resolves user by email
   - Verifies password hash
-  - Enforces lockout/2FA policy
+  - Enforces lockout and member-only per-login wireless phone OTP; the phone number is supplied for that sign-in attempt and is not stored on the user profile
+  - Leaves provider/applicant sign-in pathways without cellular 2FA until provider authentication is updated separately
   - Creates persisted session + signed token
+- Password recovery: `POST /api/user/password-reset/request` sends native reset links for user/applicant/provider/admin accounts, and `POST /api/user/password-reset/confirm` rotates the password and revokes active sessions
 - Token creation/verification helpers: `server/src/auth.ts` (`createSessionToken`, `verifySessionToken`)
 - Persisted session store: `server/src/services/userSessionStore.ts`, backed by local/persistence store implementations
 - Session validation middleware: `server/src/middleware.ts` (`requireCanonicalIdentity`)
@@ -116,7 +118,7 @@ This checkout is not the Base44-style `entities/` + `src/App.jsx` layout. The ac
 - Role changes must be audited through `recordAuditEvent` with actor, target, previous role, next role, and reason metadata.
 - Standard members must not access admin endpoints, provider queues, provider sessions, or another user's private profile/reflection/course data.
 - Provider access must remain provider-scoped. Provider request queues should verify the authenticated provider owns the queue or request before returning or mutating records.
-- 2FA methods must fail closed. If `twoFactorMethod` is `phone` or `wallet`, sign-in must not create a session until the matching second factor is verified.
+- Member sign-in 2FA must fail closed. `role === 'user'` sign-in must not create a session until the per-login wireless phone OTP is verified, and the submitted phone number must not be stored. Provider/applicant sign-in must not require cellular 2FA unless provider auth is explicitly redesigned.
 - Do not expose private contact data in public discovery APIs. Public provider/member listings should avoid raw email addresses, tokens, phone numbers, wallet identifiers, and secrets.
 - Never commit real secrets. Keep `.env`, `.env.*`, and local production overrides out of source control; only commit `.env.example` style templates with placeholder values.
 - Audit logs are persistent security records. They should redact secrets and sensitive identifiers, and new sensitive operations should emit success and denial events.

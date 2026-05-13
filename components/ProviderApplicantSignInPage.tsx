@@ -4,17 +4,22 @@ import { ChevronRight, KeyRound, ShieldCheck } from 'lucide-react';
 interface ProviderApplicantSignInPageProps {
   onBack: () => void;
   onSignIn: (email: string, password: string) => Promise<void>;
+  onPasswordReset: (email: string) => Promise<string>;
   onSignedIn: () => void;
 }
 
 const ProviderApplicantSignInPage: React.FC<ProviderApplicantSignInPageProps> = ({
   onBack,
   onSignIn,
+  onPasswordReset,
   onSignedIn,
 }) => {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [isSubmitting, setSubmitting] = useState(false);
+  const [isResetOpen, setResetOpen] = useState(false);
+  const [isResetSubmitting, setResetSubmitting] = useState(false);
+  const [resetNotice, setResetNotice] = useState('');
   const [error, setError] = useState('');
 
   const submit = async (event: React.FormEvent) => {
@@ -28,6 +33,20 @@ const ProviderApplicantSignInPage: React.FC<ProviderApplicantSignInPageProps> = 
       setError(error instanceof Error ? error.message : 'Unable to sign in as applicant.');
     } finally {
       setSubmitting(false);
+    }
+  };
+
+  const requestReset = async () => {
+    setResetSubmitting(true);
+    setResetNotice('');
+    setError('');
+    try {
+      const notice = await onPasswordReset(email);
+      setResetNotice(notice);
+    } catch (error) {
+      setResetNotice(error instanceof Error ? error.message : 'Unable to send reset link.');
+    } finally {
+      setResetSubmitting(false);
     }
   };
 
@@ -81,6 +100,34 @@ const ProviderApplicantSignInPage: React.FC<ProviderApplicantSignInPageProps> = 
               required
             />
           </label>
+
+          <div className="space-y-3 rounded-2xl border border-white/10 bg-white/[0.035] p-4">
+            <button
+              type="button"
+              onClick={() => {
+                setResetOpen((open) => !open);
+                setResetNotice('');
+              }}
+              className="text-[10px] font-black uppercase tracking-widest text-stone-100/70 transition-colors hover:text-white"
+            >
+              Forgot Password?
+            </button>
+            {isResetOpen && (
+              <div className="space-y-3">
+                <button
+                  type="button"
+                  onClick={requestReset}
+                  disabled={isResetSubmitting}
+                  className="w-full rounded-xl border border-white/10 bg-white/5 px-4 py-3 text-[10px] font-black uppercase tracking-widest text-white transition hover:bg-white/10 disabled:opacity-60"
+                >
+                  {isResetSubmitting ? 'Sending Reset Link' : 'Send Reset Link'}
+                </button>
+                {resetNotice && (
+                  <p className="text-xs leading-5 text-stone-100/75">{resetNotice}</p>
+                )}
+              </div>
+            )}
+          </div>
 
           {error && (
             <p className="rounded-2xl border border-red-400/20 bg-red-500/10 p-4 text-sm leading-6 text-red-100">

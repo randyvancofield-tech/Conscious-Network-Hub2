@@ -120,11 +120,12 @@ Authentication flow:
 
 1. Signup starts in `App.tsx` via `handleCreateProfile`, calling `POST /api/user/create`.
 2. Signin starts in `App.tsx` via `handleSignIn`, calling `POST /api/user/signin`.
-3. Backend user routes validate payloads, password policy, persistence, lockout, and optional 2FA/provider rules.
-4. Backend creates a persisted user session and returns a signed auth token.
-5. Frontend stores the token through `services/sessionService.ts`.
-6. Protected routes use `server/src/middleware.ts` `requireCanonicalIdentity` to validate both token and persisted session.
-7. Logout calls `POST /api/user/logout` and revokes the persisted session.
+3. Member sign-in requires a per-login wireless phone code sent to the number entered for that attempt; provider/applicant sign-ins do not use cellular 2FA.
+4. Backend user routes validate payloads, password policy, persistence, lockout, recovery, and provider rules.
+5. Backend creates a persisted user session and returns a signed auth token after required checks.
+6. Frontend stores the token through `services/sessionService.ts`.
+7. Protected routes use `server/src/middleware.ts` `requireCanonicalIdentity` to validate both token and persisted session.
+8. Logout calls `POST /api/user/logout` and revokes the persisted session.
 
 ## Project Structure
 

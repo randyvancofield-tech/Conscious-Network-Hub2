@@ -518,6 +518,31 @@ const requestJson = async (options: {
   };
 };
 
+const requestMemberSignIn = async (email: string, password: string): Promise<{ status: number; body: any }> => {
+  const challenge = await requestJson({
+    method: 'POST',
+    path: '/api/user/signin',
+    body: {
+      email,
+      password,
+      phoneNumber: '+15551234567',
+    },
+  });
+  expect(challenge.status).toBe(202);
+  expect(challenge.body?.method).toBe('phone');
+  expect(String(challenge.body?.devOtpCode || '')).toMatch(/^\d{6}$/);
+
+  return requestJson({
+    method: 'POST',
+    path: '/api/user/signin',
+    body: {
+      email,
+      password,
+      twoFactorCode: challenge.body.devOtpCode,
+    },
+  });
+};
+
 const requestMultipart = async (options: {
   method: string;
   path: string;
@@ -713,14 +738,7 @@ describe('Core user persistence loop', () => {
     });
     expect(currentWithOldToken.status).toBe(401);
 
-    const relogin = await requestJson({
-      method: 'POST',
-      path: '/api/user/signin',
-      body: {
-        email: 'alpha@example.com',
-        password: strongPassword,
-      },
-    });
+    const relogin = await requestMemberSignIn('alpha@example.com', strongPassword);
     expect(relogin.status).toBe(200);
     const alphaTokenAfterLogin = String(relogin.body?.token || '');
     expect(alphaTokenAfterLogin.length).toBeGreaterThan(20);
@@ -778,14 +796,7 @@ describe('Core user persistence loop', () => {
     });
     users.set(existing.id, existing);
 
-    const signin = await requestJson({
-      method: 'POST',
-      path: '/api/user/signin',
-      body: {
-        email: existing.email,
-        password,
-      },
-    });
+    const signin = await requestMemberSignIn(existing.email, password);
     expect(signin.status).toBe(200);
     expect(signin.body?.user?.initialTwoFactorRequired).toBe(false);
 
@@ -820,14 +831,7 @@ describe('Core user persistence loop', () => {
       updatedAt: membershipStart,
     });
 
-    const signin = await requestJson({
-      method: 'POST',
-      path: '/api/user/signin',
-      body: {
-        email: existing.email,
-        password,
-      },
-    });
+    const signin = await requestMemberSignIn(existing.email, password);
 
     expect(signin.status).toBe(200);
     expect(signin.body?.user?.tier).toBe('Guided Tier');
@@ -861,14 +865,7 @@ describe('Core user persistence loop', () => {
     });
     users.set(existing.id, existing);
 
-    const signin = await requestJson({
-      method: 'POST',
-      path: '/api/user/signin',
-      body: {
-        email: existing.email,
-        password,
-      },
-    });
+    const signin = await requestMemberSignIn(existing.email, password);
 
     expect(signin.status).toBe(200);
     expect(signin.body?.user?.tier).toBe(null);
@@ -973,14 +970,7 @@ describe('Core user persistence loop', () => {
     const persisted = await mockLocalStore.getUserByEmail('recoverable@example.com');
     expect(persisted?.id).toBeTruthy();
 
-    const signin = await requestJson({
-      method: 'POST',
-      path: '/api/user/signin',
-      body: {
-        email: 'recoverable@example.com',
-        password,
-      },
-    });
+    const signin = await requestMemberSignIn('recoverable@example.com', password);
 
     expect(signin.status).toBe(200);
     expect(String(signin.body?.token || '').length).toBeGreaterThan(20);

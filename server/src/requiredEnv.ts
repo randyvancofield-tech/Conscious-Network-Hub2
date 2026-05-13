@@ -208,13 +208,13 @@ export const validateRequiredEnv = (): void => {
 
   if (isProduction && !hasEmailDeliveryConfig()) {
     console.warn(
-      '[STARTUP][WARN] Email delivery is not configured. Email verification and password reset are deferred/unavailable.'
+      '[STARTUP][WARN] Email delivery is not configured. Email verification and password reset delivery are unavailable.'
     );
   }
 
   if (isProduction && !hasSmsDeliveryConfig()) {
     console.warn(
-      '[STARTUP][WARN] SMS delivery is not configured. Phone 2FA is deferred/unavailable.'
+      '[STARTUP][WARN] SMS delivery is not configured. Member sign-in wireless 2FA delivery is unavailable.'
     );
   }
 };

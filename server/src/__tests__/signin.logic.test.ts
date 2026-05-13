@@ -184,13 +184,37 @@ describe('Sign-in logic', () => {
     jest.clearAllMocks();
   });
 
-  it('logs in successfully with valid credentials and returns a token', async () => {
+  it('requires a transient phone verification code before member sign-in creates a session', async () => {
     const email = 'signin.success@example.com';
     const password = 'ValidPass#1234';
     const user = createMockUser(email, hashPassword(password));
     users.set(user.id, user);
 
-    const response = await requestSignIn({ email, password });
+    const missingPhone = await requestSignIn({ email, password });
+
+    expect(missingPhone.status).toBe(400);
+    expect(missingPhone.body?.requiresPhoneNumber).toBe(true);
+    expect(createUserSessionMock).not.toHaveBeenCalled();
+
+    const challenge = await requestSignIn({
+      email,
+      password,
+      phoneNumber: '+15551234567',
+    });
+
+    expect(challenge.status).toBe(202);
+    expect(challenge.body?.requiresTwoFactor).toBe(true);
+    expect(challenge.body?.method).toBe('phone');
+    expect(challenge.body?.phoneNumberStored).toBe(false);
+    expect(String(challenge.body?.devOtpCode || '')).toMatch(/^\d{6}$/);
+    expect(users.get(user.id)?.phoneNumber).toBeNull();
+    expect(createUserSessionMock).not.toHaveBeenCalled();
+
+    const response = await requestSignIn({
+      email,
+      password,
+      twoFactorCode: challenge.body.devOtpCode,
+    });
 
     expect(response.status).toBe(200);
     expect(response.body?.success).toBe(true);
@@ -228,20 +252,17 @@ describe('Sign-in logic', () => {
     expect(createUserSessionMock).not.toHaveBeenCalled();
   });
 
-  it('requires a wallet verification credential for wallet 2FA accounts', async () => {
-    process.env.ENABLE_USER_2FA = 'true';
-    const email = 'signin.wallet@example.com';
-    const password = 'WalletPass#1234';
+  it('does not require transient phone 2FA for provider applicant sign-in', async () => {
+    const email = 'signin.applicant@example.com';
+    const password = 'ApplicantPass#1234';
     const user = createMockUser(email, hashPassword(password));
-    user.twoFactorMethod = 'wallet';
-    user.walletDid = 'did:pkh:eip155:1:0x0000000000000000000000000000000000000001';
+    (user as MockUser & { role?: string }).role = 'applicant';
     users.set(user.id, user);
 
     const response = await requestSignIn({ email, password });
 
-    expect(response.status).toBe(202);
-    expect(response.body?.requiresTwoFactor).toBe(true);
-    expect(response.body?.method).toBe('wallet');
-    expect(createUserSessionMock).not.toHaveBeenCalled();
+    expect(response.status).toBe(200);
+    expect(response.body?.success).toBe(true);
+    expect(createUserSessionMock).toHaveBeenCalledTimes(1);
   });
 });

@@ -127,6 +127,7 @@ export const userSignInSchema: JsonSchema = {
   properties: {
     email: { type: 'string', minLength: 3, maxLength: 320 },
     password: { type: 'string', minLength: 1, maxLength: 512 },
+    phoneNumber: { type: 'string', maxLength: 32 },
     twoFactorCode: { type: 'string', maxLength: 32 },
     providerToken: { type: 'string', maxLength: 4096 },
   },

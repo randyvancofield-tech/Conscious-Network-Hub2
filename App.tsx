@@ -57,7 +57,21 @@ type RouteState = {
 
 const FREE_TIER_NAME = 'Free / Community Tier';
 const PENDING_CHECKOUT_SESSION_KEY = 'hcn.pendingCheckoutSessionId';
-const ACCOUNT_RECOVERY_UI_ENABLED = false;
+const ACCOUNT_RECOVERY_UI_ENABLED = true;
+const DEFAULT_WIRELESS_COUNTRY_CODE = '+1';
+const WIRELESS_PHONE_COUNTRY_CODES = [
+  { value: '+1', label: 'US / Canada +1' },
+  { value: '+44', label: 'UK +44' },
+  { value: '+234', label: 'Nigeria +234' },
+  { value: '+233', label: 'Ghana +233' },
+  { value: '+27', label: 'South Africa +27' },
+  { value: '+254', label: 'Kenya +254' },
+  { value: '+91', label: 'India +91' },
+  { value: '+61', label: 'Australia +61' },
+  { value: '+55', label: 'Brazil +55' },
+  { value: '+52', label: 'Mexico +52' },
+  { value: '+63', label: 'Philippines +63' },
+];
 const MEMBERSHIP_RETURN_PATH_ID = 'return';
 const MEMBERSHIP_MOBILE_STEPS = ['Start', 'Free', 'Guided', 'Accelerated'];
 const MEMBERSHIP_RETURN_INSIGHT = 'The Return – Welcome back, Traveler. Resume your journey.';
@@ -425,6 +439,8 @@ const App: React.FC = () => {
   const [error, setError] = useState('');
   const [twoFactorCodeInput, setTwoFactorCodeInput] = useState('');
   const [providerTokenInput, setProviderTokenInput] = useState('');
+  const [twoFactorPhoneCountryCode, setTwoFactorPhoneCountryCode] = useState(DEFAULT_WIRELESS_COUNTRY_CODE);
+  const [twoFactorPhoneInput, setTwoFactorPhoneInput] = useState('');
   const [pendingTwoFactorMethod, setPendingTwoFactorMethod] = useState<'phone' | 'wallet' | null>(null);
   const [initialTwoFactorMethod, setInitialTwoFactorMethod] = useState<'phone' | 'wallet'>('phone');
   const [initialTwoFactorPhoneInput, setInitialTwoFactorPhoneInput] = useState('');
@@ -522,6 +538,22 @@ const App: React.FC = () => {
   const backendConnectionErrorMessage = (actionLabel: string): string => {
     const target = getBackendBaseUrl() || 'the configured API route';
     return `Unable to ${actionLabel}. Cannot reach backend at ${target}.`;
+  };
+
+  const buildTransientPhoneNumber = (): string => {
+    const rawPhone = twoFactorPhoneInput.trim();
+    if (!rawPhone) return '';
+    if (rawPhone.startsWith('+')) return rawPhone;
+    const digits = rawPhone.replace(/\D/g, '');
+    return digits ? `${twoFactorPhoneCountryCode}${digits}` : rawPhone;
+  };
+
+  const resetSignInChallengeInputs = () => {
+    setTwoFactorCodeInput('');
+    setProviderTokenInput('');
+    setPendingTwoFactorMethod(null);
+    setTwoFactorPhoneInput('');
+    setTwoFactorPhoneCountryCode(DEFAULT_WIRELESS_COUNTRY_CODE);
   };
 
   const normalizeCourse = (rawCourse: any): Course => ({
@@ -979,9 +1011,7 @@ const App: React.FC = () => {
   const openMemberLogin = () => {
     setSignupModalOpen(false);
     setSigninModalOpen(true);
-    setPendingTwoFactorMethod(null);
-    setTwoFactorCodeInput('');
-    setProviderTokenInput('');
+    resetSignInChallengeInputs();
     setError('');
   };
 
@@ -1258,6 +1288,7 @@ const App: React.FC = () => {
     e.preventDefault();
     setError('');
     const normalizedEmail = emailInput.trim().toLowerCase();
+    const transientPhoneNumber = buildTransientPhoneNumber();
 
     try {
       const data = await api<any>('/user/signin', {
@@ -1266,6 +1297,7 @@ const App: React.FC = () => {
         body: {
           email: normalizedEmail,
           password: passwordInput,
+          phoneNumber: transientPhoneNumber || undefined,
           twoFactorCode: twoFactorCodeInput,
           providerToken: providerTokenInput,
         },
@@ -1274,6 +1306,9 @@ const App: React.FC = () => {
       if (data?.requiresTwoFactor) {
         const method = data?.method === 'wallet' ? 'wallet' : 'phone';
         setPendingTwoFactorMethod(method);
+        if (method === 'phone') {
+          setTwoFactorPhoneInput('');
+        }
         setError(data?.message || 'Additional verification is required.');
         return;
       }
@@ -1283,9 +1318,7 @@ const App: React.FC = () => {
         setUserAuthSession(data.token, canonicalUser);
         setUser(canonicalUser);
         setSelectedTier(canonicalUser.tier || FREE_TIER_NAME);
-        setPendingTwoFactorMethod(null);
-        setTwoFactorCodeInput('');
-        setProviderTokenInput('');
+        resetSignInChallengeInputs();
         setIsSelectingTier(false);
         setMembershipCheckoutPending(false);
         setMembershipNotice('');
@@ -1327,9 +1360,7 @@ const App: React.FC = () => {
             : ''
       );
       setPendingCheckoutSessionId(shouldVerifyStoredCheckout ? storedCheckoutSessionId : null);
-      setPendingTwoFactorMethod(null);
-      setTwoFactorCodeInput('');
-      setProviderTokenInput('');
+      resetSignInChallengeInputs();
       setInitialTwoFactorCompletedNotice(false);
       closeModals();
       if (preserveCareersView) {
@@ -1455,9 +1486,7 @@ const App: React.FC = () => {
       setMembershipCheckoutPending(false);
       setMembershipNotice('');
       setPendingCheckoutSessionId(null);
-      setPendingTwoFactorMethod(null);
-      setTwoFactorCodeInput('');
-      setProviderTokenInput('');
+      resetSignInChallengeInputs();
 
       const providerSession = await createNativeProviderControlSession();
       if (!providerSession?.token) {
@@ -1560,7 +1589,7 @@ const App: React.FC = () => {
           setSigninModalOpen(true);
           setPasswordInput('');
           setConfirmPasswordInput('');
-          setPendingTwoFactorMethod(null);
+          resetSignInChallengeInputs();
           setError(
             error.message ||
               'Profile was created, but session setup failed. Please sign in to continue.'
@@ -1576,6 +1605,16 @@ const App: React.FC = () => {
     }
   };
 
+  const requestPasswordResetForEmail = async (email: string): Promise<string> => {
+    const data = await api<any>('/user/password-reset/request', {
+      method: 'POST',
+      auth: false,
+      body: { email: email.trim().toLowerCase() },
+    });
+    const message = data?.message || 'If an account exists for that email, a password reset link has been sent.';
+    return data?.devResetUrl ? `${message} Dev reset URL: ${data.devResetUrl}` : message;
+  };
+
   const handlePasswordResetRequest = async (e?: React.FormEvent) => {
     e?.preventDefault();
     setPasswordResetPending(true);
@@ -1583,17 +1622,8 @@ const App: React.FC = () => {
     setError('');
 
     try {
-      const data = await api<any>('/user/password-reset/request', {
-        method: 'POST',
-        auth: false,
-        body: { email: (passwordResetEmailInput || emailInput).trim().toLowerCase() },
-      });
-      setPasswordResetNotice(
-        data?.message || 'If an account exists for that email, a password reset link has been sent.'
-      );
-      if (data?.devResetUrl) {
-        setPasswordResetNotice(`${data.message} Dev reset URL: ${data.devResetUrl}`);
-      }
+      const notice = await requestPasswordResetForEmail(passwordResetEmailInput || emailInput);
+      setPasswordResetNotice(notice);
     } catch (error) {
       setPasswordResetNotice(
         error instanceof Error ? error.message : 'Unable to start password reset. Please retry.'
@@ -1679,9 +1709,7 @@ const App: React.FC = () => {
       setMembershipNotice('Sign in to continue membership selection.');
       setSignupModalOpen(false);
       setSigninModalOpen(true);
-      setPendingTwoFactorMethod(null);
-      setTwoFactorCodeInput('');
-      setProviderTokenInput('');
+      resetSignInChallengeInputs();
       return;
     }
 
@@ -1741,9 +1769,7 @@ const App: React.FC = () => {
       setMembershipCheckoutPending(false);
       setMembershipNotice('');
       setPendingCheckoutSessionId(null);
-      setPendingTwoFactorMethod(null);
-      setTwoFactorCodeInput('');
-      setProviderTokenInput('');
+      resetSignInChallengeInputs();
       setCurrentView(AppView.ENTRY);
       setSidebarOpen(false);
     };
@@ -1766,8 +1792,7 @@ const App: React.FC = () => {
   const closeModals = () => {
     setSignupModalOpen(false); setSigninModalOpen(false);
     setError(''); setEmailInput(''); setPasswordInput(''); setConfirmPasswordInput('');
-    setTwoFactorMethodInput('none'); setPhoneNumberInput(''); setWalletDidInput('');
-    setTwoFactorCodeInput(''); setProviderTokenInput(''); setPendingTwoFactorMethod(null);
+    resetSignInChallengeInputs();
     setPasswordResetRequestOpen(false); setPasswordResetEmailInput(''); setPasswordResetNotice('');
   };
 
@@ -2063,9 +2088,7 @@ const App: React.FC = () => {
             <div className="flex flex-col sm:flex-row gap-3">
               <button
                 onClick={() => {
-                  setPendingTwoFactorMethod(null);
-                  setTwoFactorCodeInput('');
-                  setProviderTokenInput('');
+                  resetSignInChallengeInputs();
                   setSigninModalOpen(true);
                 }}
                 className="px-5 py-3 bg-blue-600 hover:bg-blue-500 text-white rounded-xl text-xs font-black uppercase tracking-widest transition-colors"
@@ -2096,9 +2119,7 @@ const App: React.FC = () => {
             </p>
             <button
               onClick={() => {
-                setPendingTwoFactorMethod(null);
-                setTwoFactorCodeInput('');
-                setProviderTokenInput('');
+                resetSignInChallengeInputs();
                 setSigninModalOpen(true);
               }}
               className="px-5 py-3 bg-blue-600 hover:bg-blue-500 text-white rounded-xl text-xs font-black uppercase tracking-widest transition-colors"
@@ -2200,7 +2221,8 @@ const App: React.FC = () => {
     }
 
     switch (currentView) {
-      case AppView.RESET_PASSWORD:
+      case AppView.RESET_PASSWORD: {
+        const hasPasswordResetToken = Boolean(String(routeParams.token || '').trim());
         return (
           <div className="p-4 sm:p-8 max-w-xl mx-auto w-full">
             <div className="glass-panel p-6 sm:p-8 rounded-3xl border border-blue-500/20">
@@ -2212,18 +2234,96 @@ const App: React.FC = () => {
                 Reset Password
               </h2>
               <p className="text-sm leading-6 text-slate-400 mb-6">
-                Password reset is deferred for launch. Please contact support if you need account help.
+                {hasPasswordResetToken
+                  ? 'Create a new password for this account. Active sessions will be revoked after the reset.'
+                  : 'Enter your account email and we will send a password reset link.'}
               </p>
+              {hasPasswordResetToken ? (
+                <form onSubmit={handleResetPasswordConfirm} className="space-y-5">
+                  <label className="block space-y-2">
+                    <span className="text-[10px] font-black uppercase tracking-widest text-slate-500">
+                      New Password
+                    </span>
+                    <input
+                      type="password"
+                      value={newPasswordInput}
+                      onChange={(event) => setNewPasswordInput(event.target.value)}
+                      className="w-full rounded-2xl border border-white/10 bg-white/[0.06] px-5 py-4 text-sm text-white outline-none transition focus:ring-2 focus:ring-blue-500/40"
+                      required
+                      placeholder="********"
+                    />
+                  </label>
+                  <label className="block space-y-2">
+                    <span className="text-[10px] font-black uppercase tracking-widest text-slate-500">
+                      Confirm Password
+                    </span>
+                    <input
+                      type="password"
+                      value={confirmNewPasswordInput}
+                      onChange={(event) => setConfirmNewPasswordInput(event.target.value)}
+                      className="w-full rounded-2xl border border-white/10 bg-white/[0.06] px-5 py-4 text-sm text-white outline-none transition focus:ring-2 focus:ring-blue-500/40"
+                      required
+                      placeholder="********"
+                    />
+                  </label>
+                  {passwordResetNotice && (
+                    <p className="rounded-xl border border-blue-400/20 bg-blue-500/10 p-3 text-xs leading-5 text-blue-100">
+                      {passwordResetNotice}
+                    </p>
+                  )}
+                  <button
+                    type="submit"
+                    disabled={isPasswordResetPending}
+                    className="w-full py-4 bg-blue-600 hover:bg-blue-500 disabled:opacity-60 text-white rounded-2xl font-black text-xs uppercase tracking-widest transition-all shadow-xl"
+                  >
+                    {isPasswordResetPending ? 'Resetting Password...' : 'Reset Password'}
+                  </button>
+                </form>
+              ) : (
+                <form onSubmit={handlePasswordResetRequest} className="space-y-5">
+                  <label className="block space-y-2">
+                    <span className="text-[10px] font-black uppercase tracking-widest text-slate-500">
+                      Account Email
+                    </span>
+                    <input
+                      type="email"
+                      value={passwordResetEmailInput}
+                      onChange={(event) => setPasswordResetEmailInput(event.target.value)}
+                      className="w-full rounded-2xl border border-white/10 bg-white/[0.06] px-5 py-4 text-sm text-white outline-none transition focus:ring-2 focus:ring-blue-500/40"
+                      required
+                      placeholder="you@example.com"
+                    />
+                  </label>
+                  {passwordResetNotice && (
+                    <p className="rounded-xl border border-blue-400/20 bg-blue-500/10 p-3 text-xs leading-5 text-blue-100">
+                      {passwordResetNotice}
+                    </p>
+                  )}
+                  <button
+                    type="submit"
+                    disabled={isPasswordResetPending}
+                    className="w-full py-4 bg-blue-600 hover:bg-blue-500 disabled:opacity-60 text-white rounded-2xl font-black text-xs uppercase tracking-widest transition-all shadow-xl"
+                  >
+                    {isPasswordResetPending ? 'Sending Reset Link...' : 'Send Reset Link'}
+                  </button>
+                </form>
+              )}
               <button
                 type="button"
-                onClick={() => setSigninModalOpen(true)}
-                className="w-full py-4 bg-blue-600 hover:bg-blue-500 text-white rounded-2xl font-black text-xs uppercase tracking-widest transition-all shadow-xl"
+                onClick={() => {
+                  setCurrentView(AppView.MEMBERSHIP_ACCESS);
+                  setSignupModalOpen(false);
+                  resetSignInChallengeInputs();
+                  setSigninModalOpen(true);
+                }}
+                className="mt-4 w-full py-4 bg-white/5 hover:bg-white/10 text-white rounded-2xl font-black text-xs uppercase tracking-widest transition-all border border-white/10"
               >
                 Return To Sign In
               </button>
             </div>
           </div>
         );
+      }
       case AppView.VERIFY_EMAIL:
         return (
           <div className="p-4 sm:p-8 max-w-xl mx-auto w-full">
@@ -2282,9 +2382,15 @@ const App: React.FC = () => {
         return (
           <ProviderAccessPage
             onGoHome={() => setCurrentView(AppView.ENTRY)}
-            onSignIn={() => setCurrentView(AppView.PROVIDER_SIGN_IN)}
+            onSignIn={() => {
+              resetSignInChallengeInputs();
+              setCurrentView(AppView.PROVIDER_SIGN_IN);
+            }}
             onApply={() => setCurrentView(AppView.PROVIDER_APPLY)}
-            onApplicantSignIn={() => setCurrentView(AppView.PROVIDER_APPLICANT_SIGN_IN)}
+            onApplicantSignIn={() => {
+              resetSignInChallengeInputs();
+              setCurrentView(AppView.PROVIDER_APPLICANT_SIGN_IN);
+            }}
           />
         );
       case AppView.PROVIDER_SIGN_IN:
@@ -2341,20 +2447,43 @@ const App: React.FC = () => {
                     placeholder="********"
                   />
                 </label>
-                {pendingTwoFactorMethod === 'phone' && (
-                  <label className="block space-y-2">
-                    <span className="text-[10px] font-black uppercase tracking-widest text-slate-500">
-                      Phone OTP Code
-                    </span>
-                    <input
-                      type="text"
-                      value={twoFactorCodeInput}
-                      onChange={(event) => setTwoFactorCodeInput(event.target.value)}
-                      className="w-full rounded-2xl border border-white/10 bg-white/[0.06] px-5 py-4 text-sm text-white outline-none transition focus:ring-2 focus:ring-blue-500/40"
-                      required
-                      placeholder="6-digit code"
-                    />
-                  </label>
+                {ACCOUNT_RECOVERY_UI_ENABLED && (
+                  <div className="space-y-3 rounded-2xl border border-white/10 bg-white/[0.03] p-4">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setPasswordResetRequestOpen((open) => !open);
+                        setPasswordResetEmailInput(emailInput);
+                        setPasswordResetNotice('');
+                      }}
+                      className="text-[10px] font-black uppercase tracking-widest text-blue-300 hover:text-blue-200"
+                    >
+                      Forgot Provider Password?
+                    </button>
+                    {isPasswordResetRequestOpen && (
+                      <div className="space-y-3">
+                        <input
+                          type="email"
+                          value={passwordResetEmailInput}
+                          onChange={(event) => setPasswordResetEmailInput(event.target.value)}
+                          className="w-full rounded-xl border border-white/10 bg-white/5 px-4 py-3 text-sm font-medium text-white outline-none transition focus:ring-2 focus:ring-blue-500/40"
+                          required
+                          placeholder="provider@example.com"
+                        />
+                        <button
+                          type="button"
+                          onClick={() => handlePasswordResetRequest()}
+                          disabled={isPasswordResetPending}
+                          className="w-full rounded-xl border border-white/10 bg-white/5 py-3 text-[10px] font-black uppercase tracking-widest text-white transition hover:bg-white/10 disabled:opacity-60"
+                        >
+                          {isPasswordResetPending ? 'Sending...' : 'Send Reset Link'}
+                        </button>
+                        {passwordResetNotice && (
+                          <p className="text-[10px] leading-5 text-blue-100/80">{passwordResetNotice}</p>
+                        )}
+                      </div>
+                    )}
+                  </div>
                 )}
                 {pendingTwoFactorMethod === 'wallet' && (
                   <label className="block space-y-2">
@@ -2375,7 +2504,7 @@ const App: React.FC = () => {
                   type="submit"
                   className="w-full rounded-2xl bg-blue-600 px-5 py-4 text-xs font-black uppercase tracking-widest text-white shadow-xl shadow-blue-950/40 transition hover:bg-blue-500"
                 >
-                  {pendingTwoFactorMethod ? 'Verify & Open Provider Tools' : 'Open Provider Tools'}
+                  {pendingTwoFactorMethod === 'wallet' ? 'Verify & Open Provider Tools' : 'Open Provider Tools'}
                 </button>
               </form>
             </div>
@@ -2394,6 +2523,7 @@ const App: React.FC = () => {
           <ProviderApplicantSignInPage
             onBack={() => setCurrentView(AppView.PROVIDER_ACCESS)}
             onSignIn={handleProviderApplicantSignIn}
+            onPasswordReset={requestPasswordResetForEmail}
             onSignedIn={() => setCurrentView(AppView.PROVIDER_APPLICATION_STATUS, {}, { replace: true })}
           />
         );
@@ -2473,9 +2603,7 @@ const App: React.FC = () => {
             onSignOut={handleSignOut}
             onGoBack={() => setCurrentView(AppView.DASHBOARD)}
             onSignInPrompt={() => {
-              setPendingTwoFactorMethod(null);
-              setTwoFactorCodeInput('');
-              setProviderTokenInput('');
+              resetSignInChallengeInputs();
               setSigninModalOpen(true);
             }}
           />
@@ -3132,9 +3260,7 @@ const App: React.FC = () => {
                             handleMembershipTierSelect(tier.name);
                           } else {
                             setSelectedTier(tier.name);
-                            setPendingTwoFactorMethod(null);
-                            setTwoFactorCodeInput('');
-                            setProviderTokenInput('');
+                            resetSignInChallengeInputs();
                             setSignupModalOpen(true);
                           }
                         }}
@@ -3546,9 +3672,7 @@ const App: React.FC = () => {
                     setIdentityGuestPromptOpen(false);
                     setSignupModalOpen(false);
                     setSigninModalOpen(true);
-                    setPendingTwoFactorMethod(null);
-                    setTwoFactorCodeInput('');
-                    setProviderTokenInput('');
+                    resetSignInChallengeInputs();
                     setError('');
                   }}
                   className="w-full py-4 bg-blue-600 hover:bg-blue-500 text-white rounded-xl font-black text-xs sm:text-sm uppercase tracking-widest transition-all shadow-xl"
@@ -3563,9 +3687,7 @@ const App: React.FC = () => {
                     setIsSelectingTier(false);
                     setSigninModalOpen(false);
                     setSignupModalOpen(true);
-                    setPendingTwoFactorMethod(null);
-                    setTwoFactorCodeInput('');
-                    setProviderTokenInput('');
+                    resetSignInChallengeInputs();
                     setError('');
                   }}
                   className="w-full py-4 bg-white/5 hover:bg-white/10 text-white rounded-xl font-black text-xs sm:text-sm uppercase tracking-widest transition-all border border-white/10"
@@ -3594,6 +3716,36 @@ const App: React.FC = () => {
                   <label className="text-[9px] font-black text-slate-500 uppercase tracking-widest ml-2">Password</label>
                   <input type="password" value={passwordInput} onChange={e => setPasswordInput(e.target.value)} className="w-full px-5 sm:px-8 py-3 sm:py-4 bg-white/5 border border-white/10 rounded-xl sm:rounded-2xl text-white outline-none focus:ring-2 focus:ring-blue-500/50 transition-all font-medium text-sm" required placeholder="••••••••" />
                 </div>
+                {isSigninModalOpen && !pendingTwoFactorMethod && (
+                  <div className="space-y-3">
+                    <label className="text-[9px] font-black text-slate-500 uppercase tracking-widest ml-2">Wireless 2FA Number</label>
+                    <div className="grid grid-cols-[minmax(7rem,0.8fr)_minmax(0,1.2fr)] gap-2">
+                      <select
+                        value={twoFactorPhoneCountryCode}
+                        onChange={(e) => setTwoFactorPhoneCountryCode(e.target.value)}
+                        className="min-w-0 rounded-xl border border-white/10 bg-slate-950 px-3 py-3 text-xs font-black uppercase tracking-wider text-white outline-none transition focus:ring-2 focus:ring-blue-500/50 sm:rounded-2xl sm:px-4"
+                        aria-label="Wireless country code"
+                      >
+                        {WIRELESS_PHONE_COUNTRY_CODES.map((option) => (
+                          <option key={option.value} value={option.value}>
+                            {option.label}
+                          </option>
+                        ))}
+                      </select>
+                      <input
+                        type="tel"
+                        value={twoFactorPhoneInput}
+                        onChange={(e) => setTwoFactorPhoneInput(e.target.value)}
+                        className="min-w-0 rounded-xl border border-white/10 bg-white/5 px-4 py-3 text-sm font-medium text-white outline-none transition focus:ring-2 focus:ring-blue-500/50 sm:rounded-2xl sm:px-5"
+                        required
+                        placeholder="555 123 4567"
+                      />
+                    </div>
+                    <p className="px-1 text-[9px] uppercase tracking-widest text-blue-300/80">
+                      Used for this sign-in only.
+                    </p>
+                  </div>
+                )}
                 {ACCOUNT_RECOVERY_UI_ENABLED && isSigninModalOpen && (
                   <div className="space-y-3 rounded-2xl border border-white/10 bg-white/[0.03] p-4">
                     <button
@@ -3616,7 +3768,7 @@ const App: React.FC = () => {
                           onKeyDown={(e) => {
                             if (e.key === 'Enter') {
                               e.preventDefault();
-                              void handlePasswordResetRequest(e);
+                              void handlePasswordResetRequest();
                             }
                           }}
                           className="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-xl text-white outline-none focus:ring-2 focus:ring-blue-500/50 transition-all font-medium text-sm"
@@ -3625,7 +3777,7 @@ const App: React.FC = () => {
                         />
                         <button
                           type="button"
-                          onClick={(event) => handlePasswordResetRequest(event)}
+                          onClick={() => handlePasswordResetRequest()}
                           disabled={isPasswordResetPending}
                           className="w-full py-3 bg-white/5 hover:bg-white/10 disabled:opacity-60 text-white rounded-xl font-black text-[10px] uppercase tracking-widest transition-all border border-white/10"
                         >
@@ -3684,7 +3836,7 @@ const App: React.FC = () => {
               </form>
               <div className="mt-6 sm:mt-8 text-center text-slate-500 text-[9px] sm:text-[10px] font-black uppercase tracking-widest">
                 {isSigninModalOpen ? "New user?" : "Already have an account?"}
-                <button onClick={() => { setSigninModalOpen(!isSigninModalOpen); setSignupModalOpen(!isSignupModalOpen); setPendingTwoFactorMethod(null); setTwoFactorCodeInput(''); setProviderTokenInput(''); setError(''); }} className="ml-2 text-blue-400 hover:underline">
+                <button onClick={() => { setSigninModalOpen(!isSigninModalOpen); setSignupModalOpen(!isSignupModalOpen); resetSignInChallengeInputs(); setError(''); }} className="ml-2 text-blue-400 hover:underline">
                   {isSigninModalOpen ? 'Create Account' : 'Sign In'}
                 </button>
               </div>

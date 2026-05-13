@@ -205,21 +205,22 @@ if (-not $SkipAuthFlow) {
   $flowSignInBody = (@{
       email = $flowEmail
       password = $flowPassword
+      phoneNumber = "+15551234567"
     } | ConvertTo-Json -Compress)
   $flowSignIn = Invoke-HttpJson -Method "POST" -Url "$trimmedBackend/api/user/signin" -Headers $userHeaders -Body $flowSignInBody
-  if ($flowSignIn.StatusCode -ne 200) {
-    throw "Auth flow sign-in failed after logout. Expected 200, got $($flowSignIn.StatusCode): $($flowSignIn.Body)"
+  if ($flowSignIn.StatusCode -ne 202) {
+    throw "Auth flow sign-in challenge failed after logout. Expected 202, got $($flowSignIn.StatusCode): $($flowSignIn.Body)"
   }
 
   $flowSignInJson = $null
   try {
     $flowSignInJson = $flowSignIn.Body | ConvertFrom-Json
   } catch {
-    throw "Auth flow sign-in response is not JSON: $($flowSignIn.Body)"
+    throw "Auth flow sign-in challenge response is not JSON: $($flowSignIn.Body)"
   }
 
-  if (-not $flowSignInJson.success -or -not $flowSignInJson.token -or -not $flowSignInJson.user) {
-    throw "Auth flow sign-in payload missing required fields: $($flowSignIn.Body)"
+  if (-not $flowSignInJson.requiresTwoFactor -or [string]$flowSignInJson.method -ne "phone") {
+    throw "Auth flow sign-in challenge payload missing phone 2FA fields: $($flowSignIn.Body)"
   }
 }
 
@@ -267,7 +268,7 @@ Write-Host "Membership tiers: 200 (public endpoint confirmed)"
 Write-Host "User create: 400 for empty payload (validation confirmed)"
 Write-Host "User signin: 400 for empty payload (validation confirmed)"
 if (-not $SkipAuthFlow) {
-  Write-Host "Auth flow: create -> current -> logout -> login passed"
+  Write-Host "Auth flow: create -> current -> logout -> wireless sign-in challenge passed"
 }
 if ($RequireSharedStore) {
   Write-Host "Store diagnostics: shared DB-backed persistence confirmed"

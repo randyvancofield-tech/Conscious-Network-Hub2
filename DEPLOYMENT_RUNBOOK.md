@@ -58,13 +58,13 @@ Optional for AI routes only:
 
 - `OPENAI_API_KEY`
 
-Deferred launch integrations (not required for backend startup):
+Production delivery integrations:
 
-- `EMAIL_USER` + `EMAIL_PASSWORD`, or `SMTP_HOST` + `SMTP_PORT`: enables email verification/password reset when the feature flags are enabled.
-- `TWILIO_ACCOUNT_SID`, `TWILIO_AUTH_TOKEN`, `TWILIO_FROM_NUMBER`: enables phone 2FA when user 2FA is enabled.
+- `EMAIL_USER` + `EMAIL_PASSWORD`, or `SMTP_HOST` + `SMTP_PORT`: required to deliver password reset email in production.
+- `TWILIO_ACCOUNT_SID`, `TWILIO_AUTH_TOKEN`, `TWILIO_FROM_NUMBER`: required to deliver per-login wireless 2FA codes for member sign-in in production.
 - `ENABLE_EMAIL_VERIFICATION=true`: re-enables email verification sends.
-- `ENABLE_PASSWORD_RESET=true`: re-enables native password reset email flow.
-- `ENABLE_USER_2FA=true`: re-enables direct user phone/wallet 2FA enrollment and sign-in challenge handling.
+- `ENABLE_PASSWORD_RESET=false`: deliberately disables native password reset email flow.
+- `ENABLE_USER_2FA=true`: re-enables legacy direct user phone/wallet 2FA enrollment routes; member sign-in phone challenges are enforced separately for `user` accounts.
 - `ENABLE_INITIAL_2FA=true`: re-enables required initial 2FA onboarding.
 - `GOOGLE_SHEETS_WEBHOOK_URL`
 

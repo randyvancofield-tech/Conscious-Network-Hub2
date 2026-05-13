@@ -78,7 +78,19 @@ const isInitialTwoFactorEnforced = (): boolean => isLaunchFeatureEnabled('ENABLE
 const isUserTwoFactorEnabled = (): boolean => isLaunchFeatureEnabled('ENABLE_USER_2FA');
 const isEmailVerificationEnabled = (): boolean =>
   isLaunchFeatureEnabled('ENABLE_EMAIL_VERIFICATION');
-const isPasswordResetEnabled = (): boolean => isLaunchFeatureEnabled('ENABLE_PASSWORD_RESET');
+const isPasswordResetEnabled = (): boolean =>
+  String(process.env.ENABLE_PASSWORD_RESET || 'true').trim().toLowerCase() !== 'false';
+
+const normalizeRole = (value: unknown): 'user' | 'applicant' | 'provider' | 'admin' => {
+  const role = String(value || 'user').trim().toLowerCase();
+  if (role === 'applicant' || role === 'provider' || role === 'admin') return role;
+  return 'user';
+};
+
+const requiresTransientPhoneSignIn = (role: string): boolean => role === 'user';
+
+const canUseNativePasswordReset = (user: { role?: string | null }): boolean =>
+  ['user', 'applicant', 'provider', 'admin'].includes(normalizeRole(user.role));
 
 const isInitialTwoFactorRequired = (user: {
   initialTwoFactorRequiredAt?: Date | null;
@@ -513,6 +525,7 @@ publicRouter.post('/signin', validateJsonBody(userSignInSchema), async (req: Req
       .toLowerCase();
     emailHash = email ? safeLogHash(email) : null;
     const password = String(req.body?.password || '');
+    const phoneNumber = normalizePhoneNumber(req.body?.phoneNumber);
     const twoFactorCode = String(req.body?.twoFactorCode || '').trim();
     const providerToken = String(req.body?.providerToken || '').trim();
     const auditSignIn = (
@@ -592,7 +605,7 @@ publicRouter.post('/signin', validateJsonBody(userSignInSchema), async (req: Req
         })) || user;
     }
 
-    const role = String(user.role || 'user').trim().toLowerCase();
+    const role = normalizeRole(user.role);
     if (role === 'provider') {
       auditSignIn('deny', 403, 'direct_platform_signin_role_denied', user.id, {
         role,
@@ -602,15 +615,16 @@ publicRouter.post('/signin', validateJsonBody(userSignInSchema), async (req: Req
       });
     }
 
-    if (isUserTwoFactorEnabled() && user.twoFactorMethod === 'phone') {
-      if (!user.phoneNumber) {
-        auditSignIn('deny', 403, 'phone_2fa_missing_phone', user.id);
-        return res.status(403).json({
-          error: 'Phone 2FA is enabled but no phone number is configured for this profile',
-        });
-      }
-
+    if (requiresTransientPhoneSignIn(role)) {
       if (!twoFactorCode) {
+        if (!phoneNumber) {
+          auditSignIn('deny', 400, 'transient_phone_2fa_missing_phone', user.id);
+          return res.status(400).json({
+            error: 'Enter a wireless phone number to receive your sign-in verification code.',
+            requiresPhoneNumber: true,
+          });
+        }
+
         const issuedAtMs = getPhoneOtpIssuedAtMs(user.pendingPhoneOtpExpiresAt);
         if (
           user.pendingPhoneOtpHash &&
@@ -630,7 +644,7 @@ publicRouter.post('/signin', validateJsonBody(userSignInSchema), async (req: Req
         const expiresAt = new Date(Date.now() + PHONE_OTP_TTL_MS);
 
         const delivery = await smsService.sendSecurityCode({
-          to: user.phoneNumber,
+          to: phoneNumber,
           code,
           purpose: 'signin',
         });
@@ -653,6 +667,7 @@ publicRouter.post('/signin', validateJsonBody(userSignInSchema), async (req: Req
           twoFactorMethod: 'phone',
           smsProvider: delivery.provider || null,
           smsSkipped: Boolean(delivery.skipped),
+          phoneHash: safeLogHash(phoneNumber),
         });
 
         return res.status(202).json({
@@ -660,6 +675,7 @@ publicRouter.post('/signin', validateJsonBody(userSignInSchema), async (req: Req
           requiresTwoFactor: true,
           method: 'phone',
           message: 'A phone verification code was sent. Enter it to complete sign-in.',
+          phoneNumberStored: false,
           ...(process.env.NODE_ENV !== 'production' && { devOtpCode: code }),
         });
       }
@@ -696,13 +712,14 @@ publicRouter.post('/signin', validateJsonBody(userSignInSchema), async (req: Req
 
       user =
         (await localStore.updateUser(user.id, {
+          phoneNumber: null,
           pendingPhoneOtpHash: null,
           pendingPhoneOtpExpiresAt: null,
           pendingPhoneOtpAttempts: 0,
         })) || user;
     }
 
-    if (isUserTwoFactorEnabled() && user.twoFactorMethod === 'wallet') {
+    if (!requiresTransientPhoneSignIn(role) && isUserTwoFactorEnabled() && user.twoFactorMethod === 'wallet') {
       if (!user.walletDid) {
         auditSignIn('deny', 403, 'wallet_2fa_missing_wallet', user.id);
         return res.status(403).json({
@@ -746,6 +763,7 @@ publicRouter.post('/signin', validateJsonBody(userSignInSchema), async (req: Req
     });
     auditSignIn('success', 200, 'signin_completed', user.id, {
       twoFactorMethod: user.twoFactorMethod || 'none',
+      transientChallengeRequired: requiresTransientPhoneSignIn(role),
     });
     return res.json({
       success: true,
@@ -994,7 +1012,7 @@ publicRouter.post(
           metadata: { emailHash, reason: 'password_reset_deferred_for_launch' },
         });
         return res.status(503).json({
-          error: 'Password reset email is deferred for launch. Please contact support.',
+          error: 'Password reset email is currently disabled. Please contact support.',
           code: 'PASSWORD_RESET_DEFERRED',
         });
       }
@@ -1002,7 +1020,7 @@ publicRouter.post(
       const user = normalizedEmail ? await localStore.getUserByEmail(normalizedEmail) : null;
       let devResetUrl: string | undefined;
 
-      if (user && user.role === 'user') {
+      if (user && canUseNativePasswordReset(user)) {
         const token = crypto.randomBytes(32).toString('base64url');
         const tokenHash = hashPasswordResetToken(token);
         const expiresAt = new Date(Date.now() + PASSWORD_RESET_TTL_MS);
@@ -1047,7 +1065,7 @@ publicRouter.post(
           action: 'password_reset_request',
           outcome: 'deny',
           statusCode: 200,
-          metadata: { emailHash, reason: user ? 'non_direct_user_role' : 'user_not_found' },
+          metadata: { emailHash, reason: user ? 'unsupported_native_reset_role' : 'user_not_found' },
         });
       }
 
@@ -1078,7 +1096,7 @@ publicRouter.post(
     try {
       if (!isPasswordResetEnabled()) {
         return res.status(503).json({
-          error: 'Password reset is deferred for launch. Please contact support.',
+          error: 'Password reset is currently disabled. Please contact support.',
           code: 'PASSWORD_RESET_DEFERRED',
         });
       }
@@ -1678,7 +1696,7 @@ protectedRouter.post('/2fa/phone/enroll', validateJsonBody(userPhoneEnrollSchema
   const shouldCompleteInitialTwoFactor =
     Boolean(existing?.initialTwoFactorRequiredAt) && !existing?.initialTwoFactorCompletedAt;
   const updated = await localStore.updateUser(authUserId, {
-    phoneNumber,
+    phoneNumber: null,
     twoFactorMethod: 'phone',
     ...(shouldCompleteInitialTwoFactor ? { initialTwoFactorCompletedAt: new Date() } : {}),
   });
@@ -1708,10 +1726,11 @@ protectedRouter.post('/2fa/phone/enroll', validateJsonBody(userPhoneEnrollSchema
   return res.json({
     success: true,
     twoFactorMethod: updated.twoFactorMethod,
-    phoneNumberMasked: maskPhoneNumber(phoneNumber),
+    phoneNumberMasked: null,
+    phoneNumberStored: false,
     security: {
       twoFactorMethod: updated.twoFactorMethod,
-      phoneNumberMasked: maskPhoneNumber(phoneNumber),
+      phoneNumberMasked: null,
       walletDid: maskWalletDid(updated.walletDid),
       initialTwoFactorRequired: isInitialTwoFactorRequired(updated),
       initialTwoFactorCompleted: Boolean(updated.initialTwoFactorCompletedAt),

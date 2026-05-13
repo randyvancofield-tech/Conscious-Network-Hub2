@@ -86,9 +86,18 @@ const run = async () => {
     headers: { Authorization: `Bearer ${token}` },
   });
 
-  const signin = await expectStatus('signin after logout', '/api/user/signin', 200, {
+  const signinChallenge = await expectStatus('signin sends wireless 2FA code', '/api/user/signin', 202, {
     method: 'POST',
-    body: JSON.stringify({ email, password }),
+    body: JSON.stringify({ email, password, phoneNumber: '+15551234567' }),
+  });
+  const otpCode = String(signinChallenge.body?.devOtpCode || '').trim();
+  if (!/^\d{6}$/.test(otpCode)) {
+    throw new Error(`signin challenge missing dev OTP code: ${JSON.stringify(signinChallenge.body)}`);
+  }
+
+  const signin = await expectStatus('signin after wireless 2FA', '/api/user/signin', 200, {
+    method: 'POST',
+    body: JSON.stringify({ email, password, twoFactorCode: otpCode }),
   });
   if (!signin.body?.success || !signin.body?.token || !signin.body?.user) {
     throw new Error(`signin response missing expected fields: ${JSON.stringify(signin.body)}`);
