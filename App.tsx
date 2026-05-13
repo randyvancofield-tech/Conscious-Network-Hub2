@@ -320,6 +320,15 @@ const isNoTierSignedInAllowedView = (view: AppView): boolean =>
     AppView.NOT_FOUND,
   ].includes(view);
 
+const isProviderPublicView = (view: AppView): boolean =>
+  [
+    AppView.PROVIDER_ACCESS,
+    AppView.PROVIDER_SIGN_IN,
+    AppView.PROVIDER_APPLY,
+    AppView.PROVIDER_APPLICANT_SIGN_IN,
+    AppView.PROVIDER_APPLICATION_STATUS,
+  ].includes(view);
+
 const App: React.FC = () => {
   const initialRoute = useMemo(getInitialRoute, []);
   const [currentView, setCurrentViewState] = useState<AppView>(initialRoute.view);
@@ -2532,6 +2541,8 @@ const App: React.FC = () => {
     }
   };
 
+  const isProviderPublicExperience = isProviderPublicView(currentView);
+
   return (
     <div className="app-scroll-root min-h-screen bg-[#05070a] text-slate-200 selection:bg-blue-500/30 flex relative">
       {currentView !== AppView.ENTRY && <ThreeScene />}
@@ -2996,9 +3007,12 @@ const App: React.FC = () => {
 
         {currentView === AppView.VERIFY_SESSION && renderActiveView()}
 
+        {isProviderPublicExperience && renderActiveView()}
+
         {(currentView !== AppView.ENTRY &&
           currentView !== AppView.MEMBERSHIP_ACCESS &&
-          currentView !== AppView.VERIFY_SESSION) && (
+          currentView !== AppView.VERIFY_SESSION &&
+          !isProviderPublicExperience) && (
           <div className="flex flex-1 min-h-[100dvh] overflow-hidden animate-in fade-in duration-500 relative z-10">
             {isSidebarOpen && (
               <div 
