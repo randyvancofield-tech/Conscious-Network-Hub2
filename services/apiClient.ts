@@ -9,12 +9,20 @@ export class ApiError extends Error {
   readonly data: unknown;
 
   constructor(status: number, data: unknown, fallbackMessage: string) {
-    const message =
+    const baseMessage =
       data && typeof data === 'object' && 'error' in data
         ? String((data as { error?: unknown }).error || fallbackMessage)
         : data && typeof data === 'object' && 'message' in data
           ? String((data as { message?: unknown }).message || fallbackMessage)
           : fallbackMessage;
+    const details =
+      data && typeof data === 'object' && Array.isArray((data as { details?: unknown }).details)
+        ? (data as { details: unknown[] }).details
+            .map((entry) => String(entry || '').trim())
+            .filter(Boolean)
+            .slice(0, 3)
+        : [];
+    const message = details.length ? `${baseMessage}: ${details.join('; ')}` : baseMessage;
 
     super(message);
     this.name = 'ApiError';

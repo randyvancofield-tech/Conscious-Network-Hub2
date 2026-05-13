@@ -1289,18 +1289,25 @@ const App: React.FC = () => {
     setError('');
     const normalizedEmail = emailInput.trim().toLowerCase();
     const transientPhoneNumber = buildTransientPhoneNumber();
+    const signInBody: Record<string, unknown> = {
+      email: normalizedEmail,
+      password: passwordInput,
+    };
+    if (transientPhoneNumber && !pendingTwoFactorMethod) {
+      signInBody.phoneNumber = transientPhoneNumber;
+    }
+    if (twoFactorCodeInput.trim()) {
+      signInBody.twoFactorCode = twoFactorCodeInput.trim();
+    }
+    if (providerTokenInput.trim()) {
+      signInBody.providerToken = providerTokenInput.trim();
+    }
 
     try {
       const data = await api<any>('/user/signin', {
         method: 'POST',
         auth: false,
-        body: {
-          email: normalizedEmail,
-          password: passwordInput,
-          phoneNumber: transientPhoneNumber || undefined,
-          twoFactorCode: twoFactorCodeInput,
-          providerToken: providerTokenInput,
-        },
+        body: signInBody,
       });
 
       if (data?.requiresTwoFactor) {
@@ -1453,17 +1460,19 @@ const App: React.FC = () => {
     event.preventDefault();
     setError('');
     const normalizedEmail = emailInput.trim().toLowerCase();
+    const providerSignInBody: Record<string, unknown> = {
+      email: normalizedEmail,
+      password: passwordInput,
+    };
+    if (providerTokenInput.trim()) {
+      providerSignInBody.providerToken = providerTokenInput.trim();
+    }
 
     try {
       const data = await api<any>('/user/signin', {
         method: 'POST',
         auth: false,
-        body: {
-          email: normalizedEmail,
-          password: passwordInput,
-          twoFactorCode: twoFactorCodeInput,
-          providerToken: providerTokenInput,
-        },
+        body: providerSignInBody,
       });
 
       if (data?.requiresTwoFactor) {
