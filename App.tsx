@@ -29,6 +29,7 @@ import {
 } from 'lucide-react';
 import logo from './src/assets/brand/logo.png';
 import privacyPolicy from './docs/compliance/privacy-policy-draft.md?raw';
+import termsOfService from './docs/compliance/terms-of-service-draft.md?raw';
 import aiTransparencyPolicy from './docs/compliance/ai-transparency-policy-draft.md?raw';
 import blockchainDataPolicy from './docs/compliance/blockchain-data-policy-draft.md?raw';
 import vendorApiGovernancePolicy from './docs/compliance/vendor-api-governance-policy-draft.md?raw';
@@ -169,6 +170,8 @@ const routePathForView = (view: AppView, params: Record<string, string> = {}): s
       return '/admin/provider-applicants';
     case AppView.PRIVACY_POLICY:
       return '/privacy-policy';
+    case AppView.TERMS_OF_SERVICE:
+      return '/terms-of-service';
     case AppView.AI_TRANSPARENCY_POLICY:
       return '/policies/ai-transparency';
     case AppView.BLOCKCHAIN_DATA_POLICY:
@@ -221,6 +224,8 @@ const resolveRoute = (pathname: string, search = ''): RouteState => {
     '/privacy-policy': AppView.PRIVACY_POLICY,
     '/privacy': AppView.PRIVACY_POLICY,
     '/policies/privacy': AppView.PRIVACY_POLICY,
+    '/terms-of-service': AppView.TERMS_OF_SERVICE,
+    '/terms': AppView.TERMS_OF_SERVICE,
     '/policies/ai-transparency': AppView.AI_TRANSPARENCY_POLICY,
     '/policies/blockchain-data': AppView.BLOCKCHAIN_DATA_POLICY,
     '/policies/vendor-api-governance': AppView.VENDOR_API_GOVERNANCE_POLICY,
@@ -292,6 +297,7 @@ const isGuestAllowedView = (view: AppView): boolean =>
     AppView.KNOWLEDGE_PATHWAYS,
     AppView.COURSE_DETAIL,
     AppView.PRIVACY_POLICY,
+    AppView.TERMS_OF_SERVICE,
     AppView.AI_TRANSPARENCY_POLICY,
     AppView.BLOCKCHAIN_DATA_POLICY,
     AppView.VENDOR_API_GOVERNANCE_POLICY,
@@ -312,6 +318,7 @@ const isNoTierSignedInAllowedView = (view: AppView): boolean =>
     AppView.PROVIDER_APPLICATION_STATUS,
     AppView.MEMBERSHIP,
     AppView.PRIVACY_POLICY,
+    AppView.TERMS_OF_SERVICE,
     AppView.AI_TRANSPARENCY_POLICY,
     AppView.BLOCKCHAIN_DATA_POLICY,
     AppView.VENDOR_API_GOVERNANCE_POLICY,
@@ -1668,6 +1675,7 @@ const App: React.FC = () => {
   const getPolicyContent = (policy: string) => {
     switch (policy) {
       case 'privacy': return privacyPolicy;
+      case 'terms': return termsOfService;
       case 'ai-transparency': return aiTransparencyPolicy;
       case 'blockchain': return blockchainDataPolicy;
       case 'vendor': return vendorApiGovernancePolicy;
@@ -1692,7 +1700,7 @@ const App: React.FC = () => {
       .trim();
   };
 
-  const policies = ['privacy', 'ai-transparency', 'blockchain', 'vendor', 'nist'];
+  const policies = ['privacy', 'terms', 'ai-transparency', 'blockchain', 'vendor', 'nist'];
 
   const getNextPolicy = (current: string) => {
     const index = policies.indexOf(current);
@@ -2420,6 +2428,18 @@ const App: React.FC = () => {
             <h1 className="text-3xl font-black text-white mb-6">Privacy Policy</h1>
             <div className="prose prose-invert max-w-none">
               <pre className="whitespace-pre-wrap text-slate-300 leading-relaxed">{cleanPolicyContent(privacyPolicy)}</pre>
+            </div>
+          </div>
+        );
+      case AppView.TERMS_OF_SERVICE:
+        return (
+          <div className="p-8 max-w-4xl mx-auto">
+            <button onClick={() => setCurrentView(AppView.DASHBOARD)} className="mb-4 text-blue-400 hover:text-blue-300 transition-colors flex items-center gap-2">
+              <ChevronRight className="w-4 h-4 rotate-180" /> Back to Hub
+            </button>
+            <h1 className="text-3xl font-black text-white mb-6">Terms of Service</h1>
+            <div className="prose prose-invert max-w-none">
+              <pre className="whitespace-pre-wrap text-slate-300 leading-relaxed">{cleanPolicyContent(termsOfService)}</pre>
             </div>
           </div>
         );
@@ -3205,6 +3225,7 @@ const App: React.FC = () => {
               <footer className="shrink-0 max-h-[28dvh] overflow-y-auto custom-scrollbar p-4 bg-black/20 backdrop-blur-sm border-t border-white/5">
                 <div className="max-w-7xl mx-auto flex flex-wrap justify-center gap-4 text-xs">
                   <button onClick={() => setCurrentView(AppView.PRIVACY_POLICY)} className="max-w-full whitespace-normal text-center leading-5 text-slate-400 hover:text-white transition-colors">Privacy Policy</button>
+                  <button onClick={() => setCurrentView(AppView.TERMS_OF_SERVICE)} className="max-w-full whitespace-normal text-center leading-5 text-slate-400 hover:text-white transition-colors">Terms of Service</button>
                   <button onClick={() => setCurrentView(AppView.AI_TRANSPARENCY_POLICY)} className="max-w-full whitespace-normal text-center leading-5 text-slate-400 hover:text-white transition-colors">AI Transparency Policy</button>
                   <button onClick={() => setCurrentView(AppView.BLOCKCHAIN_DATA_POLICY)} className="max-w-full whitespace-normal text-center leading-5 text-slate-400 hover:text-white transition-colors">Blockchain Data Policy</button>
                   <button onClick={() => setCurrentView(AppView.VENDOR_API_GOVERNANCE_POLICY)} className="max-w-full whitespace-normal text-center leading-5 text-slate-400 hover:text-white transition-colors">Vendor API Governance Policy</button>
@@ -3428,6 +3449,7 @@ const App: React.FC = () => {
                   <h3 className="text-3xl font-black mb-10 text-white uppercase tracking-tighter">Policies</h3>
                   <div className="space-y-4">
                     <button onClick={() => setSelectedPolicy('privacy')} className="w-full text-left py-3 px-4 bg-white/5 hover:bg-white/10 rounded-lg text-white font-medium">Privacy Policy</button>
+                    <button onClick={() => setSelectedPolicy('terms')} className="w-full text-left py-3 px-4 bg-white/5 hover:bg-white/10 rounded-lg text-white font-medium">Terms of Service</button>
                     <button onClick={() => setSelectedPolicy('ai-transparency')} className="w-full text-left py-3 px-4 bg-white/5 hover:bg-white/10 rounded-lg text-white font-medium">AI Transparency Policy</button>
                     <button onClick={() => setSelectedPolicy('blockchain')} className="w-full text-left py-3 px-4 bg-white/5 hover:bg-white/10 rounded-lg text-white font-medium">Blockchain Data Policy</button>
                     <button onClick={() => setSelectedPolicy('vendor')} className="w-full text-left py-3 px-4 bg-white/5 hover:bg-white/10 rounded-lg text-white font-medium">Vendor API Governance Policy</button>

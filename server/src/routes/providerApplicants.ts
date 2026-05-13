@@ -30,6 +30,7 @@ protectedRouter.use(requireCanonicalIdentity);
 
 const MIN_PASSWORD_LENGTH = 12;
 const MAX_APPLICATION_UPLOAD_BYTES = 15 * 1024 * 1024;
+const PROVIDER_PRIVACY_NOTICE_VERSION = 'provider-applicant-global-privacy-v1';
 const ACCEPTED_DOCUMENT_MIME_TYPES = new Set([
   'application/pdf',
   'application/msword',
@@ -59,6 +60,93 @@ const getPublicBaseUrl = (req: Request): string => {
   const proto = forwardedProto || req.protocol || 'https';
   return `${proto}://${req.get('host')}`;
 };
+
+const getForwardedProto = (req: Request): string =>
+  String(req.headers['x-forwarded-proto'] || '')
+    .split(',')[0]
+    .trim()
+    .toLowerCase();
+
+const getForwardedTlsVersion = (req: Request): string => {
+  const raw =
+    req.headers['x-forwarded-tls-version'] ||
+    req.headers['x-tls-version'] ||
+    req.headers['x-ssl-protocol'];
+  return String(Array.isArray(raw) ? raw[0] : raw || '').trim();
+};
+
+const normalizeTlsVersion = (value: string): string =>
+  value.toLowerCase().replace(/\s+/g, '').replace(/^tlsv?/, 'tlsv');
+
+const isLocalHost = (host: string): boolean =>
+  ['localhost', '127.0.0.1', '::1'].some((local) => host.toLowerCase().includes(local));
+
+const isSecureApplicantTransportBypassAllowed = (req: Request): boolean => {
+  if (String(process.env.REQUIRE_PROVIDER_APPLICANT_HTTPS || '').trim().toLowerCase() === 'true') {
+    return false;
+  }
+  const nodeEnv = String(process.env.NODE_ENV || '').trim().toLowerCase();
+  return nodeEnv !== 'production' && isLocalHost(String(req.headers.host || ''));
+};
+
+const isHttpsRequest = (req: Request): boolean => req.secure || getForwardedProto(req) === 'https';
+
+const enforceProviderApplicantSecureTransport = (
+  req: Request,
+  res: Response,
+  next: NextFunction
+): void => {
+  if (isSecureApplicantTransportBypassAllowed(req)) {
+    next();
+    return;
+  }
+
+  const tlsVersion = getForwardedTlsVersion(req);
+  const normalizedTlsVersion = normalizeTlsVersion(tlsVersion);
+  const tlsVersionRejected = Boolean(
+    normalizedTlsVersion &&
+      !['tlsv1.3', 'tls1.3', '1.3'].includes(normalizedTlsVersion)
+  );
+
+  if (!isHttpsRequest(req) || tlsVersionRejected) {
+    recordAuditEvent(req, {
+      domain: 'security',
+      action: 'provider_applicant_transport_rejected',
+      outcome: 'deny',
+      statusCode: 426,
+      metadata: {
+        https: isHttpsRequest(req),
+        tlsVersionProvided: Boolean(tlsVersion),
+        tls13Accepted: !tlsVersionRejected,
+      },
+    });
+    res.status(426).json({ error: 'Provider applications require HTTPS with TLS 1.3.' });
+    return;
+  }
+
+  next();
+};
+
+const getRequestIp = (req: Request): string | null => {
+  const forwardedFor = req.headers['x-forwarded-for'];
+  const forwarded =
+    typeof forwardedFor === 'string'
+      ? forwardedFor.split(',')[0]?.trim()
+      : Array.isArray(forwardedFor)
+      ? forwardedFor[0]?.split(',')[0]?.trim()
+      : '';
+  const ip = forwarded || req.ip || req.socket.remoteAddress || '';
+  return ip.trim() || null;
+};
+
+const getSoftwareVersion = (): string =>
+  String(
+    process.env.SOFTWARE_VERSION ||
+      process.env.RENDER_GIT_COMMIT ||
+      process.env.K_REVISION ||
+      process.env.npm_package_version ||
+      'unknown'
+  ).trim();
 
 const text = (value: unknown): string => String(value || '').trim();
 
@@ -173,6 +261,7 @@ const persistApplicantDocument = async (
 
 publicRouter.post(
   '/apply',
+  enforceProviderApplicantSecureTransport,
   upload.fields([
     { name: 'resume', maxCount: 1 },
     { name: 'coverLetter', maxCount: 1 },
@@ -186,8 +275,12 @@ publicRouter.post(
     const lastName = text(req.body?.lastName);
     const providerCategory = text(req.body?.providerCategory);
     const phone = text(req.body?.phone);
+    const privacyNoticeVersion =
+      text(req.body?.privacyNoticeVersion) || PROVIDER_PRIVACY_NOTICE_VERSION;
     const resume = mReq.files?.resume?.[0];
     const coverLetter = mReq.files?.coverLetter?.[0];
+    const consentedAt = new Date();
+    const softwareVersion = getSoftwareVersion();
 
     const auditApply = (
       outcome: 'success' | 'deny' | 'error',
@@ -201,7 +294,12 @@ publicRouter.post(
         outcome,
         actorUserId: actorUserId || null,
         statusCode,
-        metadata: { reason, emailProvided: Boolean(email), providerCategory },
+        metadata: {
+          reason,
+          emailProvided: Boolean(email),
+          providerCategoryProvided: Boolean(providerCategory),
+          privacyNoticeVersion,
+        },
       });
     };
 
@@ -239,6 +337,7 @@ publicRouter.post(
       providerStandards: isTruthy(req.body?.providerStandards),
       approvalNotAutomatic: isTruthy(req.body?.approvalNotAutomatic),
       contactConsent: isTruthy(req.body?.contactConsent),
+      privacyNoticeAcknowledged: isTruthy(req.body?.privacyNoticeAcknowledged),
     };
     if (!Object.values(consents).every(Boolean)) {
       auditApply('deny', 400, 'consents_missing');
@@ -317,6 +416,20 @@ publicRouter.post(
         coverLetterFile,
         alignmentAnswers,
         integrityConsents: consents,
+        consentAudit: {
+          consentedAt: consentedAt.toISOString(),
+          ipAddress: getRequestIp(req),
+          privacyNoticeVersion,
+          softwareVersion,
+          explicitConsent: true,
+          consentFields: Object.entries(consents)
+            .filter(([, accepted]) => accepted)
+            .map(([key]) => key),
+          transport: {
+            https: isHttpsRequest(req),
+            tlsVersion: getForwardedTlsVersion(req) || null,
+          },
+        },
         status: 'submitted',
         calendlyShownAt: new Date(),
       });
@@ -327,6 +440,21 @@ publicRouter.post(
         expiresAt: persistedSession.expiresAt.getTime(),
       });
 
+      recordAuditEvent(req, {
+        domain: 'profile',
+        action: 'provider_applicant_explicit_consent',
+        outcome: 'success',
+        actorUserId: user.id,
+        targetUserId: user.id,
+        statusCode: 201,
+        metadata: {
+          consentedAt: consentedAt.toISOString(),
+          privacyNoticeVersion,
+          softwareVersion,
+          consentFields: Object.keys(consents),
+          ipAddressEncryptedAtRest: true,
+        },
+      });
       auditApply('success', 201, 'application_submitted', user.id);
       res.status(201).json({
         success: true,
@@ -343,7 +471,10 @@ publicRouter.post(
         res.status(409).json({ error: 'An applicant account already exists for this email.' });
         return;
       }
-      console.error('[PROVIDER_APPLICANTS][ERROR] Failed to submit application', error);
+      console.error('[PROVIDER_APPLICANTS][ERROR] Failed to submit application', {
+        name: error instanceof Error ? error.name : 'UnknownError',
+        code: duplicateCode || 'UNKNOWN',
+      });
       auditApply('error', 500, 'application_submit_failed');
       res.status(500).json({ error: 'Failed to submit provider application.' });
     }

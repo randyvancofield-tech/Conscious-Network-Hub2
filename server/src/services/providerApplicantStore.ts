@@ -1,4 +1,10 @@
 import { getPrisma } from './prismaClient';
+import {
+  protectSensitiveJson,
+  protectSensitiveText,
+  revealSensitiveJson,
+  revealSensitiveText,
+} from './sensitiveDataPolicy';
 
 export const PROVIDER_APPLICANT_STATUSES = [
   'submitted',
@@ -50,6 +56,7 @@ export interface ProviderApplicantInput {
   coverLetterFile: ProviderApplicantFileRef;
   alignmentAnswers: Record<string, string>;
   integrityConsents: Record<string, boolean>;
+  consentAudit?: Record<string, unknown>;
   status?: ProviderApplicantStatus;
   calendlyShownAt?: Date | null;
 }
@@ -75,63 +82,133 @@ const normalizeStatus = (value: unknown): ProviderApplicantStatus => {
 
 const providerApplicantModel = () => (getPrisma() as any).providerApplicant;
 
+const applicantField = (field: string): string => `providerApplicant.${field}`;
+
+const protectApplicantText = (field: string, value: unknown): string | null =>
+  protectSensitiveText(applicantField(field), nullableString(value));
+
+const protectRequiredApplicantText = (field: string, value: unknown): string =>
+  protectApplicantText(field, value) || '';
+
+const revealApplicantText = (field: string, value: unknown): string | null =>
+  revealSensitiveText(applicantField(field), nullableString(value));
+
+const protectApplicantJson = (field: string, value: unknown): unknown =>
+  protectSensitiveJson(applicantField(field), value);
+
+const revealApplicantJson = <T = unknown>(field: string, value: unknown): T | null =>
+  revealSensitiveJson<T>(applicantField(field), value);
+
+const revealProviderApplicant = (row: any): any => {
+  if (!row) return row;
+  return {
+    ...row,
+    email: row.email,
+    firstName: revealApplicantText('firstName', row.firstName) || row.firstName,
+    lastName: revealApplicantText('lastName', row.lastName) || row.lastName,
+    phone: revealApplicantText('phone', row.phone),
+    communicationPreference: revealApplicantText(
+      'communicationPreference',
+      row.communicationPreference
+    ),
+    providerCategory:
+      revealApplicantText('providerCategory', row.providerCategory) || row.providerCategory,
+    organizationName: revealApplicantText('organizationName', row.organizationName),
+    professionalTitle: revealApplicantText('professionalTitle', row.professionalTitle),
+    website: revealApplicantText('website', row.website),
+    socialLinks: revealApplicantJson('socialLinks', row.socialLinks) || [],
+    serviceArea: revealApplicantText('serviceArea', row.serviceArea),
+    availabilityMode: revealApplicantText('availabilityMode', row.availabilityMode),
+    servicesOffered: revealApplicantJson('servicesOffered', row.servicesOffered) || [],
+    targetAudience: revealApplicantText('targetAudience', row.targetAudience),
+    populationsServed: revealApplicantJson('populationsServed', row.populationsServed) || [],
+    experienceLevel: revealApplicantText('experienceLevel', row.experienceLevel),
+    practiceStatus: revealApplicantText('practiceStatus', row.practiceStatus),
+    availabilityToServe: revealApplicantText('availabilityToServe', row.availabilityToServe),
+    credentialsText: revealApplicantText('credentialsText', row.credentialsText),
+    licenseNumber: revealApplicantText('licenseNumber', row.licenseNumber),
+    issuingOrganization: revealApplicantText('issuingOrganization', row.issuingOrganization),
+    professionalReferences: revealApplicantText(
+      'professionalReferences',
+      row.professionalReferences
+    ),
+    resumeFile: revealApplicantJson('resumeFile', row.resumeFile),
+    coverLetterFile: revealApplicantJson('coverLetterFile', row.coverLetterFile),
+    alignmentAnswers: revealApplicantJson('alignmentAnswers', row.alignmentAnswers) || {},
+    integrityConsents: revealApplicantJson('integrityConsents', row.integrityConsents) || {},
+    consentAudit: revealApplicantJson('consentAudit', row.consentAudit) || null,
+  };
+};
+
 export const createProviderApplicant = async (input: ProviderApplicantInput): Promise<any> => {
   const row = await providerApplicantModel().create({
     data: {
       userId: input.userId,
       email: input.email.trim().toLowerCase(),
-      firstName: input.firstName.trim(),
-      lastName: input.lastName.trim(),
-      phone: nullableString(input.phone),
-      communicationPreference: nullableString(input.communicationPreference),
-      providerCategory: input.providerCategory.trim(),
-      organizationName: nullableString(input.organizationName),
-      professionalTitle: nullableString(input.professionalTitle),
-      website: nullableString(input.website),
-      socialLinks: input.socialLinks || [],
-      serviceArea: nullableString(input.serviceArea),
-      availabilityMode: nullableString(input.availabilityMode),
-      servicesOffered: input.servicesOffered || [],
-      targetAudience: nullableString(input.targetAudience),
-      populationsServed: input.populationsServed || [],
-      experienceLevel: nullableString(input.experienceLevel),
+      firstName: protectRequiredApplicantText('firstName', input.firstName),
+      lastName: protectRequiredApplicantText('lastName', input.lastName),
+      phone: protectApplicantText('phone', input.phone),
+      communicationPreference: protectApplicantText(
+        'communicationPreference',
+        input.communicationPreference
+      ),
+      providerCategory: protectRequiredApplicantText('providerCategory', input.providerCategory),
+      organizationName: protectApplicantText('organizationName', input.organizationName),
+      professionalTitle: protectApplicantText('professionalTitle', input.professionalTitle),
+      website: protectApplicantText('website', input.website),
+      socialLinks: protectApplicantJson('socialLinks', input.socialLinks || []),
+      serviceArea: protectApplicantText('serviceArea', input.serviceArea),
+      availabilityMode: protectApplicantText('availabilityMode', input.availabilityMode),
+      servicesOffered: protectApplicantJson('servicesOffered', input.servicesOffered || []),
+      targetAudience: protectApplicantText('targetAudience', input.targetAudience),
+      populationsServed: protectApplicantJson('populationsServed', input.populationsServed || []),
+      experienceLevel: protectApplicantText('experienceLevel', input.experienceLevel),
       yearsExperience: input.yearsExperience ?? null,
-      practiceStatus: nullableString(input.practiceStatus),
-      availabilityToServe: nullableString(input.availabilityToServe),
-      credentialsText: nullableString(input.credentialsText),
-      licenseNumber: nullableString(input.licenseNumber),
-      issuingOrganization: nullableString(input.issuingOrganization),
+      practiceStatus: protectApplicantText('practiceStatus', input.practiceStatus),
+      availabilityToServe: protectApplicantText(
+        'availabilityToServe',
+        input.availabilityToServe
+      ),
+      credentialsText: protectApplicantText('credentialsText', input.credentialsText),
+      licenseNumber: protectApplicantText('licenseNumber', input.licenseNumber),
+      issuingOrganization: protectApplicantText('issuingOrganization', input.issuingOrganization),
       credentialExpiration: input.credentialExpiration || null,
-      professionalReferences: nullableString(input.professionalReferences),
-      resumeFile: input.resumeFile,
-      coverLetterFile: input.coverLetterFile,
-      alignmentAnswers: input.alignmentAnswers,
-      integrityConsents: input.integrityConsents,
+      professionalReferences: protectApplicantText(
+        'professionalReferences',
+        input.professionalReferences
+      ),
+      resumeFile: protectApplicantJson('resumeFile', input.resumeFile),
+      coverLetterFile: protectApplicantJson('coverLetterFile', input.coverLetterFile),
+      alignmentAnswers: protectApplicantJson('alignmentAnswers', input.alignmentAnswers),
+      integrityConsents: protectApplicantJson('integrityConsents', input.integrityConsents),
+      consentAudit: protectApplicantJson('consentAudit', input.consentAudit || null),
       status: normalizeStatus(input.status),
       submittedAt: new Date(),
       calendlyShownAt: input.calendlyShownAt || null,
     },
     include: { user: true },
   });
-  return row;
+  return revealProviderApplicant(row);
 };
 
 export const getProviderApplicantByUserId = async (userId: string): Promise<any | null> => {
   const normalized = String(userId || '').trim();
   if (!normalized) return null;
-  return providerApplicantModel().findUnique({
+  const row = await providerApplicantModel().findUnique({
     where: { userId: normalized },
     include: { user: true },
   });
+  return revealProviderApplicant(row);
 };
 
 export const getProviderApplicantById = async (id: string): Promise<any | null> => {
   const normalized = String(id || '').trim();
   if (!normalized) return null;
-  return providerApplicantModel().findUnique({
+  const row = await providerApplicantModel().findUnique({
     where: { id: normalized },
     include: { user: true },
   });
+  return revealProviderApplicant(row);
 };
 
 export const listProviderApplicants = async (input: {
@@ -140,12 +217,13 @@ export const listProviderApplicants = async (input: {
 } = {}): Promise<any[]> => {
   const status = input.status ? normalizeStatus(input.status) : null;
   const limit = Math.min(Math.max(Number(input.limit || 250), 1), 500);
-  return providerApplicantModel().findMany({
+  const rows = await providerApplicantModel().findMany({
     where: status ? { status } : undefined,
     include: { user: true },
     orderBy: [{ submittedAt: 'desc' }, { createdAt: 'desc' }],
     take: limit,
   });
+  return rows.map(revealProviderApplicant);
 };
 
 export const updateProviderApplicantReview = async (
@@ -166,9 +244,10 @@ export const updateProviderApplicantReview = async (
     data.reviewedAt = updates.reviewedAt;
   }
 
-  return providerApplicantModel().update({
+  const row = await providerApplicantModel().update({
     where: { id },
     data,
     include: { user: true },
   });
+  return revealProviderApplicant(row);
 };

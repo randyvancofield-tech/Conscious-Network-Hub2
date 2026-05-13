@@ -50,6 +50,35 @@ const formatEnvelope = (iv: Buffer, tag: Buffer, ciphertext: Buffer): string => 
   ].join(':');
 };
 
+const encryptNormalizedValue = (field: string, normalized: string): string => {
+  const key = getEncryptionKey();
+  const iv = crypto.randomBytes(IV_BYTES);
+  const cipher = crypto.createCipheriv(ALGORITHM, key, iv);
+  cipher.setAAD(Buffer.from(field, 'utf8'));
+  const ciphertext = Buffer.concat([
+    cipher.update(Buffer.from(normalized, 'utf8')),
+    cipher.final(),
+  ]);
+  const tag = cipher.getAuthTag();
+  return formatEnvelope(iv, tag, ciphertext);
+};
+
+const decryptNormalizedValue = (field: string, encryptedValue: string): string => {
+  const envelope = parseEnvelope(encryptedValue);
+  if (!envelope) {
+    throw new Error(`[SECURITY] Invalid encrypted payload format for ${field}`);
+  }
+
+  const key = getEncryptionKey();
+  const decipher = crypto.createDecipheriv(ALGORITHM, key, envelope.iv);
+  decipher.setAAD(Buffer.from(field, 'utf8'));
+  decipher.setAuthTag(envelope.tag);
+  return Buffer.concat([
+    decipher.update(envelope.ciphertext),
+    decipher.final(),
+  ]).toString('utf8');
+};
+
 const parseEnvelope = (value: string): { iv: Buffer; tag: Buffer; ciphertext: Buffer } | null => {
   const parts = value.split(':');
   if (parts.length !== 5) return null;
@@ -81,16 +110,7 @@ export const protectSensitiveField = (
   }
 
   try {
-    const key = getEncryptionKey();
-    const iv = crypto.randomBytes(IV_BYTES);
-    const cipher = crypto.createCipheriv(ALGORITHM, key, iv);
-    cipher.setAAD(Buffer.from(field, 'utf8'));
-    const ciphertext = Buffer.concat([
-      cipher.update(Buffer.from(normalized, 'utf8')),
-      cipher.final(),
-    ]);
-    const tag = cipher.getAuthTag();
-    return formatEnvelope(iv, tag, ciphertext);
+    return encryptNormalizedValue(field, normalized);
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
     if (message.startsWith('[SECURITY][SKIP]')) {
@@ -110,20 +130,67 @@ export const revealSensitiveField = (
     return normalized;
   }
 
-  const envelope = parseEnvelope(normalized);
-  if (!envelope) {
-    throw new Error(`[SECURITY] Invalid encrypted payload format for ${field}`);
+  const plaintext = decryptNormalizedValue(field, normalized);
+  return plaintext || null;
+};
+
+export const protectSensitiveText = (
+  field: string,
+  value: string | null | undefined
+): string | null => {
+  const normalized = String(value || '').trim();
+  if (!normalized) return null;
+  if (isSensitiveDataEncrypted(normalized)) return normalized;
+
+  try {
+    return encryptNormalizedValue(field, normalized);
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    if (message.startsWith('[SECURITY][SKIP]')) {
+      return normalized;
+    }
+    throw error;
+  }
+};
+
+export const revealSensitiveText = (
+  field: string,
+  value: string | null | undefined
+): string | null => {
+  const normalized = String(value || '').trim();
+  if (!normalized) return null;
+  if (!isSensitiveDataEncrypted(normalized)) return normalized;
+  return decryptNormalizedValue(field, normalized) || null;
+};
+
+export const protectSensitiveJson = (field: string, value: unknown): unknown => {
+  if (value === null || value === undefined) return null;
+  if (typeof value === 'string' && isSensitiveDataEncrypted(value)) return value;
+
+  try {
+    return encryptNormalizedValue(field, JSON.stringify(value));
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    if (message.startsWith('[SECURITY][SKIP]')) {
+      return value;
+    }
+    throw error;
+  }
+};
+
+export const revealSensitiveJson = <T = unknown>(field: string, value: unknown): T | null => {
+  if (value === null || value === undefined) return null;
+  if (!(typeof value === 'string' && isSensitiveDataEncrypted(value))) {
+    return value as T;
   }
 
-  const key = getEncryptionKey();
-  const decipher = crypto.createDecipheriv(ALGORITHM, key, envelope.iv);
-  decipher.setAAD(Buffer.from(field, 'utf8'));
-  decipher.setAuthTag(envelope.tag);
-  const plaintext = Buffer.concat([
-    decipher.update(envelope.ciphertext),
-    decipher.final(),
-  ]).toString('utf8');
-  return plaintext || null;
+  const plaintext = decryptNormalizedValue(field, value);
+  if (!plaintext) return null;
+  try {
+    return JSON.parse(plaintext) as T;
+  } catch {
+    throw new Error(`[SECURITY] Invalid encrypted JSON payload for ${field}`);
+  }
 };
 
 export const maskWalletDid = (value: string | null | undefined): string | null => {

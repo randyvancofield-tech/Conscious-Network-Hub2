@@ -129,6 +129,7 @@ model ProviderApplicant {
   coverLetterFile         Json
   alignmentAnswers        Json
   integrityConsents       Json
+  consentAudit            Json?
   status                  String    @default("submitted")
   adminNotes              String?
   submittedAt             DateTime  @default(now())

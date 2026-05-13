@@ -21,6 +21,15 @@ const steps = [
   'Consent',
 ] as const;
 
+const PROVIDER_PRIVACY_NOTICE_VERSION = 'provider-applicant-global-privacy-v1';
+const PROVIDER_PRIVACY_NOTICE_TEXT =
+  'Higher Conscious Network processes provider applicant information, including sensitive or special-category data you choose to submit, for identity verification, credential review, provider eligibility, safety, communications, and legal compliance. By submitting this application, you consent to this processing, international transfer safeguards, encrypted storage, and audit logging as described in our';
+
+const getAbsoluteLegalUrl = (path: string): string => {
+  if (typeof window === 'undefined') return path;
+  return new URL(path, window.location.origin).toString();
+};
+
 type ProviderApplicationValues = {
   firstName: string;
   lastName: string;
@@ -59,6 +68,7 @@ type ProviderApplicationValues = {
   providerStandards: boolean;
   approvalNotAutomatic: boolean;
   contactConsent: boolean;
+  privacyNoticeAcknowledged: boolean;
 };
 
 interface ProviderApplicationPageProps {
@@ -105,6 +115,7 @@ const initialValues: ProviderApplicationValues = {
   providerStandards: false,
   approvalNotAutomatic: false,
   contactConsent: false,
+  privacyNoticeAcknowledged: false,
 };
 
 const Field: React.FC<{
@@ -125,7 +136,7 @@ const Field: React.FC<{
       onChange={(event) => onChange(event.target.value)}
       required={required}
       placeholder={placeholder}
-      className="w-full rounded-2xl border border-white/10 bg-white/[0.06] px-4 py-3 text-sm text-white outline-none transition focus:border-amber-100/40 focus:ring-2 focus:ring-amber-100/20"
+      className="w-full min-w-0 rounded-2xl border border-white/10 bg-white/[0.06] px-4 py-3 text-sm text-white outline-none transition focus:border-amber-100/40 focus:ring-2 focus:ring-amber-100/20"
     />
   </label>
 );
@@ -148,7 +159,7 @@ const TextArea: React.FC<{
       required={required}
       rows={rows}
       placeholder={placeholder}
-      className="w-full resize-y rounded-2xl border border-white/10 bg-white/[0.06] px-4 py-3 text-sm leading-6 text-white outline-none transition focus:border-amber-100/40 focus:ring-2 focus:ring-amber-100/20"
+      className="w-full min-w-0 resize-y rounded-2xl border border-white/10 bg-white/[0.06] px-4 py-3 text-sm leading-6 text-white outline-none transition focus:border-amber-100/40 focus:ring-2 focus:ring-amber-100/20"
     />
   </label>
 );
@@ -166,7 +177,42 @@ const ProviderApplicationPage: React.FC<ProviderApplicationPageProps> = ({
   const [isSubmitting, setSubmitting] = useState(false);
   const [submitted, setSubmitted] = useState(false);
 
-  const progress = useMemo(() => Math.round(((step + 1) / steps.length) * 100), [step]);
+  const privacyPolicyUrl = useMemo(() => getAbsoluteLegalUrl('/privacy-policy'), []);
+  const termsOfServiceUrl = useMemo(() => getAbsoluteLegalUrl('/terms-of-service'), []);
+  const stepCompletion = useMemo(
+    () => [
+      Boolean(
+        values.firstName &&
+          values.lastName &&
+          values.email &&
+          values.phone &&
+          values.password.length >= 12 &&
+          values.password === values.confirmPassword
+      ),
+      Boolean(values.providerCategory && values.professionalTitle && values.serviceArea),
+      Boolean(values.servicesOffered && values.targetAudience && values.availabilityToServe),
+      Boolean(values.credentialsText && resume && coverLetter),
+      Boolean(
+        values.consciousService &&
+          values.ethicalResponsibility &&
+          values.marginalizedCommunities &&
+          values.worldviewDiversity &&
+          values.whyHigherConsciousNetwork &&
+          values.transformationSupport
+      ),
+      Boolean(
+        values.accurateInformation &&
+          values.credentialReview &&
+          values.providerStandards &&
+          values.approvalNotAutomatic &&
+          values.contactConsent &&
+          values.privacyNoticeAcknowledged
+      ),
+    ],
+    [coverLetter, resume, values]
+  );
+  const completedStepCount = stepCompletion.filter(Boolean).length;
+  const completionProgress = Math.round((completedStepCount / steps.length) * 100);
 
   const update = <K extends keyof ProviderApplicationValues>(
     key: K,
@@ -210,7 +256,8 @@ const ProviderApplicationPage: React.FC<ProviderApplicationPageProps> = ({
         values.credentialReview &&
         values.providerStandards &&
         values.approvalNotAutomatic &&
-        values.contactConsent
+        values.contactConsent &&
+        values.privacyNoticeAcknowledged
       )
     ) {
       return 'All integrity and consent acknowledgments are required.';
@@ -233,6 +280,7 @@ const ProviderApplicationPage: React.FC<ProviderApplicationPageProps> = ({
     Object.entries(values).forEach(([key, value]) => {
       formData.append(key, String(value));
     });
+    formData.append('privacyNoticeVersion', PROVIDER_PRIVACY_NOTICE_VERSION);
     if (resume) formData.append('resume', resume);
     if (coverLetter) formData.append('coverLetter', coverLetter);
     return formData;
@@ -311,56 +359,70 @@ const ProviderApplicationPage: React.FC<ProviderApplicationPageProps> = ({
           Provider Access
         </button>
 
-        <div className="mb-8 grid gap-6 lg:grid-cols-[0.85fr_1.15fr]">
-          <div className="glass-panel rounded-3xl border border-amber-200/20 bg-amber-400/[0.04] p-6 sm:p-8">
-            <div className="mb-5 flex h-14 w-14 items-center justify-center rounded-2xl border border-amber-200/20 bg-amber-400/10 text-amber-100">
-              <FileText className="h-6 w-6" />
+        <div className="mb-8 space-y-5">
+          <div className="glass-panel rounded-3xl border border-amber-200/20 bg-amber-400/[0.04] p-5 sm:p-6 lg:p-7">
+            <div className="flex flex-col gap-5 lg:flex-row lg:items-end lg:justify-between">
+              <div className="min-w-0">
+                <div className="mb-4 flex h-12 w-12 items-center justify-center rounded-2xl border border-amber-200/20 bg-amber-400/10 text-amber-100">
+                  <FileText className="h-5 w-5" />
+                </div>
+                <p className="text-[10px] font-black uppercase tracking-[0.35em] text-amber-100/60">
+                  New Provider Applicant
+                </p>
+                <h1 className="mt-3 text-3xl font-black uppercase leading-tight tracking-tight sm:text-5xl">
+                  Apply to Join Conscious Network Hub
+                </h1>
+              </div>
+              <p className="max-w-xl text-sm leading-7 text-slate-300">
+                Submit credentials and materials, then enter a restricted review path. Full provider
+                tools remain locked until approval and native CNH provider sign-in.
+              </p>
             </div>
-            <p className="text-[10px] font-black uppercase tracking-[0.35em] text-amber-100/60">
-              New Provider Applicant
-            </p>
-            <h1 className="mt-3 text-3xl font-black uppercase leading-tight tracking-tight sm:text-5xl">
-              Apply to Join Conscious Network Hub
-            </h1>
-            <p className="mt-4 text-sm leading-7 text-slate-300">
-              Create your applicant account, submit credentials and materials, and enter a
-              restricted review path. Full provider tools remain locked until approval and native
-              CNH provider sign-in.
-            </p>
           </div>
 
-          <div className="glass-panel rounded-3xl border border-white/10 bg-white/[0.035] p-5 sm:p-6">
-            <div className="mb-5 flex items-center justify-between gap-4">
+          <div className="glass-panel rounded-2xl border border-white/10 bg-white/[0.03] p-4 sm:p-5">
+            <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
               <div>
                 <p className="text-[10px] font-black uppercase tracking-[0.3em] text-slate-400">
-                  Step {step + 1} of {steps.length}
+                  Application Update
                 </p>
-                <h2 className="mt-1 text-xl font-black uppercase tracking-tight text-white">
-                  {steps[step]}
+                <h2 className="mt-1 text-lg font-black uppercase tracking-tight text-white sm:text-xl">
+                  Step {step + 1}: {steps[step]}
                 </h2>
+                <p className="mt-1 text-xs uppercase tracking-wider text-slate-500">
+                  {completedStepCount} of {steps.length} pages complete
+                </p>
               </div>
-              <ShieldCheck className="h-6 w-6 text-amber-100" />
+              <div className="flex min-w-0 items-center gap-3 text-amber-100">
+                <ShieldCheck className="h-5 w-5 shrink-0" />
+                <span className="text-[10px] font-black uppercase tracking-widest">
+                  Account progress updates live
+                </span>
+              </div>
             </div>
-            <div className="h-2 overflow-hidden rounded-full bg-white/10">
-              <div className="h-full rounded-full bg-amber-300 transition-all" style={{ width: `${progress}%` }} />
+            <div className="mt-4 h-2 overflow-hidden rounded-full bg-white/10">
+              <div className="h-full rounded-full bg-amber-300 transition-all" style={{ width: `${completionProgress}%` }} />
             </div>
-            <div className="mt-4 grid grid-cols-3 gap-2 sm:grid-cols-6">
-              {steps.map((name, index) => (
-                <button
-                  key={name}
-                  type="button"
-                  onClick={() => setStep(index)}
-                  className={`rounded-xl px-2 py-2 text-[10px] font-black uppercase transition ${
-                    index === step
-                      ? 'bg-amber-300 text-slate-950'
-                      : index < step
-                        ? 'bg-emerald-400/15 text-emerald-100'
-                        : 'bg-white/5 text-slate-500'
-                  }`}
-                >
-                  {name}
-                </button>
-              ))}
+            <div className="mt-4 overflow-x-auto pb-1 custom-scrollbar scrollable-x">
+              <div className="grid min-w-[36rem] grid-cols-6 gap-2">
+                {steps.map((name, index) => (
+                  <button
+                    key={name}
+                    type="button"
+                    onClick={() => setStep(index)}
+                    className={`flex min-h-10 items-center justify-center gap-1.5 rounded-xl px-2 py-2 text-[10px] font-black uppercase transition ${
+                      index === step
+                        ? 'bg-amber-300 text-slate-950'
+                        : stepCompletion[index]
+                          ? 'bg-emerald-400/15 text-emerald-100'
+                          : 'bg-white/5 text-slate-500'
+                    }`}
+                  >
+                    {stepCompletion[index] && <CheckCircle2 className="h-3 w-3 shrink-0" />}
+                    <span className="truncate">{name}</span>
+                  </button>
+                ))}
+              </div>
             </div>
           </div>
         </div>
@@ -497,6 +559,10 @@ const ProviderApplicationPage: React.FC<ProviderApplicationPageProps> = ({
                 ['providerStandards', 'I agree to CNH provider standards.'],
                 ['approvalNotAutomatic', 'I acknowledge that approval is not automatic.'],
                 ['contactConsent', 'I consent to be contacted for a discovery/interview call.'],
+                [
+                  'privacyNoticeAcknowledged',
+                  'I acknowledge the international data protection and privacy notice.',
+                ],
               ].map(([key, label]) => (
                 <label key={key} className="flex gap-3 rounded-2xl border border-white/10 bg-white/[0.04] p-4 text-sm leading-6 text-slate-200">
                   <input
@@ -516,6 +582,36 @@ const ProviderApplicationPage: React.FC<ProviderApplicationPageProps> = ({
               {error}
             </p>
           )}
+
+          <div className="mt-8 rounded-2xl border border-cyan-200/20 bg-cyan-400/[0.06] p-4 text-xs leading-6 text-cyan-50 sm:p-5 sm:text-sm">
+            <p className="text-[10px] font-black uppercase tracking-[0.28em] text-cyan-100/75">
+              International Data Protection & Privacy Notice
+            </p>
+            <p className="mt-3">
+              {PROVIDER_PRIVACY_NOTICE_TEXT}{' '}
+              <a
+                href={privacyPolicyUrl}
+                target="_blank"
+                rel="noreferrer"
+                className="font-bold text-white underline decoration-cyan-200/50 underline-offset-4 transition hover:text-cyan-100"
+              >
+                Privacy Policy
+              </a>{' '}
+              and{' '}
+              <a
+                href={termsOfServiceUrl}
+                target="_blank"
+                rel="noreferrer"
+                className="font-bold text-white underline decoration-cyan-200/50 underline-offset-4 transition hover:text-cyan-100"
+              >
+                Terms of Service
+              </a>
+              .
+            </p>
+            <p className="mt-3 text-[10px] uppercase tracking-widest text-cyan-100/55">
+              Notice version: {PROVIDER_PRIVACY_NOTICE_VERSION}
+            </p>
+          </div>
 
           <div className="mt-8 flex flex-col justify-between gap-3 sm:flex-row">
             <button
