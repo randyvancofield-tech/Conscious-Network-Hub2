@@ -86,11 +86,23 @@ export interface MeetingSessionInvite {
 
 export interface MeetingSessionSummary {
   id: string;
+  routeKey?: string;
   title: string;
+  description?: string;
+  focusArea?: string;
   mode: MeetingSessionMode;
   status: MeetingSessionStatus;
   providerDid: string;
+  providerUserId?: string | null;
+  providerDisplayName?: string;
   maxViewers: number;
+  publicStream?: boolean;
+  scheduledAtMs?: number;
+  internalRoomPath?: string;
+  internalRoomUrl?: string | null;
+  standardRoomPath?: string;
+  immersiveRoomPath?: string;
+  vodPath?: string | null;
   participants: MeetingSessionParticipant[];
   invitedMembers: MeetingSessionInvite[];
   createdAtMs: number;
@@ -446,7 +458,15 @@ class BackendAPIService {
 
   async createProviderMeetingSession(
     providerToken: string,
-    input: { title: string; mode: MeetingSessionMode; maxViewers: number }
+    input: {
+      title: string;
+      mode: MeetingSessionMode;
+      maxViewers: number;
+      description?: string;
+      focusArea?: string;
+      scheduledAtMs?: number;
+      publicStream?: boolean;
+    }
   ): Promise<MeetingSessionSummary | null> {
     const token = String(providerToken || '').trim();
     if (!token) return null;
@@ -460,6 +480,10 @@ class BackendAPIService {
           title: input.title,
           mode: input.mode,
           maxViewers: input.maxViewers,
+          description: input.description || undefined,
+          focusArea: input.focusArea || undefined,
+          scheduledAtMs: input.scheduledAtMs || undefined,
+          publicStream: input.publicStream ?? true,
         },
       });
       if (!data?.session) return null;
@@ -569,6 +593,38 @@ class BackendAPIService {
       return data.sessions as MeetingSessionSummary[];
     } catch {
       return [];
+    }
+  }
+
+  async listUpcomingMeetingSessions(): Promise<MeetingSessionSummary[]> {
+    try {
+      const data = await api<any>('/meeting/user/sessions/upcoming', { method: 'GET' });
+      if (!data || !Array.isArray(data.sessions)) return [];
+      return data.sessions as MeetingSessionSummary[];
+    } catch {
+      return [];
+    }
+  }
+
+  async listArchivedMeetingSessions(): Promise<MeetingSessionSummary[]> {
+    try {
+      const data = await api<any>('/meeting/user/sessions/archive', { method: 'GET' });
+      if (!data || !Array.isArray(data.sessions)) return [];
+      return data.sessions as MeetingSessionSummary[];
+    } catch {
+      return [];
+    }
+  }
+
+  async getMeetingSession(sessionId: string): Promise<MeetingSessionSummary | null> {
+    const id = String(sessionId || '').trim();
+    if (!id) return null;
+    try {
+      const data = await api<any>(`/meeting/user/sessions/${encodeURIComponent(id)}`, { method: 'GET' });
+      if (!data?.session) return null;
+      return data.session as MeetingSessionSummary;
+    } catch {
+      return null;
     }
   }
 
@@ -947,7 +1003,15 @@ export async function listProviderMeetingSessions(
 
 export async function createProviderMeetingSession(
   providerToken: string,
-  input: { title: string; mode: MeetingSessionMode; maxViewers: number }
+  input: {
+    title: string;
+    mode: MeetingSessionMode;
+    maxViewers: number;
+    description?: string;
+    focusArea?: string;
+    scheduledAtMs?: number;
+    publicStream?: boolean;
+  }
 ): Promise<MeetingSessionSummary | null> {
   return backendAPI.createProviderMeetingSession(providerToken, input);
 }
@@ -984,6 +1048,20 @@ export async function createProviderMeetingExternalLink(
 
 export async function listJoinableMeetingSessions(): Promise<MeetingSessionSummary[]> {
   return backendAPI.listJoinableMeetingSessions();
+}
+
+export async function listUpcomingMeetingSessions(): Promise<MeetingSessionSummary[]> {
+  return backendAPI.listUpcomingMeetingSessions();
+}
+
+export async function listArchivedMeetingSessions(): Promise<MeetingSessionSummary[]> {
+  return backendAPI.listArchivedMeetingSessions();
+}
+
+export async function getMeetingSession(
+  sessionId: string
+): Promise<MeetingSessionSummary | null> {
+  return backendAPI.getMeetingSession(sessionId);
 }
 
 export async function joinMeetingSession(

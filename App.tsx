@@ -8,8 +8,9 @@ import ProvidersMarket from './components/ProvidersMarket';
 import KnowledgePathways from './components/KnowledgePathways';
 import CommunityMembers from './components/CommunityMembers';
 import SocialLearningHub from './components/SocialLearningHub';
-import ConsciousMeetings from './components/ConsciousMeetings';
-import MeetingsPage from './components/MeetingsPage';
+import ConsciousMeetingsUpcomingPage from './components/ConsciousMeetingsUpcomingPage';
+import ConsciousMeetingPortalPage from './components/ConsciousMeetingPortalPage';
+import ConsciousMeetingRoomPage from './components/ConsciousMeetingRoomPage';
 import MembershipPage from './components/MembershipPage';
 import NotFoundPage from './components/NotFoundPage';
 import MusicBox from './components/MusicBox';
@@ -154,9 +155,13 @@ const routePathForView = (view: AppView, params: Record<string, string> = {}): s
     case AppView.COMMUNITY:
       return '/community';
     case AppView.CONSCIOUS_MEETINGS:
-      return '/meetings';
+      return '/conscious-meetings';
+    case AppView.CONSCIOUS_MEETINGS_UPCOMING:
+      return '/conscious-meetings/upcoming';
+    case AppView.CONSCIOUS_MEETINGS_PORTAL:
+      return '/conscious-meetings/portal';
     case AppView.MEETING_DETAIL:
-      return `/meetings/${encodeURIComponent(params.id || '')}`;
+      return `/conscious-meetings/session/${encodeURIComponent(params.id || '')}`;
     case AppView.MY_COURSES:
       return '/my-courses';
     case AppView.KNOWLEDGE_PATHWAYS:
@@ -203,7 +208,7 @@ const resolveRoute = (pathname: string, search = ''): RouteState => {
   const params = new URLSearchParams(search);
 
   if (params.get('externalMeetingInvite')) {
-    return { view: AppView.CONSCIOUS_MEETINGS, params: {}, path };
+    return { view: AppView.CONSCIOUS_MEETINGS_PORTAL, params: {}, path };
   }
 
   const staticRoutes: Record<string, AppView> = {
@@ -228,6 +233,11 @@ const resolveRoute = (pathname: string, search = ''): RouteState => {
     '/social-learning': AppView.CONSCIOUS_SOCIAL_LEARNING,
     '/community': AppView.COMMUNITY,
     '/meetings': AppView.CONSCIOUS_MEETINGS,
+    '/conscious-meetings': AppView.CONSCIOUS_MEETINGS,
+    '/meetings/upcoming': AppView.CONSCIOUS_MEETINGS_UPCOMING,
+    '/conscious-meetings/upcoming': AppView.CONSCIOUS_MEETINGS_UPCOMING,
+    '/meetings/portal': AppView.CONSCIOUS_MEETINGS_PORTAL,
+    '/conscious-meetings/portal': AppView.CONSCIOUS_MEETINGS_PORTAL,
     '/my-courses': AppView.MY_COURSES,
     '/courses': AppView.KNOWLEDGE_PATHWAYS,
     '/providers': AppView.PROVIDERS,
@@ -264,6 +274,9 @@ const resolveRoute = (pathname: string, search = ''): RouteState => {
   const segments = path.split('/').filter(Boolean);
   if (segments.length === 2 && segments[0] === 'meetings') {
     return { view: AppView.MEETING_DETAIL, params: { id: decodeURIComponent(segments[1]) }, path };
+  }
+  if (segments.length === 3 && segments[0] === 'conscious-meetings' && (segments[1] === 'session' || segments[1] === 'live')) {
+    return { view: AppView.MEETING_DETAIL, params: { id: decodeURIComponent(segments[2]) }, path };
   }
   if (segments.length === 2 && segments[0] === 'courses') {
     return { view: AppView.COURSE_DETAIL, params: { id: decodeURIComponent(segments[1]) }, path };
@@ -311,6 +324,8 @@ const isGuestAllowedView = (view: AppView): boolean =>
     AppView.COMMUNITY,
     AppView.CONSCIOUS_SOCIAL_LEARNING,
     AppView.CONSCIOUS_MEETINGS,
+    AppView.CONSCIOUS_MEETINGS_UPCOMING,
+    AppView.CONSCIOUS_MEETINGS_PORTAL,
     AppView.MEETING_DETAIL,
     AppView.KNOWLEDGE_PATHWAYS,
     AppView.COURSE_DETAIL,
@@ -337,6 +352,8 @@ const isNoTierSignedInAllowedView = (view: AppView): boolean =>
     AppView.CONSCIOUS_CAREERS,
     AppView.GRANT_APPLICATION,
     AppView.ENTREPRENEURSHIP_SUPPORT,
+    AppView.CONSCIOUS_MEETINGS_UPCOMING,
+    AppView.CONSCIOUS_MEETINGS_PORTAL,
     AppView.MEMBERSHIP,
     AppView.PRIVACY_POLICY,
     AppView.TERMS_OF_SERVICE,
@@ -382,6 +399,14 @@ const App: React.FC = () => {
       AppView.CONSCIOUS_CAREERS,
       AppView.GRANT_APPLICATION,
       AppView.ENTREPRENEURSHIP_SUPPORT,
+    ].includes(initialRoute.view)
+  );
+  const [isMeetingsMenuOpen, setMeetingsMenuOpen] = useState(
+    [
+      AppView.CONSCIOUS_MEETINGS,
+      AppView.CONSCIOUS_MEETINGS_UPCOMING,
+      AppView.CONSCIOUS_MEETINGS_PORTAL,
+      AppView.MEETING_DETAIL,
     ].includes(initialRoute.view)
   );
   const [user, setUser] = useState<UserProfile | null>(() => getCachedAuthUser());
@@ -2416,20 +2441,27 @@ const App: React.FC = () => {
       case AppView.COMMUNITY:
         return <CommunityMembers />;
       case AppView.CONSCIOUS_MEETINGS:
-        return hasProviderRole(user) ? (
-          <ConsciousMeetings user={user} />
-        ) : (
-          <MeetingsPage
+      case AppView.CONSCIOUS_MEETINGS_UPCOMING:
+        return (
+          <ConsciousMeetingsUpcomingPage
+            user={user}
             onOpenMeeting={(id) => setCurrentView(AppView.MEETING_DETAIL, { id })}
-            onBackToList={() => setCurrentView(AppView.CONSCIOUS_MEETINGS)}
+            onOpenPortal={() => setCurrentView(AppView.CONSCIOUS_MEETINGS_PORTAL)}
+          />
+        );
+      case AppView.CONSCIOUS_MEETINGS_PORTAL:
+        return (
+          <ConsciousMeetingPortalPage
+            user={user}
+            onOpenUpcoming={() => setCurrentView(AppView.CONSCIOUS_MEETINGS_UPCOMING)}
           />
         );
       case AppView.MEETING_DETAIL:
         return (
-          <MeetingsPage
-            meetingId={routeParams.id}
-            onOpenMeeting={(id) => setCurrentView(AppView.MEETING_DETAIL, { id })}
-            onBackToList={() => setCurrentView(AppView.CONSCIOUS_MEETINGS)}
+          <ConsciousMeetingRoomPage
+            sessionId={routeParams.id}
+            user={user}
+            onBack={() => setCurrentView(AppView.CONSCIOUS_MEETINGS_UPCOMING)}
           />
         );
       case AppView.MY_CONSCIOUS_IDENTITY: 
@@ -3178,7 +3210,11 @@ const App: React.FC = () => {
                         ? AppView.PROVIDERS
                         : currentView === AppView.COURSE_DETAIL
                           ? AppView.KNOWLEDGE_PATHWAYS
-                          : currentView === AppView.MEETING_DETAIL
+                          : [
+                              AppView.CONSCIOUS_MEETINGS_UPCOMING,
+                              AppView.CONSCIOUS_MEETINGS_PORTAL,
+                              AppView.MEETING_DETAIL,
+                            ].includes(currentView)
                             ? AppView.CONSCIOUS_MEETINGS
                             : [
                                 AppView.GRANT_APPLICATION,
@@ -3187,6 +3223,75 @@ const App: React.FC = () => {
                               ? AppView.CONSCIOUS_CAREERS
                             : currentView;
                     const isActive = parentView === view;
+                    if (item.id === 'meetings') {
+                      const meetingsSubItems = [
+                        {
+                          id: 'upcoming-sessions',
+                          label: 'Upcoming Sessions',
+                          view: AppView.CONSCIOUS_MEETINGS_UPCOMING,
+                          badge: 'Live',
+                        },
+                        {
+                          id: 'meeting-portal',
+                          label: 'Meeting Portal',
+                          view: AppView.CONSCIOUS_MEETINGS_PORTAL,
+                          badge: 'Portal',
+                        },
+                      ];
+
+                      return (
+                        <div key={item.id} className="space-y-2">
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setMeetingsMenuOpen((open) => !open);
+                              setCurrentView(AppView.CONSCIOUS_MEETINGS_UPCOMING);
+                            }}
+                            aria-expanded={isMeetingsMenuOpen}
+                            className={`w-full flex items-center gap-5 px-6 py-4 rounded-2xl transition-all group ${isActive ? 'bg-blue-600/15 text-blue-400 border border-blue-500/20 shadow-lg' : 'text-slate-500 hover:bg-white/5 hover:text-white'}`}
+                          >
+                            <span className={`${isActive ? 'text-blue-400' : 'text-slate-600 group-hover:text-blue-400'} transition-colors`}>{item.icon}</span>
+                            <span className="min-w-0 flex-1 text-left text-[10px] font-black tracking-[0.3em] uppercase">{item.label}</span>
+                            <ChevronRight className={`h-4 w-4 transition-transform ${isMeetingsMenuOpen ? 'rotate-90 text-blue-300' : 'text-slate-600'}`} />
+                          </button>
+
+                          {isMeetingsMenuOpen && (
+                            <div className="ml-8 space-y-2 border-l border-white/10 pl-4">
+                              {meetingsSubItems.map((subItem) => {
+                                const isSubActive = currentView === subItem.view;
+                                return (
+                                  <button
+                                    key={subItem.id}
+                                    type="button"
+                                    onClick={() => {
+                                      setCurrentView(subItem.view);
+                                      setMeetingsMenuOpen(true);
+                                      closeSidebarOnMobile();
+                                    }}
+                                    className={`w-full rounded-xl border px-4 py-3 text-left transition-all ${
+                                      isSubActive
+                                        ? 'border-cyan-300/30 bg-cyan-400/10 text-white'
+                                        : 'border-white/5 bg-white/[0.03] text-slate-500 hover:bg-white/5 hover:text-white'
+                                    }`}
+                                  >
+                                    <span className="flex items-center justify-between gap-3">
+                                      <span className="text-[9px] font-black uppercase tracking-[0.22em]">{subItem.label}</span>
+                                      <span className={`rounded-full px-2 py-1 text-[7px] font-black uppercase tracking-widest ${
+                                        subItem.badge === 'Live'
+                                          ? 'bg-emerald-400/10 text-emerald-200'
+                                          : 'bg-blue-400/10 text-blue-200'
+                                      }`}>
+                                        {subItem.badge}
+                                      </span>
+                                    </span>
+                                  </button>
+                                );
+                              })}
+                            </div>
+                          )}
+                        </div>
+                      );
+                    }
                     if (item.id === 'careers') {
                       const careersSubItems = [
                         {

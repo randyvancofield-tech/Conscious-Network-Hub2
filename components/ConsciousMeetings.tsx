@@ -68,6 +68,19 @@ interface InviteGroupTemplate {
 }
 
 type MeetingNotes = NonNullable<Meeting['notes']>;
+
+const toLocalDateInputValue = (date: Date): string => {
+  const year = date.getFullYear();
+  const month = `${date.getMonth() + 1}`.padStart(2, '0');
+  const day = `${date.getDate()}`.padStart(2, '0');
+  return `${year}-${month}-${day}`;
+};
+
+const toLocalTimeInputValue = (date: Date): string => {
+  const hours = `${date.getHours()}`.padStart(2, '0');
+  const minutes = `${date.getMinutes()}`.padStart(2, '0');
+  return `${hours}:${minutes}`;
+};
 type SynthesisAgentMode = 'meeting-bot' | 'action-agent' | 'security-agent';
 
 interface MeetingBackgroundPreset {
@@ -243,6 +256,16 @@ const ConsciousMeetings: React.FC<ConsciousMeetingsProps> = ({ user }) => {
   const [joinableMeetingSessions, setJoinableMeetingSessions] = useState<MeetingSessionSummary[]>([]);
   const [selectedHostedSessionId, setSelectedHostedSessionId] = useState('');
   const [hostSessionTitleInput, setHostSessionTitleInput] = useState('Provider-Led Session');
+  const [hostSessionDescriptionInput, setHostSessionDescriptionInput] = useState(
+    'A live Conscious Network Hub session for shared growth, grounded reflection, and practical next steps.'
+  );
+  const [hostSessionFocusAreaInput, setHostSessionFocusAreaInput] = useState('Mental Wellness');
+  const [hostSessionDateInput, setHostSessionDateInput] = useState(() => toLocalDateInputValue(new Date()));
+  const [hostSessionTimeInput, setHostSessionTimeInput] = useState(() => {
+    const date = new Date();
+    date.setMinutes(date.getMinutes() + 30);
+    return toLocalTimeInputValue(date);
+  });
   const [hostSessionMode, setHostSessionMode] = useState<MeetingSessionMode>('virtual');
   const [hostSessionMaxViewersInput, setHostSessionMaxViewersInput] = useState(120);
   const [providerGroupNameInput, setProviderGroupNameInput] = useState('');
@@ -673,10 +696,15 @@ const ConsciousMeetings: React.FC<ConsciousMeetingsProps> = ({ user }) => {
     setIsMeetingOpsBusy(true);
     setMeetingOpsStatus('Creating provider-hosted session...');
     try {
+      const scheduledAtMs = Date.parse(`${hostSessionDateInput}T${hostSessionTimeInput || '12:00'}`);
       const created = await createProviderMeetingSession(token, {
         title: hostSessionTitleInput,
         mode: hostSessionMode,
         maxViewers: hostSessionMaxViewersInput,
+        description: hostSessionDescriptionInput,
+        focusArea: hostSessionFocusAreaInput,
+        scheduledAtMs: Number.isFinite(scheduledAtMs) ? scheduledAtMs : Date.now(),
+        publicStream: true,
       });
       if (!created) {
         setMeetingOpsStatus('Unable to create provider session.');
@@ -684,7 +712,7 @@ const ConsciousMeetings: React.FC<ConsciousMeetingsProps> = ({ user }) => {
       }
       await refreshProviderMeetingData(token);
       setSelectedHostedSessionId(created.id);
-      setMeetingOpsStatus(`Session created: ${created.title}`);
+      setMeetingOpsStatus(`Session created and published to Upcoming Sessions: ${created.title}`);
     } finally {
       setIsMeetingOpsBusy(false);
     }
@@ -3022,18 +3050,37 @@ const ConsciousMeetings: React.FC<ConsciousMeetingsProps> = ({ user }) => {
 
               {providerSessionToken.trim() && (
                 <div className="space-y-5 border-t border-white/10 pt-5">
-                  <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
+                  <div className="grid grid-cols-1 md:grid-cols-6 gap-3">
                     <input
                       type="text"
                       value={hostSessionTitleInput}
                       onChange={(event) => setHostSessionTitleInput(event.target.value)}
                       placeholder="Session title"
+                      className="md:col-span-3 w-full px-4 py-3 bg-white/5 border border-white/10 rounded-xl text-xs text-white focus:outline-none focus:ring-2 focus:ring-blue-500/30 transition-all font-medium"
+                    />
+                    <input
+                      type="text"
+                      value={hostSessionFocusAreaInput}
+                      onChange={(event) => setHostSessionFocusAreaInput(event.target.value)}
+                      placeholder="Professional focus area"
+                      className="md:col-span-3 w-full px-4 py-3 bg-white/5 border border-white/10 rounded-xl text-xs text-white focus:outline-none focus:ring-2 focus:ring-blue-500/30 transition-all font-medium"
+                    />
+                    <input
+                      type="date"
+                      value={hostSessionDateInput}
+                      onChange={(event) => setHostSessionDateInput(event.target.value)}
+                      className="md:col-span-2 w-full px-4 py-3 bg-white/5 border border-white/10 rounded-xl text-xs text-white focus:outline-none focus:ring-2 focus:ring-blue-500/30 transition-all font-medium"
+                    />
+                    <input
+                      type="time"
+                      value={hostSessionTimeInput}
+                      onChange={(event) => setHostSessionTimeInput(event.target.value)}
                       className="md:col-span-2 w-full px-4 py-3 bg-white/5 border border-white/10 rounded-xl text-xs text-white focus:outline-none focus:ring-2 focus:ring-blue-500/30 transition-all font-medium"
                     />
                     <select
                       value={hostSessionMode}
                       onChange={(event) => setHostSessionMode(event.target.value as MeetingSessionMode)}
-                      className="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-xl text-xs text-white focus:outline-none focus:ring-2 focus:ring-blue-500/30 transition-all font-medium"
+                      className="md:col-span-1 w-full px-4 py-3 bg-white/5 border border-white/10 rounded-xl text-xs text-white focus:outline-none focus:ring-2 focus:ring-blue-500/30 transition-all font-medium"
                     >
                       <option value="virtual">Virtual</option>
                       <option value="solo">Solo</option>
@@ -3046,7 +3093,13 @@ const ConsciousMeetings: React.FC<ConsciousMeetingsProps> = ({ user }) => {
                       value={hostSessionMaxViewersInput}
                       onChange={(event) => setHostSessionMaxViewersInput(Number(event.target.value || 120))}
                       placeholder="Max viewers"
-                      className="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-xl text-xs text-white focus:outline-none focus:ring-2 focus:ring-blue-500/30 transition-all font-medium"
+                      className="md:col-span-1 w-full px-4 py-3 bg-white/5 border border-white/10 rounded-xl text-xs text-white focus:outline-none focus:ring-2 focus:ring-blue-500/30 transition-all font-medium"
+                    />
+                    <textarea
+                      value={hostSessionDescriptionInput}
+                      onChange={(event) => setHostSessionDescriptionInput(event.target.value)}
+                      placeholder="Session description"
+                      className="md:col-span-6 w-full min-h-[96px] px-4 py-3 bg-white/5 border border-white/10 rounded-xl text-xs text-white focus:outline-none focus:ring-2 focus:ring-blue-500/30 transition-all font-medium"
                     />
                   </div>
 
@@ -3089,7 +3142,7 @@ const ConsciousMeetings: React.FC<ConsciousMeetingsProps> = ({ user }) => {
                     <option value="">Select hosted session</option>
                     {hostedMeetingSessions.map((session) => (
                       <option key={session.id} value={session.id}>
-                        {session.title} [{session.mode}] ({session.status}) - {session.participants.length}/{session.maxViewers}
+                        {session.title} [{session.mode}] ({session.status}) - {new Date(session.scheduledAtMs || session.createdAtMs).toLocaleString()} - {session.participants.length}/{session.maxViewers}
                       </option>
                     ))}
                   </select>
