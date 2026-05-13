@@ -6,6 +6,13 @@ import {
 } from 'lucide-react';
 import { getAuthToken } from '../services/sessionService';
 import { api } from '../services/apiClient';
+import {
+  getProfileAvatarMedia,
+  getProfileHeroMedia,
+  isVideoMediaAsset,
+  normalizeMediaAsset,
+  type NormalizedMediaAsset,
+} from '../services/mediaAssets';
 import { PROVIDER_SURFACE_RECORDS } from '../services/platformData';
 import { ActionButton, EmptyState, PageHeader, PageShell, SurfacePanel } from './ui/PlatformPrimitives';
 
@@ -22,6 +29,8 @@ interface ProviderProfile {
   services?: string[];
   verificationStatus?: 'review_pending' | 'verified';
   accessMode?: 'request' | 'invite_only';
+  imageMedia: NormalizedMediaAsset;
+  heroMedia: NormalizedMediaAsset;
 }
 
 interface ProvidersMarketProps {
@@ -33,6 +42,10 @@ interface ProvidersMarketProps {
 const normalizeProvider = (rawProvider: any): ProviderProfile => {
   const interests = Array.isArray(rawProvider?.interests) ? rawProvider.interests.filter(Boolean) : [];
   const category = interests[0] ? String(interests[0]) : 'Verified Provider';
+  const fallbackImage = 'https://images.unsplash.com/photo-1497366754035-f200968a6e72?auto=format&fit=crop&q=80&w=400';
+  const avatarMedia = getProfileAvatarMedia(rawProvider);
+  const heroMedia = getProfileHeroMedia(rawProvider);
+  const imageMedia = avatarMedia.url ? avatarMedia : heroMedia.url ? heroMedia : normalizeMediaAsset({ url: fallbackImage });
 
   return {
     id: String(rawProvider?.id || ''),
@@ -43,11 +56,35 @@ const normalizeProvider = (rawProvider: any): ProviderProfile => {
     bio: String(rawProvider?.bio || 'This provider has been verified through the CNH review process and has not published a full profile yet.'),
     rating: 0,
     experience: 'Verified',
-    image: String(rawProvider?.avatarUrl || rawProvider?.bannerUrl || 'https://images.unsplash.com/photo-1497366754035-f200968a6e72?auto=format&fit=crop&q=80&w=400'),
+    image: imageMedia.url || fallbackImage,
+    imageMedia,
+    heroMedia: heroMedia.url ? heroMedia : imageMedia,
     services: Array.isArray(rawProvider?.services) ? rawProvider.services.map(String) : [],
     verificationStatus: 'verified',
     accessMode: 'request',
   };
+};
+
+const renderProviderMedia = (
+  media: NormalizedMediaAsset,
+  alt: string,
+  className: string,
+  controls = false
+) => {
+  if (isVideoMediaAsset(media)) {
+    return (
+      <video
+        src={media.url || ''}
+        className={className}
+        muted={!controls}
+        loop
+        autoPlay={!controls}
+        controls={controls}
+        playsInline
+      />
+    );
+  }
+  return <img src={media.url || ''} alt={alt} className={className} />;
 };
 
 const ProvidersMarket: React.FC<ProvidersMarketProps> = ({ providerId, onOpenProvider, onBackToList }) => {
@@ -61,7 +98,11 @@ const ProvidersMarket: React.FC<ProvidersMarketProps> = ({ providerId, onOpenPro
   const [connectionNote, setConnectionNote] = useState('');
   const [connectionStatus, setConnectionStatus] = useState('');
 
-  const providerRecords: ProviderProfile[] = providers.length > 0 ? providers : PROVIDER_SURFACE_RECORDS;
+  const fallbackProviderRecords = useMemo(
+    () => PROVIDER_SURFACE_RECORDS.map((provider) => normalizeProvider(provider)),
+    []
+  );
+  const providerRecords: ProviderProfile[] = providers.length > 0 ? providers : fallbackProviderRecords;
 
   const categories = useMemo(
     () => ['All', ...Array.from(new Set(providerRecords.map((provider) => provider.category))).sort()],
@@ -189,7 +230,7 @@ const ProvidersMarket: React.FC<ProvidersMarketProps> = ({ providerId, onOpenPro
 
         <div className="grid grid-cols-1 gap-6 lg:grid-cols-[1.1fr_0.9fr]">
           <SurfacePanel className="overflow-hidden p-0">
-            <img src={routeProvider.image} alt={routeProvider.name} className="h-72 w-full object-cover" />
+            {renderProviderMedia(routeProvider.heroMedia, routeProvider.name, 'h-72 w-full object-cover', true)}
             <div className="space-y-5 p-6 sm:p-8">
               <h2 className="text-xl font-black uppercase text-white">Provider Profile</h2>
               <p className="text-sm leading-6 text-slate-400">{routeProvider.bio}</p>
@@ -331,11 +372,11 @@ const ProvidersMarket: React.FC<ProvidersMarketProps> = ({ providerId, onOpenPro
           {filteredProviders.map((provider) => (
             <div key={provider.id} className="glass-panel group rounded-[2.5rem] overflow-hidden flex flex-col border-white/5 hover:border-blue-500/30 transition-all duration-500 hover:-translate-y-2 shadow-2xl">
               <div className="h-48 relative overflow-hidden">
-                <img
-                  src={provider.image}
-                  className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-[3s] ease-out"
-                  alt={provider.name}
-                />
+                {renderProviderMedia(
+                  provider.imageMedia,
+                  provider.name,
+                  'w-full h-full object-cover group-hover:scale-110 transition-transform duration-[3s] ease-out'
+                )}
                 <div className="absolute inset-0 bg-gradient-to-t from-[#05070a] via-transparent to-transparent opacity-60" />
                 <div className="absolute top-4 right-4 flex gap-2">
                   <div className="px-3 py-1 bg-black/60 backdrop-blur-md rounded-full border border-white/10 flex items-center gap-2">
@@ -433,7 +474,7 @@ const ProvidersMarket: React.FC<ProvidersMarketProps> = ({ providerId, onOpenPro
         <div className="fixed inset-0 z-[180] bg-black/85 backdrop-blur-sm p-4 flex items-start sm:items-center justify-center overflow-y-auto custom-scrollbar">
           <div className="glass-panel w-full max-w-3xl my-4 max-h-[calc(100dvh-2rem)] rounded-[2.5rem] border border-white/10 overflow-y-auto custom-scrollbar shadow-2xl animate-in zoom-in duration-300">
             <div className="relative h-64">
-              <img src={selectedProvider.image} alt={selectedProvider.name} className="w-full h-full object-cover" />
+              {renderProviderMedia(selectedProvider.heroMedia, selectedProvider.name, 'w-full h-full object-cover', true)}
               <div className="absolute inset-0 bg-gradient-to-t from-[#05070a] via-black/30 to-transparent" />
               <button
                 onClick={() => setSelectedProvider(null)}

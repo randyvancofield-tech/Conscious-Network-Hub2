@@ -10,6 +10,14 @@ import {
 } from 'lucide-react';
 import { UserProfile } from '../types';
 import { api } from '../services/apiClient';
+import {
+  getProfileAvatarMedia,
+  getProfileBackgroundMedia,
+  getProfileHeroMedia,
+  isVideoMediaAsset,
+  normalizeMediaAsset,
+  type NormalizedMediaAsset,
+} from '../services/mediaAssets';
 
 interface Comment {
   id: string;
@@ -24,6 +32,7 @@ interface NodeContent {
   authorId: string;
   author: string;
   avatar: string;
+  avatarMedia?: NormalizedMediaAsset;
   type: 'text' | 'image' | 'video' | 'file';
   title: string;
   content: string;
@@ -77,25 +86,61 @@ const toRelativeTimestamp = (value: string): string => {
   return `${deltaDays}d ago`;
 };
 
-const isLikelyVideoUrl = (value: string): boolean =>
-  /\.(mp4|webm|mov|m4v|ogg)([?#].*)?$/i.test(String(value || '').trim());
-
 const toDateLabel = (value: string | null | undefined): string => {
   const parsed = new Date(String(value || ''));
   if (Number.isNaN(parsed.getTime())) return 'N/A';
   return parsed.toLocaleDateString();
 };
 
+const defaultAvatarUrl = (seed: string): string =>
+  `https://api.dicebear.com/7.x/avataaars/svg?seed=${encodeURIComponent(seed || 'node')}`;
+
+const renderAvatarMedia = (media: NormalizedMediaAsset, name: string, className: string) => {
+  if (media.url) {
+    if (isVideoMediaAsset(media)) {
+      return (
+        <video
+          src={media.url}
+          className={className}
+          muted
+          loop
+          autoPlay
+          playsInline
+        />
+      );
+    }
+    return <img src={media.url} className={className} alt={name} />;
+  }
+
+  return <img src={defaultAvatarUrl(name)} className={className} alt={name} />;
+};
+
+const renderWideMedia = (media: NormalizedMediaAsset, alt: string, className: string) => {
+  if (!media.url) return null;
+  if (isVideoMediaAsset(media)) {
+    return (
+      <video
+        src={media.url}
+        className={className}
+        controls
+        playsInline
+      />
+    );
+  }
+  return <img src={media.url} alt={alt} className={className} />;
+};
+
 const mapSocialPostToNode = (post: any): NodeContent => {
   const media = Array.isArray(post?.media) ? post.media[0] : null;
   const type = media?.mediaType === 'video' ? 'video' : media?.mediaType === 'file' ? 'file' : media ? 'image' : 'text';
+  const fallbackAvatar = defaultAvatarUrl(String(post?.authorId || 'node'));
+  const authorAvatarMedia = normalizeMediaAsset({ url: post?.authorAvatarUrl }, fallbackAvatar);
   return {
     id: String(post?.id || Date.now()),
     authorId: String(post?.authorId || post?.author?.id || ''),
     author: String(post?.authorName || 'Node'),
-    avatar:
-      String(post?.authorAvatarUrl || '').trim() ||
-      `https://api.dicebear.com/7.x/avataaars/svg?seed=${String(post?.authorId || 'node')}`,
+    avatar: authorAvatarMedia.url || fallbackAvatar,
+    avatarMedia: authorAvatarMedia,
     type,
     title: type === 'text' ? 'Knowledge Node' : `${type.toUpperCase()} Node`,
     content: media?.url || String(post?.text || ''),
@@ -267,11 +312,14 @@ const SocialLearningHub: React.FC<SocialLearningHubProps> = ({ user }) => {
         const mapped = mapSocialPostToNode(data.post);
         setNodes((prev) => [mapped, ...prev.filter((entry) => entry.id !== mapped.id)]);
       } else {
+        const fallbackAvatar = defaultAvatarUrl(user?.id || 'guest');
+        const avatarMedia = user ? getProfileAvatarMedia(user) : normalizeMediaAsset({ url: fallbackAvatar });
         const newNode: NodeContent = {
           id: Date.now().toString(),
           authorId: user?.id || 'guest',
           author: user?.name || 'Guest Node',
-          avatar: user?.avatarUrl || `https://api.dicebear.com/7.x/avataaars/svg?seed=${user?.id || 'guest'}`,
+          avatar: avatarMedia.url || fallbackAvatar,
+          avatarMedia,
           type: selectedFile?.type || 'text',
           title: selectedFile ? `New ${selectedFile.type.toUpperCase()} Node` : 'New Cognitive Node',
           content: selectedFile ? selectedFile.data : newPost,
@@ -772,7 +820,11 @@ const SocialLearningHub: React.FC<SocialLearningHubProps> = ({ user }) => {
                           onClick={() => void openProfileView(node.authorId)}
                           className="flex items-center gap-4 sm:gap-5 text-left group/author"
                         >
-                          <img src={node.avatar} className="w-12 h-12 sm:w-14 sm:h-14 rounded-2xl object-cover ring-4 ring-white/5 shadow-2xl" alt={node.author} />
+                          {renderAvatarMedia(
+                            node.avatarMedia || normalizeMediaAsset({ url: node.avatar }),
+                            node.author,
+                            'w-12 h-12 sm:w-14 sm:h-14 rounded-2xl object-cover ring-4 ring-white/5 shadow-2xl'
+                          )}
                           <div>
                             <h4 className="text-base sm:text-lg font-black text-white uppercase tracking-tighter leading-none group-hover/author:text-blue-300 transition-colors">{node.author}</h4>
                             <p className="text-[9px] sm:text-[10px] text-blue-400/60 font-black uppercase tracking-widest mt-1.5">{node.timestamp}</p>
@@ -928,7 +980,11 @@ const SocialLearningHub: React.FC<SocialLearningHubProps> = ({ user }) => {
                           <div className="space-y-4">
                             {node.comments.map((comment) => (
                               <div key={comment.id} className="flex gap-3 sm:gap-4 p-4 sm:p-5 bg-white/[0.02] border border-white/5 rounded-[1.5rem] sm:rounded-[1.8rem] animate-in fade-in">
-                                <img src={comment.avatar} className="w-8 h-8 sm:w-10 sm:h-10 rounded-xl object-cover ring-2 ring-white/5 shrink-0" alt={comment.author} />
+                                {renderAvatarMedia(
+                                  normalizeMediaAsset({ url: comment.avatar }),
+                                  comment.author,
+                                  'w-8 h-8 sm:w-10 sm:h-10 rounded-xl object-cover ring-2 ring-white/5 shrink-0'
+                                )}
                                 <div className="space-y-1 min-w-0">
                                   <div className="flex items-center gap-3">
                                     <h5 className="text-[10px] sm:text-[11px] font-black text-white uppercase tracking-tighter truncate">{comment.author}</h5>
@@ -1002,37 +1058,26 @@ const SocialLearningHub: React.FC<SocialLearningHubProps> = ({ user }) => {
               </div>
             )}
 
-            {selectedProfileView && !profileViewLoading && (
+            {selectedProfileView && !profileViewLoading && (() => {
+              const heroMedia = getProfileHeroMedia(selectedProfileView.profile);
+              const avatarMedia = getProfileAvatarMedia(selectedProfileView.profile);
+              const backgroundMedia = getProfileBackgroundMedia(selectedProfileView.profile);
+              const shouldShowBackgroundMedia = Boolean(backgroundMedia.url && backgroundMedia.url !== heroMedia.url);
+
+              return (
               <div className="space-y-6">
                 <div className="rounded-[1.5rem] overflow-hidden border border-white/10 bg-white/5">
-                  {selectedProfileView.profile?.bannerUrl || selectedProfileView.profile?.profileMedia?.cover?.url ? (
-                    isLikelyVideoUrl(selectedProfileView.profile?.bannerUrl || selectedProfileView.profile?.profileMedia?.cover?.url) ? (
-                      <video
-                        src={selectedProfileView.profile?.bannerUrl || selectedProfileView.profile?.profileMedia?.cover?.url}
-                        className="w-full h-44 sm:h-56 object-cover"
-                        controls
-                        playsInline
-                      />
-                    ) : (
-                      <img
-                        src={selectedProfileView.profile?.bannerUrl || selectedProfileView.profile?.profileMedia?.cover?.url}
-                        alt={selectedProfileView.profile?.name || 'Node'}
-                        className="w-full h-44 sm:h-56 object-cover"
-                      />
-                    )
+                  {heroMedia.url ? (
+                    renderWideMedia(heroMedia, selectedProfileView.profile?.name || 'Node', 'w-full h-44 sm:h-56 object-cover')
                   ) : (
                     <div className="w-full h-44 sm:h-56 bg-gradient-to-r from-blue-900/40 to-teal-900/20" />
                   )}
                   <div className="p-4 sm:p-6 flex flex-col sm:flex-row sm:items-center gap-4">
-                    <img
-                      src={
-                        selectedProfileView.profile?.avatarUrl ||
-                        selectedProfileView.profile?.profileMedia?.avatar?.url ||
-                        'https://api.dicebear.com/7.x/avataaars/svg?seed=node'
-                      }
-                      alt={selectedProfileView.profile?.name || 'Node'}
-                      className="w-16 h-16 sm:w-20 sm:h-20 rounded-2xl object-cover ring-2 ring-white/10"
-                    />
+                    {renderAvatarMedia(
+                      avatarMedia.url ? avatarMedia : normalizeMediaAsset({ url: defaultAvatarUrl(selectedProfileView.profile?.name || 'node') }),
+                      selectedProfileView.profile?.name || 'Node',
+                      'w-16 h-16 sm:w-20 sm:h-20 rounded-2xl object-cover ring-2 ring-white/10'
+                    )}
                     <div className="min-w-0">
                       <h5 className="text-xl sm:text-2xl font-black text-white tracking-tight break-words">
                         {selectedProfileView.profile?.name || 'Node'}
@@ -1043,6 +1088,12 @@ const SocialLearningHub: React.FC<SocialLearningHubProps> = ({ user }) => {
                     </div>
                   </div>
                 </div>
+
+                {shouldShowBackgroundMedia && (
+                  <div className="rounded-[1.5rem] overflow-hidden border border-white/10 bg-white/5">
+                    {renderWideMedia(backgroundMedia, `${selectedProfileView.profile?.name || 'Node'} background`, 'w-full h-44 sm:h-56 object-cover bg-black')}
+                  </div>
+                )}
 
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                   <div className="p-4 rounded-xl bg-white/5 border border-white/10">
@@ -1110,10 +1161,11 @@ const SocialLearningHub: React.FC<SocialLearningHubProps> = ({ user }) => {
                           {Array.isArray(post.media) && post.media.length > 0 && (
                             <div className="mt-3 grid grid-cols-1 sm:grid-cols-2 gap-3">
                               {post.media.map((entry: any) => {
-                                const mediaUrl = String(entry?.url || '').trim();
+                                const mediaAsset = normalizeMediaAsset(entry, entry?.url);
+                                const mediaUrl = mediaAsset.url;
                                 if (!mediaUrl) return null;
                                 const mediaType = String(entry?.mediaType || '').toLowerCase();
-                                if (mediaType === 'video' || isLikelyVideoUrl(mediaUrl)) {
+                                if (mediaType === 'video' || isVideoMediaAsset(mediaAsset)) {
                                   return (
                                     <video
                                       key={String(entry?.id || mediaUrl)}
@@ -1141,7 +1193,8 @@ const SocialLearningHub: React.FC<SocialLearningHubProps> = ({ user }) => {
                   )}
                 </div>
               </div>
-            )}
+              );
+            })()}
           </div>
         </div>
       )}

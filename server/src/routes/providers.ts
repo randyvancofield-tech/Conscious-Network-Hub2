@@ -4,6 +4,7 @@ import { getPrisma } from '../services/prismaClient';
 import { recordAuditEvent } from '../services/auditTelemetry';
 import { localStore } from '../services/persistenceStore';
 import { isProviderAccessActive } from '../services/providerAccess';
+import { normalizeProfileMedia } from '../services/profileNormalization';
 
 const providersRouter = Router();
 const userRequestsRouter = Router();
@@ -11,22 +12,63 @@ const providerRequestsRouter = Router();
 
 const validRequestStatuses = new Set(['pending', 'accepted', 'scheduled', 'closed']);
 
-const toProviderResponse = (user: any) => ({
+const getPublicBaseUrl = (req: Request): string => {
+  const configured = String(process.env.PUBLIC_BASE_URL || '').trim();
+  if (configured) return configured.replace(/\/+$/, '');
+  const forwardedProto = (req.headers['x-forwarded-proto'] as string | undefined)
+    ?.split(',')[0]
+    ?.trim();
+  const proto = forwardedProto || req.protocol || 'https';
+  const host = req.get('host');
+  return `${proto}://${host}`;
+};
+
+const absolutizeUrl = (req: Request, value: unknown): string | null => {
+  const raw = typeof value === 'string' ? value.trim() : '';
+  if (!raw) return null;
+  if (/^[a-z][a-z0-9+.-]*:/i.test(raw)) return raw;
+  const path = raw.startsWith('/') ? raw : `/${raw}`;
+  return `${getPublicBaseUrl(req)}${path}`;
+};
+
+const absolutizeProfileMedia = (req: Request, user: any) => {
+  const normalized = normalizeProfileMedia(
+    user?.profileMedia,
+    user?.avatarUrl || null,
+    user?.bannerUrl || null
+  );
+  return {
+    avatar: {
+      ...normalized.avatar,
+      url: absolutizeUrl(req, normalized.avatar.url),
+    },
+    cover: {
+      ...normalized.cover,
+      url: absolutizeUrl(req, normalized.cover.url),
+    },
+  };
+};
+
+const toProviderResponse = (req: Request, user: any) => ({
   id: user.id,
   name: user.name || (user.role === 'provider' ? 'Verified Provider' : 'Member'),
   role: user.role,
   handle: user.handle || null,
   bio: user.bio || '',
   location: user.location || '',
-  avatarUrl: user.avatarUrl || '',
-  bannerUrl: user.bannerUrl || '',
+  avatarUrl: absolutizeUrl(req, user.avatarUrl) || '',
+  bannerUrl: absolutizeUrl(req, user.bannerUrl) || '',
+  profileMedia: absolutizeProfileMedia(req, user),
+  profileBackgroundVideo: absolutizeUrl(req, user.profileBackgroundVideo) || '',
   interests: Array.isArray(user.interests) ? user.interests : [],
   websiteUrl: user.websiteUrl || '',
+  twitterUrl: user.twitterUrl || '',
+  githubUrl: user.githubUrl || '',
   createdAt: user.createdAt,
   updatedAt: user.updatedAt,
 });
 
-const toAnchorLinkRequestResponse = (request: any) => ({
+const toAnchorLinkRequestResponse = (req: Request, request: any) => ({
   id: request.id,
   userId: request.userId,
   providerId: request.providerId,
@@ -34,11 +76,11 @@ const toAnchorLinkRequestResponse = (request: any) => ({
   status: request.status,
   createdAt: request.createdAt,
   updatedAt: request.updatedAt,
-  user: request.user ? toProviderResponse(request.user) : undefined,
-  provider: request.provider ? toProviderResponse(request.provider) : undefined,
+  user: request.user ? toProviderResponse(req, request.user) : undefined,
+  provider: request.provider ? toProviderResponse(req, request.provider) : undefined,
 });
 
-providersRouter.get('/', async (_req: Request, res: Response): Promise<void> => {
+providersRouter.get('/', async (req: Request, res: Response): Promise<void> => {
   try {
     const db = getPrisma() as any;
     const providers = await db.user.findMany({
@@ -50,7 +92,7 @@ providersRouter.get('/', async (_req: Request, res: Response): Promise<void> => 
       },
       orderBy: { updatedAt: 'desc' },
     });
-    res.json({ success: true, providers: providers.map(toProviderResponse) });
+    res.json({ success: true, providers: providers.map((provider: any) => toProviderResponse(req, provider)) });
   } catch (error) {
     console.error('[PROVIDERS][ERROR] Failed to list providers', error);
     res.status(500).json({ error: 'Failed to list providers' });
@@ -114,7 +156,7 @@ providersRouter.post('/:id/request', requireCanonicalIdentity, async (req: Reque
       },
     });
 
-    res.status(201).json({ success: true, request: toAnchorLinkRequestResponse(request) });
+    res.status(201).json({ success: true, request: toAnchorLinkRequestResponse(req, request) });
   } catch (error) {
     console.error('[PROVIDERS][ERROR] Failed to create anchor link request', error);
     res.status(500).json({ error: 'Failed to create provider request' });
@@ -135,7 +177,7 @@ userRequestsRouter.get('/', requireCanonicalIdentity, async (req: Request, res: 
       include: { provider: true },
       orderBy: { createdAt: 'desc' },
     });
-    res.json({ success: true, requests: requests.map(toAnchorLinkRequestResponse) });
+    res.json({ success: true, requests: requests.map((request: any) => toAnchorLinkRequestResponse(req, request)) });
   } catch (error) {
     console.error('[PROVIDERS][ERROR] Failed to list user anchor link requests', error);
     res.status(500).json({ error: 'Failed to list requests' });
@@ -162,7 +204,7 @@ providerRequestsRouter.get('/', requireCanonicalIdentity, async (req: Request, r
       include: { user: true },
       orderBy: { createdAt: 'desc' },
     });
-    res.json({ success: true, requests: requests.map(toAnchorLinkRequestResponse) });
+    res.json({ success: true, requests: requests.map((request: any) => toAnchorLinkRequestResponse(req, request)) });
   } catch (error) {
     console.error('[PROVIDERS][ERROR] Failed to list provider anchor link requests', error);
     res.status(500).json({ error: 'Failed to list provider requests' });
@@ -215,7 +257,7 @@ providerRequestsRouter.patch('/:id', requireCanonicalIdentity, async (req: Reque
         status,
       },
     });
-    res.json({ success: true, request: toAnchorLinkRequestResponse(request) });
+    res.json({ success: true, request: toAnchorLinkRequestResponse(req, request) });
   } catch (error) {
     console.error('[PROVIDERS][ERROR] Failed to update provider request', error);
     res.status(500).json({ error: 'Failed to update provider request' });

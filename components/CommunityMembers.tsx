@@ -19,6 +19,14 @@ import {
 import { UserProfile } from '../types';
 import { getAuthToken } from '../services/sessionService';
 import { api, backendAssetUrl } from '../services/apiClient';
+import {
+  getProfileAvatarMedia,
+  getProfileBackgroundMedia,
+  getProfileHeroMedia,
+  isVideoMediaAsset,
+  normalizeMediaAsset,
+  type NormalizedMediaAsset,
+} from '../services/mediaAssets';
 
 interface Member {
   id: string;
@@ -28,6 +36,7 @@ interface Member {
   location: string;
   bio: string;
   image: string | null;
+  imageMedia: NormalizedMediaAsset;
   status: 'online' | 'offline';
   verified: boolean;
 }
@@ -52,9 +61,6 @@ const toRelativeTimestamp = (value: string): string => {
   return `${deltaDays}d ago`;
 };
 
-const isLikelyVideoUrl = (value: string): boolean =>
-  /\.(mp4|webm|mov|m4v|ogg)([?#].*)?$/i.test(String(value || '').trim());
-
 const toDateLabel = (value: string | null | undefined): string => {
   const parsed = new Date(String(value || ''));
   if (Number.isNaN(parsed.getTime())) return 'N/A';
@@ -78,6 +84,62 @@ const isLikelyAutomatedProfile = (profile: any): boolean => {
     .map((entry) => String(entry || '').trim().toLowerCase())
     .filter(Boolean);
   return fields.some((field) => AUTOMATED_PROFILE_PATTERN.test(field));
+};
+
+const avatarFallbackUrl = (name: string): string =>
+  `https://ui-avatars.com/api/?name=${encodeURIComponent(name || 'Node')}&background=0f172a&color=38bdf8`;
+
+const renderAvatarMedia = (
+  media: NormalizedMediaAsset,
+  name: string,
+  className: string,
+  fallbackClassName = className
+) => {
+  if (media.url) {
+    if (isVideoMediaAsset(media)) {
+      return (
+        <video
+          src={media.url}
+          className={className}
+          muted
+          loop
+          autoPlay
+          playsInline
+        />
+      );
+    }
+    return (
+      <img
+        src={media.url}
+        className={className}
+        alt={name}
+        onError={(event) => {
+          event.currentTarget.src = avatarFallbackUrl(name);
+        }}
+      />
+    );
+  }
+
+  return (
+    <div className={`${fallbackClassName} bg-slate-900 text-blue-300 text-xs font-black flex items-center justify-center`}>
+      {toInitials(name)}
+    </div>
+  );
+};
+
+const renderWideMedia = (media: NormalizedMediaAsset, alt: string, className: string) => {
+  if (!media.url) return null;
+  if (isVideoMediaAsset(media)) {
+    return (
+      <video
+        src={media.url}
+        className={className}
+        controls
+        playsInline
+      />
+    );
+  }
+  return <img src={media.url} alt={alt} className={className} />;
 };
 
 const CommunityMembers: React.FC = () => {
@@ -119,20 +181,21 @@ const CommunityMembers: React.FC = () => {
 
         const mapped = directoryUsers
           .filter((profile: any) => profile?.id && !isLikelyAutomatedProfile(profile))
-          .map((profile: any): Member => ({
-            id: String(profile.id),
-            name: String(profile.name || 'Node'),
-            handle: String(profile.handle || '').trim() || null,
-            role: `${String(profile.tier || 'Free / Community Tier')} Member`,
-            location: String(profile.location || 'Decentralized Hub'),
-            bio: String(profile.bio || 'Mission statement established.'),
-            image:
-              toAssetUrl(profile?.profileMedia?.avatar?.url) ||
-              toAssetUrl(profile?.avatarUrl) ||
-              null,
-            status: activeUser?.id === profile.id ? 'online' : 'offline',
-            verified: true,
-          }))
+          .map((profile: any): Member => {
+            const imageMedia = getProfileAvatarMedia(profile);
+            return {
+              id: String(profile.id),
+              name: String(profile.name || 'Node'),
+              handle: String(profile.handle || '').trim() || null,
+              role: `${String(profile.tier || 'Free / Community Tier')} Member`,
+              location: String(profile.location || 'Decentralized Hub'),
+              bio: String(profile.bio || 'Mission statement established.'),
+              image: imageMedia.url || toAssetUrl(profile?.avatarUrl) || null,
+              imageMedia,
+              status: activeUser?.id === profile.id ? 'online' : 'offline',
+              verified: true,
+            };
+          })
           .sort((a, b) => a.name.localeCompare(b.name));
 
         setAllMembers(mapped);
@@ -298,21 +361,10 @@ const CommunityMembers: React.FC = () => {
                   onClick={() => setSelectedMember(member)}
                 >
                   <div className="relative shrink-0">
-                    {member.image ? (
-                      <img
-                        src={member.image}
-                        className="w-12 h-12 rounded-xl object-cover ring-2 ring-white/5"
-                        alt={member.name}
-                        onError={(event) => {
-                          event.currentTarget.src = `https://ui-avatars.com/api/?name=${encodeURIComponent(
-                            member.name
-                          )}&background=0f172a&color=38bdf8`;
-                        }}
-                      />
-                    ) : (
-                      <div className="w-12 h-12 rounded-xl ring-2 ring-white/5 bg-slate-900 text-blue-300 text-xs font-black flex items-center justify-center">
-                        {toInitials(member.name)}
-                      </div>
+                    {renderAvatarMedia(
+                      member.imageMedia,
+                      member.name,
+                      'w-12 h-12 rounded-xl object-cover ring-2 ring-white/5'
                     )}
                     <div
                       className={`absolute -bottom-1 -right-1 w-3.5 h-3.5 rounded-full border-2 border-[#05070a] ${
@@ -378,21 +430,10 @@ const CommunityMembers: React.FC = () => {
                     <ArrowLeft className="w-6 h-6" />
                   </button>
                   <div className="relative shrink-0">
-                    {selectedMember.image ? (
-                      <img
-                        src={selectedMember.image}
-                        className="w-10 h-10 md:w-14 md:h-14 rounded-xl md:rounded-2xl object-cover ring-2 ring-white/10"
-                        alt={selectedMember.name}
-                        onError={(event) => {
-                          event.currentTarget.src = `https://ui-avatars.com/api/?name=${encodeURIComponent(
-                            selectedMember.name
-                          )}&background=0f172a&color=38bdf8`;
-                        }}
-                      />
-                    ) : (
-                      <div className="w-10 h-10 md:w-14 md:h-14 rounded-xl md:rounded-2xl bg-slate-900 text-blue-300 text-xs font-black flex items-center justify-center ring-2 ring-white/10">
-                        {toInitials(selectedMember.name)}
-                      </div>
+                    {renderAvatarMedia(
+                      selectedMember.imageMedia,
+                      selectedMember.name,
+                      'w-10 h-10 md:w-14 md:h-14 rounded-xl md:rounded-2xl object-cover ring-2 ring-white/10'
                     )}
                     <div className="absolute -top-1.5 -right-1.5 p-1 bg-blue-600 rounded-lg shadow-xl">
                       <Lock className="w-2.5 h-2.5 text-white" />
@@ -527,13 +568,7 @@ const CommunityMembers: React.FC = () => {
           <div className="glass-panel w-full max-w-xl my-4 max-h-[calc(100dvh-2rem)] overflow-y-auto custom-scrollbar rounded-[2rem] border border-white/10 p-6 sm:p-8 shadow-2xl animate-in zoom-in duration-300">
             <div className="flex items-start justify-between gap-4 mb-6">
               <div className="flex items-center gap-4 min-w-0">
-                {selectedMember.image ? (
-                  <img src={selectedMember.image} alt={selectedMember.name} className="w-14 h-14 rounded-2xl object-cover" />
-                ) : (
-                  <div className="w-14 h-14 rounded-2xl bg-slate-900 text-blue-300 text-xs font-black flex items-center justify-center">
-                    {toInitials(selectedMember.name)}
-                  </div>
-                )}
+                {renderAvatarMedia(selectedMember.imageMedia, selectedMember.name, 'w-14 h-14 rounded-2xl object-cover')}
                 <div className="min-w-0">
                   <h4 className="text-xl font-black text-white tracking-tight truncate">{selectedMember.name}</h4>
                   <p className="text-[10px] uppercase tracking-widest text-blue-300 font-black truncate">{selectedMember.role}</p>
@@ -588,39 +623,26 @@ const CommunityMembers: React.FC = () => {
               <div className="p-6 rounded-2xl bg-red-500/10 border border-red-500/30 text-red-200 text-sm">{profileViewError}</div>
             )}
 
-            {selectedProfileView && !profileViewLoading && (
+            {selectedProfileView && !profileViewLoading && (() => {
+              const heroMedia = getProfileHeroMedia(selectedProfileView.profile);
+              const avatarMedia = getProfileAvatarMedia(selectedProfileView.profile);
+              const backgroundMedia = getProfileBackgroundMedia(selectedProfileView.profile);
+              const shouldShowBackgroundMedia = Boolean(backgroundMedia.url && backgroundMedia.url !== heroMedia.url);
+
+              return (
               <div className="space-y-6">
                 <div className="rounded-[1.5rem] overflow-hidden border border-white/10 bg-white/5">
-                  {selectedProfileView.profile?.bannerUrl || selectedProfileView.profile?.profileMedia?.cover?.url ? (
-                    isLikelyVideoUrl(selectedProfileView.profile?.bannerUrl || selectedProfileView.profile?.profileMedia?.cover?.url) ? (
-                      <video
-                        src={selectedProfileView.profile?.bannerUrl || selectedProfileView.profile?.profileMedia?.cover?.url}
-                        className="w-full h-44 sm:h-56 object-cover"
-                        controls
-                        playsInline
-                      />
-                    ) : (
-                      <img
-                        src={selectedProfileView.profile?.bannerUrl || selectedProfileView.profile?.profileMedia?.cover?.url}
-                        alt={selectedProfileView.profile?.name || 'Node'}
-                        className="w-full h-44 sm:h-56 object-cover"
-                      />
-                    )
+                  {heroMedia.url ? (
+                    renderWideMedia(heroMedia, selectedProfileView.profile?.name || 'Node', 'w-full h-44 sm:h-56 object-cover')
                   ) : (
                     <div className="w-full h-44 sm:h-56 bg-gradient-to-r from-blue-900/40 to-teal-900/20" />
                   )}
                   <div className="p-4 sm:p-6 flex flex-col sm:flex-row sm:items-center gap-4">
-                    <img
-                      src={
-                        selectedProfileView.profile?.avatarUrl ||
-                        selectedProfileView.profile?.profileMedia?.avatar?.url ||
-                        `https://ui-avatars.com/api/?name=${encodeURIComponent(
-                          selectedProfileView.profile?.name || 'Node'
-                        )}&background=0f172a&color=38bdf8`
-                      }
-                      alt={selectedProfileView.profile?.name || 'Node'}
-                      className="w-16 h-16 sm:w-20 sm:h-20 rounded-2xl object-cover ring-2 ring-white/10"
-                    />
+                    {renderAvatarMedia(
+                      avatarMedia,
+                      selectedProfileView.profile?.name || 'Node',
+                      'w-16 h-16 sm:w-20 sm:h-20 rounded-2xl object-cover ring-2 ring-white/10'
+                    )}
                     <div className="min-w-0">
                       <h5 className="text-xl sm:text-2xl font-black text-white tracking-tight break-words">
                         {selectedProfileView.profile?.name || 'Node'}
@@ -631,6 +653,12 @@ const CommunityMembers: React.FC = () => {
                     </div>
                   </div>
                 </div>
+
+                {shouldShowBackgroundMedia && (
+                  <div className="rounded-[1.5rem] overflow-hidden border border-white/10 bg-white/5">
+                    {renderWideMedia(backgroundMedia, `${selectedProfileView.profile?.name || 'Node'} background`, 'w-full h-44 sm:h-56 object-cover bg-black')}
+                  </div>
+                )}
 
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                   <div className="p-4 rounded-xl bg-white/5 border border-white/10">
@@ -696,10 +724,11 @@ const CommunityMembers: React.FC = () => {
                           {Array.isArray(post.media) && post.media.length > 0 && (
                             <div className="mt-3 grid grid-cols-1 sm:grid-cols-2 gap-3">
                               {post.media.map((entry: any) => {
-                                const mediaUrl = String(entry?.url || '').trim();
+                                const mediaAsset = normalizeMediaAsset(entry, entry?.url);
+                                const mediaUrl = mediaAsset.url;
                                 if (!mediaUrl) return null;
                                 const mediaType = String(entry?.mediaType || '').toLowerCase();
-                                if (mediaType === 'video' || isLikelyVideoUrl(mediaUrl)) {
+                                if (mediaType === 'video' || isVideoMediaAsset(mediaAsset)) {
                                   return (
                                     <video
                                       key={String(entry?.id || mediaUrl)}
@@ -727,7 +756,8 @@ const CommunityMembers: React.FC = () => {
                   )}
                 </div>
               </div>
-            )}
+              );
+            })()}
           </div>
         </div>
       )}

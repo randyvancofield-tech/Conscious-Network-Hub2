@@ -329,6 +329,7 @@ const isNoTierSignedInAllowedView = (view: AppView): boolean =>
     AppView.PROVIDER_APPLICANT_SIGN_IN,
     AppView.PROVIDER_APPLICATION_STATUS,
     AppView.CONSCIOUS_CAREERS,
+    AppView.GRANT_APPLICATION,
     AppView.MEMBERSHIP,
     AppView.PRIVACY_POLICY,
     AppView.TERMS_OF_SERVICE,
@@ -339,6 +340,9 @@ const isNoTierSignedInAllowedView = (view: AppView): boolean =>
     AppView.AI_SAFETY_GOVERNANCE,
     AppView.NOT_FOUND,
   ].includes(view);
+
+const shouldPreserveNoTierViewAfterAuth = (view: AppView): boolean =>
+  [AppView.CONSCIOUS_CAREERS, AppView.GRANT_APPLICATION].includes(view);
 
 const isProviderPublicView = (view: AppView): boolean =>
   [
@@ -1250,6 +1254,10 @@ const App: React.FC = () => {
       const storedCheckoutSessionId = getStoredPendingCheckoutSessionId();
       const shouldVerifyStoredCheckout =
         Boolean(storedCheckoutSessionId) && !needsInitialTwoFactorSetup && needsMembershipSelection;
+      const preserveNoTierView =
+        !needsInitialTwoFactorSetup &&
+        needsMembershipSelection &&
+        shouldPreserveNoTierViewAfterAuth(currentView);
       if (storedCheckoutSessionId && !shouldVerifyStoredCheckout) {
         setStoredPendingCheckoutSessionId(null);
       }
@@ -1259,13 +1267,19 @@ const App: React.FC = () => {
         void refreshUserCourses();
       }
       setSelectedTier(canonicalUser.tier || FREE_TIER_NAME);
-      setIsSelectingTier(!needsInitialTwoFactorSetup && (needsMembershipSelection || shouldVerifyStoredCheckout));
+      setIsSelectingTier(
+        !needsInitialTwoFactorSetup &&
+          !preserveNoTierView &&
+          (needsMembershipSelection || shouldVerifyStoredCheckout)
+      );
       setMembershipCheckoutPending(shouldVerifyStoredCheckout);
       setMembershipNotice(
         needsInitialTwoFactorSetup
           ? ''
           : shouldVerifyStoredCheckout
             ? 'Redirecting to your platform...'
+            : preserveNoTierView
+            ? ''
             : needsMembershipSelection
             ? 'Select a membership tier to continue.'
             : ''
@@ -1286,6 +1300,8 @@ const App: React.FC = () => {
           ? AppView.DASHBOARD
           : shouldVerifyStoredCheckout
             ? AppView.VERIFY_SESSION
+          : preserveNoTierView
+            ? currentView
           : needsMembershipSelection
             ? AppView.MEMBERSHIP_ACCESS
             : AppView.DASHBOARD,
@@ -1452,6 +1468,10 @@ const App: React.FC = () => {
       const canonicalUser = toPlatformUser(data.user);
       const needsInitialTwoFactorSetup = requiresInitialTwoFactorSetup(canonicalUser);
       const needsMembershipSelection = !hasConfirmedMembership(canonicalUser);
+      const preserveNoTierView =
+        !needsInitialTwoFactorSetup &&
+        needsMembershipSelection &&
+        shouldPreserveNoTierViewAfterAuth(currentView);
       setUserAuthSession(data.token, canonicalUser);
       setUser(canonicalUser);
       if (!needsInitialTwoFactorSetup) {
@@ -1462,6 +1482,8 @@ const App: React.FC = () => {
       setMembershipNotice(
         needsInitialTwoFactorSetup
           ? ''
+          : preserveNoTierView
+            ? ''
           : needsMembershipSelection
             ? 'Select a membership tier to continue.'
             : ''
@@ -1471,13 +1493,15 @@ const App: React.FC = () => {
       setCurrentView(
         needsInitialTwoFactorSetup
           ? AppView.DASHBOARD
+          : preserveNoTierView
+            ? currentView
           : needsMembershipSelection
             ? AppView.MEMBERSHIP_ACCESS
             : AppView.DASHBOARD,
         {},
         { replace: true }
       );
-      setIsSelectingTier(!needsInitialTwoFactorSetup && needsMembershipSelection);
+      setIsSelectingTier(!needsInitialTwoFactorSetup && needsMembershipSelection && !preserveNoTierView);
       setSidebarOpen(!needsInitialTwoFactorSetup && !needsMembershipSelection && window.innerWidth >= 1024);
     } catch (error) {
       if (error instanceof ApiError) {
