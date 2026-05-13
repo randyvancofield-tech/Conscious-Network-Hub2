@@ -5,6 +5,7 @@ interface ConsciousCareersPageProps {
   onGoHome: () => void;
   onGrantApplication: () => void;
   onEntrepreneurshipSupport: () => void;
+  embedded?: boolean;
 }
 
 const CAREERS_RETURN_PATH_ID = 'careers-grants';
@@ -15,11 +16,18 @@ const ConsciousCareersPage: React.FC<ConsciousCareersPageProps> = ({
   onGoHome,
   onGrantApplication,
   onEntrepreneurshipSupport,
+  embedded = false,
 }) => {
   const [hoveredPath, setHoveredPath] = useState<string | null>(null);
 
   return (
-    <div className="min-h-[100dvh] max-h-[100dvh] overflow-y-auto overscroll-y-auto custom-scrollbar animate-in fade-in duration-700 relative z-10 scrollable p-4 pt-20 text-slate-100 sm:p-6 sm:pt-24 md:p-8 lg:p-12 xl:p-20">
+    <div
+      className={
+        embedded
+          ? 'relative z-10 w-full animate-in fade-in duration-700 text-slate-100'
+          : 'relative z-10 min-h-[100dvh] animate-in fade-in duration-700 p-4 pt-20 text-slate-100 sm:p-6 sm:pt-24 md:p-8 lg:p-12 xl:p-20'
+      }
+    >
       <svg
         className={`pointer-events-none absolute inset-0 z-0 hidden h-full w-full transition-opacity duration-500 lg:block ${
           hoveredPath ? 'opacity-100' : 'opacity-70'
@@ -91,21 +99,23 @@ const ConsciousCareersPage: React.FC<ConsciousCareersPageProps> = ({
         </circle>
       </svg>
 
-      <button
-        type="button"
-        onClick={onGrantApplication}
-        onMouseEnter={() => setHoveredPath(CAREERS_RETURN_PATH_ID)}
-        onMouseLeave={() => setHoveredPath(null)}
-        onFocus={() => setHoveredPath(CAREERS_RETURN_PATH_ID)}
-        onBlur={() => setHoveredPath(null)}
-        className={`fixed right-4 top-4 z-30 rounded-2xl border border-cyan-200/30 bg-slate-950/80 px-4 py-3 text-[10px] font-black uppercase tracking-widest text-white shadow-2xl shadow-blue-950/40 backdrop-blur-xl transition-all hover:bg-cyan-500/20 sm:right-8 sm:top-8 sm:px-5 ${
-          hoveredPath === CAREERS_RETURN_PATH_ID
-            ? 'animate-pulse ring-2 ring-cyan-200/40 shadow-cyan-400/30'
-            : ''
-        }`}
-      >
-        Grant Application
-      </button>
+      {!embedded && (
+        <button
+          type="button"
+          onClick={onGrantApplication}
+          onMouseEnter={() => setHoveredPath(CAREERS_RETURN_PATH_ID)}
+          onMouseLeave={() => setHoveredPath(null)}
+          onFocus={() => setHoveredPath(CAREERS_RETURN_PATH_ID)}
+          onBlur={() => setHoveredPath(null)}
+          className={`fixed right-4 top-4 z-30 rounded-2xl border border-cyan-200/30 bg-slate-950/80 px-4 py-3 text-[10px] font-black uppercase tracking-widest text-white shadow-2xl shadow-blue-950/40 backdrop-blur-xl transition-all hover:bg-cyan-500/20 sm:right-8 sm:top-8 sm:px-5 ${
+            hoveredPath === CAREERS_RETURN_PATH_ID
+              ? 'animate-pulse ring-2 ring-cyan-200/40 shadow-cyan-400/30'
+              : ''
+          }`}
+        >
+          Grant Application
+        </button>
+      )}
 
       <div className="relative z-10 mx-auto max-w-7xl space-y-8 pb-6 sm:space-y-10 sm:pb-10 md:space-y-12">
         <button onClick={onGoHome} className="flex items-center gap-2 sm:gap-3 text-slate-500 hover:text-white transition-colors group">

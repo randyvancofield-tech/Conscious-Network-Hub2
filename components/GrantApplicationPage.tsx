@@ -371,7 +371,7 @@ const GrantApplicationPage: React.FC<GrantApplicationPageProps> = ({
   }
 
   return (
-    <div className="min-h-[100dvh] overflow-y-auto bg-[#07120d] p-4 text-white sm:p-6 lg:p-8">
+    <div className="min-h-[100dvh] bg-[#07120d] p-4 text-white sm:p-6 lg:p-8">
       <div className="mx-auto max-w-6xl">
         <button
           type="button"

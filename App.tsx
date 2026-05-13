@@ -2385,6 +2385,7 @@ const App: React.FC = () => {
             onGoHome={() => setCurrentView(user ? AppView.DASHBOARD : AppView.ENTRY)}
             onGrantApplication={() => setCurrentView(AppView.GRANT_APPLICATION)}
             onEntrepreneurshipSupport={() => setCurrentView(AppView.ENTREPRENEURSHIP_SUPPORT)}
+            embedded={Boolean(user)}
           />
         );
       case AppView.GRANT_APPLICATION:

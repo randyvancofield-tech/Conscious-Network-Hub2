@@ -7,7 +7,7 @@ interface EntrepreneurshipSupportPageProps {
 
 const EntrepreneurshipSupportPage: React.FC<EntrepreneurshipSupportPageProps> = ({ onBack }) => {
   return (
-    <div className="min-h-[100dvh] w-full overflow-y-auto custom-scrollbar p-4 pt-20 text-slate-100 sm:p-6 sm:pt-24 md:p-8 lg:p-12">
+    <div className="min-h-[100dvh] w-full p-4 pt-20 text-slate-100 sm:p-6 sm:pt-24 md:p-8 lg:p-12">
       <div className="mx-auto flex max-w-5xl flex-col gap-8">
         <button
           type="button"
