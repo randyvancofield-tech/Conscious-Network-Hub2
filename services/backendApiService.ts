@@ -64,6 +64,62 @@ export interface ProviderInviteGroup {
   updatedAt: string;
 }
 
+export type ProviderCrmToolId =
+  | 'home'
+  | 'members'
+  | 'sessions'
+  | 'follow-ups'
+  | 'notes'
+  | 'referrals'
+  | 'content-courses'
+  | 'analytics'
+  | 'resources'
+  | 'collaboration'
+  | 'admin-support';
+
+export interface ProviderCrmTool {
+  id: ProviderCrmToolId;
+  label: string;
+  description: string;
+  phase: string;
+  providerVisible: boolean;
+  adminOnly: boolean;
+  enabledByDefault: boolean;
+  enabled: boolean;
+}
+
+export interface ProviderCrmToolsResult {
+  success: boolean;
+  role: 'provider' | 'admin';
+  tools: ProviderCrmTool[];
+}
+
+export interface ProviderCrmSummaryResult {
+  success: boolean;
+  role: 'provider' | 'admin';
+  did: string;
+  sessionId: string;
+  summary: {
+    activeToolCount: number;
+    shellStatus: string;
+    dataModelsEnabled: boolean;
+    notesEnabled: boolean;
+    relationshipManagementEnabled: boolean;
+    analyticsEnabled: boolean;
+  };
+}
+
+export interface ProviderCrmAdminToolsResult {
+  success: boolean;
+  soleAdminEmail: string;
+  visibilityControl: {
+    source: string;
+    persistentStorage: boolean;
+    envOverrides?: string[];
+  };
+  tools: ProviderCrmTool[];
+}
+
 export type MeetingSessionMode = 'virtual' | 'solo' | 'immersive-5d';
 export type MeetingSessionStatus = 'scheduled' | 'live' | 'ended';
 
@@ -390,6 +446,72 @@ class BackendAPIService {
       return data.groups as ProviderInviteGroup[];
     } catch {
       return [];
+    }
+  }
+
+  async getProviderCrmTools(providerToken: string): Promise<ProviderCrmToolsResult | null> {
+    const token = String(providerToken || '').trim();
+    if (!token) return null;
+    try {
+      return await api<ProviderCrmToolsResult>('/provider/crm/tools', {
+        method: 'GET',
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      });
+    } catch {
+      return null;
+    }
+  }
+
+  async getProviderCrmSummary(providerToken: string): Promise<ProviderCrmSummaryResult | null> {
+    const token = String(providerToken || '').trim();
+    if (!token) return null;
+    try {
+      return await api<ProviderCrmSummaryResult>('/provider/crm/summary', {
+        method: 'GET',
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      });
+    } catch {
+      return null;
+    }
+  }
+
+  async getProviderCrmAdminTools(providerToken: string): Promise<ProviderCrmAdminToolsResult | null> {
+    const token = String(providerToken || '').trim();
+    if (!token) return null;
+    try {
+      return await api<ProviderCrmAdminToolsResult>('/provider/crm/admin/tools', {
+        method: 'GET',
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      });
+    } catch {
+      return null;
+    }
+  }
+
+  async updateProviderCrmToolVisibility(
+    providerToken: string,
+    toolId: ProviderCrmToolId,
+    enabled: boolean
+  ): Promise<ProviderCrmTool | null> {
+    const token = String(providerToken || '').trim();
+    if (!token) return null;
+    try {
+      const data = await api<any>(`/provider/crm/admin/tools/${encodeURIComponent(toolId)}`, {
+        method: 'PATCH',
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+        body: { enabled },
+      });
+      return data?.tool || null;
+    } catch {
+      return null;
     }
   }
 
@@ -972,6 +1094,32 @@ export async function getUserDirectory(): Promise<DirectoryUserEntry[]> {
 
 export async function createNativeProviderControlSession(): Promise<NativeProviderSessionResult | null> {
   return backendAPI.createNativeProviderControlSession();
+}
+
+export async function getProviderCrmTools(
+  providerToken: string
+): Promise<ProviderCrmToolsResult | null> {
+  return backendAPI.getProviderCrmTools(providerToken);
+}
+
+export async function getProviderCrmSummary(
+  providerToken: string
+): Promise<ProviderCrmSummaryResult | null> {
+  return backendAPI.getProviderCrmSummary(providerToken);
+}
+
+export async function getProviderCrmAdminTools(
+  providerToken: string
+): Promise<ProviderCrmAdminToolsResult | null> {
+  return backendAPI.getProviderCrmAdminTools(providerToken);
+}
+
+export async function updateProviderCrmToolVisibility(
+  providerToken: string,
+  toolId: ProviderCrmToolId,
+  enabled: boolean
+): Promise<ProviderCrmTool | null> {
+  return backendAPI.updateProviderCrmToolVisibility(providerToken, toolId, enabled);
 }
 
 export async function listProviderInviteGroups(

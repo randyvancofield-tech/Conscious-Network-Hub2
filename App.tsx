@@ -21,6 +21,7 @@ import ProviderApplicationPage from './components/ProviderApplicationPage';
 import ProviderApplicantSignInPage from './components/ProviderApplicantSignInPage';
 import ProviderApplicationStatusPage from './components/ProviderApplicationStatusPage';
 import AdminProviderApplicantsPage from './components/AdminProviderApplicantsPage';
+import ProviderCrmShell from './components/ProviderCrmShell';
 import ConsciousCareersPage from './components/ConsciousCareersPage';
 import GrantApplicationPage from './components/GrantApplicationPage';
 import EntrepreneurshipSupportPage from './components/EntrepreneurshipSupportPage';
@@ -170,6 +171,8 @@ const routePathForView = (view: AppView, params: Record<string, string> = {}): s
       return '/provider/applicant-sign-in';
     case AppView.PROVIDER_APPLICATION_STATUS:
       return '/provider/application-status';
+    case AppView.PROVIDER_CRM:
+      return '/provider/crm';
     case AppView.CONSCIOUS_CAREERS:
       return '/conscious-careers';
     case AppView.GRANT_APPLICATION:
@@ -250,6 +253,7 @@ const resolveRoute = (pathname: string, search = ''): RouteState => {
     '/provider/apply': AppView.PROVIDER_APPLY,
     '/provider/applicant-sign-in': AppView.PROVIDER_APPLICANT_SIGN_IN,
     '/provider/application-status': AppView.PROVIDER_APPLICATION_STATUS,
+    '/provider/crm': AppView.PROVIDER_CRM,
     '/conscious-careers': AppView.CONSCIOUS_CAREERS,
     '/careers': AppView.CONSCIOUS_CAREERS,
     '/conscious-careers/grant-application': AppView.GRANT_APPLICATION,
@@ -331,6 +335,7 @@ const requiresStoredSession = (view: AppView): boolean =>
     AppView.NOTIFICATIONS,
     AppView.ADMIN_DASHBOARD,
     AppView.ADMIN_PROVIDER_APPLICANTS,
+    AppView.PROVIDER_CRM,
     AppView.PROVIDER_APPLICATION_STATUS,
     AppView.GRANT_APPLICATION,
   ].includes(view);
@@ -377,6 +382,7 @@ const isNoTierSignedInAllowedView = (view: AppView): boolean =>
     AppView.PROVIDER_APPLY,
     AppView.PROVIDER_APPLICANT_SIGN_IN,
     AppView.PROVIDER_APPLICATION_STATUS,
+    AppView.PROVIDER_CRM,
     AppView.CONSCIOUS_CAREERS,
     AppView.GRANT_APPLICATION,
     AppView.ENTREPRENEURSHIP_SUPPORT,
@@ -1874,6 +1880,7 @@ const App: React.FC = () => {
     'social-learning': AppView.CONSCIOUS_SOCIAL_LEARNING,
     community: AppView.COMMUNITY,
     meetings: AppView.CONSCIOUS_MEETINGS,
+    'provider-crm': AppView.PROVIDER_CRM,
     'my-courses': AppView.MY_COURSES,
     courses: AppView.KNOWLEDGE_PATHWAYS,
     providers: AppView.PROVIDERS,
@@ -1893,11 +1900,16 @@ const App: React.FC = () => {
     if (hasAdminRole(user)) {
       return NAVIGATION_ITEMS;
     }
+    if (hasProviderRole(user)) {
+      return NAVIGATION_ITEMS.filter(
+        (item) => item.id !== 'admin' && (item.id === 'provider-crm' || canTierAccessNavItem(user.tier, item.id))
+      );
+    }
     if (!hasConfirmedMembership(user)) {
       return NAVIGATION_ITEMS.filter((item) => item.id === 'membership' || item.id === 'careers');
     }
     return NAVIGATION_ITEMS.filter(
-      (item) => item.id !== 'admin' && canTierAccessNavItem(user.tier, item.id)
+      (item) => item.id !== 'admin' && item.id !== 'provider-crm' && canTierAccessNavItem(user.tier, item.id)
     );
   }, [user]);
 
@@ -2451,6 +2463,19 @@ const App: React.FC = () => {
             user={user}
             onOpenMeeting={(id) => setCurrentView(AppView.MEETING_DETAIL, { id })}
             onOpenPortal={() => setCurrentView(AppView.CONSCIOUS_MEETINGS_PORTAL)}
+          />
+        );
+      case AppView.PROVIDER_CRM:
+        return hasProviderRole(user) ? (
+          <ProviderCrmShell
+            user={user}
+            onOpenProviderAccess={() => setCurrentView(AppView.PROVIDER_ACCESS)}
+          />
+        ) : (
+          <NotFoundPage
+            path={activePath}
+            onGoHome={() => setCurrentView(AppView.ENTRY)}
+            onGoDashboard={() => setCurrentView(AppView.DASHBOARD)}
           />
         );
       case AppView.CONSCIOUS_MEETINGS_PORTAL:
