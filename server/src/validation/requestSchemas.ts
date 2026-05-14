@@ -196,15 +196,6 @@ export const userPrivacyUpdateSchema: JsonSchema = {
   },
 };
 
-export const userPhoneEnrollSchema: JsonSchema = {
-  type: 'object',
-  additionalProperties: false,
-  required: ['phoneNumber'],
-  properties: {
-    phoneNumber: { type: 'string', minLength: 7, maxLength: 32 },
-  },
-};
-
 export const userWalletEnrollSchema: JsonSchema = {
   type: 'object',
   additionalProperties: false,

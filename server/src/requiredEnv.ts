@@ -208,15 +208,10 @@ export const validateRequiredEnv = (): void => {
 
   if (isProduction && !hasEmailDeliveryConfig()) {
     console.warn(
-      '[STARTUP][WARN] Email delivery is not configured. Email verification and password reset delivery are unavailable.'
+      '[STARTUP][WARN] Email delivery is not configured. Password reset email delivery is unavailable; normal sign-in is unaffected.'
     );
   }
 
-  if (isProduction && !hasSmsDeliveryConfig()) {
-    console.warn(
-      '[STARTUP][WARN] SMS delivery is not configured. Member sign-in wireless 2FA delivery is unavailable.'
-    );
-  }
 };
 
 export const hasOpenAiApiKey = (): boolean => hasNonEmptyEnv('OPENAI_API_KEY');
@@ -246,7 +241,7 @@ export const logDeliveryEnvironmentLoaded = (): void => {
     '[STARTUP] Security delivery environment loaded:',
     JSON.stringify({
       email: hasEmailDeliveryConfig() ? 'present' : 'missing',
-      sms: hasSmsDeliveryConfig() ? 'present' : 'missing',
+      legacySms: hasSmsDeliveryConfig() ? 'present' : 'optional_missing',
     })
   );
 };

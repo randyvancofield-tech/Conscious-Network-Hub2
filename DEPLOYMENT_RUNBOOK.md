@@ -60,12 +60,10 @@ Optional for AI routes only:
 
 Production delivery integrations:
 
-- `EMAIL_USER` + `EMAIL_PASSWORD`, or `SMTP_HOST` + `SMTP_PORT`: required to deliver password reset email in production.
-- `TWILIO_ACCOUNT_SID`, `TWILIO_AUTH_TOKEN`, `TWILIO_FROM_NUMBER`: required to deliver per-login wireless 2FA codes for member sign-in in production.
-- `ENABLE_EMAIL_VERIFICATION=true`: re-enables email verification sends.
+- `EMAIL_USER` + `EMAIL_PASSWORD`, or `SMTP_HOST` + `SMTP_PORT`: optional; enables native password reset email delivery only. Normal sign-in does not require email delivery.
+- `TWILIO_ACCOUNT_SID`, `TWILIO_AUTH_TOKEN`, `TWILIO_FROM_NUMBER`: optional legacy SMS settings only. Member/provider sign-in does not require Twilio.
 - `ENABLE_PASSWORD_RESET=false`: deliberately disables native password reset email flow.
-- `ENABLE_USER_2FA=true`: re-enables legacy direct user phone/wallet 2FA enrollment routes; member sign-in phone challenges are enforced separately for `user` accounts.
-- `ENABLE_INITIAL_2FA=true`: re-enables required initial 2FA onboarding.
+- `ENABLE_USER_2FA=false`: leave disabled for launch; legacy 2FA fields are non-blocking.
 - `GOOGLE_SHEETS_WEBHOOK_URL`
 
 For Render, keep secrets in Render environment variables or a managed secret source rather than source control.

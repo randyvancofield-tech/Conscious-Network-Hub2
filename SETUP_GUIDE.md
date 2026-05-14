@@ -38,7 +38,6 @@ Create `.env.local` in repo root:
 ```env
 VITE_BACKEND_URL=http://localhost:3001
 VITE_ALLOW_REMOTE_BACKEND_IN_DEV=false
-VITE_ENABLE_SIGNUP_2FA=false
 ```
 
 ### Backend env
@@ -130,4 +129,3 @@ Expected: full smoke checks pass, including `create -> current -> logout -> logi
 - Use second terminal for `npm run dev`.
 - Keep `.env.local` and `server/.env.local` open in split view when troubleshooting.
 - Use `npm --prefix server run build` before pushing deployment changes.
-

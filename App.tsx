@@ -58,20 +58,6 @@ type RouteState = {
 const FREE_TIER_NAME = 'Free / Community Tier';
 const PENDING_CHECKOUT_SESSION_KEY = 'hcn.pendingCheckoutSessionId';
 const ACCOUNT_RECOVERY_UI_ENABLED = true;
-const DEFAULT_WIRELESS_COUNTRY_CODE = '+1';
-const WIRELESS_PHONE_COUNTRY_CODES = [
-  { value: '+1', label: 'US / Canada +1' },
-  { value: '+44', label: 'UK +44' },
-  { value: '+234', label: 'Nigeria +234' },
-  { value: '+233', label: 'Ghana +233' },
-  { value: '+27', label: 'South Africa +27' },
-  { value: '+254', label: 'Kenya +254' },
-  { value: '+91', label: 'India +91' },
-  { value: '+61', label: 'Australia +61' },
-  { value: '+55', label: 'Brazil +55' },
-  { value: '+52', label: 'Mexico +52' },
-  { value: '+63', label: 'Philippines +63' },
-];
 const MEMBERSHIP_RETURN_PATH_ID = 'return';
 const MEMBERSHIP_MOBILE_STEPS = ['Start', 'Free', 'Guided', 'Accelerated'];
 const MEMBERSHIP_RETURN_INSIGHT = 'The Return – Welcome back, Traveler. Resume your journey.';
@@ -437,27 +423,12 @@ const App: React.FC = () => {
   const [passwordInput, setPasswordInput] = useState('');
   const [confirmPasswordInput, setConfirmPasswordInput] = useState('');
   const [error, setError] = useState('');
-  const [twoFactorCodeInput, setTwoFactorCodeInput] = useState('');
-  const [providerTokenInput, setProviderTokenInput] = useState('');
-  const [twoFactorPhoneCountryCode, setTwoFactorPhoneCountryCode] = useState(DEFAULT_WIRELESS_COUNTRY_CODE);
-  const [twoFactorPhoneInput, setTwoFactorPhoneInput] = useState('');
-  const [pendingTwoFactorMethod, setPendingTwoFactorMethod] = useState<'phone' | 'wallet' | null>(null);
-  const [initialTwoFactorMethod, setInitialTwoFactorMethod] = useState<'phone' | 'wallet'>('phone');
-  const [initialTwoFactorPhoneInput, setInitialTwoFactorPhoneInput] = useState('');
-  const [initialTwoFactorWalletInput, setInitialTwoFactorWalletInput] = useState('');
-  const [initialTwoFactorStatus, setInitialTwoFactorStatus] = useState('');
-  const [initialTwoFactorError, setInitialTwoFactorError] = useState('');
-  const [isInitialTwoFactorSubmitting, setInitialTwoFactorSubmitting] = useState(false);
-  const [initialTwoFactorCompletedNotice, setInitialTwoFactorCompletedNotice] = useState(false);
   const [isPasswordResetRequestOpen, setPasswordResetRequestOpen] = useState(false);
   const [passwordResetEmailInput, setPasswordResetEmailInput] = useState('');
   const [passwordResetNotice, setPasswordResetNotice] = useState('');
   const [isPasswordResetPending, setPasswordResetPending] = useState(false);
   const [newPasswordInput, setNewPasswordInput] = useState('');
   const [confirmNewPasswordInput, setConfirmNewPasswordInput] = useState('');
-  const [emailVerificationNotice, setEmailVerificationNotice] = useState('');
-  const [isEmailVerificationPending, setEmailVerificationPending] = useState(false);
-
   const [isContactModalOpen, setContactModalOpen] = useState(false);
   const [contactName, setContactName] = useState('');
   const [contactEmail, setContactEmail] = useState('');
@@ -540,21 +511,7 @@ const App: React.FC = () => {
     return `Unable to ${actionLabel}. Cannot reach backend at ${target}.`;
   };
 
-  const buildTransientPhoneNumber = (): string => {
-    const rawPhone = twoFactorPhoneInput.trim();
-    if (!rawPhone) return '';
-    if (rawPhone.startsWith('+')) return rawPhone;
-    const digits = rawPhone.replace(/\D/g, '');
-    return digits ? `${twoFactorPhoneCountryCode}${digits}` : rawPhone;
-  };
-
-  const resetSignInChallengeInputs = () => {
-    setTwoFactorCodeInput('');
-    setProviderTokenInput('');
-    setPendingTwoFactorMethod(null);
-    setTwoFactorPhoneInput('');
-    setTwoFactorPhoneCountryCode(DEFAULT_WIRELESS_COUNTRY_CODE);
-  };
+  const resetSignInChallengeInputs = () => undefined;
 
   const normalizeCourse = (rawCourse: any): Course => ({
     id: String(rawCourse?.id || ''),
@@ -1146,64 +1103,6 @@ const App: React.FC = () => {
     user?.tier,
   ]);
 
-  const continueAfterInitialTwoFactor = (profile: UserProfile) => {
-    const needsMembershipSelection = !hasConfirmedMembership(profile);
-    setInitialTwoFactorCompletedNotice(false);
-    setInitialTwoFactorStatus('');
-    setInitialTwoFactorError('');
-    setIsSelectingTier(needsMembershipSelection);
-    setMembershipNotice(needsMembershipSelection ? 'Select a membership tier to continue.' : '');
-    setCurrentView(needsMembershipSelection ? AppView.MEMBERSHIP_ACCESS : AppView.DASHBOARD, {}, { replace: true });
-    setSidebarOpen(!needsMembershipSelection && window.innerWidth >= 1024);
-  };
-
-  const handleInitialTwoFactorEnroll = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!user) return;
-
-    const isPhone = initialTwoFactorMethod === 'phone';
-    const endpoint = isPhone ? '/user/2fa/phone/enroll' : '/user/2fa/wallet/enroll';
-    const value = isPhone ? initialTwoFactorPhoneInput.trim() : initialTwoFactorWalletInput.trim();
-    if (!value) {
-      setInitialTwoFactorError(
-        isPhone ? 'Enter a phone number to complete 2FA setup.' : 'Enter an address DID to complete 2FA setup.'
-      );
-      return;
-    }
-
-    setInitialTwoFactorSubmitting(true);
-    setInitialTwoFactorError('');
-    setInitialTwoFactorStatus('Setting up your required account protection...');
-    try {
-      const data = await api<any>(endpoint, {
-        method: 'POST',
-        body: isPhone ? { phoneNumber: value } : { walletDid: value },
-      });
-      const nextUser = data?.user ? toPlatformUser(data.user) : await refreshCanonicalUser();
-      if (!nextUser) {
-        setInitialTwoFactorError('2FA was updated, but your session could not be refreshed. Please sign in again.');
-        setInitialTwoFactorStatus('');
-        return;
-      }
-      const token = getAuthToken();
-      if (token) {
-        setUserAuthSession(token, nextUser);
-      }
-      setUser(nextUser);
-      setInitialTwoFactorCompletedNotice(true);
-      setInitialTwoFactorStatus('Initial 2FA setup complete. You can continue.');
-      setInitialTwoFactorPhoneInput('');
-      setInitialTwoFactorWalletInput('');
-    } catch (error) {
-      setInitialTwoFactorStatus('');
-      setInitialTwoFactorError(
-        error instanceof Error ? error.message : '2FA enrollment failed. Please retry.'
-      );
-    } finally {
-      setInitialTwoFactorSubmitting(false);
-    }
-  };
-
   useEffect(() => {
     if (!pendingCheckoutSessionId) {
       return;
@@ -1288,20 +1187,10 @@ const App: React.FC = () => {
     e.preventDefault();
     setError('');
     const normalizedEmail = emailInput.trim().toLowerCase();
-    const transientPhoneNumber = buildTransientPhoneNumber();
     const signInBody: Record<string, unknown> = {
       email: normalizedEmail,
       password: passwordInput,
     };
-    if (transientPhoneNumber && !pendingTwoFactorMethod) {
-      signInBody.phoneNumber = transientPhoneNumber;
-    }
-    if (twoFactorCodeInput.trim()) {
-      signInBody.twoFactorCode = twoFactorCodeInput.trim();
-    }
-    if (providerTokenInput.trim()) {
-      signInBody.providerToken = providerTokenInput.trim();
-    }
 
     try {
       const data = await api<any>('/user/signin', {
@@ -1309,16 +1198,6 @@ const App: React.FC = () => {
         auth: false,
         body: signInBody,
       });
-
-      if (data?.requiresTwoFactor) {
-        const method = data?.method === 'wallet' ? 'wallet' : 'phone';
-        setPendingTwoFactorMethod(method);
-        if (method === 'phone') {
-          setTwoFactorPhoneInput('');
-        }
-        setError(data?.message || 'Additional verification is required.');
-        return;
-      }
 
       const canonicalUser = toPlatformUser(data.user);
       if (hasApplicantRole(canonicalUser)) {
@@ -1368,7 +1247,6 @@ const App: React.FC = () => {
       );
       setPendingCheckoutSessionId(shouldVerifyStoredCheckout ? storedCheckoutSessionId : null);
       resetSignInChallengeInputs();
-      setInitialTwoFactorCompletedNotice(false);
       closeModals();
       if (preserveCareersView) {
         setCurrentView(currentView, {}, { replace: true });
@@ -1464,9 +1342,6 @@ const App: React.FC = () => {
       email: normalizedEmail,
       password: passwordInput,
     };
-    if (providerTokenInput.trim()) {
-      providerSignInBody.providerToken = providerTokenInput.trim();
-    }
 
     try {
       const data = await api<any>('/user/signin', {
@@ -1474,13 +1349,6 @@ const App: React.FC = () => {
         auth: false,
         body: providerSignInBody,
       });
-
-      if (data?.requiresTwoFactor) {
-        const method = data?.method === 'wallet' ? 'wallet' : 'phone';
-        setPendingTwoFactorMethod(method);
-        setError(data?.message || 'Additional verification is required.');
-        return;
-      }
 
       const canonicalUser = toPlatformUser(data.user);
       if (!hasProviderRole(canonicalUser)) {
@@ -1541,7 +1409,6 @@ const App: React.FC = () => {
           email: normalizedEmail,
           name: identityName,
           password: passwordInput,
-          twoFactorMethod: 'none',
         },
       });
 
@@ -1571,7 +1438,6 @@ const App: React.FC = () => {
             ? 'Select a membership tier to continue.'
             : ''
       );
-      setInitialTwoFactorCompletedNotice(false);
       closeModals();
       setCurrentView(
         needsInitialTwoFactorSetup
@@ -1683,31 +1549,6 @@ const App: React.FC = () => {
       );
     } finally {
       setPasswordResetPending(false);
-    }
-  };
-
-  const handleVerifyEmailConfirm = async () => {
-    setEmailVerificationPending(true);
-    setEmailVerificationNotice('');
-    const token = String(routeParams.token || '').trim();
-    if (!token) {
-      setEmailVerificationNotice('Verification link is missing a token.');
-      setEmailVerificationPending(false);
-      return;
-    }
-    try {
-      const data = await api<any>('/user/email-verification/confirm', {
-        method: 'POST',
-        auth: false,
-        body: { token },
-      });
-      setEmailVerificationNotice(data?.message || 'Email verified. You can continue into the hub.');
-    } catch (error) {
-      setEmailVerificationNotice(
-        error instanceof Error ? error.message : 'Unable to verify email. Please retry.'
-      );
-    } finally {
-      setEmailVerificationPending(false);
     }
   };
 
@@ -1945,122 +1786,7 @@ const App: React.FC = () => {
     );
   }, [user]);
 
-  const renderInitialTwoFactorSetup = () => {
-    const completed = Boolean(user && !requiresInitialTwoFactorSetup(user) && initialTwoFactorCompletedNotice);
-    return (
-      <div className="p-4 sm:p-8 max-w-3xl mx-auto w-full">
-        <div className="glass-panel p-6 sm:p-8 rounded-3xl border border-blue-500/20">
-          <div className="flex items-start gap-4 mb-6">
-            <div className="p-3 rounded-2xl bg-blue-500/10 border border-blue-400/20">
-              {completed ? (
-                <CheckCircle2 className="w-6 h-6 text-emerald-300" />
-              ) : (
-                <Shield className="w-6 h-6 text-blue-300" />
-              )}
-            </div>
-            <div>
-              <h2 className="text-2xl sm:text-3xl font-black text-white uppercase tracking-tight">
-                {completed ? '2FA Setup Complete' : 'Required 2FA Setup'}
-              </h2>
-              <p className="mt-2 text-sm leading-6 text-slate-300">
-                {completed
-                  ? 'Your account now has initial two-factor protection enabled.'
-                  : 'Complete this security step before membership activation or dashboard access.'}
-              </p>
-            </div>
-          </div>
-
-          {!completed ? (
-            <form onSubmit={handleInitialTwoFactorEnroll} className="space-y-5">
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                <button
-                  type="button"
-                  onClick={() => setInitialTwoFactorMethod('phone')}
-                  className={`p-4 rounded-2xl border text-left transition-colors ${
-                    initialTwoFactorMethod === 'phone'
-                      ? 'border-blue-400/60 bg-blue-500/15 text-white'
-                      : 'border-white/10 bg-white/5 text-slate-300 hover:bg-white/10'
-                  }`}
-                >
-                  <span className="block text-xs font-black uppercase tracking-widest">Phone Code</span>
-                  <span className="block mt-2 text-xs leading-5 text-slate-400">
-                    Use a phone number for sign-in OTP checks.
-                  </span>
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setInitialTwoFactorMethod('wallet')}
-                  className={`p-4 rounded-2xl border text-left transition-colors ${
-                    initialTwoFactorMethod === 'wallet'
-                      ? 'border-blue-400/60 bg-blue-500/15 text-white'
-                      : 'border-white/10 bg-white/5 text-slate-300 hover:bg-white/10'
-                  }`}
-                >
-                  <span className="block text-xs font-black uppercase tracking-widest">Address Credential</span>
-                  <span className="block mt-2 text-xs leading-5 text-slate-400">
-                    Use a verified address DID for signature-based checks.
-                  </span>
-                </button>
-              </div>
-
-              {initialTwoFactorMethod === 'phone' ? (
-                <div className="space-y-3">
-                  <label className="text-[9px] font-black text-slate-500 uppercase tracking-widest ml-2">Phone Number</label>
-                  <input
-                    type="tel"
-                    value={initialTwoFactorPhoneInput}
-                    onChange={(e) => setInitialTwoFactorPhoneInput(e.target.value)}
-                    className="w-full px-5 py-4 bg-white/5 border border-white/10 rounded-2xl text-white outline-none focus:ring-2 focus:ring-blue-500/50 transition-all font-medium text-sm"
-                    placeholder="+1 555 123 4567"
-                    required
-                  />
-                </div>
-              ) : (
-                <div className="space-y-3">
-                  <label className="text-[9px] font-black text-slate-500 uppercase tracking-widest ml-2">Address DID</label>
-                  <input
-                    type="text"
-                    value={initialTwoFactorWalletInput}
-                    onChange={(e) => setInitialTwoFactorWalletInput(e.target.value)}
-                    className="w-full px-5 py-4 bg-white/5 border border-white/10 rounded-2xl text-white outline-none focus:ring-2 focus:ring-blue-500/50 transition-all font-medium text-sm"
-                    placeholder="did:hcn:..."
-                    required
-                  />
-                </div>
-              )}
-
-              {initialTwoFactorStatus && (
-                <p className="rounded-xl border border-blue-400/20 bg-blue-500/10 p-3 text-xs leading-5 text-blue-100">
-                  {initialTwoFactorStatus}
-                </p>
-              )}
-              {initialTwoFactorError && (
-                <p className="rounded-xl border border-red-400/20 bg-red-500/10 p-3 text-xs leading-5 text-red-100">
-                  {initialTwoFactorError}
-                </p>
-              )}
-
-              <button
-                type="submit"
-                disabled={isInitialTwoFactorSubmitting}
-                className="w-full py-4 bg-blue-600 hover:bg-blue-500 disabled:opacity-60 text-white rounded-2xl font-black text-xs uppercase tracking-widest transition-all shadow-xl"
-              >
-                {isInitialTwoFactorSubmitting ? 'Setting Up...' : 'Complete 2FA Setup'}
-              </button>
-            </form>
-          ) : (
-            <button
-              type="button"
-              onClick={() => user && continueAfterInitialTwoFactor(user)}
-              className="w-full py-4 bg-blue-600 hover:bg-blue-500 text-white rounded-2xl font-black text-xs uppercase tracking-widest transition-all shadow-xl"
-            >
-              Continue
-            </button>
-          )}
-        </div>
-      </div>
-    );
-  };
+  const renderInitialTwoFactorSetup = () => null;
 
   const renderActiveView = () => {
     if (!user && currentView === AppView.PROVIDER_APPLICATION_STATUS) {
@@ -2342,17 +2068,23 @@ const App: React.FC = () => {
                 <span className="text-[10px] font-black uppercase tracking-widest">Portal Entry</span>
               </button>
               <h2 className="text-3xl font-black text-white uppercase tracking-tight mb-3">
-                Verify Email
+                Account Access
               </h2>
               <p className="text-sm leading-6 text-slate-400 mb-6">
-                Email verification is deferred for launch. Membership access is handled through sign-in and Stripe checkout.
+                Sign in with your email and password to continue.
               </p>
               <button
                 type="button"
-                onClick={() => setCurrentView(AppView.MEMBERSHIP_ACCESS)}
+                onClick={() => {
+                  setCurrentView(user ? AppView.MEMBERSHIP_ACCESS : AppView.ENTRY);
+                  if (!user) {
+                    resetSignInChallengeInputs();
+                    setSigninModalOpen(true);
+                  }
+                }}
                 className="w-full py-4 bg-blue-600 hover:bg-blue-500 disabled:opacity-60 text-white rounded-2xl font-black text-xs uppercase tracking-widest transition-all shadow-xl"
               >
-                Continue To Membership
+                Continue
               </button>
             </div>
           </div>
@@ -2494,26 +2226,11 @@ const App: React.FC = () => {
                     )}
                   </div>
                 )}
-                {pendingTwoFactorMethod === 'wallet' && (
-                  <label className="block space-y-2">
-                    <span className="text-[10px] font-black uppercase tracking-widest text-slate-500">
-                      Address Verification Credential
-                    </span>
-                    <input
-                      type="text"
-                      value={providerTokenInput}
-                      onChange={(event) => setProviderTokenInput(event.target.value)}
-                      className="w-full rounded-2xl border border-white/10 bg-white/[0.06] px-5 py-4 text-sm text-white outline-none transition focus:ring-2 focus:ring-blue-500/40"
-                      required
-                      placeholder="Paste session credential"
-                    />
-                  </label>
-                )}
                 <button
                   type="submit"
                   className="w-full rounded-2xl bg-blue-600 px-5 py-4 text-xs font-black uppercase tracking-widest text-white shadow-xl shadow-blue-950/40 transition hover:bg-blue-500"
                 >
-                  {pendingTwoFactorMethod === 'wallet' ? 'Verify & Open Provider Tools' : 'Open Provider Tools'}
+                  Open Provider Tools
                 </button>
               </form>
             </div>
@@ -3725,36 +3442,6 @@ const App: React.FC = () => {
                   <label className="text-[9px] font-black text-slate-500 uppercase tracking-widest ml-2">Password</label>
                   <input type="password" value={passwordInput} onChange={e => setPasswordInput(e.target.value)} className="w-full px-5 sm:px-8 py-3 sm:py-4 bg-white/5 border border-white/10 rounded-xl sm:rounded-2xl text-white outline-none focus:ring-2 focus:ring-blue-500/50 transition-all font-medium text-sm" required placeholder="••••••••" />
                 </div>
-                {isSigninModalOpen && !pendingTwoFactorMethod && (
-                  <div className="space-y-3">
-                    <label className="text-[9px] font-black text-slate-500 uppercase tracking-widest ml-2">Wireless 2FA Number</label>
-                    <div className="grid grid-cols-[minmax(7rem,0.8fr)_minmax(0,1.2fr)] gap-2">
-                      <select
-                        value={twoFactorPhoneCountryCode}
-                        onChange={(e) => setTwoFactorPhoneCountryCode(e.target.value)}
-                        className="min-w-0 rounded-xl border border-white/10 bg-slate-950 px-3 py-3 text-xs font-black uppercase tracking-wider text-white outline-none transition focus:ring-2 focus:ring-blue-500/50 sm:rounded-2xl sm:px-4"
-                        aria-label="Wireless country code"
-                      >
-                        {WIRELESS_PHONE_COUNTRY_CODES.map((option) => (
-                          <option key={option.value} value={option.value}>
-                            {option.label}
-                          </option>
-                        ))}
-                      </select>
-                      <input
-                        type="tel"
-                        value={twoFactorPhoneInput}
-                        onChange={(e) => setTwoFactorPhoneInput(e.target.value)}
-                        className="min-w-0 rounded-xl border border-white/10 bg-white/5 px-4 py-3 text-sm font-medium text-white outline-none transition focus:ring-2 focus:ring-blue-500/50 sm:rounded-2xl sm:px-5"
-                        required
-                        placeholder="555 123 4567"
-                      />
-                    </div>
-                    <p className="px-1 text-[9px] uppercase tracking-widest text-blue-300/80">
-                      Used for this sign-in only.
-                    </p>
-                  </div>
-                )}
                 {ACCOUNT_RECOVERY_UI_ENABLED && isSigninModalOpen && (
                   <div className="space-y-3 rounded-2xl border border-white/10 bg-white/[0.03] p-4">
                     <button
@@ -3813,34 +3500,8 @@ const App: React.FC = () => {
                     </p>
                   </>
                 )}
-                {isSigninModalOpen && pendingTwoFactorMethod === 'phone' && (
-                  <div className="space-y-3">
-                    <label className="text-[9px] font-black text-slate-500 uppercase tracking-widest ml-2">Phone OTP Code</label>
-                    <input
-                      type="text"
-                      value={twoFactorCodeInput}
-                      onChange={(e) => setTwoFactorCodeInput(e.target.value)}
-                      className="w-full px-5 sm:px-8 py-3 sm:py-4 bg-white/5 border border-white/10 rounded-xl sm:rounded-2xl text-white outline-none focus:ring-2 focus:ring-blue-500/50 transition-all font-medium text-sm"
-                      placeholder="6-digit code"
-                      required
-                    />
-                  </div>
-                )}
-                {isSigninModalOpen && pendingTwoFactorMethod === 'wallet' && (
-                  <div className="space-y-3">
-                    <label className="text-[9px] font-black text-slate-500 uppercase tracking-widest ml-2">Address Verification Credential</label>
-                    <input
-                      type="text"
-                      value={providerTokenInput}
-                      onChange={(e) => setProviderTokenInput(e.target.value)}
-                      className="w-full px-5 sm:px-8 py-3 sm:py-4 bg-white/5 border border-white/10 rounded-xl sm:rounded-2xl text-white outline-none focus:ring-2 focus:ring-blue-500/50 transition-all font-medium text-sm"
-                      placeholder="Paste session credential"
-                      required
-                    />
-                  </div>
-                )}
                 <button type="submit" className="w-full py-4 sm:py-5 bg-blue-600 hover:bg-blue-500 text-white rounded-xl sm:rounded-2xl font-black text-xs sm:text-sm uppercase tracking-widest transition-all shadow-2xl shadow-blue-900/40 mt-4 sm:mt-6">
-                  {isSigninModalOpen ? (pendingTwoFactorMethod ? 'Verify & Sign In' : 'Sign In') : 'Create Account'}
+                  {isSigninModalOpen ? 'Sign In' : 'Create Account'}
                 </button>
               </form>
               <div className="mt-6 sm:mt-8 text-center text-slate-500 text-[9px] sm:text-[10px] font-black uppercase tracking-widest">

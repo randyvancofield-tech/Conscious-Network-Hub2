@@ -48,8 +48,8 @@ Optional integration values:
 - `OPENAI_API_KEY`: enables OpenAI-backed AI route responses.
 - `GOOGLE_CLOUD_PROJECT`, `GOOGLE_CLOUD_REGION`, `VERTEX_AI_MODEL`: enable Vertex AI service initialization.
 - `STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET`, `STRIPE_PRICE_FREE`, `STRIPE_PRICE_GUIDED`, `STRIPE_PRICE_ACCELERATED`, `STRIPE_MODE`, `STRIPE_SUCCESS_URL`, `STRIPE_CANCEL_URL`: enable membership checkout and webhooks.
-- `SMTP_*` / email secrets: enable email delivery for native password reset and optional email verification.
-- `TWILIO_*`: required to deliver per-login wireless 2FA codes for member sign-in in production.
+- `SMTP_*` / email secrets: optional delivery for native password reset only.
+- `TWILIO_*`: optional legacy SMS settings only; default member sign-in and onboarding do not require Twilio.
 - `HCN_PROFILE_ANCHOR_CONTRACT_ADDRESS`, `HCN_PROFILE_ANCHOR_CHAIN_ID`, RPC keys: enable integrity anchoring.
 
 The canonical environment reference is [docs/ENVIRONMENT_MATRIX.md](../docs/ENVIRONMENT_MATRIX.md).
@@ -142,7 +142,7 @@ Signin:
 1. Frontend calls `POST /api/user/signin`.
 2. Backend resolves user by email.
 3. `src/auth.ts` verifies password hash.
-4. User route enforces lockout and optional 2FA/provider policy.
+4. User route enforces lockout and provider policy.
 5. A persisted session and signed token are returned.
 
 Protected requests:

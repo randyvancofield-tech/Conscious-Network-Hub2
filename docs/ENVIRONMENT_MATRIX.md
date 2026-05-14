@@ -8,7 +8,6 @@ Canonical environment values for the current backend architecture.
 |---|---|---|---|---|
 | `.env.local` | `VITE_BACKEND_URL` | `http://localhost:3001` | Yes | Frontend API base URL. |
 | `.env.local` | `VITE_ALLOW_REMOTE_BACKEND_IN_DEV` | `false` | No | Keeps development writes on local backend unless explicitly overridden. |
-| `.env.local` | `VITE_ENABLE_SIGNUP_2FA` | `false` | No | Keep disabled until full OTP/provider flows are operational. |
 | `.env.example` | `VITE_BACKEND_URL` | `http://localhost:3001` | Yes | Template value for local development. |
 
 ## Backend
@@ -39,12 +38,10 @@ Canonical environment values for the current backend architecture.
 | Render | `DATABASE_POOL_MODE` | `transaction` | Yes | Must match the Neon pooler mode for `DATABASE_URL`. |
 | Render | `HSTS_ALLOWED_HOSTS` | final production API/custom domain host | Yes for custom prod domains | Optional comma-separated override for hosts that should receive Strict-Transport-Security. Defaults to the host from `FRONTEND_BASE_URL`. |
 | Render | `HSTS_MAX_AGE_SECONDS` | `31536000` | No | HSTS max-age for production HTTPS requests on allowed hosts. |
-| Render | `EMAIL_USER` + `EMAIL_PASSWORD`, or `SMTP_HOST` + `SMTP_PORT` | none | Yes for account recovery | Required to deliver password reset email in production. |
-| Render | `TWILIO_ACCOUNT_SID`, `TWILIO_AUTH_TOKEN`, `TWILIO_FROM_NUMBER` | none | Yes for member sign-in | Required to deliver the per-login wireless 2FA code for member accounts in production. |
-| Render | `ENABLE_EMAIL_VERIFICATION` | `false` | No | Keep unset/false for launch mode. |
+| Render | `EMAIL_USER` + `EMAIL_PASSWORD`, or `SMTP_HOST` + `SMTP_PORT` | none | No | Optional; enables native password reset email delivery only. Normal sign-in does not require email delivery. |
 | Render | `ENABLE_PASSWORD_RESET` | `true` | No | Set to `false` only to deliberately disable native password reset. |
-| Render | `ENABLE_USER_2FA` | `false` | No | Legacy stored 2FA enrollment flag; member sign-in phone challenges are always enforced for `user` accounts. |
-| Render | `ENABLE_INITIAL_2FA` | `false` | No | Keep unset/false for launch mode. |
+| Render | `ENABLE_USER_2FA` | `false` | No | Optional legacy enrolled 2FA flag. Default member sign-in does not require SMS. |
+| Render | `TWILIO_ACCOUNT_SID`, `TWILIO_AUTH_TOKEN`, `TWILIO_FROM_NUMBER` | none | No | Optional legacy SMS settings only; not required for member sign-in, onboarding, or Render startup. |
 
 ## Hardening Rules
 

@@ -8,6 +8,7 @@ interface MockUser {
   id: string;
   email: string;
   name: string | null;
+  role: 'user' | 'applicant' | 'provider' | 'admin';
   handle: string | null;
   bio: string | null;
   location: string | null;
@@ -30,6 +31,9 @@ interface MockUser {
   };
   password: string;
   passwordFingerprint: string | null;
+  emailVerified: boolean;
+  emailVerificationTokenHash: string | null;
+  emailVerificationExpiresAt: Date | null;
   tier: string;
   subscriptionStatus: string;
   subscriptionStartDate: Date | null;
@@ -43,6 +47,10 @@ interface MockUser {
   pendingPhoneOtpAttempts: number;
   initialTwoFactorRequiredAt: Date | null;
   initialTwoFactorCompletedAt: Date | null;
+  providerApproved: boolean;
+  providerApprovalStatus: string | null;
+  providerRevokedAt: Date | null;
+  providerAccessUpdatedAt: Date | null;
   failedSignInAttempts: number;
   lockoutUntil: Date | null;
   createdAt: Date;
@@ -74,6 +82,7 @@ const uploads = new Map<string, StoredUpload>();
 let nextUserId = 1;
 let nextPostId = 1;
 let nextSessionId = 1;
+let nextProviderSessionId = 1;
 let nextUploadId = 1;
 
 const followKey = (followerId: string, followingId: string): string => `${followerId}:${followingId}`;
@@ -94,9 +103,12 @@ const cloneUser = (user: MockUser): MockUser => ({
   },
   subscriptionStartDate: cloneDate(user.subscriptionStartDate),
   subscriptionEndDate: cloneDate(user.subscriptionEndDate),
+  emailVerificationExpiresAt: cloneDate(user.emailVerificationExpiresAt),
   pendingPhoneOtpExpiresAt: cloneDate(user.pendingPhoneOtpExpiresAt),
   initialTwoFactorRequiredAt: cloneDate(user.initialTwoFactorRequiredAt),
   initialTwoFactorCompletedAt: cloneDate(user.initialTwoFactorCompletedAt),
+  providerRevokedAt: cloneDate(user.providerRevokedAt),
+  providerAccessUpdatedAt: cloneDate(user.providerAccessUpdatedAt),
   lockoutUntil: cloneDate(user.lockoutUntil),
   createdAt: new Date(user.createdAt.getTime()),
   updatedAt: new Date(user.updatedAt.getTime()),
@@ -115,6 +127,7 @@ const createMockUser = (id: string, email: string, overrides: Partial<MockUser> 
     id,
     email,
     name: 'Node',
+    role: 'user',
     handle: null,
     bio: null,
     location: null,
@@ -137,6 +150,9 @@ const createMockUser = (id: string, email: string, overrides: Partial<MockUser> 
     },
     password: '',
     passwordFingerprint: null,
+    emailVerified: false,
+    emailVerificationTokenHash: null,
+    emailVerificationExpiresAt: null,
     tier: 'Free / Community Tier',
     subscriptionStatus: 'inactive',
     subscriptionStartDate: null,
@@ -150,6 +166,10 @@ const createMockUser = (id: string, email: string, overrides: Partial<MockUser> 
     pendingPhoneOtpAttempts: 0,
     initialTwoFactorRequiredAt: null,
     initialTwoFactorCompletedAt: null,
+    providerApproved: false,
+    providerApprovalStatus: null,
+    providerRevokedAt: null,
+    providerAccessUpdatedAt: null,
     failedSignInAttempts: 0,
     lockoutUntil: null,
     createdAt: now,
@@ -175,6 +195,7 @@ const resetState = (): void => {
   nextUserId = 1;
   nextPostId = 1;
   nextSessionId = 1;
+  nextProviderSessionId = 1;
   nextUploadId = 1;
 };
 
@@ -209,11 +230,23 @@ const mockLocalStore = {
     return null;
   },
 
+  async findUserByEmailVerificationTokenHash(tokenHash: string): Promise<MockUser | null> {
+    const normalized = String(tokenHash || '').trim();
+    if (!normalized) return null;
+    for (const user of users.values()) {
+      if (user.emailVerificationTokenHash === normalized) {
+        return cloneUser(user);
+      }
+    }
+    return null;
+  },
+
   async createUser(input: any): Promise<MockUser> {
     const email = String(input.email || '').trim().toLowerCase();
     const id = `user-${nextUserId++}`;
     const created = createMockUser(id, email, {
       name: input.name || 'Node',
+      role: input.role || 'user',
       handle: input.handle || null,
       bio: input.bio || null,
       location: input.location || null,
@@ -226,12 +259,19 @@ const mockLocalStore = {
       },
       password: input.password || '',
       passwordFingerprint: input.passwordFingerprint || null,
+      emailVerified: input.emailVerified === true,
+      emailVerificationTokenHash: input.emailVerificationTokenHash || null,
+      emailVerificationExpiresAt: input.emailVerificationExpiresAt || null,
       tier: input.tier !== undefined ? input.tier : 'Free / Community Tier',
       phoneNumber: input.phoneNumber || null,
       twoFactorMethod: input.twoFactorMethod || 'none',
       walletDid: input.walletDid || null,
       initialTwoFactorRequiredAt: input.initialTwoFactorRequiredAt || null,
       initialTwoFactorCompletedAt: input.initialTwoFactorCompletedAt || null,
+      providerApproved: input.providerApproved === true,
+      providerApprovalStatus: input.providerApprovalStatus || null,
+      providerRevokedAt: input.providerRevokedAt || null,
+      providerAccessUpdatedAt: input.providerAccessUpdatedAt || null,
     });
     users.set(id, created);
     return cloneUser(created);
@@ -442,6 +482,18 @@ const revokeUserSessionMock = jest.fn(async (sessionId: string) => {
   });
 });
 
+const createProviderSessionMock = jest.fn(async (did: string, scopes: string[]) => {
+  const now = new Date();
+  return {
+    id: `provider-session-${nextProviderSessionId++}`,
+    did,
+    scopes,
+    issuedAt: now,
+    expiresAt: new Date(now.getTime() + 1000 * 60 * 60),
+    revokedAt: null,
+  };
+});
+
 const mockIsOpenAIConfigured = jest.fn(() => false);
 const mockChatWithOpenAI = jest.fn(async () => 'Ethical AI test response');
 const mockGetVertexAIService = jest.fn(() => {
@@ -471,7 +523,16 @@ jest.mock('../services/googleSheetsMirror', () => ({
   mirrorUserToGoogleSheets: jest.fn(async () => undefined),
 }));
 
+jest.mock('../services/emailService', () => ({
+  __esModule: true,
+  default: {
+    send: jest.fn(async () => ({ ok: true, skipped: true })),
+    configured: jest.fn(() => false),
+  },
+}));
+
 jest.mock('../services/providerSessionStore', () => ({
+  createProviderSession: createProviderSessionMock,
   getProviderSessionById: jest.fn(async () => null),
 }));
 
@@ -488,6 +549,7 @@ const { userPublicRoutes, userProtectedRoutes } = require('../routes/user');
 const socialRoutes = require('../routes/social').default;
 const { uploadPublicRoutes, uploadProtectedRoutes } = require('../routes/upload');
 const aiRoutes = require('../routes/ai').default;
+const providerAuthRoutes = require('../routes/providerAuth').default;
 
 let server: http.Server | null = null;
 let baseUrl = '';
@@ -519,26 +581,12 @@ const requestJson = async (options: {
 };
 
 const requestMemberSignIn = async (email: string, password: string): Promise<{ status: number; body: any }> => {
-  const challenge = await requestJson({
-    method: 'POST',
-    path: '/api/user/signin',
-    body: {
-      email,
-      password,
-      phoneNumber: '+15551234567',
-    },
-  });
-  expect(challenge.status).toBe(202);
-  expect(challenge.body?.method).toBe('phone');
-  expect(String(challenge.body?.devOtpCode || '')).toMatch(/^\d{6}$/);
-
   return requestJson({
     method: 'POST',
     path: '/api/user/signin',
     body: {
       email,
       password,
-      twoFactorCode: challenge.body.devOtpCode,
     },
   });
 };
@@ -581,6 +629,7 @@ describe('Core user persistence loop', () => {
     app.use('/api/social', socialRoutes);
     app.use('/api/upload', uploadProtectedRoutes);
     app.use('/api/ai', aiRoutes);
+    app.use('/api/provider/auth', providerAuthRoutes);
     app.use('/uploads', uploadPublicRoutes);
 
     server = await new Promise<http.Server>((resolve) => {
@@ -611,9 +660,7 @@ describe('Core user persistence loop', () => {
 
   beforeEach(() => {
     resetState();
-    delete process.env.ENABLE_INITIAL_2FA;
     delete process.env.ENABLE_USER_2FA;
-    delete process.env.ENABLE_EMAIL_VERIFICATION;
     delete process.env.ENABLE_PASSWORD_RESET;
     jest.clearAllMocks();
     mockIsOpenAIConfigured.mockReturnValue(false);
@@ -641,6 +688,7 @@ describe('Core user persistence loop', () => {
     expect(alphaToken.length).toBeGreaterThan(20);
     expect(alphaId).toBeTruthy();
     expect(createAlpha.body?.user?.initialTwoFactorRequired).toBe(false);
+    expect(createAlpha.body?.emailVerification).toBeUndefined();
 
     const privacyBeforeMembership = await requestJson({
       method: 'GET',
@@ -787,7 +835,63 @@ describe('Core user persistence loop', () => {
     expect(deniedProfileView.body?.error).toBe('Profile is unavailable');
   });
 
-  it('does not block existing users with null initial 2FA onboarding fields', async () => {
+  it('registers and signs in a member without phoneNumber or email verification', async () => {
+    const password = 'Qx#93Lm!T2vA';
+    const create = await requestJson({
+      method: 'POST',
+      path: '/api/user/create',
+      body: {
+        email: 'email-verify@example.com',
+        password,
+        name: 'Email Verify',
+      },
+    });
+
+    expect(create.status).toBe(200);
+    expect(create.body?.emailVerification).toBeUndefined();
+    expect(create.body?.user?.initialTwoFactorRequired).toBe(false);
+    expect(create.body?.user?.emailVerified).toBe(false);
+
+    const signin = await requestMemberSignIn('email-verify@example.com', password);
+    expect(signin.status).toBe(200);
+    expect(signin.body?.success).toBe(true);
+    expect(signin.body?.user?.initialTwoFactorRequired).toBe(false);
+    expect(signin.body?.user?.emailVerified).toBe(false);
+  });
+
+  it('signs in an approved provider and initializes native provider controls without 2FA', async () => {
+    const password = 'ProviderPass#1234';
+    const provider = createMockUser('approved-provider', 'provider@example.com', {
+      role: 'provider',
+      password: hashPassword(password),
+      providerApproved: true,
+      providerApprovalStatus: 'approved',
+      providerRevokedAt: null,
+    });
+    users.set(provider.id, provider);
+
+    const signin = await requestMemberSignIn(provider.email, password);
+    expect(signin.status).toBe(200);
+    expect(signin.body?.success).toBe(true);
+    expect(signin.body?.user?.role).toBe('provider');
+
+    const providerSession = await requestJson({
+      method: 'POST',
+      path: '/api/provider/auth/session',
+      token: String(signin.body?.token || ''),
+      body: {},
+    });
+
+    expect(providerSession.status).toBe(200);
+    expect(providerSession.body?.success).toBe(true);
+    expect(String(providerSession.body?.token || '').length).toBeGreaterThan(20);
+    expect(createProviderSessionMock).toHaveBeenCalledWith(`provider:${provider.id}`, [
+      'provider:read',
+      'provider:host',
+    ]);
+  });
+
+  it('does not block existing users with null legacy verification fields', async () => {
     const password = 'ExistingPass#1234';
     const existing = createMockUser('existing-user', 'existing@example.com', {
       password: hashPassword(password),
@@ -880,7 +984,7 @@ describe('Core user persistence loop', () => {
     expect(projected?.subscriptionEndDate).toBe(null);
   });
 
-  it('allows free users with completed initial 2FA to call Ethical AI Insight', async () => {
+  it('allows free users with legacy verification fields to call Ethical AI Insight', async () => {
     const user = createMockUser('free-ai-user', 'free-ai@example.com', {
       tier: 'Free / Community Tier',
       initialTwoFactorRequiredAt: new Date(Date.now() - 1000),
@@ -907,8 +1011,7 @@ describe('Core user persistence loop', () => {
     expect(ai.body?.reply).toBe('Free tier AI response');
   });
 
-  it('blocks Ethical AI Insight until required initial 2FA is completed', async () => {
-    process.env.ENABLE_INITIAL_2FA = 'true';
+  it('does not block Ethical AI Insight when legacy initial verification fields are incomplete', async () => {
     const user = createMockUser('pending-ai-user', 'pending-ai@example.com', {
       tier: 'Free / Community Tier',
       initialTwoFactorRequiredAt: new Date(),
@@ -925,8 +1028,8 @@ describe('Core user persistence loop', () => {
       body: { refreshNonce: 'test' },
     });
 
-    expect(ai.status).toBe(403);
-    expect(ai.body?.code).toBe('INITIAL_2FA_REQUIRED');
+    expect(ai.status).toBe(200);
+    expect(ai.body?.provider).toBe('openai');
   });
 
   it('returns a graceful 503 when no AI provider is configured', async () => {

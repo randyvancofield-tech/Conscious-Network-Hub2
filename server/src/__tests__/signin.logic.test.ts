@@ -6,6 +6,7 @@ type MockUser = {
   id: string;
   email: string;
   name: string | null;
+  role: 'user' | 'applicant' | 'provider' | 'admin';
   password: string;
   passwordFingerprint: string | null;
   tier: string;
@@ -16,12 +17,20 @@ type MockUser = {
   updatedAt: Date;
   failedSignInAttempts: number;
   lockoutUntil: Date | null;
+  emailVerified: boolean;
+  emailVerificationTokenHash: string | null;
+  emailVerificationExpiresAt: Date | null;
   twoFactorMethod: 'none' | 'phone' | 'wallet';
   phoneNumber: string | null;
   walletDid: string | null;
   pendingPhoneOtpHash: string | null;
   pendingPhoneOtpExpiresAt: Date | null;
   pendingPhoneOtpAttempts: number;
+  initialTwoFactorRequiredAt: Date | null;
+  initialTwoFactorCompletedAt: Date | null;
+  providerApproved: boolean;
+  providerApprovalStatus: string | null;
+  providerRevokedAt: Date | null;
 };
 
 const users = new Map<string, MockUser>();
@@ -38,8 +47,17 @@ const cloneUser = (user: MockUser): MockUser => ({
     ? new Date(user.subscriptionEndDate.getTime())
     : null,
   lockoutUntil: user.lockoutUntil ? new Date(user.lockoutUntil.getTime()) : null,
+  emailVerificationExpiresAt: user.emailVerificationExpiresAt
+    ? new Date(user.emailVerificationExpiresAt.getTime())
+    : null,
   pendingPhoneOtpExpiresAt: user.pendingPhoneOtpExpiresAt
     ? new Date(user.pendingPhoneOtpExpiresAt.getTime())
+    : null,
+  initialTwoFactorRequiredAt: user.initialTwoFactorRequiredAt
+    ? new Date(user.initialTwoFactorRequiredAt.getTime())
+    : null,
+  initialTwoFactorCompletedAt: user.initialTwoFactorCompletedAt
+    ? new Date(user.initialTwoFactorCompletedAt.getTime())
     : null,
 });
 
@@ -49,6 +67,7 @@ const createMockUser = (email: string, passwordHash: string): MockUser => {
     id: `user-${email}`,
     email,
     name: 'SignIn User',
+    role: 'user',
     password: passwordHash,
     passwordFingerprint: null,
     tier: 'Free / Community Tier',
@@ -59,12 +78,20 @@ const createMockUser = (email: string, passwordHash: string): MockUser => {
     updatedAt: now,
     failedSignInAttempts: 0,
     lockoutUntil: null,
+    emailVerified: false,
+    emailVerificationTokenHash: null,
+    emailVerificationExpiresAt: null,
     twoFactorMethod: 'none',
     phoneNumber: null,
     walletDid: null,
     pendingPhoneOtpHash: null,
     pendingPhoneOtpExpiresAt: null,
     pendingPhoneOtpAttempts: 0,
+    initialTwoFactorRequiredAt: null,
+    initialTwoFactorCompletedAt: null,
+    providerApproved: false,
+    providerApprovalStatus: null,
+    providerRevokedAt: null,
   };
 };
 
@@ -119,6 +146,14 @@ jest.mock('../services/userSessionStore', () => ({
 
 jest.mock('../services/providerSessionStore', () => ({
   getProviderSessionById: jest.fn(async () => null),
+}));
+
+jest.mock('../services/emailService', () => ({
+  __esModule: true,
+  default: {
+    send: jest.fn(async () => ({ ok: true, skipped: true })),
+    configured: jest.fn(() => false),
+  },
 }));
 
 const { userPublicRoutes } = require('../routes/user');
@@ -184,43 +219,20 @@ describe('Sign-in logic', () => {
     jest.clearAllMocks();
   });
 
-  it('requires a transient phone verification code before member sign-in creates a session', async () => {
+  it('signs in a member without requiring phoneNumber or SMS 2FA', async () => {
     const email = 'signin.success@example.com';
     const password = 'ValidPass#1234';
     const user = createMockUser(email, hashPassword(password));
     users.set(user.id, user);
 
-    const missingPhone = await requestSignIn({ email, password });
-
-    expect(missingPhone.status).toBe(400);
-    expect(missingPhone.body?.requiresPhoneNumber).toBe(true);
-    expect(createUserSessionMock).not.toHaveBeenCalled();
-
-    const challenge = await requestSignIn({
-      email,
-      password,
-      phoneNumber: '+15551234567',
-    });
-
-    expect(challenge.status).toBe(202);
-    expect(challenge.body?.requiresTwoFactor).toBe(true);
-    expect(challenge.body?.method).toBe('phone');
-    expect(challenge.body?.phoneNumberStored).toBe(false);
-    expect(String(challenge.body?.devOtpCode || '')).toMatch(/^\d{6}$/);
-    expect(users.get(user.id)?.phoneNumber).toBeNull();
-    expect(createUserSessionMock).not.toHaveBeenCalled();
-
-    const response = await requestSignIn({
-      email,
-      password,
-      twoFactorCode: challenge.body.devOtpCode,
-    });
+    const response = await requestSignIn({ email, password });
 
     expect(response.status).toBe(200);
     expect(response.body?.success).toBe(true);
     expect(String(response.body?.token || '').length).toBeGreaterThan(20);
     expect(response.body?.user?.email).toBe(email);
     expect(createUserSessionMock).toHaveBeenCalledTimes(1);
+    expect(users.get(user.id)?.phoneNumber).toBeNull();
   });
 
   it('returns invalid credentials for wrong password', async () => {
@@ -252,7 +264,7 @@ describe('Sign-in logic', () => {
     expect(createUserSessionMock).not.toHaveBeenCalled();
   });
 
-  it('does not require transient phone 2FA for provider applicant sign-in', async () => {
+  it('does not require phone 2FA for provider applicant sign-in', async () => {
     const email = 'signin.applicant@example.com';
     const password = 'ApplicantPass#1234';
     const user = createMockUser(email, hashPassword(password));
@@ -263,6 +275,23 @@ describe('Sign-in logic', () => {
 
     expect(response.status).toBe(200);
     expect(response.body?.success).toBe(true);
+    expect(createUserSessionMock).toHaveBeenCalledTimes(1);
+  });
+
+  it('signs in an approved provider without phoneNumber or SMS 2FA', async () => {
+    const email = 'signin.provider@example.com';
+    const password = 'ProviderPass#1234';
+    const user = createMockUser(email, hashPassword(password));
+    user.role = 'provider';
+    user.providerApproved = true;
+    user.providerApprovalStatus = 'approved';
+    users.set(user.id, user);
+
+    const response = await requestSignIn({ email, password });
+
+    expect(response.status).toBe(200);
+    expect(response.body?.success).toBe(true);
+    expect(response.body?.user?.role).toBe('provider');
     expect(createUserSessionMock).toHaveBeenCalledTimes(1);
   });
 });

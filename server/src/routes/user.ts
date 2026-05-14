@@ -7,7 +7,6 @@ import {
   needsPasswordRehash,
   verifyPassword,
 } from '../auth';
-import { verifyIdentitySessionToken } from '../auth/identitySession';
 import {
   enforceAuthenticatedUserMatch,
   getAuthenticatedSessionId,
@@ -21,7 +20,6 @@ import { mirrorUserToGoogleSheets } from '../services/googleSheetsMirror';
 import { maskPhoneNumber, maskWalletDid } from '../services/sensitiveDataPolicy';
 import { createUserSession, revokeUserSession, revokeUserSessionsByUserId } from '../services/userSessionStore';
 import emailService from '../services/emailService';
-import smsService from '../services/smsService';
 import {
   normalizeDateOfBirth,
   normalizeOptionalString,
@@ -37,10 +35,8 @@ import { normalizeTier } from '../tierPolicy';
 import { validateJsonBody } from '../validation/jsonSchema';
 import {
   userCreateSchema,
-  userEmailVerificationConfirmSchema,
   userPasswordResetConfirmSchema,
   userPasswordResetRequestSchema,
-  userPhoneEnrollSchema,
   userPrivacyUpdateSchema,
   userProfilePatchSchema,
   userSignInSchema,
@@ -53,11 +49,7 @@ const protectedRouter = Router();
 const MIN_PASSWORD_LENGTH = 12;
 const MAX_FAILED_SIGN_IN_ATTEMPTS = 5;
 const LOCKOUT_WINDOW_MS = 15 * 60 * 1000;
-const PHONE_OTP_TTL_MS = 10 * 60 * 1000;
-const PHONE_OTP_RESEND_GUARD_MS = 60 * 1000;
-const MAX_PHONE_OTP_ATTEMPTS = 5;
 const PASSWORD_RESET_TTL_MS = 60 * 60 * 1000;
-const EMAIL_VERIFICATION_TTL_MS = 24 * 60 * 60 * 1000;
 const AUTOMATED_PROFILE_PATTERN = /\b(bot|agent|assistant|seed|system)\b/i;
 const PROFILE_STORE_UNAVAILABLE_RESPONSE = {
   error: 'Profile service is currently unavailable. Please retry shortly.',
@@ -71,15 +63,9 @@ const PROFILE_SESSION_ESTABLISH_FAILED_RESPONSE = {
   retryable: true,
 } as const;
 
-const isLaunchFeatureEnabled = (name: string): boolean =>
-  String(process.env[name] || '').trim().toLowerCase() === 'true';
-
-const isInitialTwoFactorEnforced = (): boolean => isLaunchFeatureEnabled('ENABLE_INITIAL_2FA');
-const isUserTwoFactorEnabled = (): boolean => isLaunchFeatureEnabled('ENABLE_USER_2FA');
-const isEmailVerificationEnabled = (): boolean =>
-  isLaunchFeatureEnabled('ENABLE_EMAIL_VERIFICATION');
 const isPasswordResetEnabled = (): boolean =>
   String(process.env.ENABLE_PASSWORD_RESET || 'true').trim().toLowerCase() !== 'false';
+const isUserTwoFactorEnabled = (): boolean => false;
 
 const normalizeRole = (value: unknown): 'user' | 'applicant' | 'provider' | 'admin' => {
   const role = String(value || 'user').trim().toLowerCase();
@@ -87,17 +73,14 @@ const normalizeRole = (value: unknown): 'user' | 'applicant' | 'provider' | 'adm
   return 'user';
 };
 
-const requiresTransientPhoneSignIn = (role: string): boolean => role === 'user';
-
 const canUseNativePasswordReset = (user: { role?: string | null }): boolean =>
   ['user', 'applicant', 'provider', 'admin'].includes(normalizeRole(user.role));
 
-const isInitialTwoFactorRequired = (user: {
+const isInitialTwoFactorRequired = (_user: {
+  role?: string | null;
   initialTwoFactorRequiredAt?: Date | null;
   initialTwoFactorCompletedAt?: Date | null;
-}): boolean =>
-  isInitialTwoFactorEnforced() &&
-  Boolean(user.initialTwoFactorRequiredAt && !user.initialTwoFactorCompletedAt);
+}): boolean => false;
 
 const COMMON_PASSWORDS = new Set([
   'password',
@@ -142,9 +125,6 @@ const setAuthResponseNoStore = (res: Response): void => {
 const hashPasswordResetToken = (token: string): string =>
   crypto.createHash('sha256').update(token, 'utf8').digest('hex');
 
-const hashEmailVerificationToken = (token: string): string =>
-  crypto.createHash('sha256').update(token, 'utf8').digest('hex');
-
 const resolveFrontendBaseUrl = (req: Request): string => {
   const configured = String(process.env.FRONTEND_BASE_URL || '').trim().replace(/\/+$/, '');
   if (configured) return configured;
@@ -153,14 +133,6 @@ const resolveFrontendBaseUrl = (req: Request): string => {
 
 const buildPasswordResetUrl = (req: Request, token: string): string =>
   `${resolveFrontendBaseUrl(req)}/reset-password?token=${encodeURIComponent(token)}`;
-
-const buildEmailVerificationUrl = (req: Request, token: string): string =>
-  `${resolveFrontendBaseUrl(req)}/verify-email?token=${encodeURIComponent(token)}`;
-
-const getPhoneOtpIssuedAtMs = (expiresAt: Date | null): number | null => {
-  if (!expiresAt) return null;
-  return expiresAt.getTime() - PHONE_OTP_TTL_MS;
-};
 
 const logAuthFlowError = (
   req: Request,
@@ -262,17 +234,6 @@ const normalizeTwoFactorMethod = (value: unknown): TwoFactorMethod => {
   if (normalized === 'phone') return 'phone';
   if (normalized === 'wallet') return 'wallet';
   return 'none';
-};
-
-const normalizePhoneNumber = (value: unknown): string | null => {
-  const raw = String(value || '').trim();
-  if (!raw) return null;
-  const stripped = raw.replace(/[^\d+]/g, '');
-  const normalized = stripped.startsWith('+')
-    ? `+${stripped.slice(1).replace(/\+/g, '')}`
-    : stripped.replace(/\+/g, '');
-  if (!/^\+?\d{10,15}$/.test(normalized)) return null;
-  return normalized;
 };
 
 const toPublicTier = (user: any): string | null => {
@@ -478,40 +439,6 @@ const buildPublicUser = async (req: Request, user: any) => {
   };
 };
 
-const sendVerificationEmailForUser = async (
-  req: Request,
-  user: { id: string; email: string; emailVerified?: boolean | null }
-): Promise<{ sent: boolean; devVerificationUrl?: string }> => {
-  if (!isEmailVerificationEnabled()) return { sent: false };
-  if (user.emailVerified) return { sent: false };
-  const token = crypto.randomBytes(32).toString('base64url');
-  const verificationUrl = buildEmailVerificationUrl(req, token);
-  await localStore.updateUser(user.id, {
-    emailVerificationTokenHash: hashEmailVerificationToken(token),
-    emailVerificationExpiresAt: new Date(Date.now() + EMAIL_VERIFICATION_TTL_MS),
-  });
-  const result = await emailService.send({
-    to: user.email,
-    subject: 'Verify your Conscious Network Hub email',
-    text: [
-      'Welcome to Conscious Network Hub.',
-      `Verify your email within 24 hours: ${verificationUrl}`,
-      'If you did not create this account, you can ignore this email.',
-    ].join('\n\n'),
-    html: `
-      <p>Welcome to Conscious Network Hub.</p>
-      <p><a href="${verificationUrl}">Verify your email</a></p>
-      <p>This link expires in 24 hours. If you did not create this account, you can ignore this email.</p>
-    `,
-  });
-  return {
-    sent: true,
-    ...(result?.skipped && process.env.NODE_ENV !== 'production'
-      ? { devVerificationUrl: verificationUrl }
-      : {}),
-  };
-};
-
 /**
  * POST /api/user/signin
  * Authenticate an existing user with canonical backend identity.
@@ -525,9 +452,6 @@ publicRouter.post('/signin', validateJsonBody(userSignInSchema), async (req: Req
       .toLowerCase();
     emailHash = email ? safeLogHash(email) : null;
     const password = String(req.body?.password || '');
-    const phoneNumber = normalizePhoneNumber(req.body?.phoneNumber);
-    const twoFactorCode = String(req.body?.twoFactorCode || '').trim();
-    const providerToken = String(req.body?.providerToken || '').trim();
     const auditSignIn = (
       outcome: 'success' | 'deny' | 'error',
       statusCode: number,
@@ -605,155 +529,13 @@ publicRouter.post('/signin', validateJsonBody(userSignInSchema), async (req: Req
         })) || user;
     }
 
-    const role = normalizeRole(user.role);
-    if (role === 'provider') {
-      auditSignIn('deny', 403, 'direct_platform_signin_role_denied', user.id, {
-        role,
-      });
-      return res.status(403).json({
-        error: 'Provider accounts must authenticate through the provider portal',
-      });
-    }
-
-    if (requiresTransientPhoneSignIn(role)) {
-      if (!twoFactorCode) {
-        if (!phoneNumber) {
-          auditSignIn('deny', 400, 'transient_phone_2fa_missing_phone', user.id);
-          return res.status(400).json({
-            error: 'Enter a wireless phone number to receive your sign-in verification code.',
-            requiresPhoneNumber: true,
-          });
-        }
-
-        const issuedAtMs = getPhoneOtpIssuedAtMs(user.pendingPhoneOtpExpiresAt);
-        if (
-          user.pendingPhoneOtpHash &&
-          user.pendingPhoneOtpExpiresAt &&
-          user.pendingPhoneOtpExpiresAt.getTime() > Date.now() &&
-          issuedAtMs &&
-          Date.now() - issuedAtMs < PHONE_OTP_RESEND_GUARD_MS
-        ) {
-          auditSignIn('deny', 429, 'phone_otp_resend_too_soon', user.id);
-          return res.status(429).json({
-            error: 'A verification code was just sent. Please wait before requesting another code.',
-          });
-        }
-
-        const code = crypto.randomInt(0, 1000000).toString().padStart(6, '0');
-        const hashedCode = computePasswordFingerprint(`otp:${code}`);
-        const expiresAt = new Date(Date.now() + PHONE_OTP_TTL_MS);
-
-        const delivery = await smsService.sendSecurityCode({
-          to: phoneNumber,
-          code,
-          purpose: 'signin',
-        });
-        if (!delivery.ok) {
-          auditSignIn('error', 503, 'phone_otp_delivery_failed', user.id, {
-            provider: delivery.provider || null,
-          });
-          return res.status(503).json({
-            error: 'Unable to send phone verification code. Please retry shortly.',
-          });
-        }
-
-        await localStore.updateUser(user.id, {
-          pendingPhoneOtpHash: hashedCode,
-          pendingPhoneOtpExpiresAt: expiresAt,
-          pendingPhoneOtpAttempts: 0,
-        });
-
-        auditSignIn('deny', 202, 'two_factor_required_phone', user.id, {
-          twoFactorMethod: 'phone',
-          smsProvider: delivery.provider || null,
-          smsSkipped: Boolean(delivery.skipped),
-          phoneHash: safeLogHash(phoneNumber),
-        });
-
-        return res.status(202).json({
-          success: false,
-          requiresTwoFactor: true,
-          method: 'phone',
-          message: 'A phone verification code was sent. Enter it to complete sign-in.',
-          phoneNumberStored: false,
-          ...(process.env.NODE_ENV !== 'production' && { devOtpCode: code }),
-        });
-      }
-
-      const otpExpired =
-        !user.pendingPhoneOtpExpiresAt || user.pendingPhoneOtpExpiresAt.getTime() <= Date.now();
-      if (!user.pendingPhoneOtpHash || otpExpired) {
-        auditSignIn('deny', 401, 'phone_otp_expired_or_missing', user.id);
-        return res.status(401).json({
-          error: 'Phone verification code expired. Retry sign-in to request a new code',
-        });
-      }
-
-      const providedCodeHash = computePasswordFingerprint(`otp:${twoFactorCode}`);
-      if (providedCodeHash !== user.pendingPhoneOtpHash) {
-        const nextAttempts = (user.pendingPhoneOtpAttempts || 0) + 1;
-        const exhausted = nextAttempts >= MAX_PHONE_OTP_ATTEMPTS;
-        await localStore.updateUser(user.id, {
-          pendingPhoneOtpAttempts: exhausted ? 0 : nextAttempts,
-          pendingPhoneOtpHash: exhausted ? null : user.pendingPhoneOtpHash,
-          pendingPhoneOtpExpiresAt: exhausted ? null : user.pendingPhoneOtpExpiresAt,
-        });
-
-        if (exhausted) {
-          auditSignIn('deny', 429, 'phone_otp_attempts_exhausted', user.id);
-          return res.status(429).json({
-            error: 'Too many invalid 2FA attempts. Restart sign-in to request a new code',
-          });
-        }
-
-        auditSignIn('deny', 401, 'phone_otp_invalid', user.id);
-        return res.status(401).json({ error: 'Invalid verification code' });
-      }
-
-      user =
-        (await localStore.updateUser(user.id, {
-          phoneNumber: null,
-          pendingPhoneOtpHash: null,
-          pendingPhoneOtpExpiresAt: null,
-          pendingPhoneOtpAttempts: 0,
-        })) || user;
-    }
-
-    if (!requiresTransientPhoneSignIn(role) && isUserTwoFactorEnabled() && user.twoFactorMethod === 'wallet') {
-      if (!user.walletDid) {
-        auditSignIn('deny', 403, 'wallet_2fa_missing_wallet', user.id);
-        return res.status(403).json({
-          error: 'Wallet 2FA is enabled but no wallet DID is configured for this profile',
-        });
-      }
-
-      if (!providerToken) {
-        auditSignIn('deny', 202, 'two_factor_required_wallet', user.id, {
-          twoFactorMethod: 'wallet',
-        });
-        return res.status(202).json({
-          success: false,
-          requiresTwoFactor: true,
-          method: 'wallet',
-          message: 'Address verification credential required to complete sign-in',
-        });
-      }
-
-      const identitySession = verifyIdentitySessionToken(providerToken);
-      const expectedDid = String(user.walletDid || '').trim().toLowerCase();
-      const verifiedDid = String(identitySession?.did || '').trim().toLowerCase();
-      if (!identitySession || identitySession.sub !== user.id || verifiedDid !== expectedDid) {
-        auditSignIn('deny', 401, 'wallet_2fa_invalid_credential', user.id, {
-          twoFactorMethod: 'wallet',
-        });
-        return res.status(401).json({ error: 'Invalid address verification credential' });
-      }
-    }
-
     user =
       (await localStore.updateUser(user.id, {
         failedSignInAttempts: 0,
         lockoutUntil: null,
+        pendingPhoneOtpHash: null,
+        pendingPhoneOtpExpiresAt: null,
+        pendingPhoneOtpAttempts: 0,
       })) || user;
 
     const persistedSession = await createUserSession(user.id);
@@ -763,7 +545,7 @@ publicRouter.post('/signin', validateJsonBody(userSignInSchema), async (req: Req
     });
     auditSignIn('success', 200, 'signin_completed', user.id, {
       twoFactorMethod: user.twoFactorMethod || 'none',
-      transientChallengeRequired: requiresTransientPhoneSignIn(role),
+      additionalVerificationRequired: false,
     });
     return res.json({
       success: true,
@@ -818,8 +600,6 @@ publicRouter.post('/create', validateJsonBody(userCreateSchema), async (req: Req
     const requestedLocation = normalizeOptionalString(req.body?.location);
     const requestedDateOfBirth = normalizeDateOfBirth(req.body?.dateOfBirth);
     const requestedTwoFactor = normalizeTwoFactorMethod(req.body?.twoFactorMethod);
-    const requestedPhone = normalizePhoneNumber(req.body?.phoneNumber);
-    const requestedWalletDid = String(req.body?.walletDid || '').trim() || null;
     const requestedProfileMedia = normalizeProfileMedia(
       req.body?.profileMedia,
       normalizeOptionalString(req.body?.avatarUrl),
@@ -889,7 +669,7 @@ publicRouter.post('/create', validateJsonBody(userCreateSchema), async (req: Req
       phoneNumber: null,
       twoFactorMethod: 'none',
       walletDid: null,
-      initialTwoFactorRequiredAt: isInitialTwoFactorEnforced() ? new Date() : null,
+      initialTwoFactorRequiredAt: null,
       initialTwoFactorCompletedAt: null,
     });
 
@@ -927,7 +707,6 @@ publicRouter.post('/create', validateJsonBody(userCreateSchema), async (req: Req
       sessionId: persistedSession.id,
       expiresAt: persistedSession.expiresAt.getTime(),
     });
-    const verification = await sendVerificationEmailForUser(req, persisted);
     auditCreate('success', 200, 'create_completed', persisted.id);
 
     return res.json({
@@ -945,10 +724,6 @@ publicRouter.post('/create', validateJsonBody(userCreateSchema), async (req: Req
           requiresSymbol: true,
         },
         twoFactorMethod: persisted.twoFactorMethod,
-      },
-      emailVerification: {
-        sent: verification.sent,
-        ...(verification.devVerificationUrl ? { devVerificationUrl: verification.devVerificationUrl } : {}),
       },
     });
   } catch (error) {
@@ -1146,51 +921,13 @@ publicRouter.post(
 
 /**
  * POST /api/user/email-verification/confirm
- * Verify a direct platform user's email address.
+ * Email verification is not part of the launch sign-in gate.
  */
-publicRouter.post(
-  '/email-verification/confirm',
-  validateJsonBody(userEmailVerificationConfirmSchema),
-  async (req: Request, res: Response): Promise<any> => {
-    const token = String(req.body?.token || '').trim();
-    const tokenHash = hashEmailVerificationToken(token);
-    try {
-      if (!isEmailVerificationEnabled()) {
-        return res.status(503).json({
-          error: 'Email verification is deferred for launch.',
-          code: 'EMAIL_VERIFICATION_DEFERRED',
-        });
-      }
-
-      const user = await localStore.findUserByEmailVerificationTokenHash(tokenHash);
-      if (
-        !user ||
-        !user.emailVerificationExpiresAt ||
-        user.emailVerificationExpiresAt.getTime() <= Date.now()
-      ) {
-        return res.status(400).json({ error: 'Verification link is invalid or expired' });
-      }
-
-      await localStore.updateUser(user.id, {
-        emailVerified: true,
-        emailVerificationTokenHash: null,
-        emailVerificationExpiresAt: null,
-      });
-
-      recordAuditEvent(req, {
-        domain: 'auth',
-        action: 'email_verification_confirm',
-        outcome: 'success',
-        statusCode: 200,
-        targetUserId: user.id,
-      });
-
-      return res.json({ success: true, message: 'Email verified. You can continue into the hub.' });
-    } catch (error) {
-      console.error('[AUTH][EMAIL_VERIFICATION] confirm failed', error);
-      return res.status(500).json({ error: 'Unable to verify email. Please retry.' });
-    }
-  }
+publicRouter.post('/email-verification/confirm', async (_req: Request, res: Response): Promise<any> =>
+  res.status(410).json({
+    error: 'Email verification is not required for launch sign-in.',
+    code: 'EMAIL_VERIFICATION_DISABLED',
+  })
 );
 
 /**
@@ -1218,6 +955,17 @@ publicRouter.get('/create/diagnostics', async (req: Request, res: Response): Pro
  * Return canonical authenticated user identity.
  */
 protectedRouter.use(requireCanonicalIdentity);
+
+/**
+ * POST /api/user/email-verification/request
+ * Email verification is not part of the launch sign-in gate.
+ */
+protectedRouter.post('/email-verification/request', async (_req: Request, res: Response): Promise<any> =>
+  res.status(410).json({
+    error: 'Email verification is not required for launch sign-in.',
+    code: 'EMAIL_VERIFICATION_DISABLED',
+  })
+);
 
 protectedRouter.get('/current', async (req: Request, res: Response): Promise<any> => {
   setAuthResponseNoStore(res);
@@ -1657,88 +1405,14 @@ protectedRouter.get('/security', async (req: Request, res: Response): Promise<an
 
 /**
  * POST /api/user/2fa/phone/enroll
- * Enroll authenticated user in phone-based 2FA.
+ * Legacy phone 2FA is intentionally unavailable for the default member path.
  */
-protectedRouter.post('/2fa/phone/enroll', validateJsonBody(userPhoneEnrollSchema), async (req: Request, res: Response): Promise<any> => {
-  if (!isUserTwoFactorEnabled()) {
-    return res.status(503).json({
-      error: 'User phone 2FA enrollment is deferred for launch.',
-      code: 'USER_2FA_DEFERRED',
-    });
-  }
-
-  const authUserId = getAuthenticatedUserId(req);
-  if (!authUserId) {
-    recordAuditEvent(req, {
-      domain: 'profile',
-      action: '2fa_enroll_phone',
-      outcome: 'deny',
-      statusCode: 401,
-      metadata: { reason: 'missing_authentication' },
-    });
-    return res.status(401).json({ error: 'Authentication required' });
-  }
-
-  const phoneNumber = normalizePhoneNumber(req.body?.phoneNumber);
-  if (!phoneNumber) {
-    recordAuditEvent(req, {
-      domain: 'profile',
-      action: '2fa_enroll_phone',
-      outcome: 'deny',
-      actorUserId: authUserId,
-      statusCode: 400,
-      metadata: { reason: 'invalid_phone_number' },
-    });
-    return res.status(400).json({ error: 'Valid phoneNumber is required' });
-  }
-
-  const existing = await localStore.getUserById(authUserId);
-  const shouldCompleteInitialTwoFactor =
-    Boolean(existing?.initialTwoFactorRequiredAt) && !existing?.initialTwoFactorCompletedAt;
-  const updated = await localStore.updateUser(authUserId, {
-    phoneNumber: null,
-    twoFactorMethod: 'phone',
-    ...(shouldCompleteInitialTwoFactor ? { initialTwoFactorCompletedAt: new Date() } : {}),
-  });
-  if (!updated) {
-    recordAuditEvent(req, {
-      domain: 'profile',
-      action: '2fa_enroll_phone',
-      outcome: 'deny',
-      actorUserId: authUserId,
-      targetUserId: authUserId,
-      statusCode: 404,
-      metadata: { reason: 'user_not_found' },
-    });
-    return res.status(404).json({ error: 'User not found' });
-  }
-
-  recordAuditEvent(req, {
-    domain: 'profile',
-    action: '2fa_enroll_phone',
-    outcome: 'success',
-    actorUserId: authUserId,
-    targetUserId: authUserId,
-    statusCode: 200,
-    metadata: { twoFactorMethod: updated.twoFactorMethod },
-  });
-
-  return res.json({
-    success: true,
-    twoFactorMethod: updated.twoFactorMethod,
-    phoneNumberMasked: null,
-    phoneNumberStored: false,
-    security: {
-      twoFactorMethod: updated.twoFactorMethod,
-      phoneNumberMasked: null,
-      walletDid: maskWalletDid(updated.walletDid),
-      initialTwoFactorRequired: isInitialTwoFactorRequired(updated),
-      initialTwoFactorCompleted: Boolean(updated.initialTwoFactorCompletedAt),
-      canAccessFullPlatform: !isInitialTwoFactorRequired(updated),
-    },
-    user: toPublicUser(req, updated),
-  });
-});
+protectedRouter.post('/2fa/phone/enroll', async (_req: Request, res: Response): Promise<any> =>
+  res.status(410).json({
+    error: 'Phone-based member 2FA is not used for launch. Sign in with email and password.',
+    code: 'PHONE_2FA_REMOVED',
+  })
+);
 
 /**
  * POST /api/user/2fa/wallet/enroll
@@ -1777,13 +1451,9 @@ protectedRouter.post('/2fa/wallet/enroll', validateJsonBody(userWalletEnrollSche
     return res.status(400).json({ error: 'walletDid is required' });
   }
 
-  const existing = await localStore.getUserById(authUserId);
-  const shouldCompleteInitialTwoFactor =
-    Boolean(existing?.initialTwoFactorRequiredAt) && !existing?.initialTwoFactorCompletedAt;
   const updated = await localStore.updateUser(authUserId, {
     walletDid,
     twoFactorMethod: 'wallet',
-    ...(shouldCompleteInitialTwoFactor ? { initialTwoFactorCompletedAt: new Date() } : {}),
   });
   if (!updated) {
     recordAuditEvent(req, {

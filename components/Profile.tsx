@@ -40,20 +40,6 @@ const Profile: React.FC<ProfileProps> = ({ user, onUserUpdate }) => {
   const [editingReflectionId, setEditingReflectionId] = useState<string | null>(null);
   const [editingReflectionContent, setEditingReflectionContent] = useState('');
   const [loading, setLoading] = useState(false);
-  const [securityLoading, setSecurityLoading] = useState(false);
-  const [securityMessage, setSecurityMessage] = useState('');
-  const [securityError, setSecurityError] = useState('');
-  const [securityState, setSecurityState] = useState<{
-    twoFactorMethod: 'none' | 'phone' | 'wallet';
-    phoneNumberMasked: string | null;
-    walletDid: string | null;
-  }>({
-    twoFactorMethod: user.twoFactorMethod || 'none',
-    phoneNumberMasked: user.phoneNumberMasked || null,
-    walletDid: user.walletDid || null,
-  });
-  const [phoneEnrollInput, setPhoneEnrollInput] = useState('');
-  const [walletEnrollInput, setWalletEnrollInput] = useState('');
   const [error, setError] = useState('');
 
   const avatarPreviewIsVideo = (avatarImage ? avatarImage.type : '').startsWith('video/') || isLikelyVideoUrl(avatarPreviewUrl);
@@ -68,16 +54,7 @@ const Profile: React.FC<ProfileProps> = ({ user, onUserUpdate }) => {
     setBgVideoUrl(toAssetUrl(user.profileBackgroundVideo));
     setAvatarPreviewUrl(toAssetUrl(user.avatarUrl));
     setCoverPreviewUrl(toAssetUrl(user.bannerUrl));
-    setSecurityState({
-      twoFactorMethod: user.twoFactorMethod || 'none',
-      phoneNumberMasked: user.phoneNumberMasked || null,
-      walletDid: user.walletDid || null,
-    });
-  }, [user.id, user.name, user.profileBackgroundVideo, user.avatarUrl, user.bannerUrl, user.twoFactorMethod, user.phoneNumberMasked, user.walletDid]);
-
-  useEffect(() => {
-    fetchSecuritySettings();
-  }, [user.id]);
+  }, [user.id, user.name, user.profileBackgroundVideo, user.avatarUrl, user.bannerUrl]);
 
   const fetchReflections = async () => {
     try {
@@ -90,97 +67,6 @@ const Profile: React.FC<ProfileProps> = ({ user, onUserUpdate }) => {
       );
     } catch (e) {
       setError('Failed to load reflections');
-    }
-  };
-
-  const fetchSecuritySettings = async () => {
-    setSecurityLoading(true);
-    setSecurityError('');
-    try {
-      const data = await api<any>('/user/security');
-      const security = data?.security || {};
-      setSecurityState({
-        twoFactorMethod: security.twoFactorMethod || 'none',
-        phoneNumberMasked: security.phoneNumberMasked || null,
-        walletDid: security.walletDid || null,
-      });
-      onUserUpdate({
-        ...user,
-        twoFactorEnabled: security.twoFactorMethod && security.twoFactorMethod !== 'none',
-        twoFactorMethod: security.twoFactorMethod || 'none',
-        phoneNumberMasked: security.phoneNumberMasked || null,
-        walletDid: security.walletDid || null,
-      });
-    } catch {
-      setSecurityError('Failed to load security settings');
-    } finally {
-      setSecurityLoading(false);
-    }
-  };
-
-  const enrollPhoneTwoFactor = async () => {
-    if (!phoneEnrollInput.trim()) {
-      setSecurityError('Enter a phone number to enroll phone 2FA');
-      return;
-    }
-
-    setSecurityLoading(true);
-    setSecurityError('');
-    setSecurityMessage('');
-    try {
-      await api('/user/2fa/phone/enroll', {
-        method: 'POST',
-        body: { phoneNumber: phoneEnrollInput.trim() },
-      });
-      setPhoneEnrollInput('');
-      setSecurityMessage('Phone 2FA enabled');
-      await fetchSecuritySettings();
-    } catch (e) {
-      setSecurityError(e instanceof Error ? e.message : 'Failed to enable phone 2FA');
-    } finally {
-      setSecurityLoading(false);
-    }
-  };
-
-  const enrollWalletTwoFactor = async () => {
-    if (!walletEnrollInput.trim()) {
-      setSecurityError('Enter an address DID to enroll signature-based 2FA');
-      return;
-    }
-
-    setSecurityLoading(true);
-    setSecurityError('');
-    setSecurityMessage('');
-    try {
-      await api('/user/2fa/wallet/enroll', {
-        method: 'POST',
-        body: { walletDid: walletEnrollInput.trim() },
-      });
-      setWalletEnrollInput('');
-      setSecurityMessage('Signature-based 2FA enabled');
-      await fetchSecuritySettings();
-    } catch (e) {
-      setSecurityError(e instanceof Error ? e.message : 'Failed to enable signature-based 2FA');
-    } finally {
-      setSecurityLoading(false);
-    }
-  };
-
-  const disableTwoFactor = async () => {
-    setSecurityLoading(true);
-    setSecurityError('');
-    setSecurityMessage('');
-    try {
-      await api('/user/2fa/disable', {
-        method: 'POST',
-        body: {},
-      });
-      setSecurityMessage('2FA disabled');
-      await fetchSecuritySettings();
-    } catch (e) {
-      setSecurityError(e instanceof Error ? e.message : 'Failed to disable 2FA');
-    } finally {
-      setSecurityLoading(false);
     }
   };
 
@@ -450,45 +336,14 @@ const Profile: React.FC<ProfileProps> = ({ user, onUserUpdate }) => {
       <h3>Security Settings</h3>
       <div style={{ border: '1px solid rgba(255,255,255,0.2)', padding: '12px', borderRadius: '10px', marginBottom: '16px' }}>
         <div style={{ marginBottom: '8px' }}>
-          Email: <strong>{user.emailVerified ? 'Verified' : 'Not verified'}</strong>
+          Sign-in: <strong>Email and password</strong>
         </div>
         <div style={{ marginBottom: '8px' }}>
-          Current 2FA: <strong>{securityState.twoFactorMethod === 'none' ? 'Disabled' : securityState.twoFactorMethod.toUpperCase()}</strong>
+          Additional verification: <strong>Not required for launch access</strong>
         </div>
-        {securityState.phoneNumberMasked && (
-          <div style={{ marginBottom: '8px' }}>Phone: {securityState.phoneNumberMasked}</div>
-        )}
-        {securityState.walletDid && (
-          <div style={{ marginBottom: '8px', wordBreak: 'break-all' }}>Address DID: {securityState.walletDid}</div>
-        )}
-
-        <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', marginBottom: '10px' }}>
-          <input
-            type="tel"
-            value={phoneEnrollInput}
-            onChange={(e) => setPhoneEnrollInput(e.target.value)}
-            placeholder="Phone for OTP (e.g. +15551234567)"
-          />
-          <button onClick={enrollPhoneTwoFactor} disabled={securityLoading}>Enable Phone 2FA</button>
+        <div style={{ color: 'rgba(226,232,240,0.8)', fontSize: '13px', lineHeight: 1.5 }}>
+          Phone, SMS, email-code, and email-link verification are not part of the normal launch sign-in path.
         </div>
-
-        <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', marginBottom: '10px' }}>
-          <input
-            type="text"
-            value={walletEnrollInput}
-            onChange={(e) => setWalletEnrollInput(e.target.value)}
-            placeholder="Address DID (did:hcn:ed25519:...)"
-          />
-          <button onClick={enrollWalletTwoFactor} disabled={securityLoading}>Enable Signature 2FA</button>
-        </div>
-
-        <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
-          <button onClick={disableTwoFactor} disabled={securityLoading}>Disable 2FA</button>
-          <button onClick={fetchSecuritySettings} disabled={securityLoading}>Refresh Security</button>
-        </div>
-
-        {securityMessage && <div style={{ color: '#34d399', marginTop: '10px' }}>{securityMessage}</div>}
-        {securityError && <div style={{ color: '#f87171', marginTop: '10px' }}>{securityError}</div>}
       </div>
       <hr />
       <h3>Reflections</h3>

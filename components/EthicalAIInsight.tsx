@@ -37,10 +37,6 @@ const getActionableAiErrorMessage = (error: unknown): string => {
       return 'Your session has expired. Please sign in again to use Ethical AI Insight.';
     }
 
-    if (error.status === 403 && code === 'INITIAL_2FA_REQUIRED') {
-      return 'Complete your required 2FA setup before using Ethical AI Insight.';
-    }
-
     if (error.status === 403) {
       return 'Complete your account setup, including free membership activation if prompted, then try Ethical AI Insight again.';
     }

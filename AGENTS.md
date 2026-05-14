@@ -47,8 +47,7 @@ This checkout is not the Base44-style `entities/` + `src/App.jsx` layout. The ac
 - Signin backend handler: `server/src/routes/user.ts`:
   - Resolves user by email
   - Verifies password hash
-  - Enforces lockout and member-only per-login wireless phone OTP; the phone number is supplied for that sign-in attempt and is not stored on the user profile
-  - Leaves provider/applicant sign-in pathways without cellular 2FA until provider authentication is updated separately
+  - Enforces password lockout and provider/admin role rules without phone, SMS, email-code, or email-link verification gates in the default launch path
   - Creates persisted session + signed token
 - Password recovery: `POST /api/user/password-reset/request` sends native reset links for user/applicant/provider/admin accounts, and `POST /api/user/password-reset/confirm` rotates the password and revokes active sessions
 - Token creation/verification helpers: `server/src/auth.ts` (`createSessionToken`, `verifySessionToken`)
@@ -57,7 +56,7 @@ This checkout is not the Base44-style `entities/` + `src/App.jsx` layout. The ac
 - Protected-route identity helpers: `getAuthenticatedUserId(req)` and `enforceAuthenticatedUserMatch(...)`
 - Logout endpoint: `POST /api/user/logout` revokes the active persisted session
 - Admin elevation: `server/src/routes/admin.ts` requires canonical identity, admin role, password verification, and short-lived elevation token checks for sensitive operations
-- Provider auth is separate from member auth: native provider session routes live in `server/src/routes/providerAuth.ts` and `providerSession.ts`
+- Provider auth is separate from member auth: approved providers sign in with email/password for a canonical user session, then native provider session routes in `server/src/routes/providerAuth.ts` and `providerSession.ts` initialize provider-scoped controls.
 
 ## Current Workspace Structure
 
@@ -118,7 +117,7 @@ This checkout is not the Base44-style `entities/` + `src/App.jsx` layout. The ac
 - Role changes must be audited through `recordAuditEvent` with actor, target, previous role, next role, and reason metadata.
 - Standard members must not access admin endpoints, provider queues, provider sessions, or another user's private profile/reflection/course data.
 - Provider access must remain provider-scoped. Provider request queues should verify the authenticated provider owns the queue or request before returning or mutating records.
-- Member sign-in 2FA must fail closed. `role === 'user'` sign-in must not create a session until the per-login wireless phone OTP is verified, and the submitted phone number must not be stored. Provider/applicant sign-in must not require cellular 2FA unless provider auth is explicitly redesigned.
+- Default member/provider launch sign-in must not require phone, SMS, email-code, email-link, or 2FA verification unless explicitly redesigned. Legacy 2FA/database fields may remain, but they must stay non-blocking for normal authenticated access.
 - Do not expose private contact data in public discovery APIs. Public provider/member listings should avoid raw email addresses, tokens, phone numbers, wallet identifiers, and secrets.
 - Never commit real secrets. Keep `.env`, `.env.*`, and local production overrides out of source control; only commit `.env.example` style templates with placeholder values.
 - Audit logs are persistent security records. They should redact secrets and sensitive identifiers, and new sensitive operations should emit success and denial events.

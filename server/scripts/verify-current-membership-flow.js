@@ -65,22 +65,6 @@ async function requestCurrent(baseUrl, token) {
 }
 
 async function requestSignIn(baseUrl) {
-  const challengeResponse = await fetch(`${baseUrl}/api/user/signin`, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify({
-      email: `${USER_ID}@example.com`,
-      password: PASSWORD,
-      phoneNumber: '+15551234567',
-    }),
-  });
-  const challengeBody = await challengeResponse.json().catch(() => ({}));
-  if (challengeResponse.status !== 202 || !challengeBody.devOtpCode) {
-    return { status: challengeResponse.status, body: challengeBody };
-  }
-
   const response = await fetch(`${baseUrl}/api/user/signin`, {
     method: 'POST',
     headers: {
@@ -89,7 +73,6 @@ async function requestSignIn(baseUrl) {
     body: JSON.stringify({
       email: `${USER_ID}@example.com`,
       password: PASSWORD,
-      twoFactorCode: challengeBody.devOtpCode,
     }),
   });
   const body = await response.json().catch(() => ({}));

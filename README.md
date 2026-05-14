@@ -40,7 +40,6 @@ Create root `.env.local`:
 ```env
 VITE_BACKEND_URL=http://localhost:3001
 VITE_ALLOW_REMOTE_BACKEND_IN_DEV=false
-VITE_ENABLE_SIGNUP_2FA=false
 ```
 
 Create `server/.env.local` from `server/.env.example` and set at minimum:
@@ -120,7 +119,7 @@ Authentication flow:
 
 1. Signup starts in `App.tsx` via `handleCreateProfile`, calling `POST /api/user/create`.
 2. Signin starts in `App.tsx` via `handleSignIn`, calling `POST /api/user/signin`.
-3. Member sign-in requires a per-login wireless phone code sent to the number entered for that attempt; provider/applicant sign-ins do not use cellular 2FA.
+3. Members sign in with email and password; no phone number, SMS code, email code, or email link is required for normal launch access.
 4. Backend user routes validate payloads, password policy, persistence, lockout, recovery, and provider rules.
 5. Backend creates a persisted user session and returns a signed auth token after required checks.
 6. Frontend stores the token through `services/sessionService.ts`.
