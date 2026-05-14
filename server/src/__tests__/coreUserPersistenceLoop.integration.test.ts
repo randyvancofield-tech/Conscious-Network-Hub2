@@ -859,7 +859,7 @@ describe('Core user persistence loop', () => {
     expect(signin.body?.user?.emailVerified).toBe(false);
   });
 
-  it('signs in an approved provider and initializes native provider controls without 2FA', async () => {
+  it('requires provider wallet verification before native provider controls unlock', async () => {
     const password = 'ProviderPass#1234';
     const provider = createMockUser('approved-provider', 'provider@example.com', {
       role: 'provider',
@@ -882,13 +882,9 @@ describe('Core user persistence loop', () => {
       body: {},
     });
 
-    expect(providerSession.status).toBe(200);
-    expect(providerSession.body?.success).toBe(true);
-    expect(String(providerSession.body?.token || '').length).toBeGreaterThan(20);
-    expect(createProviderSessionMock).toHaveBeenCalledWith(`provider:${provider.id}`, [
-      'provider:read',
-      'provider:host',
-    ]);
+    expect(providerSession.status).toBe(403);
+    expect(providerSession.body?.code).toBe('PROVIDER_WALLET_VERIFICATION_REQUIRED');
+    expect(createProviderSessionMock).not.toHaveBeenCalled();
   });
 
   it('does not block existing users with null legacy verification fields', async () => {

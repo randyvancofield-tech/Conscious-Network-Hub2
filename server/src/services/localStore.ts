@@ -925,6 +925,16 @@ export const localStore = {
     return row ? rowToUser(row) : null;
   },
 
+  findUserByWalletAddress(walletAddress: string): LocalUserRecord | null {
+    const normalized = String(walletAddress || '').trim().toLowerCase();
+    if (!normalized) return null;
+    const store = loadStore();
+    const row = store.users.find(
+      (user) => String(user.walletAddress || '').trim().toLowerCase() === normalized
+    );
+    return row ? rowToUser(row) : null;
+  },
+
   findUserByPasswordResetTokenHash(tokenHash: string): LocalUserRecord | null {
     const normalized = String(tokenHash || '').trim();
     if (!normalized) return null;
@@ -1308,11 +1318,16 @@ export const localStore = {
   },
 
   markProviderChallengeUsed(id: string): void {
+    this.consumeProviderChallenge(id);
+  },
+
+  consumeProviderChallenge(id: string): boolean {
     const store = loadStore();
     const row = store.providerChallenges.find((challenge) => challenge.id === id);
-    if (!row || row.usedAt) return;
+    if (!row || row.usedAt) return false;
     row.usedAt = nowIso();
     saveStore(store);
+    return true;
   },
 
   createProviderSession(input: CreateProviderSessionInput): LocalProviderSessionRecord {

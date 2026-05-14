@@ -5,7 +5,9 @@
   "type": "module",
   "scripts": {
     "compile": "node tooling/compile-contracts.mjs",
-    "deploy": "node tooling/deploy-contracts.mjs"
+    "deploy": "node tooling/deploy-contracts.mjs",
+    "smoke:provider-manager": "node tooling/smoke-provider-manager.mjs",
+    "test": "npm run compile && npm run smoke:provider-manager"
   },
   "dependencies": {
     "ethers": "^6.15.0",

@@ -346,6 +346,24 @@ export const localStore = {
     }
   },
 
+  async findUserByWalletAddress(walletAddress: string): Promise<LocalUserRecord | null> {
+    try {
+      const normalized = String(walletAddress || '').trim();
+      if (!normalized) return null;
+      const row = await ensurePrisma().user.findFirst({
+        where: {
+          walletAddress: {
+            equals: normalized,
+            mode: 'insensitive',
+          },
+        } as any,
+      });
+      return row ? toLocalUser(row) : null;
+    } catch (error) {
+      return translatePrismaError(error);
+    }
+  },
+
   async findUserByPasswordResetTokenHash(tokenHash: string): Promise<LocalUserRecord | null> {
     try {
       const normalized = String(tokenHash || '').trim();
@@ -809,13 +827,21 @@ export const localStore = {
   },
 
   async markProviderChallengeUsed(id: string): Promise<void> {
+    await this.consumeProviderChallenge(id);
+  },
+
+  async consumeProviderChallenge(id: string): Promise<boolean> {
     try {
-      const challenge = await ensurePrisma().providerChallenge.findUnique({ where: { id } });
-      if (!challenge || challenge.usedAt) return;
-      await ensurePrisma().providerChallenge.update({
-        where: { id },
-        data: { usedAt: new Date() },
+      const result = await ensurePrisma().providerChallenge.updateMany({
+        where: {
+          id,
+          usedAt: null,
+        },
+        data: {
+          usedAt: new Date(),
+        },
       });
+      return result.count === 1;
     } catch (error) {
       return translatePrismaError(error);
     }

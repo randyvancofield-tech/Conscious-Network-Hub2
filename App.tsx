@@ -55,6 +55,19 @@ type RouteState = {
   path: string;
 };
 
+type ProviderWalletChallenge = {
+  challengeId: string;
+  domain: string;
+  address: string;
+  statement: string;
+  uri: string;
+  version: string;
+  chainId: number;
+  nonce: string;
+  issuedAt: string;
+  expirationTime: string;
+};
+
 const FREE_TIER_NAME = 'Free / Community Tier';
 const PENDING_CHECKOUT_SESSION_KEY = 'hcn.pendingCheckoutSessionId';
 const ACCOUNT_RECOVERY_UI_ENABLED = true;
@@ -69,6 +82,21 @@ const MEMBERSHIP_INSIGHTS: Record<string, string> = {
   'Accelerated Tier':
     'The Enlightenment – Full ecosystem mastery. (Premium Access → Direct Entry).',
 };
+
+const buildProviderSiweMessage = (challenge: ProviderWalletChallenge): string =>
+  [
+    `${challenge.domain} wants you to sign in with your Ethereum account:`,
+    challenge.address,
+    '',
+    challenge.statement,
+    '',
+    `URI: ${challenge.uri}`,
+    `Version: ${challenge.version}`,
+    `Chain ID: ${challenge.chainId}`,
+    `Nonce: ${challenge.nonce}`,
+    `Issued At: ${challenge.issuedAt}`,
+    `Expiration Time: ${challenge.expirationTime}`,
+  ].join('\n');
 const MEMBERSHIP_TIER_COLOR_CLASSES = {
   blue: {
     cardBorder: 'hover:border-blue-500/30 border-t-blue-500/20',
@@ -423,6 +451,9 @@ const App: React.FC = () => {
   const [passwordInput, setPasswordInput] = useState('');
   const [confirmPasswordInput, setConfirmPasswordInput] = useState('');
   const [error, setError] = useState('');
+  const [isProviderWalletVerificationRequired, setProviderWalletVerificationRequired] = useState(false);
+  const [isProviderWalletVerifying, setProviderWalletVerifying] = useState(false);
+  const [providerWalletStatus, setProviderWalletStatus] = useState('');
   const [isPasswordResetRequestOpen, setPasswordResetRequestOpen] = useState(false);
   const [passwordResetEmailInput, setPasswordResetEmailInput] = useState('');
   const [passwordResetNotice, setPasswordResetNotice] = useState('');
@@ -511,7 +542,11 @@ const App: React.FC = () => {
     return `Unable to ${actionLabel}. Cannot reach backend at ${target}.`;
   };
 
-  const resetSignInChallengeInputs = () => undefined;
+  const resetSignInChallengeInputs = () => {
+    setProviderWalletVerificationRequired(false);
+    setProviderWalletVerifying(false);
+    setProviderWalletStatus('');
+  };
 
   const normalizeCourse = (rawCourse: any): Course => ({
     id: String(rawCourse?.id || ''),
@@ -1363,17 +1398,24 @@ const App: React.FC = () => {
       setMembershipCheckoutPending(false);
       setMembershipNotice('');
       setPendingCheckoutSessionId(null);
-      resetSignInChallengeInputs();
 
-      const providerSession = await createNativeProviderControlSession();
-      if (!providerSession?.token) {
-        setError('Provider account verified, but provider host controls could not be initialized.');
+      if (canonicalUser.role === 'admin') {
+        resetSignInChallengeInputs();
+        const providerSession = await createNativeProviderControlSession();
+        if (!providerSession?.token) {
+          setError('Admin provider controls could not be initialized.');
+          return;
+        }
+        setProviderControlSession(providerSession.token);
+        setPasswordInput('');
+        setCurrentView(AppView.CONSCIOUS_MEETINGS, {}, { replace: true });
+        setSidebarOpen(window.innerWidth >= 1024);
         return;
       }
 
-      setProviderControlSession(providerSession.token);
-      setCurrentView(AppView.CONSCIOUS_MEETINGS, {}, { replace: true });
-      setSidebarOpen(window.innerWidth >= 1024);
+      setProviderWalletVerificationRequired(true);
+      setProviderWalletStatus('Provider account confirmed. Complete wallet verification to open provider tools.');
+      setPasswordInput('');
     } catch (error) {
       if (error instanceof ApiError) {
         setError(error.message || 'Invalid provider credentials.');
@@ -1382,6 +1424,79 @@ const App: React.FC = () => {
       console.error('Provider sign-in request failed:', error);
       setHealthStatus('offline');
       setError(backendConnectionErrorMessage('sign in as a provider'));
+    }
+  };
+
+  const handleProviderWalletVerification = async () => {
+    if (!user || !hasProviderRole(user)) {
+      setError('Sign in with an approved provider account before wallet verification.');
+      return;
+    }
+
+    const ethereum = (window as any).ethereum;
+    if (!ethereum?.request) {
+      setError('MetaMask is required for provider wallet verification.');
+      return;
+    }
+
+    setProviderWalletVerifying(true);
+    setError('');
+    setProviderWalletStatus('Requesting your provider wallet...');
+    try {
+      const accounts = await ethereum.request({ method: 'eth_requestAccounts' });
+      const walletAddress = Array.isArray(accounts) ? String(accounts[0] || '').trim() : '';
+      if (!walletAddress) {
+        setError('No wallet address was returned by MetaMask.');
+        setProviderWalletStatus('');
+        return;
+      }
+
+      setProviderWalletStatus('Preparing gasless provider verification message...');
+      const challenge = await api<ProviderWalletChallenge>('/provider/auth/wallet/nonce', {
+        method: 'POST',
+        body: { walletAddress },
+      });
+      const message = buildProviderSiweMessage(challenge);
+
+      setProviderWalletStatus('Confirm the gasless signature in MetaMask.');
+      const signature = await ethereum.request({
+        method: 'personal_sign',
+        params: [message, challenge.address],
+      });
+
+      setProviderWalletStatus('Verifying provider wallet and opening tools...');
+      const providerSession = await api<any>('/provider/auth/wallet/verify', {
+        method: 'POST',
+        body: {
+          challengeId: challenge.challengeId,
+          walletAddress: challenge.address,
+          message,
+          signature,
+        },
+      });
+
+      if (!providerSession?.token) {
+        setError('Wallet verified, but provider host controls could not be initialized.');
+        setProviderWalletStatus('');
+        return;
+      }
+
+      setProviderControlSession(providerSession.token);
+      setProviderWalletVerificationRequired(false);
+      setProviderWalletStatus('');
+      setCurrentView(AppView.CONSCIOUS_MEETINGS, {}, { replace: true });
+      setSidebarOpen(window.innerWidth >= 1024);
+    } catch (error) {
+      if (error instanceof ApiError) {
+        setError(error.message || 'Provider wallet verification failed.');
+      } else if (error instanceof Error) {
+        setError(error.message || 'Provider wallet verification failed.');
+      } else {
+        setError('Provider wallet verification failed.');
+      }
+      setProviderWalletStatus('');
+    } finally {
+      setProviderWalletVerifying(false);
     }
   };
 
@@ -2156,83 +2271,116 @@ const App: React.FC = () => {
                 Sign in with your approved Conscious Network Hub provider account to initialize
                 native provider host controls.
               </p>
-              <form onSubmit={handleApprovedProviderSignIn} className="mt-7 space-y-5">
+              <div className="mt-7 space-y-5">
                 {error && (
                   <p className="rounded-xl border border-red-400/20 bg-red-400/10 p-3 text-[10px] font-black uppercase tracking-widest text-red-200">
                     {error}
                   </p>
                 )}
-                <label className="block space-y-2">
-                  <span className="text-[10px] font-black uppercase tracking-widest text-slate-500">
-                    Provider email
-                  </span>
-                  <input
-                    type="email"
-                    value={emailInput}
-                    onChange={(event) => setEmailInput(event.target.value)}
-                    className="w-full rounded-2xl border border-white/10 bg-white/[0.06] px-5 py-4 text-sm text-white outline-none transition focus:ring-2 focus:ring-blue-500/40"
-                    required
-                    placeholder="you@example.com"
-                  />
-                </label>
-                <label className="block space-y-2">
-                  <span className="text-[10px] font-black uppercase tracking-widest text-slate-500">
-                    Password
-                  </span>
-                  <input
-                    type="password"
-                    value={passwordInput}
-                    onChange={(event) => setPasswordInput(event.target.value)}
-                    className="w-full rounded-2xl border border-white/10 bg-white/[0.06] px-5 py-4 text-sm text-white outline-none transition focus:ring-2 focus:ring-blue-500/40"
-                    required
-                    placeholder="********"
-                  />
-                </label>
-                {ACCOUNT_RECOVERY_UI_ENABLED && (
-                  <div className="space-y-3 rounded-2xl border border-white/10 bg-white/[0.03] p-4">
+                {isProviderWalletVerificationRequired ? (
+                  <div className="space-y-5 rounded-3xl border border-blue-300/20 bg-blue-500/[0.04] p-5">
+                    <div className="flex items-start gap-4">
+                      <div className="flex h-12 w-12 items-center justify-center rounded-2xl border border-blue-300/20 bg-blue-500/10 text-blue-100">
+                        <WalletCards className="h-5 w-5" />
+                      </div>
+                      <div>
+                        <h3 className="text-sm font-black uppercase tracking-widest text-white">
+                          Wallet Verification
+                        </h3>
+                        <p className="mt-2 text-xs leading-5 text-slate-300">
+                          Sign a gasless provider access message with your approved wallet. This does not submit a blockchain transaction.
+                        </p>
+                      </div>
+                    </div>
+                    {providerWalletStatus && (
+                      <p className="rounded-xl border border-blue-300/20 bg-blue-500/10 p-3 text-[10px] font-black uppercase tracking-widest text-blue-100">
+                        {providerWalletStatus}
+                      </p>
+                    )}
                     <button
                       type="button"
-                      onClick={() => {
-                        setPasswordResetRequestOpen((open) => !open);
-                        setPasswordResetEmailInput(emailInput);
-                        setPasswordResetNotice('');
-                      }}
-                      className="text-[10px] font-black uppercase tracking-widest text-blue-300 hover:text-blue-200"
+                      onClick={() => void handleProviderWalletVerification()}
+                      disabled={isProviderWalletVerifying}
+                      className="w-full rounded-2xl bg-blue-600 px-5 py-4 text-xs font-black uppercase tracking-widest text-white shadow-xl shadow-blue-950/40 transition hover:bg-blue-500 disabled:opacity-60"
                     >
-                      Forgot Provider Password?
+                      {isProviderWalletVerifying ? 'Verifying Wallet...' : 'Verify Wallet & Open Tools'}
                     </button>
-                    {isPasswordResetRequestOpen && (
-                      <div className="space-y-3">
-                        <input
-                          type="email"
-                          value={passwordResetEmailInput}
-                          onChange={(event) => setPasswordResetEmailInput(event.target.value)}
-                          className="w-full rounded-xl border border-white/10 bg-white/5 px-4 py-3 text-sm font-medium text-white outline-none transition focus:ring-2 focus:ring-blue-500/40"
-                          required
-                          placeholder="provider@example.com"
-                        />
+                  </div>
+                ) : (
+                  <form onSubmit={handleApprovedProviderSignIn} className="space-y-5">
+                    <label className="block space-y-2">
+                      <span className="text-[10px] font-black uppercase tracking-widest text-slate-500">
+                        Provider email
+                      </span>
+                      <input
+                        type="email"
+                        value={emailInput}
+                        onChange={(event) => setEmailInput(event.target.value)}
+                        className="w-full rounded-2xl border border-white/10 bg-white/[0.06] px-5 py-4 text-sm text-white outline-none transition focus:ring-2 focus:ring-blue-500/40"
+                        required
+                        placeholder="you@example.com"
+                      />
+                    </label>
+                    <label className="block space-y-2">
+                      <span className="text-[10px] font-black uppercase tracking-widest text-slate-500">
+                        Password
+                      </span>
+                      <input
+                        type="password"
+                        value={passwordInput}
+                        onChange={(event) => setPasswordInput(event.target.value)}
+                        className="w-full rounded-2xl border border-white/10 bg-white/[0.06] px-5 py-4 text-sm text-white outline-none transition focus:ring-2 focus:ring-blue-500/40"
+                        required
+                        placeholder="********"
+                      />
+                    </label>
+                    {ACCOUNT_RECOVERY_UI_ENABLED && (
+                      <div className="space-y-3 rounded-2xl border border-white/10 bg-white/[0.03] p-4">
                         <button
                           type="button"
-                          onClick={() => handlePasswordResetRequest()}
-                          disabled={isPasswordResetPending}
-                          className="w-full rounded-xl border border-white/10 bg-white/5 py-3 text-[10px] font-black uppercase tracking-widest text-white transition hover:bg-white/10 disabled:opacity-60"
+                          onClick={() => {
+                            setPasswordResetRequestOpen((open) => !open);
+                            setPasswordResetEmailInput(emailInput);
+                            setPasswordResetNotice('');
+                          }}
+                          className="text-[10px] font-black uppercase tracking-widest text-blue-300 hover:text-blue-200"
                         >
-                          {isPasswordResetPending ? 'Sending...' : 'Send Reset Link'}
+                          Forgot Provider Password?
                         </button>
-                        {passwordResetNotice && (
-                          <p className="text-[10px] leading-5 text-blue-100/80">{passwordResetNotice}</p>
+                        {isPasswordResetRequestOpen && (
+                          <div className="space-y-3">
+                            <input
+                              type="email"
+                              value={passwordResetEmailInput}
+                              onChange={(event) => setPasswordResetEmailInput(event.target.value)}
+                              className="w-full rounded-xl border border-white/10 bg-white/5 px-4 py-3 text-sm font-medium text-white outline-none transition focus:ring-2 focus:ring-blue-500/40"
+                              required
+                              placeholder="provider@example.com"
+                            />
+                            <button
+                              type="button"
+                              onClick={() => handlePasswordResetRequest()}
+                              disabled={isPasswordResetPending}
+                              className="w-full rounded-xl border border-white/10 bg-white/5 py-3 text-[10px] font-black uppercase tracking-widest text-white transition hover:bg-white/10 disabled:opacity-60"
+                            >
+                              {isPasswordResetPending ? 'Sending...' : 'Send Reset Link'}
+                            </button>
+                            {passwordResetNotice && (
+                              <p className="text-[10px] leading-5 text-blue-100/80">{passwordResetNotice}</p>
+                            )}
+                          </div>
                         )}
                       </div>
                     )}
-                  </div>
+                    <button
+                      type="submit"
+                      className="w-full rounded-2xl bg-blue-600 px-5 py-4 text-xs font-black uppercase tracking-widest text-white shadow-xl shadow-blue-950/40 transition hover:bg-blue-500"
+                    >
+                      Continue To Wallet Verification
+                    </button>
+                  </form>
                 )}
-                <button
-                  type="submit"
-                  className="w-full rounded-2xl bg-blue-600 px-5 py-4 text-xs font-black uppercase tracking-widest text-white shadow-xl shadow-blue-950/40 transition hover:bg-blue-500"
-                >
-                  Open Provider Tools
-                </button>
-              </form>
+              </div>
             </div>
           </div>
         );
