@@ -39,6 +39,7 @@ import {
   providerApplicantProtectedRoutes,
 } from './routes/providerApplicants';
 import { initializeVertexAI } from './services/vertexAiService';
+import { ensureProviderCrmAdminFromEnv } from './services/providerCrmAdminBootstrap';
 import {
   hasOpenAiApiKey,
   logDeliveryEnvironmentLoaded,
@@ -275,8 +276,17 @@ app.use((req, res) => {
 app.use(errorHandler);
 
 // Start server
-app.listen(PORT, '0.0.0.0', () => {
-  console.log(`Backend listening on port ${PORT}`);
+const startServer = async (): Promise<void> => {
+  await ensureProviderCrmAdminFromEnv();
+
+  app.listen(PORT, '0.0.0.0', () => {
+    console.log(`Backend listening on port ${PORT}`);
+  });
+};
+
+void startServer().catch((error) => {
+  console.error('[STARTUP][FATAL] Failed to start backend', error);
+  process.exit(1);
 });
 
 export default app;
