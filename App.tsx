@@ -2277,11 +2277,11 @@ const App: React.FC = () => {
                 <WalletCards className="h-6 w-6" />
               </div>
               <h2 className="text-2xl font-black uppercase tracking-tight text-white sm:text-3xl">
-                Approved Provider Sign In
+                Provider / Admin Sign In
               </h2>
               <p className="mt-3 text-sm leading-6 text-slate-300">
-                Sign in with your approved Conscious Network Hub provider account to initialize
-                native provider host controls.
+                Sign in with your approved Conscious Network Hub provider or admin account to initialize
+                native provider controls.
               </p>
               <div className="mt-7 space-y-5">
                 {error && (
@@ -2322,7 +2322,7 @@ const App: React.FC = () => {
                   <form onSubmit={handleApprovedProviderSignIn} className="space-y-5">
                     <label className="block space-y-2">
                       <span className="text-[10px] font-black uppercase tracking-widest text-slate-500">
-                        Provider email
+                        Provider or admin email
                       </span>
                       <input
                         type="email"
@@ -2388,7 +2388,7 @@ const App: React.FC = () => {
                       type="submit"
                       className="w-full rounded-2xl bg-blue-600 px-5 py-4 text-xs font-black uppercase tracking-widest text-white shadow-xl shadow-blue-950/40 transition hover:bg-blue-500"
                     >
-                      Continue To Wallet Verification
+                      Continue To Provider Access
                     </button>
                   </form>
                 )}
