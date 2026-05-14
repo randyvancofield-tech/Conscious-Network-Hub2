@@ -21,13 +21,26 @@ export const ensureProviderCrmAdminFromEnv = async (): Promise<void> => {
   const db = getPrisma() as any;
   const password = hashPassword(initialPassword);
   const passwordFingerprint = computePasswordFingerprint(initialPassword);
-  const existing = await db.user.findUnique({
-    where: { email: PROVIDER_CRM_SOLE_ADMIN_EMAIL },
+  const existingUsers = await db.user.findMany({
+    where: {
+      email: {
+        equals: PROVIDER_CRM_SOLE_ADMIN_EMAIL,
+        mode: 'insensitive',
+      },
+    },
     select: {
       id: true,
+      email: true,
       role: true,
     },
   });
+
+  if (existingUsers.length > 1) {
+    console.error(
+      `[ProviderCRMAdminBootstrap] Refusing to repair admin account because ${existingUsers.length} case-insensitive matches exist.`
+    );
+    return;
+  }
 
   const adminData = {
     name: 'CNH Provider CRM Administrator',
@@ -44,10 +57,14 @@ export const ensureProviderCrmAdminFromEnv = async (): Promise<void> => {
     passwordResetExpiresAt: null,
   };
 
+  const existing = existingUsers[0] || null;
   if (existing) {
     await db.user.update({
-      where: { email: PROVIDER_CRM_SOLE_ADMIN_EMAIL },
-      data: adminData,
+      where: { id: existing.id },
+      data: {
+        ...adminData,
+        email: PROVIDER_CRM_SOLE_ADMIN_EMAIL,
+      },
     });
     console.log('[ProviderCRMAdminBootstrap] Provider CRM administrator repaired from env.');
     return;

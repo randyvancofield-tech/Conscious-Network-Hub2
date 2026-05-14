@@ -12,7 +12,7 @@ interface ProviderAccessPageProps {
 
 const PROVIDER_RETURN_PATH_ID = 'provider-return';
 const PROVIDER_MOBILE_STEPS = ['Start', 'Provider', 'Applicant', 'Candidate'];
-const PROVIDER_RETURN_INSIGHT = 'Approved providers and admins resume the Provider Portal and Business Command Center.';
+const PROVIDER_RETURN_INSIGHT = 'Approved providers resume the Provider Portal and Business Command Center.';
 
 const providerPathways: Array<{
   name: string;
@@ -306,18 +306,6 @@ const ProviderAccessPage: React.FC<ProviderAccessPageProps> = ({
                 <p className="mt-2 text-xs leading-5 text-cyan-50">{PROVIDER_RETURN_INSIGHT}</p>
               </div>
             </div>
-            <button
-              type="button"
-              onClick={onSignIn}
-              onMouseEnter={() => setHoveredProviderPath(PROVIDER_RETURN_PATH_ID)}
-              onMouseLeave={() => setHoveredProviderPath(null)}
-              onFocus={() => setHoveredProviderPath(PROVIDER_RETURN_PATH_ID)}
-              onBlur={() => setHoveredProviderPath(null)}
-              className="inline-flex items-center gap-2 rounded-xl border border-amber-200/30 bg-amber-500/10 px-6 py-3 text-[10px] font-black uppercase tracking-widest text-amber-100 shadow-xl shadow-amber-950/20 transition-all hover:bg-amber-500/20 sm:px-8 sm:text-xs"
-            >
-              <Shield className="h-4 w-4" />
-              Admin Entry
-            </button>
           </div>
           <p className="text-slate-500 text-[10px] sm:text-xs uppercase tracking-wider">
             New providers begin by selecting the Applicant Portal below.

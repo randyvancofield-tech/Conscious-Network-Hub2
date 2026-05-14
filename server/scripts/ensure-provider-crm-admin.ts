@@ -1,7 +1,7 @@
 import path from 'path';
 import dotenv from 'dotenv';
 import { PrismaClient } from '@prisma/client';
-import { hashPassword } from '../src/auth';
+import { computePasswordFingerprint, hashPassword } from '../src/auth';
 
 dotenv.config({ path: path.resolve(__dirname, '../.env.local') });
 dotenv.config({ path: path.resolve(__dirname, '../.env') });
@@ -14,42 +14,67 @@ const INITIAL_PASSWORD_ENV = 'PROVIDER_CRM_ADMIN_INITIAL_PASSWORD';
 const prisma = new PrismaClient();
 
 async function main(): Promise<void> {
-  const existing = await prisma.user.findUnique({
-    where: { email: PROVIDER_CRM_ADMIN_EMAIL },
+  const existingUsers = await prisma.user.findMany({
+    where: {
+      email: {
+        equals: PROVIDER_CRM_ADMIN_EMAIL,
+        mode: 'insensitive',
+      },
+    },
   });
 
-  if (existing) {
-    if (existing.role !== 'admin') {
-      await prisma.user.update({
-        where: { email: PROVIDER_CRM_ADMIN_EMAIL },
-        data: { role: 'admin' },
-      });
-      console.log(`Provider CRM administrator promoted: ${PROVIDER_CRM_ADMIN_EMAIL}`);
-      return;
-    }
+  if (existingUsers.length > 1) {
+    throw new Error(
+      `Refusing to repair ${PROVIDER_CRM_ADMIN_EMAIL}: ${existingUsers.length} case-insensitive user records exist.`
+    );
+  }
 
-    console.log(`Provider CRM administrator already active: ${PROVIDER_CRM_ADMIN_EMAIL}`);
+  const initialPassword = String(process.env[INITIAL_PASSWORD_ENV] || '').trim();
+  const passwordData =
+    initialPassword.length > 0
+      ? {
+          password: hashPassword(initialPassword),
+          passwordFingerprint: computePasswordFingerprint(initialPassword),
+        }
+      : {};
+
+  if (initialPassword.length > 0 && initialPassword.length < 12) {
+    throw new Error(`${INITIAL_PASSWORD_ENV} must be at least 12 characters.`);
+  }
+
+  const adminData = {
+    email: PROVIDER_CRM_ADMIN_EMAIL,
+    name: 'CNH Provider CRM Administrator',
+    role: 'admin',
+    tier: 'Accelerated Tier',
+    membershipStatus: 'active',
+    subscriptionStatus: 'active',
+    emailVerified: true,
+    failedSignInAttempts: 0,
+    lockoutUntil: null,
+    passwordResetTokenHash: null,
+    passwordResetExpiresAt: null,
+    ...passwordData,
+  } as any;
+
+  const existing = existingUsers[0] || null;
+  if (existing) {
+    await prisma.user.update({
+      where: { id: existing.id },
+      data: adminData,
+    });
+    console.log(`Provider CRM administrator repaired: ${PROVIDER_CRM_ADMIN_EMAIL}`);
     return;
   }
 
-  const initialPassword = String(process.env[INITIAL_PASSWORD_ENV] || '');
-  if (initialPassword.length < 12) {
+  if (!initialPassword) {
     throw new Error(
       `${PROVIDER_CRM_ADMIN_EMAIL} does not exist. Set ${INITIAL_PASSWORD_ENV} to a one-time password with at least 12 characters, run this script, then rotate the password immediately.`
     );
   }
 
   await prisma.user.create({
-    data: {
-      email: PROVIDER_CRM_ADMIN_EMAIL,
-      name: 'CNH Provider CRM Administrator',
-      role: 'admin',
-      password: hashPassword(initialPassword),
-      tier: 'Accelerated Tier',
-      membershipStatus: 'active',
-      subscriptionStatus: 'active',
-      emailVerified: true,
-    } as any,
+    data: adminData,
   });
 
   console.log(`Provider CRM administrator created: ${PROVIDER_CRM_ADMIN_EMAIL}`);

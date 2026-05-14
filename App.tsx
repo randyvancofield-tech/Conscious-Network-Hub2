@@ -16,6 +16,7 @@ import NotFoundPage from './components/NotFoundPage';
 import MusicBox from './components/MusicBox';
 import NotificationsCenter from './components/NotificationsCenter';
 import AdminDashboard from './components/AdminDashboard';
+import AdministrativeAccessPage from './components/AdministrativeAccessPage';
 import ProviderAccessPage from './components/ProviderAccessPage';
 import ProviderApplicationPage from './components/ProviderApplicationPage';
 import ProviderApplicantSignInPage from './components/ProviderApplicantSignInPage';
@@ -161,6 +162,10 @@ const routePathForView = (view: AppView, params: Record<string, string> = {}): s
       return '/verify-session';
     case AppView.MEMBERSHIP_ACCESS:
       return '/membership-access';
+    case AppView.ADMINISTRATIVE_ACCESS:
+      return '/administrative-access';
+    case AppView.ADMIN_SIGN_IN:
+      return '/administrative/sign-in';
     case AppView.PROVIDER_ACCESS:
       return '/provider-access';
     case AppView.PROVIDER_SIGN_IN:
@@ -248,6 +253,10 @@ const resolveRoute = (pathname: string, search = ''): RouteState => {
     '/verify-email': AppView.VERIFY_EMAIL,
     '/verify-session': AppView.VERIFY_SESSION,
     '/membership-access': AppView.MEMBERSHIP_ACCESS,
+    '/administrative-access': AppView.ADMINISTRATIVE_ACCESS,
+    '/admin-access': AppView.ADMINISTRATIVE_ACCESS,
+    '/administrative/sign-in': AppView.ADMIN_SIGN_IN,
+    '/admin/sign-in': AppView.ADMIN_SIGN_IN,
     '/provider-access': AppView.PROVIDER_ACCESS,
     '/provider/sign-in': AppView.PROVIDER_SIGN_IN,
     '/provider/apply': AppView.PROVIDER_APPLY,
@@ -347,6 +356,8 @@ const isGuestAllowedView = (view: AppView): boolean =>
     AppView.VERIFY_EMAIL,
     AppView.VERIFY_SESSION,
     AppView.MEMBERSHIP_ACCESS,
+    AppView.ADMINISTRATIVE_ACCESS,
+    AppView.ADMIN_SIGN_IN,
     AppView.PROVIDER_ACCESS,
     AppView.PROVIDER_SIGN_IN,
     AppView.PROVIDER_APPLY,
@@ -377,6 +388,8 @@ const isNoTierSignedInAllowedView = (view: AppView): boolean =>
     AppView.ENTRY,
     AppView.VERIFY_SESSION,
     AppView.MEMBERSHIP_ACCESS,
+    AppView.ADMINISTRATIVE_ACCESS,
+    AppView.ADMIN_SIGN_IN,
     AppView.PROVIDER_ACCESS,
     AppView.PROVIDER_SIGN_IN,
     AppView.PROVIDER_APPLY,
@@ -413,6 +426,12 @@ const isProviderPublicView = (view: AppView): boolean =>
     AppView.PROVIDER_APPLY,
     AppView.PROVIDER_APPLICANT_SIGN_IN,
     AppView.PROVIDER_APPLICATION_STATUS,
+  ].includes(view);
+
+const isAdministrativePublicView = (view: AppView): boolean =>
+  [
+    AppView.ADMINISTRATIVE_ACCESS,
+    AppView.ADMIN_SIGN_IN,
   ].includes(view);
 
 const isCareersPublicView = (view: AppView): boolean =>
@@ -991,6 +1010,10 @@ const App: React.FC = () => {
     setCurrentView(AppView.PROVIDER_ACCESS);
   };
 
+  const handleEnterAdministrativeAccess = () => {
+    setCurrentView(AppView.ADMINISTRATIVE_ACCESS);
+  };
+
   const handleEnterConsciousCareers = () => {
     setCurrentView(AppView.CONSCIOUS_CAREERS);
   };
@@ -1224,6 +1247,31 @@ const App: React.FC = () => {
     void confirmCheckoutSession();
   }, [pendingCheckoutSessionId, user?.id]);
 
+  const completeAdminPortalSignIn = async (token: string, canonicalUser: UserProfile): Promise<boolean> => {
+    setUserAuthSession(token, canonicalUser);
+    setUser(canonicalUser);
+    setSelectedTier(canonicalUser.tier || 'Accelerated Tier');
+    setIsSelectingTier(false);
+    setMembershipCheckoutPending(false);
+    setMembershipNotice('');
+    setPendingCheckoutSessionId(null);
+
+    const providerSession = await createNativeProviderControlSession();
+    if (!providerSession?.token) {
+      setError('Administrative controls could not be initialized.');
+      return false;
+    }
+
+    setProviderControlSession(providerSession.token);
+    void refreshUserCourses();
+    resetSignInChallengeInputs();
+    closeModals();
+    setPasswordInput('');
+    setCurrentView(AppView.PROVIDER_CRM, {}, { replace: true });
+    setSidebarOpen(window.innerWidth >= 1024);
+    return true;
+  };
+
   const handleSignIn = async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
@@ -1251,6 +1299,10 @@ const App: React.FC = () => {
         setMembershipNotice('');
         closeModals();
         routeApplicantToStatus(canonicalUser);
+        return;
+      }
+      if (hasAdminRole(canonicalUser)) {
+        await completeAdminPortalSignIn(data.token, canonicalUser);
         return;
       }
       const needsInitialTwoFactorSetup = requiresInitialTwoFactorSetup(canonicalUser);
@@ -1375,6 +1427,39 @@ const App: React.FC = () => {
     routeApplicantToStatus(canonicalUser);
   };
 
+  const handleAdministrativeSignIn = async (event: React.FormEvent) => {
+    event.preventDefault();
+    setError('');
+    const normalizedEmail = emailInput.trim().toLowerCase();
+
+    try {
+      const data = await api<any>('/user/signin', {
+        method: 'POST',
+        auth: false,
+        body: {
+          email: normalizedEmail,
+          password: passwordInput,
+        },
+      });
+
+      const canonicalUser = toPlatformUser(data.user);
+      if (!hasAdminRole(canonicalUser)) {
+        setError('Administrative Access is limited to administrator accounts.');
+        return;
+      }
+
+      await completeAdminPortalSignIn(data.token, canonicalUser);
+    } catch (error) {
+      if (error instanceof ApiError) {
+        setError(error.message || 'Invalid administrator credentials.');
+        return;
+      }
+      console.error('Administrative sign-in request failed:', error);
+      setHealthStatus('offline');
+      setError(backendConnectionErrorMessage('sign in as an administrator'));
+    }
+  };
+
   const handleApprovedProviderSignIn = async (event: React.FormEvent) => {
     event.preventDefault();
     setError('');
@@ -1392,8 +1477,8 @@ const App: React.FC = () => {
       });
 
       const canonicalUser = toPlatformUser(data.user);
-      if (!hasProviderRole(canonicalUser)) {
-        setError('This sign-in is only for approved CNH providers and admins.');
+      if (canonicalUser.role !== 'provider') {
+        setError('This sign-in is only for approved CNH providers. Administrators should use Administrative Access.');
         return;
       }
 
@@ -1404,20 +1489,6 @@ const App: React.FC = () => {
       setMembershipCheckoutPending(false);
       setMembershipNotice('');
       setPendingCheckoutSessionId(null);
-
-      if (canonicalUser.role === 'admin') {
-        resetSignInChallengeInputs();
-        const providerSession = await createNativeProviderControlSession();
-        if (!providerSession?.token) {
-          setError('Admin provider controls could not be initialized.');
-          return;
-        }
-        setProviderControlSession(providerSession.token);
-        setPasswordInput('');
-        setCurrentView(AppView.CONSCIOUS_MEETINGS, {}, { replace: true });
-        setSidebarOpen(window.innerWidth >= 1024);
-        return;
-      }
 
       setProviderWalletVerificationRequired(true);
       setProviderWalletStatus('Provider account confirmed. Complete wallet verification to open provider tools.');
@@ -2246,6 +2317,119 @@ const App: React.FC = () => {
             </div>
           </div>
         );
+      case AppView.ADMINISTRATIVE_ACCESS:
+        return (
+          <AdministrativeAccessPage
+            onGoHome={() => setCurrentView(AppView.ENTRY)}
+            onSignIn={() => {
+              resetSignInChallengeInputs();
+              setCurrentView(AppView.ADMIN_SIGN_IN);
+            }}
+          />
+        );
+      case AppView.ADMIN_SIGN_IN:
+        return (
+          <div className="flex min-h-[100dvh] w-full items-center justify-center bg-[#05070a] p-4 sm:p-8">
+            <div className="glass-panel w-full max-w-xl rounded-3xl border border-amber-200/20 bg-amber-500/[0.04] p-6 shadow-2xl sm:p-8">
+              <button
+                type="button"
+                onClick={() => setCurrentView(AppView.ADMINISTRATIVE_ACCESS)}
+                className="mb-6 flex items-center gap-2 text-[10px] font-black uppercase tracking-widest text-amber-100/60 transition-colors hover:text-white"
+              >
+                <ChevronRight className="h-4 w-4 rotate-180" />
+                Administrative Access
+              </button>
+              <div className="mb-6 flex h-14 w-14 items-center justify-center rounded-2xl border border-amber-200/20 bg-amber-500/10 text-amber-100">
+                <LockKeyhole className="h-6 w-6" />
+              </div>
+              <h2 className="text-2xl font-black uppercase tracking-tight text-white sm:text-3xl">
+                Administrator Sign In
+              </h2>
+              <p className="mt-3 text-sm leading-6 text-slate-300">
+                Sign in with an administrator account to enter provider operations and platform oversight.
+              </p>
+              <div className="mt-7 space-y-5">
+                {error && (
+                  <p className="rounded-xl border border-red-400/20 bg-red-400/10 p-3 text-[10px] font-black uppercase tracking-widest text-red-200">
+                    {error}
+                  </p>
+                )}
+                <form onSubmit={handleAdministrativeSignIn} className="space-y-5">
+                  <label className="block space-y-2">
+                    <span className="text-[10px] font-black uppercase tracking-widest text-slate-500">
+                      Administrator email
+                    </span>
+                    <input
+                      type="email"
+                      value={emailInput}
+                      onChange={(event) => setEmailInput(event.target.value)}
+                      className="w-full rounded-2xl border border-white/10 bg-white/[0.06] px-5 py-4 text-sm text-white outline-none transition focus:ring-2 focus:ring-amber-400/40"
+                      required
+                      placeholder="admin@example.com"
+                    />
+                  </label>
+                  <label className="block space-y-2">
+                    <span className="text-[10px] font-black uppercase tracking-widest text-slate-500">
+                      Password
+                    </span>
+                    <input
+                      type="password"
+                      value={passwordInput}
+                      onChange={(event) => setPasswordInput(event.target.value)}
+                      className="w-full rounded-2xl border border-white/10 bg-white/[0.06] px-5 py-4 text-sm text-white outline-none transition focus:ring-2 focus:ring-amber-400/40"
+                      required
+                      placeholder="********"
+                    />
+                  </label>
+                  {ACCOUNT_RECOVERY_UI_ENABLED && (
+                    <div className="space-y-3 rounded-2xl border border-white/10 bg-white/[0.03] p-4">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setPasswordResetRequestOpen((open) => !open);
+                          setPasswordResetEmailInput(emailInput);
+                          setPasswordResetNotice('');
+                        }}
+                        className="text-[10px] font-black uppercase tracking-widest text-amber-200 hover:text-amber-100"
+                      >
+                        Forgot Administrator Password?
+                      </button>
+                      {isPasswordResetRequestOpen && (
+                        <div className="space-y-3">
+                          <input
+                            type="email"
+                            value={passwordResetEmailInput}
+                            onChange={(event) => setPasswordResetEmailInput(event.target.value)}
+                            className="w-full rounded-xl border border-white/10 bg-white/5 px-4 py-3 text-sm font-medium text-white outline-none transition focus:ring-2 focus:ring-amber-400/40"
+                            required
+                            placeholder="admin@example.com"
+                          />
+                          <button
+                            type="button"
+                            onClick={() => handlePasswordResetRequest()}
+                            disabled={isPasswordResetPending}
+                            className="w-full rounded-xl border border-white/10 bg-white/5 py-3 text-[10px] font-black uppercase tracking-widest text-white transition hover:bg-white/10 disabled:opacity-60"
+                          >
+                            {isPasswordResetPending ? 'Sending...' : 'Send Reset Link'}
+                          </button>
+                          {passwordResetNotice && (
+                            <p className="text-[10px] leading-5 text-amber-100/80">{passwordResetNotice}</p>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  )}
+                  <button
+                    type="submit"
+                    className="w-full rounded-2xl bg-amber-500 px-5 py-4 text-xs font-black uppercase tracking-widest text-slate-950 shadow-xl shadow-amber-950/30 transition hover:bg-amber-400"
+                  >
+                    Enter Administrative Portal
+                  </button>
+                </form>
+              </div>
+            </div>
+          </div>
+        );
       case AppView.PROVIDER_ACCESS:
         return (
           <ProviderAccessPage
@@ -2277,11 +2461,11 @@ const App: React.FC = () => {
                 <WalletCards className="h-6 w-6" />
               </div>
               <h2 className="text-2xl font-black uppercase tracking-tight text-white sm:text-3xl">
-                Provider / Admin Sign In
+                Approved Provider Sign In
               </h2>
               <p className="mt-3 text-sm leading-6 text-slate-300">
-                Sign in with your approved Conscious Network Hub provider or admin account to initialize
-                native provider controls.
+                Sign in with your approved Conscious Network Hub provider account to initialize
+                native provider host controls.
               </p>
               <div className="mt-7 space-y-5">
                 {error && (
@@ -2322,7 +2506,7 @@ const App: React.FC = () => {
                   <form onSubmit={handleApprovedProviderSignIn} className="space-y-5">
                     <label className="block space-y-2">
                       <span className="text-[10px] font-black uppercase tracking-widest text-slate-500">
-                        Provider or admin email
+                        Provider email
                       </span>
                       <input
                         type="email"
@@ -2388,7 +2572,7 @@ const App: React.FC = () => {
                       type="submit"
                       className="w-full rounded-2xl bg-blue-600 px-5 py-4 text-xs font-black uppercase tracking-widest text-white shadow-xl shadow-blue-950/40 transition hover:bg-blue-500"
                     >
-                      Continue To Provider Access
+                      Continue To Wallet Verification
                     </button>
                   </form>
                 )}
@@ -2719,6 +2903,7 @@ const App: React.FC = () => {
   };
 
   const isProviderPublicExperience = isProviderPublicView(currentView);
+  const isAdministrativePublicExperience = isAdministrativePublicView(currentView);
   const isCareersPublicExperience = !user && isCareersPublicView(currentView);
 
   return (
@@ -2786,7 +2971,7 @@ const App: React.FC = () => {
                 </p>
               </div>
 
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4 sm:gap-5 max-w-5xl mx-auto pt-2 sm:pt-4">
+              <div className="grid grid-cols-1 gap-4 pt-2 sm:grid-cols-2 sm:gap-5 sm:pt-4 xl:grid-cols-4 max-w-6xl mx-auto">
                 <button
                   onClick={handleEnterHub}
                   className="portal-entry-primary group relative flex min-h-[8.75rem] w-full flex-col justify-between overflow-hidden rounded-2xl border border-blue-500/20 bg-white/[0.03] p-5 text-left shadow-[0_0_30px_rgba(37,99,235,0.12)] transition-all hover:-translate-y-1 hover:border-blue-400/40 hover:bg-blue-500/10 active:scale-[0.98] sm:min-h-[9.5rem] sm:p-6"
@@ -2846,6 +3031,28 @@ const App: React.FC = () => {
                   </div>
                   <span className="mt-4 inline-flex w-fit rounded-full border border-blue-400/20 bg-blue-500/10 px-3 py-1 text-[9px] font-black uppercase tracking-[0.25em] text-blue-100/70">
                     Conscious Careers
+                  </span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={handleEnterAdministrativeAccess}
+                  className="group relative flex min-h-[8.75rem] w-full flex-col justify-between overflow-hidden rounded-2xl border border-amber-300/20 bg-amber-500/[0.04] p-5 text-left shadow-[0_0_30px_rgba(245,158,11,0.12)] transition-all hover:-translate-y-1 hover:border-amber-200/40 hover:bg-amber-500/10 active:scale-[0.98] sm:min-h-[9.5rem] sm:p-6"
+                >
+                  <div className="absolute inset-0 bg-gradient-to-r from-transparent via-amber-100/10 to-transparent -translate-x-full group-hover:translate-x-full transition-transform duration-1000" />
+                  <div className="flex items-start justify-between gap-4">
+                    <div className="min-w-0">
+                      <h2 className="text-sm sm:text-base font-black uppercase tracking-[0.16em] text-white leading-snug">
+                        Administrative Access
+                      </h2>
+                      <p className="mt-3 text-xs sm:text-sm leading-relaxed text-blue-100/65">
+                        Founder and administrator operations
+                      </p>
+                    </div>
+                    <LockKeyhole className="w-5 h-5 text-amber-200 flex-shrink-0 group-hover:text-white transition-colors" />
+                  </div>
+                  <span className="mt-4 inline-flex w-fit rounded-full border border-amber-300/20 bg-amber-500/10 px-3 py-1 text-[9px] font-black uppercase tracking-[0.25em] text-amber-100/70">
+                    Admin Access
                   </span>
                 </button>
               </div>
@@ -3186,12 +3393,15 @@ const App: React.FC = () => {
 
         {isProviderPublicExperience && renderActiveView()}
 
+        {isAdministrativePublicExperience && renderActiveView()}
+
         {isCareersPublicExperience && renderActiveView()}
 
         {(currentView !== AppView.ENTRY &&
           currentView !== AppView.MEMBERSHIP_ACCESS &&
           currentView !== AppView.VERIFY_SESSION &&
           !isProviderPublicExperience &&
+          !isAdministrativePublicExperience &&
           !isCareersPublicExperience) && (
           <div className="flex flex-1 min-h-[100dvh] overflow-hidden animate-in fade-in duration-500 relative z-10">
             {isSidebarOpen && (
