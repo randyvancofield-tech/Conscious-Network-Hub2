@@ -17,6 +17,7 @@ import { getPrisma } from '../services/prismaClient';
 
 type SessionMode = 'virtual' | 'solo' | 'immersive-5d';
 type SessionStatus = 'scheduled' | 'live' | 'ended';
+type MeetingSignalType = 'offer' | 'answer' | 'ice' | 'presence' | 'renegotiate';
 
 interface MeetingParticipant {
   id: string;
@@ -45,6 +46,15 @@ interface ExternalLinkRecord {
   revoked: boolean;
 }
 
+interface MeetingSignalRecord {
+  id: string;
+  fromParticipantId: string;
+  toParticipantId: string | null;
+  type: MeetingSignalType;
+  payload: unknown;
+  createdAtMs: number;
+}
+
 interface MeetingSessionRecord {
   id: string;
   providerDid: string;
@@ -62,11 +72,15 @@ interface MeetingSessionRecord {
   startedAtMs: number | null;
   endedAtMs: number | null;
   publicStream: boolean;
+  nativeRoomEnabled: boolean;
+  immersiveEnabled: boolean;
+  localRecordingAllowed: boolean;
   routeKey: string;
   vodPath: string | null;
   participants: Map<string, MeetingParticipant>;
   invitedMembers: Map<string, MeetingInviteRecord>;
   externalLinks: Map<string, ExternalLinkRecord>;
+  signals: Map<string, MeetingSignalRecord>;
 }
 
 interface ExternalInviteTokenPayload {
@@ -105,6 +119,8 @@ const MAX_LINK_MAX_USES = 1000;
 const DIRECTORY_LOOKUP_LIMIT = 1000;
 const MAX_BATCH_USERNAMES = 500;
 const MAX_BATCH_GROUPS = 50;
+const MAX_SIGNAL_MESSAGES = 200;
+const MAX_SIGNAL_PAYLOAD_BYTES = 12 * 1024;
 
 const mapToArray = <T>(value: Map<string, T>): T[] => Array.from(value.values());
 
@@ -120,10 +136,14 @@ const sessionMetadata = (session: MeetingSessionRecord) => ({
   createdAtMs: session.createdAtMs,
   updatedAtMs: session.updatedAtMs,
   publicStream: session.publicStream,
+  nativeRoomEnabled: session.nativeRoomEnabled,
+  immersiveEnabled: session.immersiveEnabled,
+  localRecordingAllowed: session.localRecordingAllowed,
   routeKey: session.routeKey,
   vodPath: session.vodPath,
   invitedMembers: mapToArray(session.invitedMembers),
   externalLinks: mapToArray(session.externalLinks),
+  signals: mapToArray(session.signals).slice(-MAX_SIGNAL_MESSAGES),
 });
 
 const sessionFromRow = (row: any): MeetingSessionRecord => {
@@ -131,6 +151,7 @@ const sessionFromRow = (row: any): MeetingSessionRecord => {
   const participants = Array.isArray(row?.participants) ? row.participants : [];
   const invitedMembers = Array.isArray(metadata.invitedMembers) ? metadata.invitedMembers : [];
   const externalLinks = Array.isArray(metadata.externalLinks) ? metadata.externalLinks : [];
+  const signals = Array.isArray(metadata.signals) ? metadata.signals.slice(-MAX_SIGNAL_MESSAGES) : [];
   const createdAtMs = Number(metadata.createdAtMs || new Date(row.createdAt).getTime());
   const updatedAtMs = Number(metadata.updatedAtMs || new Date(row.updatedAt).getTime());
   const scheduledAtMs = Number(
@@ -156,11 +177,19 @@ const sessionFromRow = (row: any): MeetingSessionRecord => {
     startedAtMs: row.startedAt ? new Date(row.startedAt).getTime() : null,
     endedAtMs: row.endedAt ? new Date(row.endedAt).getTime() : null,
     publicStream: metadata.publicStream === true,
+    nativeRoomEnabled: metadata.nativeRoomEnabled !== false,
+    immersiveEnabled: metadata.immersiveEnabled === true || normalizeSessionMode(metadata.mode) === 'immersive-5d',
+    localRecordingAllowed: metadata.localRecordingAllowed === true,
     routeKey: String(metadata.routeKey || row.id).trim() || row.id,
     vodPath: metadata.vodPath ? String(metadata.vodPath) : null,
     participants: new Map(participants.map((entry: MeetingParticipant) => [entry.id, entry])),
     invitedMembers: new Map(invitedMembers.map((entry: MeetingInviteRecord) => [entry.key, entry])),
     externalLinks: new Map(externalLinks.map((entry: ExternalLinkRecord) => [entry.id, entry])),
+    signals: new Map(
+      signals
+        .filter((entry: MeetingSignalRecord) => entry?.id && entry?.fromParticipantId && entry?.type)
+        .map((entry: MeetingSignalRecord) => [entry.id, entry])
+    ),
   };
 };
 
@@ -279,6 +308,57 @@ const normalizePositiveInteger = (
   return rounded;
 };
 
+const normalizeBoolean = (value: unknown, fallback = false): boolean => {
+  if (typeof value === 'boolean') return value;
+  if (typeof value === 'string') {
+    const normalized = value.trim().toLowerCase();
+    if (['true', '1', 'yes', 'on'].includes(normalized)) return true;
+    if (['false', '0', 'no', 'off'].includes(normalized)) return false;
+  }
+  return fallback;
+};
+
+const getMeetingIceServers = () => {
+  const configuredStunUrls = String(process.env.MEETING_STUN_URLS || 'stun:stun.l.google.com:19302')
+    .split(',')
+    .map((entry) => entry.trim())
+    .filter(Boolean);
+  const configuredTurnUrls = String(process.env.MEETING_TURN_URLS || '')
+    .split(',')
+    .map((entry) => entry.trim())
+    .filter(Boolean);
+  const iceServers: Array<Record<string, unknown>> = [];
+  if (configuredStunUrls.length > 0) {
+    iceServers.push({ urls: configuredStunUrls });
+  }
+  if (configuredTurnUrls.length > 0) {
+    iceServers.push({
+      urls: configuredTurnUrls,
+      username: String(process.env.MEETING_TURN_USERNAME || ''),
+      credential: String(process.env.MEETING_TURN_CREDENTIAL || ''),
+    });
+  }
+  return iceServers;
+};
+
+const sanitizeSignalType = (value: unknown): MeetingSignalType | null => {
+  const normalized = String(value || '').trim().toLowerCase();
+  if (['offer', 'answer', 'ice', 'presence', 'renegotiate'].includes(normalized)) {
+    return normalized as MeetingSignalType;
+  }
+  return null;
+};
+
+const sanitizeSignalPayload = (value: unknown): unknown | null => {
+  try {
+    const serialized = JSON.stringify(value ?? {});
+    if (serialized.length > MAX_SIGNAL_PAYLOAD_BYTES) return null;
+    return JSON.parse(serialized);
+  } catch {
+    return null;
+  }
+};
+
 const getPublicBaseUrl = (req: Request): string => {
   const configured = String(process.env.PUBLIC_BASE_URL || '').trim();
   if (configured) return configured.replace(/\/+$/, '');
@@ -379,6 +459,15 @@ const sessionToResponse = (session: MeetingSessionRecord, req?: Request) => {
     providerDisplayName: session.providerDisplayName,
     maxViewers: session.maxViewers,
     publicStream: session.publicStream,
+    nativeRoom: {
+      provider: 'native-webrtc-p2p',
+      enabled: session.nativeRoomEnabled,
+      signaling: 'https-polling',
+      serverRecordingEnabled: false,
+      localRecordingAllowed: session.localRecordingAllowed,
+      immersiveEnabled: session.immersiveEnabled,
+      securityLevel: 'signed-session-required',
+    },
     scheduledAtMs: session.scheduledAtMs,
     internalRoomPath: roomPath,
     internalRoomUrl: baseUrl ? `${baseUrl}${roomPath}` : null,
@@ -486,7 +575,70 @@ const isUserInvited = (session: MeetingSessionRecord, user: any): boolean => {
 };
 
 const canUserAccessSession = (session: MeetingSessionRecord, user: any): boolean =>
-  session.publicStream || isUserInvited(session, user);
+  String(user?.role || '').toLowerCase() === 'admin' ||
+  String(user?.id || '').trim() === session.providerUserId ||
+  session.publicStream ||
+  isUserInvited(session, user);
+
+const getParticipantIdForUser = (session: MeetingSessionRecord, user: any): string => {
+  const userId = String(user?.id || '').trim();
+  if (userId && userId === session.providerUserId) return `provider:${session.providerDid}`;
+  if (String(user?.role || '').toLowerCase() === 'admin' && userId) return `admin:${userId}`;
+  return `user:${userId}`;
+};
+
+const roomConfigToResponse = (session: MeetingSessionRecord, viewer: any, req: Request) => {
+  const participantId = getParticipantIdForUser(session, viewer);
+  return {
+    success: true,
+    sessionId: session.id,
+    routeKey: session.routeKey,
+    participantId,
+    nativeRoom: {
+      provider: 'native-webrtc-p2p',
+      enabled: session.nativeRoomEnabled,
+      signaling: {
+        transport: 'https-polling',
+        messagesPath: `/api/meeting/user/sessions/${encodeURIComponent(session.routeKey || session.id)}/signals`,
+      },
+      mediaTransport: 'browser-webrtc-dtls-srtp',
+      iceServers: getMeetingIceServers(),
+      globalReliability: {
+        freeMode: 'stun-and-direct-peer-to-peer',
+        turnRelayConfigured: String(process.env.MEETING_TURN_URLS || '').trim().length > 0,
+        note: 'Some restrictive networks require a TURN relay; configure MEETING_TURN_URLS for global reliability.',
+      },
+    },
+    immersive: {
+      enabled: session.immersiveEnabled,
+      participantOptInRequired: true,
+      localCapabilityRequired: true,
+      supportedRoomPath: `${getPublicBaseUrl(req)}/conscious-meetings/session/${encodeURIComponent(session.routeKey || session.id)}?view=immersive-5d`,
+    },
+    recording: {
+      serverRecordingEnabled: false,
+      localParticipantRecordingAllowed: session.localRecordingAllowed,
+      localOptInRequired: true,
+      sharedRecordingDefault: false,
+      policy: session.localRecordingAllowed
+        ? 'Participants may record locally only after choosing to do so in their own browser.'
+        : 'Provider has disabled participant-side local recording for this session.',
+    },
+    security: {
+      authentication: 'signed-cnh-session',
+      authorization: session.publicStream ? 'signed-in-or-invited' : 'invite-managed',
+      transport: 'https-plus-webrtc-dtls-srtp',
+      serverMediaStorage: false,
+      auditEvents: true,
+    },
+    participants: Array.from(session.participants.values()).map((entry) => ({
+      id: entry.id,
+      kind: entry.kind,
+      displayName: entry.displayName,
+      joinedAtMs: entry.joinedAtMs,
+    })),
+  };
+};
 
 providerRouter.get('/sessions', requireProviderScope('provider:read'), async (req: Request, res: Response): Promise<void> => {
   const providerReq = req as ProviderAuthenticatedRequest;
@@ -534,6 +686,8 @@ providerRouter.post('/sessions', requireProviderScope('provider:host'), async (r
   );
   const scheduledAtMs = normalizeScheduledAtMs(req.body?.scheduledAtMs || req.body?.scheduledAt);
   const publicStream = req.body?.publicStream !== false;
+  const immersiveEnabled = mode === 'immersive-5d' || normalizeBoolean(req.body?.immersiveEnabled, false);
+  const localRecordingAllowed = normalizeBoolean(req.body?.localRecordingAllowed, false);
   const providerProfile = await localStore.getUserById(providerUserId);
   const providerDisplayName =
     String(providerProfile?.name || providerProfile?.handle || 'Verified Provider').trim() || 'Verified Provider';
@@ -557,11 +711,15 @@ providerRouter.post('/sessions', requireProviderScope('provider:host'), async (r
     startedAtMs: null,
     endedAtMs: null,
     publicStream,
+    nativeRoomEnabled: true,
+    immersiveEnabled,
+    localRecordingAllowed,
     routeKey: createInternalRouteKey(),
     vodPath: null,
     participants: new Map<string, MeetingParticipant>(),
     invitedMembers: new Map<string, MeetingInviteRecord>(),
     externalLinks: new Map<string, ExternalLinkRecord>(),
+    signals: new Map<string, MeetingSignalRecord>(),
   };
 
   await saveMeetingSession(record);
@@ -577,6 +735,8 @@ providerRouter.post('/sessions', requireProviderScope('provider:host'), async (r
       sessionId: record.id,
       routeKey: record.routeKey,
       mode: record.mode,
+      immersiveEnabled: record.immersiveEnabled,
+      localRecordingAllowed: record.localRecordingAllowed,
       maxViewers: record.maxViewers,
       scheduledAtMs: record.scheduledAtMs,
       publicStream: record.publicStream,
@@ -910,6 +1070,118 @@ userRouter.get('/sessions/:sessionId', async (req: Request, res: Response): Prom
   res.json({ success: true, session: sessionToResponse(session, req) });
 });
 
+userRouter.get('/sessions/:sessionId/room-config', async (req: Request, res: Response): Promise<void> => {
+  const authUserId = getAuthenticatedUserId(req);
+  if (!authUserId) {
+    res.status(401).json({ error: 'Authentication required' });
+    return;
+  }
+
+  const viewer = await localStore.getUserById(authUserId);
+  if (!viewer) {
+    res.status(401).json({ error: 'Viewer session is invalid' });
+    return;
+  }
+
+  const sessionId = String(req.params.sessionId || '').trim();
+  const session = await getMeetingSessionByEndpoint(sessionId);
+  if (!session || !canUserAccessSession(session, viewer)) {
+    res.status(404).json({ error: 'Meeting session not found' });
+    return;
+  }
+
+  res.json(roomConfigToResponse(session, viewer, req));
+});
+
+userRouter.get('/sessions/:sessionId/signals', async (req: Request, res: Response): Promise<void> => {
+  const authUserId = getAuthenticatedUserId(req);
+  if (!authUserId) {
+    res.status(401).json({ error: 'Authentication required' });
+    return;
+  }
+
+  const viewer = await localStore.getUserById(authUserId);
+  if (!viewer) {
+    res.status(401).json({ error: 'Viewer session is invalid' });
+    return;
+  }
+
+  const sessionId = String(req.params.sessionId || '').trim();
+  const session = await getMeetingSessionByEndpoint(sessionId);
+  if (!session || !canUserAccessSession(session, viewer)) {
+    res.status(404).json({ error: 'Meeting session not found' });
+    return;
+  }
+
+  const participantId = getParticipantIdForUser(session, viewer);
+  const afterMs = Number(req.query.afterMs || 0);
+  const signals = Array.from(session.signals.values())
+    .filter((signal) => signal.createdAtMs > (Number.isFinite(afterMs) ? afterMs : 0))
+    .filter((signal) => signal.fromParticipantId !== participantId)
+    .filter((signal) => !signal.toParticipantId || signal.toParticipantId === participantId)
+    .sort((a, b) => a.createdAtMs - b.createdAtMs);
+
+  res.json({
+    success: true,
+    participantId,
+    signals,
+    latestSignalAtMs: signals.reduce((latest, signal) => Math.max(latest, signal.createdAtMs), afterMs || 0),
+  });
+});
+
+userRouter.post('/sessions/:sessionId/signals', async (req: Request, res: Response): Promise<void> => {
+  const authUserId = getAuthenticatedUserId(req);
+  if (!authUserId) {
+    res.status(401).json({ error: 'Authentication required' });
+    return;
+  }
+
+  const viewer = await localStore.getUserById(authUserId);
+  if (!viewer) {
+    res.status(401).json({ error: 'Viewer session is invalid' });
+    return;
+  }
+
+  const sessionId = String(req.params.sessionId || '').trim();
+  const session = await getMeetingSessionByEndpoint(sessionId);
+  if (!session || !canUserAccessSession(session, viewer)) {
+    res.status(404).json({ error: 'Meeting session not found' });
+    return;
+  }
+
+  if (!session.nativeRoomEnabled || session.status !== 'live') {
+    res.status(409).json({ error: 'Native meeting room is not live' });
+    return;
+  }
+
+  const type = sanitizeSignalType(req.body?.type);
+  const payload = sanitizeSignalPayload(req.body?.payload);
+  if (!type || payload === null) {
+    res.status(400).json({ error: 'Valid signal type and payload are required' });
+    return;
+  }
+
+  const participantId = getParticipantIdForUser(session, viewer);
+  const targetParticipantId = String(req.body?.toParticipantId || '').trim() || null;
+  const nowMs = Date.now();
+  const signal: MeetingSignalRecord = {
+    id: `sig_${crypto.randomUUID()}`,
+    fromParticipantId: participantId,
+    toParticipantId: targetParticipantId,
+    type,
+    payload,
+    createdAtMs: nowMs,
+  };
+
+  session.signals.set(signal.id, signal);
+  const sortedSignals = Array.from(session.signals.values()).sort((a, b) => a.createdAtMs - b.createdAtMs);
+  session.signals = new Map(sortedSignals.slice(-MAX_SIGNAL_MESSAGES).map((entry) => [entry.id, entry]));
+  session.updatedAtMs = nowMs;
+  await saveMeetingSession(session);
+
+  res.status(201).json({ success: true, signalId: signal.id, createdAtMs: signal.createdAtMs });
+});
+
 userRouter.post('/sessions/:sessionId/join', async (req: Request, res: Response): Promise<void> => {
   const authUserId = getAuthenticatedUserId(req);
   if (!authUserId) {
@@ -940,11 +1212,11 @@ userRouter.post('/sessions/:sessionId/join', async (req: Request, res: Response)
     return;
   }
 
-  const participantId = `user:${authUserId}`;
+  const participantId = getParticipantIdForUser(session, viewer);
   if (!session.participants.has(participantId)) {
     session.participants.set(participantId, {
       id: participantId,
-      kind: 'user',
+      kind: participantId.startsWith('provider:') ? 'provider' : 'user',
       displayName: String(req.body?.displayName || viewer.name || viewer.handle || 'Participant').trim().slice(0, 80) || 'Participant',
       email: null,
       joinedAtMs: Date.now(),
@@ -970,7 +1242,9 @@ userRouter.post('/sessions/:sessionId/leave', async (req: Request, res: Response
     return;
   }
 
-  session.participants.delete(`user:${authUserId}`);
+  const viewer = await localStore.getUserById(authUserId);
+  const participantId = viewer ? getParticipantIdForUser(session, viewer) : `user:${authUserId}`;
+  session.participants.delete(participantId);
   session.updatedAtMs = Date.now();
   if (session.participants.size === 0) {
     await maybeFinalizeSession(session);
@@ -978,7 +1252,7 @@ userRouter.post('/sessions/:sessionId/leave', async (req: Request, res: Response
     await saveMeetingSession(session);
   }
 
-  res.json({ success: true, sessionId, leftParticipantId: `user:${authUserId}` });
+  res.json({ success: true, sessionId, leftParticipantId: participantId });
 });
 
 guestRouter.post('/preview', async (req: Request, res: Response): Promise<void> => {

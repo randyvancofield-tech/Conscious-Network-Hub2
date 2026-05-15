@@ -1,22 +1,27 @@
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   ArrowLeft,
   Camera,
+  Download,
   Layers,
   Loader2,
   Mic,
   Monitor,
   Radio,
   ShieldCheck,
+  Square,
   Users,
   Video,
 } from 'lucide-react';
 import { UserProfile } from '../types';
 import {
   getMeetingSession,
+  getMeetingRoomConfig,
   joinMeetingSession,
   leaveMeetingSession,
+  MeetingRoomConfig,
   MeetingSessionSummary,
+  postMeetingSignal,
 } from '../services/backendApiService';
 import { ActionButton, EmptyState, PageHeader, PageShell, SurfacePanel } from './ui/PlatformPrimitives';
 
@@ -47,6 +52,14 @@ const ConsciousMeetingRoomPage: React.FC<ConsciousMeetingRoomPageProps> = ({ ses
   const [hasJoined, setHasJoined] = useState(false);
   const [xrSupported, setXrSupported] = useState(false);
   const [mediaDevicesReady, setMediaDevicesReady] = useState(false);
+  const [roomConfig, setRoomConfig] = useState<MeetingRoomConfig | null>(null);
+  const [localStream, setLocalStream] = useState<MediaStream | null>(null);
+  const [recordingState, setRecordingState] = useState<'idle' | 'recording'>('idle');
+  const [recordedChunks, setRecordedChunks] = useState<Blob[]>([]);
+  const [recordingSeconds, setRecordingSeconds] = useState(0);
+  const localVideoRef = useRef<HTMLVideoElement | null>(null);
+  const mediaRecorderRef = useRef<MediaRecorder | null>(null);
+  const recordingTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   const refreshSession = useCallback(async () => {
     if (!sessionId) {
@@ -97,12 +110,26 @@ const ConsciousMeetingRoomPage: React.FC<ConsciousMeetingRoomPageProps> = ({ ses
       if (hasJoined && session?.id) {
         void leaveMeetingSession(session.id);
       }
+      localStream?.getTracks().forEach((track) => track.stop());
+      if (recordingTimerRef.current) {
+        clearInterval(recordingTimerRef.current);
+      }
     };
-  }, [hasJoined, session?.id]);
+  }, [hasJoined, localStream, session?.id]);
+
+  useEffect(() => {
+    if (!localVideoRef.current || !localStream) return;
+    localVideoRef.current.srcObject = localStream;
+  }, [localStream]);
 
   const participantCount = session?.participants?.length || 0;
   const scheduledAtMs = session?.scheduledAtMs || session?.startedAtMs || session?.createdAtMs || Date.now();
   const canEnter = Boolean(session && session.status === 'live' && user);
+  const canUseImmersive =
+    Boolean(session?.nativeRoom?.immersiveEnabled || session?.mode === 'immersive-5d') && xrSupported;
+  const canRecordLocally = Boolean(
+    roomConfig?.recording.localParticipantRecordingAllowed && hasJoined && localStream
+  );
 
   const providerName = useMemo(
     () => session?.providerDisplayName || 'Verified Provider',
@@ -128,7 +155,86 @@ const ConsciousMeetingRoomPage: React.FC<ConsciousMeetingRoomPageProps> = ({ ses
     }
     setSession(joined);
     setHasJoined(true);
+    const config = await getMeetingRoomConfig(session.routeKey || session.id);
+    setRoomConfig(config);
+    if (config) {
+      void postMeetingSignal(session.routeKey || session.id, {
+        type: 'presence',
+        payload: {
+          mode,
+          participantId: config.participantId,
+          supportsImmersive5d: xrSupported,
+          localRecordingCapable: typeof MediaRecorder !== 'undefined',
+        },
+      });
+    }
     setJoinStatus(mode === 'immersive-5d' ? 'Joined 5D gateway. Checking spatial profile...' : 'Joined Standard View.');
+  };
+
+  const enableLocalMedia = async () => {
+    try {
+      const nextStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
+      localStream?.getTracks().forEach((track) => track.stop());
+      setLocalStream(nextStream);
+      setMediaDevicesReady(true);
+      setJoinStatus('Local camera and microphone are active for this browser only.');
+    } catch {
+      setJoinStatus('Camera and microphone permission was denied or unavailable.');
+    }
+  };
+
+  const startLocalRecording = () => {
+    if (!canRecordLocally || !localStream) {
+      setJoinStatus('Local recording is unavailable until the provider enables it and your media is active.');
+      return;
+    }
+    if (recordingState === 'recording') return;
+
+    const mimeType = MediaRecorder.isTypeSupported('video/webm;codecs=vp9,opus')
+      ? 'video/webm;codecs=vp9,opus'
+      : MediaRecorder.isTypeSupported('video/webm;codecs=vp8,opus')
+        ? 'video/webm;codecs=vp8,opus'
+        : 'video/webm';
+    const recorder = new MediaRecorder(localStream, { mimeType });
+    const chunks: Blob[] = [];
+    recorder.ondataavailable = (event) => {
+      if (event.data.size > 0) chunks.push(event.data);
+    };
+    recorder.onstop = () => {
+      setRecordedChunks(chunks);
+      setRecordingState('idle');
+      if (recordingTimerRef.current) {
+        clearInterval(recordingTimerRef.current);
+        recordingTimerRef.current = null;
+      }
+    };
+    mediaRecorderRef.current = recorder;
+    setRecordedChunks([]);
+    setRecordingSeconds(0);
+    recorder.start();
+    recordingTimerRef.current = setInterval(() => {
+      setRecordingSeconds((current) => current + 1);
+    }, 1000);
+    setRecordingState('recording');
+    setJoinStatus('Local-only recording started. Nothing is uploaded to CNH storage.');
+  };
+
+  const stopLocalRecording = () => {
+    mediaRecorderRef.current?.stop();
+    setJoinStatus('Local recording stopped. Download is available only in this browser session.');
+  };
+
+  const downloadLocalRecording = () => {
+    if (recordedChunks.length === 0) return;
+    const blob = new Blob(recordedChunks, { type: 'video/webm' });
+    const url = URL.createObjectURL(blob);
+    const anchor = document.createElement('a');
+    anchor.href = url;
+    anchor.download = `conscious-meeting-local-${new Date().toISOString().slice(0, 19).replace(/:/g, '-')}.webm`;
+    document.body.appendChild(anchor);
+    anchor.click();
+    document.body.removeChild(anchor);
+    URL.revokeObjectURL(url);
   };
 
   if (isLoading) {
@@ -174,7 +280,7 @@ const ConsciousMeetingRoomPage: React.FC<ConsciousMeetingRoomPageProps> = ({ ses
             <ActionButton type="button" onClick={() => handleJoin('standard')} disabled={!canEnter} icon={<Monitor className="h-4 w-4" />}>
               Standard View
             </ActionButton>
-            <ActionButton type="button" variant="secondary" onClick={() => handleJoin('immersive-5d')} disabled={!canEnter} icon={<Layers className="h-4 w-4" />}>
+            <ActionButton type="button" variant="secondary" onClick={() => handleJoin('immersive-5d')} disabled={!canEnter || !canUseImmersive} icon={<Layers className="h-4 w-4" />}>
               5D Provider Experience
             </ActionButton>
           </>
@@ -185,13 +291,23 @@ const ConsciousMeetingRoomPage: React.FC<ConsciousMeetingRoomPageProps> = ({ ses
         <SurfacePanel className="space-y-5">
           <div className="aspect-video overflow-hidden rounded-2xl border border-white/10 bg-black">
             {roomMode === 'standard' ? (
-              <div className="flex h-full flex-col items-center justify-center bg-[radial-gradient(circle_at_top_left,rgba(59,130,246,0.24),transparent_34%),linear-gradient(135deg,rgba(15,23,42,0.98),rgba(2,6,23,0.94))] p-6 text-center">
-                <Radio className="mb-4 h-12 w-12 text-blue-300" />
-                <h2 className="text-xl font-black uppercase text-white">Internal Standard View</h2>
-                <p className="mt-2 max-w-xl text-sm leading-6 text-slate-400">
-                  Provider audio and video render here through the native CNH live stream pipeline when the room is broadcasting.
-                </p>
-              </div>
+              localStream ? (
+                <video
+                  ref={localVideoRef}
+                  muted
+                  playsInline
+                  autoPlay
+                  className="h-full w-full bg-black object-cover"
+                />
+              ) : (
+                <div className="flex h-full flex-col items-center justify-center bg-[radial-gradient(circle_at_top_left,rgba(59,130,246,0.24),transparent_34%),linear-gradient(135deg,rgba(15,23,42,0.98),rgba(2,6,23,0.94))] p-6 text-center">
+                  <Radio className="mb-4 h-12 w-12 text-blue-300" />
+                  <h2 className="text-xl font-black uppercase text-white">Native Standard Room</h2>
+                  <p className="mt-2 max-w-xl text-sm leading-6 text-slate-400">
+                    This room uses CNH-issued meeting links, signed-session access, and browser WebRTC readiness without a paid meeting vendor.
+                  </p>
+                </div>
+              )
             ) : (
               <div className="relative flex h-full flex-col items-center justify-center overflow-hidden bg-[radial-gradient(circle_at_center,rgba(45,212,191,0.28),transparent_28%),linear-gradient(160deg,rgba(8,47,73,0.94),rgba(2,6,23,0.98))] p-6 text-center">
                 <div className="absolute inset-6 rounded-full border border-cyan-200/20" />
@@ -212,6 +328,43 @@ const ConsciousMeetingRoomPage: React.FC<ConsciousMeetingRoomPageProps> = ({ ses
               {joinStatus}
             </div>
           )}
+
+          <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
+            <ActionButton
+              type="button"
+              variant="secondary"
+              onClick={() => void enableLocalMedia()}
+              disabled={!hasJoined}
+              icon={<Camera className="h-4 w-4" />}
+            >
+              Enable Media
+            </ActionButton>
+            <ActionButton
+              type="button"
+              variant="secondary"
+              className={recordingState === 'recording' ? 'border-red-400/30 bg-red-500/20 text-red-100 hover:bg-red-500/30' : ''}
+              onClick={recordingState === 'recording' ? stopLocalRecording : startLocalRecording}
+              disabled={!hasJoined || (!canRecordLocally && recordingState !== 'recording')}
+              icon={recordingState === 'recording' ? <Square className="h-4 w-4" /> : <Video className="h-4 w-4" />}
+            >
+              {recordingState === 'recording' ? `Stop ${recordingSeconds}s` : 'Record Locally'}
+            </ActionButton>
+            <ActionButton
+              type="button"
+              variant="secondary"
+              onClick={downloadLocalRecording}
+              disabled={recordedChunks.length === 0}
+              icon={<Download className="h-4 w-4" />}
+            >
+              Download
+            </ActionButton>
+          </div>
+
+          <div className="rounded-xl border border-white/10 bg-white/[0.03] p-4 text-xs leading-5 text-slate-400">
+            {roomConfig?.recording.localParticipantRecordingAllowed
+              ? 'Provider enabled local-only participant recording. Each participant records only in their own browser after opting in.'
+              : 'Server recording is off. Participant-side local recording is disabled unless the provider enables it for this session.'}
+          </div>
         </SurfacePanel>
 
         <SurfacePanel className="space-y-5">
@@ -246,6 +399,16 @@ const ConsciousMeetingRoomPage: React.FC<ConsciousMeetingRoomPageProps> = ({ ses
               <p className="flex items-center gap-2">
                 <Users className="h-4 w-4 text-blue-300" />
                 {session.publicStream ? 'Open to signed-in CNH users' : 'Invite-managed access'}
+              </p>
+              <p className="flex items-center gap-2">
+                <ShieldCheck className="h-4 w-4 text-cyan-300" />
+                {roomConfig?.nativeRoom.globalReliability.turnRelayConfigured
+                  ? 'TURN relay configured for restrictive networks'
+                  : 'Free P2P/STUN mode; restrictive networks may need TURN'}
+              </p>
+              <p className="flex items-center gap-2">
+                <Layers className={`h-4 w-4 ${session.nativeRoom?.immersiveEnabled ? 'text-teal-300' : 'text-slate-500'}`} />
+                {session.nativeRoom?.immersiveEnabled ? '5D gateway provider-enabled' : '5D gateway off for this room'}
               </p>
             </div>
           </div>

@@ -153,6 +153,15 @@ export interface MeetingSessionSummary {
   providerDisplayName?: string;
   maxViewers: number;
   publicStream?: boolean;
+  nativeRoom?: {
+    provider: 'native-webrtc-p2p';
+    enabled: boolean;
+    signaling: 'https-polling';
+    serverRecordingEnabled: boolean;
+    localRecordingAllowed: boolean;
+    immersiveEnabled: boolean;
+    securityLevel: string;
+  };
   scheduledAtMs?: number;
   internalRoomPath?: string;
   internalRoomUrl?: string | null;
@@ -165,6 +174,58 @@ export interface MeetingSessionSummary {
   updatedAtMs: number;
   startedAtMs: number | null;
   endedAtMs: number | null;
+}
+
+export interface MeetingRoomConfig {
+  success: boolean;
+  sessionId: string;
+  routeKey: string;
+  participantId: string;
+  nativeRoom: {
+    provider: 'native-webrtc-p2p';
+    enabled: boolean;
+    signaling: {
+      transport: 'https-polling';
+      messagesPath: string;
+    };
+    mediaTransport: string;
+    iceServers: RTCIceServer[];
+    globalReliability: {
+      freeMode: string;
+      turnRelayConfigured: boolean;
+      note: string;
+    };
+  };
+  immersive: {
+    enabled: boolean;
+    participantOptInRequired: boolean;
+    localCapabilityRequired: boolean;
+    supportedRoomPath: string;
+  };
+  recording: {
+    serverRecordingEnabled: boolean;
+    localParticipantRecordingAllowed: boolean;
+    localOptInRequired: boolean;
+    sharedRecordingDefault: boolean;
+    policy: string;
+  };
+  security: {
+    authentication: string;
+    authorization: string;
+    transport: string;
+    serverMediaStorage: boolean;
+    auditEvents: boolean;
+  };
+  participants: MeetingSessionParticipant[];
+}
+
+export interface MeetingSignalMessage {
+  id: string;
+  fromParticipantId: string;
+  toParticipantId: string | null;
+  type: 'offer' | 'answer' | 'ice' | 'presence' | 'renegotiate';
+  payload: unknown;
+  createdAtMs: number;
 }
 
 export interface MeetingExternalLink {
@@ -588,6 +649,8 @@ class BackendAPIService {
       focusArea?: string;
       scheduledAtMs?: number;
       publicStream?: boolean;
+      immersiveEnabled?: boolean;
+      localRecordingAllowed?: boolean;
     }
   ): Promise<MeetingSessionSummary | null> {
     const token = String(providerToken || '').trim();
@@ -606,6 +669,8 @@ class BackendAPIService {
           focusArea: input.focusArea || undefined,
           scheduledAtMs: input.scheduledAtMs || undefined,
           publicStream: input.publicStream ?? true,
+          immersiveEnabled: input.immersiveEnabled ?? input.mode === 'immersive-5d',
+          localRecordingAllowed: input.localRecordingAllowed ?? false,
         },
       });
       if (!data?.session) return null;
@@ -747,6 +812,68 @@ class BackendAPIService {
       return data.session as MeetingSessionSummary;
     } catch {
       return null;
+    }
+  }
+
+  async getMeetingRoomConfig(sessionId: string): Promise<MeetingRoomConfig | null> {
+    const id = String(sessionId || '').trim();
+    if (!id) return null;
+    try {
+      const data = await api<any>(`/meeting/user/sessions/${encodeURIComponent(id)}/room-config`, {
+        method: 'GET',
+      });
+      if (!data?.nativeRoom || !data?.participantId) return null;
+      return data as MeetingRoomConfig;
+    } catch {
+      return null;
+    }
+  }
+
+  async listMeetingSignals(sessionId: string, afterMs = 0): Promise<{
+    participantId: string;
+    signals: MeetingSignalMessage[];
+    latestSignalAtMs: number;
+  } | null> {
+    const id = String(sessionId || '').trim();
+    if (!id) return null;
+    try {
+      const data = await api<any>(
+        `/meeting/user/sessions/${encodeURIComponent(id)}/signals?afterMs=${encodeURIComponent(String(afterMs || 0))}`,
+        { method: 'GET' }
+      );
+      if (!data || !Array.isArray(data.signals)) return null;
+      return {
+        participantId: String(data.participantId || ''),
+        signals: data.signals as MeetingSignalMessage[],
+        latestSignalAtMs: Number(data.latestSignalAtMs || afterMs || 0),
+      };
+    } catch {
+      return null;
+    }
+  }
+
+  async postMeetingSignal(
+    sessionId: string,
+    input: {
+      type: MeetingSignalMessage['type'];
+      payload: unknown;
+      toParticipantId?: string | null;
+    }
+  ): Promise<boolean> {
+    const id = String(sessionId || '').trim();
+    if (!id) return false;
+    try {
+      await api(`/meeting/user/sessions/${encodeURIComponent(id)}/signals`, {
+        method: 'POST',
+        body: {
+          type: input.type,
+          payload: input.payload ?? {},
+          toParticipantId: input.toParticipantId || null,
+        },
+      });
+      return true;
+    } catch {
+      return false;
     }
   }
 
@@ -1159,6 +1286,8 @@ export async function createProviderMeetingSession(
     focusArea?: string;
     scheduledAtMs?: number;
     publicStream?: boolean;
+    immersiveEnabled?: boolean;
+    localRecordingAllowed?: boolean;
   }
 ): Promise<MeetingSessionSummary | null> {
   return backendAPI.createProviderMeetingSession(providerToken, input);
@@ -1210,6 +1339,28 @@ export async function getMeetingSession(
   sessionId: string
 ): Promise<MeetingSessionSummary | null> {
   return backendAPI.getMeetingSession(sessionId);
+}
+
+export async function getMeetingRoomConfig(sessionId: string): Promise<MeetingRoomConfig | null> {
+  return backendAPI.getMeetingRoomConfig(sessionId);
+}
+
+export async function listMeetingSignals(
+  sessionId: string,
+  afterMs = 0
+): Promise<{ participantId: string; signals: MeetingSignalMessage[]; latestSignalAtMs: number } | null> {
+  return backendAPI.listMeetingSignals(sessionId, afterMs);
+}
+
+export async function postMeetingSignal(
+  sessionId: string,
+  input: {
+    type: MeetingSignalMessage['type'];
+    payload: unknown;
+    toParticipantId?: string | null;
+  }
+): Promise<boolean> {
+  return backendAPI.postMeetingSignal(sessionId, input);
 }
 
 export async function joinMeetingSession(

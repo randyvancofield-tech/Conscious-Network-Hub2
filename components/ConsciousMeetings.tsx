@@ -81,6 +81,19 @@ const toLocalTimeInputValue = (date: Date): string => {
   const minutes = `${date.getMinutes()}`.padStart(2, '0');
   return `${hours}:${minutes}`;
 };
+
+const CNH_NATIVE_ROOM_PROVIDER_ID = 'cnh-native';
+const CNH_NATIVE_ROOM_LABEL = 'Conscious Meetings Room (CNH Native)';
+
+const toAppHostedRoomLink = (session?: MeetingSessionSummary | null): string => {
+  const roomPath = session?.internalRoomPath || session?.standardRoomPath || session?.internalRoomUrl || '';
+  if (!roomPath) return '';
+  if (/^https?:\/\//i.test(roomPath)) return roomPath;
+  const normalizedPath = roomPath.startsWith('/') ? roomPath : `/${roomPath}`;
+  if (typeof window === 'undefined' || !window.location?.origin) return normalizedPath;
+  return `${window.location.origin}${normalizedPath}`;
+};
+
 type SynthesisAgentMode = 'meeting-bot' | 'action-agent' | 'security-agent';
 
 interface MeetingBackgroundPreset {
@@ -268,6 +281,8 @@ const ConsciousMeetings: React.FC<ConsciousMeetingsProps> = ({ user }) => {
   });
   const [hostSessionMode, setHostSessionMode] = useState<MeetingSessionMode>('virtual');
   const [hostSessionMaxViewersInput, setHostSessionMaxViewersInput] = useState(120);
+  const [hostSessionImmersiveGatewayEnabled, setHostSessionImmersiveGatewayEnabled] = useState(false);
+  const [hostSessionLocalRecordingAllowed, setHostSessionLocalRecordingAllowed] = useState(false);
   const [providerGroupNameInput, setProviderGroupNameInput] = useState('');
   const [providerGroupMemberUsernameInput, setProviderGroupMemberUsernameInput] = useState('');
   const [inviteUsernamesBatchInput, setInviteUsernamesBatchInput] = useState('');
@@ -283,6 +298,9 @@ const ConsciousMeetings: React.FC<ConsciousMeetingsProps> = ({ user }) => {
   const [externalGuestNameInput, setExternalGuestNameInput] = useState('');
   const [externalGuestEmailInput, setExternalGuestEmailInput] = useState('');
   const [externalGuestSessionToken, setExternalGuestSessionToken] = useState('');
+  const selectedHostedSession =
+    hostedMeetingSessions.find((session) => session.id === selectedHostedSessionId) || null;
+  const selectedInternalRoomLink = toAppHostedRoomLink(selectedHostedSession);
 
   // Solo Session States
   const [isSoloSessionActive, setIsSoloSessionActive] = useState(false);
@@ -705,14 +723,22 @@ const ConsciousMeetings: React.FC<ConsciousMeetingsProps> = ({ user }) => {
         focusArea: hostSessionFocusAreaInput,
         scheduledAtMs: Number.isFinite(scheduledAtMs) ? scheduledAtMs : Date.now(),
         publicStream: true,
+        immersiveEnabled: hostSessionMode === 'immersive-5d' || hostSessionImmersiveGatewayEnabled,
+        localRecordingAllowed: hostSessionLocalRecordingAllowed,
       });
       if (!created) {
         setMeetingOpsStatus('Unable to create provider session.');
         return;
       }
       await refreshProviderMeetingData(token);
+      setHostedMeetingSessions((current) => [
+        created,
+        ...current.filter((session) => session.id !== created.id),
+      ]);
       setSelectedHostedSessionId(created.id);
-      setMeetingOpsStatus(`Session created and published to Upcoming Sessions: ${created.title}`);
+      setMeetingOpsStatus(
+        `${CNH_NATIVE_ROOM_LABEL} created. Internal room link is ready to copy: ${created.title}`
+      );
     } finally {
       setIsMeetingOpsBusy(false);
     }
@@ -796,9 +822,14 @@ const ConsciousMeetings: React.FC<ConsciousMeetingsProps> = ({ user }) => {
         return;
       }
       await refreshProviderMeetingData(token);
+      setHostedMeetingSessions((current) => [
+        started,
+        ...current.filter((session) => session.id !== started.id),
+      ]);
+      setSelectedHostedSessionId(started.id);
       setActiveJoinedSessionId(started.id);
       setIsJoining(true);
-      setMeetingOpsStatus(`Hosted session is live: ${started.title}`);
+      setMeetingOpsStatus(`${CNH_NATIVE_ROOM_LABEL} is live: ${started.title}`);
     } finally {
       setIsMeetingOpsBusy(false);
     }
@@ -857,8 +888,13 @@ const ConsciousMeetings: React.FC<ConsciousMeetingsProps> = ({ user }) => {
       setInviteUsernamesBatchInput('');
       setSelectedProviderGroupIds([]);
       await refreshProviderMeetingData(token);
+      setHostedMeetingSessions((current) => [
+        updated,
+        ...current.filter((session) => session.id !== updated.id),
+      ]);
+      setSelectedHostedSessionId(updated.id);
       await refreshJoinableSessions();
-      setMeetingOpsStatus('Invites sent to selected users/groups.');
+      setMeetingOpsStatus('Platform invites sent. Internal room link remains ready to copy.');
     } finally {
       setIsMeetingOpsBusy(false);
     }
@@ -3065,6 +3101,13 @@ const ConsciousMeetings: React.FC<ConsciousMeetingsProps> = ({ user }) => {
                       placeholder="Professional focus area"
                       className="md:col-span-3 w-full px-4 py-3 bg-white/5 border border-white/10 rounded-xl text-xs text-white focus:outline-none focus:ring-2 focus:ring-blue-500/30 transition-all font-medium"
                     />
+                    <select
+                      value={CNH_NATIVE_ROOM_PROVIDER_ID}
+                      disabled
+                      className="md:col-span-2 w-full px-4 py-3 bg-white/5 border border-cyan-300/20 rounded-xl text-xs text-cyan-50 focus:outline-none focus:ring-2 focus:ring-cyan-500/30 transition-all font-medium disabled:opacity-100"
+                    >
+                      <option value={CNH_NATIVE_ROOM_PROVIDER_ID}>{CNH_NATIVE_ROOM_LABEL}</option>
+                    </select>
                     <input
                       type="date"
                       value={hostSessionDateInput}
@@ -3080,7 +3123,7 @@ const ConsciousMeetings: React.FC<ConsciousMeetingsProps> = ({ user }) => {
                     <select
                       value={hostSessionMode}
                       onChange={(event) => setHostSessionMode(event.target.value as MeetingSessionMode)}
-                      className="md:col-span-1 w-full px-4 py-3 bg-white/5 border border-white/10 rounded-xl text-xs text-white focus:outline-none focus:ring-2 focus:ring-blue-500/30 transition-all font-medium"
+                      className="md:col-span-3 w-full px-4 py-3 bg-white/5 border border-white/10 rounded-xl text-xs text-white focus:outline-none focus:ring-2 focus:ring-blue-500/30 transition-all font-medium"
                     >
                       <option value="virtual">Virtual</option>
                       <option value="solo">Solo</option>
@@ -3093,7 +3136,7 @@ const ConsciousMeetings: React.FC<ConsciousMeetingsProps> = ({ user }) => {
                       value={hostSessionMaxViewersInput}
                       onChange={(event) => setHostSessionMaxViewersInput(Number(event.target.value || 120))}
                       placeholder="Max viewers"
-                      className="md:col-span-1 w-full px-4 py-3 bg-white/5 border border-white/10 rounded-xl text-xs text-white focus:outline-none focus:ring-2 focus:ring-blue-500/30 transition-all font-medium"
+                      className="md:col-span-3 w-full px-4 py-3 bg-white/5 border border-white/10 rounded-xl text-xs text-white focus:outline-none focus:ring-2 focus:ring-blue-500/30 transition-all font-medium"
                     />
                     <textarea
                       value={hostSessionDescriptionInput}
@@ -3103,13 +3146,45 @@ const ConsciousMeetings: React.FC<ConsciousMeetingsProps> = ({ user }) => {
                     />
                   </div>
 
+                  <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
+                    <label className="flex items-start gap-3 rounded-xl border border-cyan-300/20 bg-cyan-400/10 p-4 text-xs leading-5 text-cyan-50">
+                      <input
+                        type="checkbox"
+                        checked={hostSessionMode === 'immersive-5d' || hostSessionImmersiveGatewayEnabled}
+                        disabled={hostSessionMode === 'immersive-5d'}
+                        onChange={(event) => setHostSessionImmersiveGatewayEnabled(event.target.checked)}
+                        className="mt-1 h-4 w-4 shrink-0 accent-cyan-400"
+                      />
+                      <span>
+                        <span className="block text-[9px] font-black uppercase tracking-widest text-cyan-100">
+                          5D Participant Gateway
+                        </span>
+                        Participants can choose 5D only when their local browser/device supports WebXR. Standard View remains available.
+                      </span>
+                    </label>
+                    <label className="flex items-start gap-3 rounded-xl border border-amber-300/20 bg-amber-400/10 p-4 text-xs leading-5 text-amber-50">
+                      <input
+                        type="checkbox"
+                        checked={hostSessionLocalRecordingAllowed}
+                        onChange={(event) => setHostSessionLocalRecordingAllowed(event.target.checked)}
+                        className="mt-1 h-4 w-4 shrink-0 accent-amber-400"
+                      />
+                      <span>
+                        <span className="block text-[9px] font-black uppercase tracking-widest text-amber-100">
+                          Local-Only Participant Recording
+                        </span>
+                        Allows each participant to record only inside their own browser after they opt in. CNH server recording stays off.
+                      </span>
+                    </label>
+                  </div>
+
                   <div className="flex flex-wrap gap-2">
                     <button
                       onClick={createHostedSession}
                       disabled={isMeetingOpsBusy}
                       className="px-4 py-3 bg-blue-600 hover:bg-blue-500 disabled:bg-slate-700 disabled:text-slate-500 text-white rounded-xl text-[9px] sm:text-[10px] font-black uppercase tracking-widest transition-all"
                     >
-                      Create Session
+                      Create CNH Room
                     </button>
                     <button
                       onClick={startHostedSession}
@@ -3139,13 +3214,62 @@ const ConsciousMeetings: React.FC<ConsciousMeetingsProps> = ({ user }) => {
                     onChange={(event) => setSelectedHostedSessionId(event.target.value)}
                     className="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-xl text-xs text-white focus:outline-none focus:ring-2 focus:ring-blue-500/30 transition-all font-medium"
                   >
-                    <option value="">Select hosted session</option>
+                    <option value="">
+                      {hostedMeetingSessions.length === 0
+                        ? `No ${CNH_NATIVE_ROOM_LABEL} sessions yet`
+                        : 'Select hosted session'}
+                    </option>
                     {hostedMeetingSessions.map((session) => (
                       <option key={session.id} value={session.id}>
-                        {session.title} [{session.mode}] ({session.status}) - {new Date(session.scheduledAtMs || session.createdAtMs).toLocaleString()} - {session.participants.length}/{session.maxViewers}
+                        {session.title} - CNH Native [{session.mode}{session.nativeRoom?.immersiveEnabled ? ', 5D' : ''}{session.nativeRoom?.localRecordingAllowed ? ', local rec' : ''}] ({session.status}) - {new Date(session.scheduledAtMs || session.createdAtMs).toLocaleString()} - {session.participants.length}/{session.maxViewers}
                       </option>
                     ))}
                   </select>
+
+                  <div className="space-y-3 rounded-xl border border-cyan-300/20 bg-cyan-400/10 p-4">
+                    <div className="flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
+                      <p className="text-[9px] sm:text-[10px] font-black uppercase tracking-widest text-cyan-50">
+                        Internal {CNH_NATIVE_ROOM_LABEL}
+                      </p>
+                      <p className="text-[8px] sm:text-[9px] uppercase tracking-widest text-cyan-200">
+                        Signed CNH access
+                      </p>
+                    </div>
+                    <div className="grid grid-cols-1 md:grid-cols-6 gap-3">
+                      <input
+                        type="text"
+                        value={selectedInternalRoomLink || 'Create or select a hosted session to generate the CNH room link.'}
+                        readOnly
+                        className="md:col-span-4 w-full px-4 py-3 bg-black/30 border border-cyan-300/20 rounded-xl text-[10px] text-cyan-50"
+                      />
+                      <button
+                        onClick={async () => {
+                          if (!selectedInternalRoomLink) return;
+                          try {
+                            await navigator.clipboard.writeText(selectedInternalRoomLink);
+                            setMeetingOpsStatus('Internal CNH room link copied.');
+                          } catch {
+                            setMeetingOpsStatus('Copy failed. You can manually share the internal room link.');
+                          }
+                        }}
+                        disabled={!selectedInternalRoomLink}
+                        className="md:col-span-1 inline-flex items-center justify-center gap-2 px-4 py-3 bg-cyan-600 hover:bg-cyan-500 disabled:bg-slate-700 disabled:text-slate-500 text-white rounded-xl text-[9px] sm:text-[10px] font-black uppercase tracking-widest transition-all"
+                      >
+                        <Share2 className="h-3.5 w-3.5" aria-hidden="true" />
+                        Copy
+                      </button>
+                      <button
+                        onClick={() => {
+                          if (!selectedInternalRoomLink || typeof window === 'undefined') return;
+                          window.open(selectedInternalRoomLink, '_blank', 'noopener,noreferrer');
+                        }}
+                        disabled={!selectedInternalRoomLink}
+                        className="md:col-span-1 px-4 py-3 bg-white/5 hover:bg-white/10 disabled:bg-slate-800 disabled:text-slate-600 border border-white/10 text-slate-200 rounded-xl text-[9px] sm:text-[10px] font-black uppercase tracking-widest transition-all"
+                      >
+                        Open
+                      </button>
+                    </div>
+                  </div>
 
                   <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
                     <input
