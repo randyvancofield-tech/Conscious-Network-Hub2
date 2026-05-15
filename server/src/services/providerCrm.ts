@@ -38,12 +38,14 @@ export type ProviderCrmToolId =
   | 'home'
   | 'members'
   | 'sessions'
+  | 'roundtable'
   | 'follow-ups'
   | 'notes'
   | 'referrals'
   | 'content-courses'
   | 'analytics'
   | 'resources'
+  | 'knowledge-center'
   | 'collaboration'
   | 'admin-support';
 
@@ -65,17 +67,17 @@ const TOOL_REGISTRY: ProviderCrmTool[] = [
   {
     id: 'home',
     label: 'Home',
-    description: 'Daily CRM command center for approved providers.',
-    phase: 'Phase 1 shell',
+    description: 'Business and treatment command center for provider-owned work and admin-wide operations.',
+    phase: 'Phase 1 foundation',
     providerVisible: true,
     adminOnly: false,
     enabledByDefault: true,
   },
   {
     id: 'members',
-    label: 'Members',
-    description: 'Provider-scoped member and relationship workspace placeholder.',
-    phase: 'Phase 1 shell',
+    label: 'Care Relationships',
+    description: 'Provider-scoped user, organization, institution, and continuity record workspace.',
+    phase: 'Phase 1 foundation',
     providerVisible: true,
     adminOnly: false,
     enabledByDefault: true,
@@ -83,8 +85,17 @@ const TOOL_REGISTRY: ProviderCrmTool[] = [
   {
     id: 'sessions',
     label: 'Sessions',
-    description: 'Session history, upcoming sessions, and session workflow placeholder.',
-    phase: 'Phase 1 shell',
+    description: 'Session history, upcoming sessions, and provider workflow controls.',
+    phase: 'Phase 1 foundation',
+    providerVisible: true,
+    adminOnly: false,
+    enabledByDefault: true,
+  },
+  {
+    id: 'roundtable',
+    label: 'Conscious Roundtable',
+    description: 'Private branded room scheduler with 12 hourly rooms for provider and admin sessions.',
+    phase: 'Phase 2 foundation',
     providerVisible: true,
     adminOnly: false,
     enabledByDefault: true,
@@ -109,9 +120,9 @@ const TOOL_REGISTRY: ProviderCrmTool[] = [
   },
   {
     id: 'referrals',
-    label: 'Referrals',
-    description: 'Internal referral and handoff workspace placeholder.',
-    phase: 'Phase 1 shell',
+    label: 'Institutions & Contracts',
+    description: 'Organizations and institutions CNH should evaluate for relationships, contracts, and partnerships.',
+    phase: 'Phase 1 foundation',
     providerVisible: true,
     adminOnly: false,
     enabledByDefault: true,
@@ -137,8 +148,17 @@ const TOOL_REGISTRY: ProviderCrmTool[] = [
   {
     id: 'resources',
     label: 'Resources',
-    description: 'Reusable provider resource workspace placeholder.',
-    phase: 'Phase 1 shell',
+    description: 'Reusable provider resources and operating guidance.',
+    phase: 'Phase 1 foundation',
+    providerVisible: true,
+    adminOnly: false,
+    enabledByDefault: true,
+  },
+  {
+    id: 'knowledge-center',
+    label: 'Best Practices & Knowledge Center',
+    description: 'Standardized provider delivery guidance, checklists, and operating practices.',
+    phase: 'Phase 3 foundation',
     providerVisible: true,
     adminOnly: false,
     enabledByDefault: true,

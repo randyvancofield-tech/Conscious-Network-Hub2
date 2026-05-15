@@ -11,6 +11,12 @@ import {
   listProviderCrmToolsForRole,
   setProviderCrmToolVisibility,
 } from '../services/providerCrm';
+import {
+  ProviderCrmWorkspaceScope,
+  buildProviderCrmWorkspace,
+  createProviderCrmRecord,
+  createRoundtableReservation,
+} from '../services/providerCrmWorkspaceStore';
 import { localStore } from '../services/persistenceStore';
 import { recordAuditEvent } from '../services/auditTelemetry';
 
@@ -25,6 +31,22 @@ const getCurrentProviderUser = async (req: Request) => {
   const providerReq = getProviderRequestContext(req);
   const userId = String(providerReq.providerUserId || '').trim();
   return userId ? localStore.getUserById(userId) : null;
+};
+
+const getWorkspaceScope = async (req: Request): Promise<ProviderCrmWorkspaceScope | null> => {
+  const providerReq = getProviderRequestContext(req);
+  const providerUserId = String(providerReq.providerUserId || '').trim();
+  const providerDid = String(providerReq.providerDid || '').trim();
+  if (!providerUserId || !providerDid) return null;
+
+  const user = await getCurrentProviderUser(req);
+  return {
+    role: providerReq.providerRole === 'admin' ? 'admin' : 'provider',
+    providerUserId,
+    providerDid,
+    providerDisplayName:
+      String(user?.name || user?.handle || user?.email || 'Verified Provider').trim() || 'Verified Provider',
+  };
 };
 
 const requireSoleProviderCrmAdmin = async (
@@ -98,14 +120,115 @@ router.get('/summary', requireProviderScope('provider:read'), (req: Request, res
     sessionId: providerReq.providerSessionId,
     summary: {
       activeToolCount: tools.filter((tool) => tool.enabled).length,
-      shellStatus: 'phase-1-shell',
-      dataModelsEnabled: false,
+      shellStatus: 'crm-workspace-foundation',
+      dataModelsEnabled: true,
       notesEnabled: tools.some((tool) => tool.id === 'notes' && tool.enabled),
-      relationshipManagementEnabled: false,
+      relationshipManagementEnabled: true,
       analyticsEnabled: tools.some((tool) => tool.id === 'analytics' && tool.enabled),
     },
   });
 });
+
+router.get('/workspace', requireProviderScope('provider:read'), async (req: Request, res: Response): Promise<void> => {
+  const scope = await getWorkspaceScope(req);
+  if (!scope) {
+    res.status(400).json({ error: 'Missing provider workspace identity context' });
+    return;
+  }
+
+  const timezone = String(req.query.timezone || 'UTC').trim() || 'UTC';
+  const workspace = await buildProviderCrmWorkspace(scope, timezone);
+  recordAuditEvent(req, {
+    domain: 'admin',
+    action: 'provider_crm_workspace_read',
+    outcome: 'success',
+    actorUserId: scope.providerUserId,
+    targetUserId: scope.providerUserId,
+    statusCode: 200,
+    metadata: {
+      role: scope.role,
+      visibility: workspace.scope.visibility,
+      recordCount: workspace.records.length,
+      roundtableReservationCount: workspace.roundtable.reservations.length,
+    },
+  });
+
+  res.json({
+    success: true,
+    workspace,
+  });
+});
+
+router.post('/records', requireProviderScope('provider:host'), async (req: Request, res: Response): Promise<void> => {
+  const scope = await getWorkspaceScope(req);
+  if (!scope) {
+    res.status(400).json({ error: 'Missing provider workspace identity context' });
+    return;
+  }
+
+  const record = await createProviderCrmRecord(scope, req.body || {});
+  recordAuditEvent(req, {
+    domain: 'admin',
+    action: 'provider_crm_record_create',
+    outcome: 'success',
+    actorUserId: scope.providerUserId,
+    targetUserId: scope.providerUserId,
+    statusCode: 201,
+    metadata: {
+      role: scope.role,
+      recordId: record.id,
+      kind: record.kind,
+      status: record.status,
+      priority: record.priority,
+    },
+  });
+
+  res.status(201).json({
+    success: true,
+    record,
+  });
+});
+
+router.post(
+  '/roundtable/reservations',
+  requireProviderScope('provider:host'),
+  async (req: Request, res: Response): Promise<void> => {
+    const scope = await getWorkspaceScope(req);
+    if (!scope) {
+      res.status(400).json({ error: 'Missing provider workspace identity context' });
+      return;
+    }
+
+    try {
+      const reservation = await createRoundtableReservation(scope, req.body || {});
+      recordAuditEvent(req, {
+        domain: 'admin',
+        action: 'provider_crm_roundtable_reserve',
+        outcome: 'success',
+        actorUserId: scope.providerUserId,
+        targetUserId: scope.providerUserId,
+        statusCode: 201,
+        metadata: {
+          role: scope.role,
+          reservationId: reservation.id,
+          roomNumber: reservation.roomNumber,
+          meetingSessionId: reservation.meetingSessionId,
+        },
+      });
+
+      res.status(201).json({
+        success: true,
+        reservation,
+      });
+    } catch (error) {
+      if (error instanceof Error && error.message === 'ROUNDTABLE_SLOT_UNAVAILABLE') {
+        res.status(409).json({ error: 'Conscious Roundtable room is already reserved for that hour' });
+        return;
+      }
+      throw error;
+    }
+  }
+);
 
 router.get('/admin/foundation', async (req: Request, res: Response): Promise<void> => {
   if (!(await requireSoleProviderCrmAdmin(req, res))) return;

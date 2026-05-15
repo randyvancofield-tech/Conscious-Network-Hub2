@@ -68,12 +68,14 @@ export type ProviderCrmToolId =
   | 'home'
   | 'members'
   | 'sessions'
+  | 'roundtable'
   | 'follow-ups'
   | 'notes'
   | 'referrals'
   | 'content-courses'
   | 'analytics'
   | 'resources'
+  | 'knowledge-center'
   | 'collaboration'
   | 'admin-support';
 
@@ -118,6 +120,96 @@ export interface ProviderCrmAdminToolsResult {
     envOverrides?: string[];
   };
   tools: ProviderCrmTool[];
+}
+
+export type ProviderCrmRecordKind = 'client' | 'organization' | 'institution' | 'follow_up';
+export type ProviderCrmRecordStatus = 'active' | 'watching' | 'contracting' | 'completed' | 'archived';
+export type ProviderCrmPriority = 'low' | 'normal' | 'high' | 'urgent';
+
+export interface ProviderCrmRecord {
+  id: string;
+  providerId: string;
+  clientUserId: string | null;
+  clientDisplayName: string | null;
+  organizationName: string | null;
+  kind: ProviderCrmRecordKind;
+  title: string;
+  treatmentFocus: string | null;
+  businessFocus: string | null;
+  status: ProviderCrmRecordStatus;
+  priority: ProviderCrmPriority;
+  nextActionAt: string | null;
+  timezone: string | null;
+  details: Record<string, unknown>;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface ProviderRoundtableReservation {
+  id: string;
+  providerId: string;
+  roomNumber: number;
+  startAt: string;
+  endAt: string;
+  timezone: string;
+  title: string;
+  meetingSessionId: string;
+  roomUrl: string;
+  status: 'scheduled' | 'live' | 'completed' | 'cancelled';
+  chatMode: 'native-room-signals';
+  details: Record<string, unknown>;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface ProviderCrmWorkspace {
+  scope: {
+    role: 'provider' | 'admin';
+    providerUserId: string;
+    providerDid: string;
+    providerDisplayName: string;
+    visibility: 'provider-owned' | 'administrator-holistic';
+  };
+  metrics: {
+    treatment: {
+      activeClientRecords: number;
+      dueFollowUps: number;
+      upcomingRoundtables: number;
+    };
+    businessGrowth: {
+      organizationsTracked: number;
+      institutionContractOpportunities: number;
+      urgentOpportunities: number;
+    };
+  };
+  guidanceAlerts: Array<{
+    id: string;
+    severity: 'info' | 'warning' | 'urgent';
+    title: string;
+    detail: string;
+    action: string;
+  }>;
+  records: ProviderCrmRecord[];
+  roundtable: {
+    label: 'Conscious Roundtable';
+    roomCount: 12;
+    dayStartHour: 8;
+    hourCount: 12;
+    timezone: string;
+    reservations: ProviderRoundtableReservation[];
+  };
+  resources: Array<{
+    id: string;
+    title: string;
+    category: string;
+    summary: string;
+    checklist: string[];
+  }>;
+}
+
+export interface ProviderCrmWorkspaceResult {
+  success: boolean;
+  workspace: ProviderCrmWorkspace;
 }
 
 export type MeetingSessionMode = 'virtual' | 'solo' | 'immersive-5d';
@@ -571,6 +663,87 @@ class BackendAPIService {
         body: { enabled },
       });
       return data?.tool || null;
+    } catch {
+      return null;
+    }
+  }
+
+  async getProviderCrmWorkspace(
+    providerToken: string,
+    timezone = 'UTC'
+  ): Promise<ProviderCrmWorkspace | null> {
+    const token = String(providerToken || '').trim();
+    if (!token) return null;
+    try {
+      const data = await api<ProviderCrmWorkspaceResult>(
+        `/provider/crm/workspace?timezone=${encodeURIComponent(timezone || 'UTC')}`,
+        {
+          method: 'GET',
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+        }
+      );
+      return data?.workspace || null;
+    } catch {
+      return null;
+    }
+  }
+
+  async createProviderCrmRecord(
+    providerToken: string,
+    input: {
+      kind: ProviderCrmRecordKind;
+      title: string;
+      clientDisplayName?: string;
+      organizationName?: string;
+      treatmentFocus?: string;
+      businessFocus?: string;
+      status?: ProviderCrmRecordStatus;
+      priority?: ProviderCrmPriority;
+      nextActionAt?: string | null;
+      timezone?: string;
+    }
+  ): Promise<ProviderCrmRecord | null> {
+    const token = String(providerToken || '').trim();
+    if (!token) return null;
+    try {
+      const data = await api<{ success: boolean; record: ProviderCrmRecord }>('/provider/crm/records', {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+        body: input,
+      });
+      return data?.record || null;
+    } catch {
+      return null;
+    }
+  }
+
+  async createProviderRoundtableReservation(
+    providerToken: string,
+    input: {
+      roomNumber: number;
+      startAt: string;
+      timezone: string;
+      title: string;
+    }
+  ): Promise<ProviderRoundtableReservation | null> {
+    const token = String(providerToken || '').trim();
+    if (!token) return null;
+    try {
+      const data = await api<{ success: boolean; reservation: ProviderRoundtableReservation }>(
+        '/provider/crm/roundtable/reservations',
+        {
+          method: 'POST',
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+          body: input,
+        }
+      );
+      return data?.reservation || null;
     } catch {
       return null;
     }
@@ -1247,6 +1420,43 @@ export async function updateProviderCrmToolVisibility(
   enabled: boolean
 ): Promise<ProviderCrmTool | null> {
   return backendAPI.updateProviderCrmToolVisibility(providerToken, toolId, enabled);
+}
+
+export async function getProviderCrmWorkspace(
+  providerToken: string,
+  timezone = 'UTC'
+): Promise<ProviderCrmWorkspace | null> {
+  return backendAPI.getProviderCrmWorkspace(providerToken, timezone);
+}
+
+export async function createProviderCrmRecord(
+  providerToken: string,
+  input: {
+    kind: ProviderCrmRecordKind;
+    title: string;
+    clientDisplayName?: string;
+    organizationName?: string;
+    treatmentFocus?: string;
+    businessFocus?: string;
+    status?: ProviderCrmRecordStatus;
+    priority?: ProviderCrmPriority;
+    nextActionAt?: string | null;
+    timezone?: string;
+  }
+): Promise<ProviderCrmRecord | null> {
+  return backendAPI.createProviderCrmRecord(providerToken, input);
+}
+
+export async function createProviderRoundtableReservation(
+  providerToken: string,
+  input: {
+    roomNumber: number;
+    startAt: string;
+    timezone: string;
+    title: string;
+  }
+): Promise<ProviderRoundtableReservation | null> {
+  return backendAPI.createProviderRoundtableReservation(providerToken, input);
 }
 
 export async function listProviderInviteGroups(
