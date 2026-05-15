@@ -12,7 +12,14 @@ import {
 import { getProviderAccessDenyReason, isProviderAccessActive } from '../services/providerAccess';
 import { recordAuditEvent } from '../services/auditTelemetry';
 import { localStore, type LocalUserRecord } from '../services/persistenceStore';
-import { PROVIDER_CRM_SOLE_ADMIN_EMAIL, isProviderCrmSoleAdmin } from '../services/providerCrm';
+import {
+  PROVIDER_CRM_ADMIN_WALLET_ENV_KEYS,
+  PROVIDER_CRM_SOLE_ADMIN_EMAIL,
+  getConfiguredProviderCrmAdminWalletAddress,
+  isProviderCrmAdminPasswordFallbackEnabled,
+  isProviderCrmSoleAdmin,
+  maskProviderCrmAdminWalletAddress,
+} from '../services/providerCrm';
 import { createProviderSession } from '../services/providerSessionStore';
 import { createUserSession } from '../services/userSessionStore';
 
@@ -25,7 +32,6 @@ const PROVIDER_WALLET_STATEMENT =
   'Sign in to Conscious Network Hub Provider Access. This gasless signature verifies your approved provider wallet and does not authorize a blockchain transaction.';
 const ADMIN_WALLET_STATEMENT =
   'Sign in to Conscious Network Hub Administrative Access. This gasless signature verifies the founder administrator wallet and does not authorize a blockchain transaction.';
-const ADMIN_WALLET_ENV_KEYS = ['PROVIDER_CRM_ADMIN_WALLET_ADDRESS', 'ADMIN_WALLET_ADDRESS'];
 
 interface ProviderSiweFields {
   domain: string;
@@ -147,14 +153,6 @@ const resolveApprovedProviderByWallet = async (
     return { user: null, reason: getProviderAccessDenyReason(matched) || 'provider_not_active' };
   }
   return { user: matched, reason: null };
-};
-
-const getConfiguredAdminWalletAddress = (): string | null => {
-  for (const key of ADMIN_WALLET_ENV_KEYS) {
-    const normalized = normalizeWalletAddress(process.env[key]);
-    if (normalized) return normalized;
-  }
-  return null;
 };
 
 const getSoleProviderCrmAdminUser = async (): Promise<LocalUserRecord | null> => {
@@ -296,18 +294,50 @@ router.post('/session', requireCanonicalIdentity, async (req: Request, res: Resp
 });
 
 /**
+ * GET /api/provider/auth/admin/wallet/status
+ * Reports Administrative Access wallet readiness without exposing private material.
+ */
+router.get('/admin/wallet/status', async (req: Request, res: Response): Promise<void> => {
+  try {
+    const configuredWalletAddress = getConfiguredProviderCrmAdminWalletAddress();
+    const adminUser = await getSoleProviderCrmAdminUser();
+    res.json({
+      success: true,
+      adminEmail: PROVIDER_CRM_SOLE_ADMIN_EMAIL,
+      walletConfigured: Boolean(configuredWalletAddress),
+      walletAddressMasked: maskProviderCrmAdminWalletAddress(configuredWalletAddress),
+      adminAccountReady: Boolean(adminUser),
+      passwordFallbackEnabled: isProviderCrmAdminPasswordFallbackEnabled(),
+    });
+  } catch (error) {
+    console.error('[ProviderAuth] admin wallet status failed', error);
+    recordAuditEvent(req, {
+      domain: 'auth',
+      action: 'admin_wallet_status',
+      outcome: 'error',
+      statusCode: 500,
+      metadata: { reason: 'unexpected_error' },
+    });
+    res.status(500).json({
+      success: false,
+      error: 'Administrative Access readiness could not be checked',
+    });
+  }
+});
+
+/**
  * POST /api/provider/auth/admin/wallet/nonce
  * Issues a short-lived SIWE-style challenge for the configured founder/admin wallet.
  */
 router.post('/admin/wallet/nonce', async (req: Request, res: Response): Promise<void> => {
-  const configuredWalletAddress = getConfiguredAdminWalletAddress();
+  const configuredWalletAddress = getConfiguredProviderCrmAdminWalletAddress();
   if (!configuredWalletAddress) {
     recordAuditEvent(req, {
       domain: 'auth',
       action: 'admin_wallet_nonce',
       outcome: 'deny',
       statusCode: 503,
-      metadata: { reason: 'admin_wallet_not_configured', envKeys: ADMIN_WALLET_ENV_KEYS },
+      metadata: { reason: 'admin_wallet_not_configured', envKeys: PROVIDER_CRM_ADMIN_WALLET_ENV_KEYS },
     });
     res.status(503).json({
       error: 'Administrative wallet verification is not configured',
@@ -423,14 +453,14 @@ router.post('/admin/wallet/nonce', async (req: Request, res: Response): Promise<
  * Consumes an admin wallet challenge and creates both canonical and provider-admin sessions.
  */
 router.post('/admin/wallet/verify', async (req: Request, res: Response): Promise<void> => {
-  const configuredWalletAddress = getConfiguredAdminWalletAddress();
+  const configuredWalletAddress = getConfiguredProviderCrmAdminWalletAddress();
   if (!configuredWalletAddress) {
     recordAuditEvent(req, {
       domain: 'auth',
       action: 'admin_wallet_verify',
       outcome: 'deny',
       statusCode: 503,
-      metadata: { reason: 'admin_wallet_not_configured', envKeys: ADMIN_WALLET_ENV_KEYS },
+      metadata: { reason: 'admin_wallet_not_configured', envKeys: PROVIDER_CRM_ADMIN_WALLET_ENV_KEYS },
     });
     res.status(503).json({
       error: 'Administrative wallet verification is not configured',

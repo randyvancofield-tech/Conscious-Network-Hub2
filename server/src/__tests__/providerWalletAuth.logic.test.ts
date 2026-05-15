@@ -47,6 +47,7 @@ interface MessageSigner {
 const users = new Map<string, MockUser>();
 const challenges = new Map<string, MockProviderChallenge>();
 const sessions = new Map<string, MockProviderSession>();
+let nextUserSessionId = 1;
 
 const cloneDate = (value: Date | null): Date | null => (value ? new Date(value.getTime()) : null);
 
@@ -102,6 +103,16 @@ const mockLocalStore = {
   async getUserById(id: string): Promise<MockUser | null> {
     const user = users.get(id);
     return user ? cloneUser(user) : null;
+  },
+
+  async getUserByEmail(email: string): Promise<MockUser | null> {
+    const normalized = String(email || '').trim().toLowerCase();
+    for (const user of users.values()) {
+      if (user.email.toLowerCase() === normalized) {
+        return cloneUser(user);
+      }
+    }
+    return null;
   },
 
   async findUserByWalletAddress(walletAddress: string): Promise<MockUser | null> {
@@ -176,17 +187,32 @@ const mockLocalStore = {
   },
 };
 
+const createUserSessionMock = jest.fn(async (userId: string) => {
+  const now = new Date();
+  return {
+    id: `user-session-${nextUserSessionId++}`,
+    userId,
+    issuedAt: now,
+    expiresAt: new Date(now.getTime() + 60 * 60 * 1000),
+    revokedAt: null,
+  };
+});
+
 jest.mock('../services/persistenceStore', () => ({
   localStore: mockLocalStore,
 }));
 
 jest.mock('../services/userSessionStore', () => ({
+  createUserSession: createUserSessionMock,
   getUserSessionById: jest.fn(async () => null),
   revokeUserSession: jest.fn(async () => undefined),
 }));
 
 const providerAuthRoutes = require('../routes/providerAuth').default;
 const providerSessionRoutes = require('../routes/providerSession').default;
+const { PROVIDER_CRM_SOLE_ADMIN_EMAIL } = require('../services/providerCrm') as {
+  PROVIDER_CRM_SOLE_ADMIN_EMAIL: string;
+};
 
 let server: http.Server | null = null;
 let baseUrl = '';
@@ -259,6 +285,33 @@ const verifyChallenge = async (
   });
 };
 
+const issueAdminChallenge = async (walletAddress: string) => {
+  return requestJson({
+    method: 'POST',
+    path: '/api/provider/auth/admin/wallet/nonce',
+    body: { walletAddress },
+  });
+};
+
+const verifyAdminChallenge = async (
+  challenge: any,
+  wallet: MessageSigner,
+  walletAddress = challenge.address
+) => {
+  const message = buildProviderSiweMessage(challenge);
+  const signature = await wallet.signMessage(message);
+  return requestJson({
+    method: 'POST',
+    path: '/api/provider/auth/admin/wallet/verify',
+    body: {
+      challengeId: challenge.challengeId,
+      walletAddress,
+      message,
+      signature,
+    },
+  });
+};
+
 describe('Provider wallet authentication', () => {
   beforeAll(async () => {
     process.env.NODE_ENV = 'test';
@@ -299,6 +352,10 @@ describe('Provider wallet authentication', () => {
     users.clear();
     challenges.clear();
     sessions.clear();
+    nextUserSessionId = 1;
+    delete process.env.PROVIDER_CRM_ADMIN_WALLET_ADDRESS;
+    delete process.env.ADMIN_WALLET_ADDRESS;
+    delete process.env.ENABLE_ADMIN_PASSWORD_FALLBACK;
     jest.clearAllMocks();
   });
 
@@ -450,5 +507,71 @@ describe('Provider wallet authentication', () => {
     expect(response.status).toBe(200);
     expect(response.body?.success).toBe(true);
     expect(response.body?.session?.scopes).toEqual(['provider:*']);
+  });
+
+  it('reports Administrative Access wallet readiness without exposing the full wallet address', async () => {
+    const wallet = ethers.Wallet.createRandom();
+    process.env.PROVIDER_CRM_ADMIN_WALLET_ADDRESS = wallet.address;
+    users.set(
+      'sole-admin',
+      createMockUser('sole-admin', 'admin', null, {
+        email: PROVIDER_CRM_SOLE_ADMIN_EMAIL,
+      })
+    );
+
+    const response = await requestJson({
+      method: 'GET',
+      path: '/api/provider/auth/admin/wallet/status',
+    });
+
+    expect(response.status).toBe(200);
+    expect(response.body?.walletConfigured).toBe(true);
+    expect(response.body?.walletAddressMasked).toMatch(/^0x[a-fA-F0-9]{4}\.\.\.[a-fA-F0-9]{4}$/);
+    expect(response.body?.walletAddressMasked).not.toBe(wallet.address);
+    expect(response.body?.adminAccountReady).toBe(true);
+    expect(response.body?.passwordFallbackEnabled).toBe(true);
+  });
+
+  it('verifies the configured admin wallet and creates canonical plus provider-control sessions', async () => {
+    const wallet = ethers.Wallet.createRandom();
+    process.env.PROVIDER_CRM_ADMIN_WALLET_ADDRESS = wallet.address;
+    users.set(
+      'sole-admin',
+      createMockUser('sole-admin', 'admin', null, {
+        email: PROVIDER_CRM_SOLE_ADMIN_EMAIL,
+      })
+    );
+
+    const challenge = await issueAdminChallenge(wallet.address);
+    const verification = await verifyAdminChallenge(challenge.body, wallet);
+
+    expect(challenge.status).toBe(200);
+    expect(verification.status).toBe(200);
+    expect(verification.body?.success).toBe(true);
+    expect(verification.body?.walletVerified).toBe(true);
+    expect(String(verification.body?.token || '').length).toBeGreaterThan(20);
+    expect(verification.body?.user?.email).toBe(PROVIDER_CRM_SOLE_ADMIN_EMAIL);
+    expect(verification.body?.user?.role).toBe('admin');
+    expect(verification.body?.providerControl?.session?.scopes).toEqual(['provider:*']);
+    expect(createUserSessionMock).toHaveBeenCalledWith('sole-admin');
+    expect(sessions.size).toBe(1);
+  });
+
+  it('rejects Administrative Access nonce requests from any wallet other than the configured founder wallet', async () => {
+    const wallet = ethers.Wallet.createRandom();
+    const otherWallet = ethers.Wallet.createRandom();
+    process.env.PROVIDER_CRM_ADMIN_WALLET_ADDRESS = wallet.address;
+    users.set(
+      'sole-admin',
+      createMockUser('sole-admin', 'admin', null, {
+        email: PROVIDER_CRM_SOLE_ADMIN_EMAIL,
+      })
+    );
+
+    const response = await issueAdminChallenge(otherWallet.address);
+
+    expect(response.status).toBe(403);
+    expect(response.body?.code).toBe('ADMIN_WALLET_MISMATCH');
+    expect(challenges.size).toBe(0);
   });
 });

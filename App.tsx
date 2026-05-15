@@ -481,6 +481,13 @@ const App: React.FC = () => {
   const [providerWalletStatus, setProviderWalletStatus] = useState('');
   const [isAdminWalletVerifying, setAdminWalletVerifying] = useState(false);
   const [adminWalletStatus, setAdminWalletStatus] = useState('');
+  const [adminAccessStatus, setAdminAccessStatus] = useState<{
+    walletConfigured: boolean;
+    walletAddressMasked: string | null;
+    adminAccountReady: boolean;
+    passwordFallbackEnabled: boolean;
+  } | null>(null);
+  const [isAdminAccessStatusLoading, setAdminAccessStatusLoading] = useState(false);
   const [isPasswordResetRequestOpen, setPasswordResetRequestOpen] = useState(false);
   const [passwordResetEmailInput, setPasswordResetEmailInput] = useState('');
   const [passwordResetNotice, setPasswordResetNotice] = useState('');
@@ -994,6 +1001,38 @@ const App: React.FC = () => {
       setPendingScrollWisdom(false);
     }
   }, [pendingScrollWisdom, currentView]);
+
+  useEffect(() => {
+    if (currentView !== AppView.ADMIN_SIGN_IN) return;
+
+    let cancelled = false;
+    const loadAdminAccessStatus = async () => {
+      setAdminAccessStatusLoading(true);
+      try {
+        const status = await api<any>('/provider/auth/admin/wallet/status', {
+          method: 'GET',
+          auth: false,
+          cache: 'no-store',
+        });
+        if (cancelled) return;
+        setAdminAccessStatus({
+          walletConfigured: status?.walletConfigured === true,
+          walletAddressMasked: status?.walletAddressMasked || null,
+          adminAccountReady: status?.adminAccountReady === true,
+          passwordFallbackEnabled: status?.passwordFallbackEnabled !== false,
+        });
+      } catch {
+        if (!cancelled) setAdminAccessStatus(null);
+      } finally {
+        if (!cancelled) setAdminAccessStatusLoading(false);
+      }
+    };
+
+    void loadAdminAccessStatus();
+    return () => {
+      cancelled = true;
+    };
+  }, [currentView]);
 
   const handleOpenSelectKey = async () => {
     // @ts-ignore
@@ -2438,6 +2477,22 @@ const App: React.FC = () => {
                     {error}
                   </p>
                 )}
+                <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-4">
+                  <p className="text-[10px] font-black uppercase tracking-widest text-slate-500">
+                    {isAdminAccessStatusLoading
+                      ? 'Checking Administrative Access'
+                      : adminAccessStatus
+                        ? adminAccessStatus.walletConfigured
+                          ? `Founder wallet ready${adminAccessStatus.walletAddressMasked ? `: ${adminAccessStatus.walletAddressMasked}` : ''}`
+                          : 'Founder wallet is not configured on the backend'
+                        : 'Unable to confirm Administrative Access readiness'}
+                  </p>
+                  {adminAccessStatus && !adminAccessStatus.adminAccountReady && (
+                    <p className="mt-2 text-[10px] leading-5 text-amber-100/80">
+                      The sole administrator account must exist before wallet entry can open the portal.
+                    </p>
+                  )}
+                </div>
                 <div className="space-y-4 rounded-3xl border border-amber-200/20 bg-amber-500/[0.04] p-5">
                   <div>
                     <h3 className="text-sm font-black uppercase tracking-widest text-white">
@@ -2455,89 +2510,108 @@ const App: React.FC = () => {
                   <button
                     type="button"
                     onClick={() => void handleAdministrativeWalletVerification()}
-                    disabled={isAdminWalletVerifying}
+                    disabled={
+                      isAdminWalletVerifying ||
+                      isAdminAccessStatusLoading ||
+                      adminAccessStatus?.walletConfigured === false ||
+                      adminAccessStatus?.adminAccountReady === false
+                    }
                     className="w-full rounded-2xl bg-amber-500 px-5 py-4 text-xs font-black uppercase tracking-widest text-slate-950 shadow-xl shadow-amber-950/30 transition hover:bg-amber-400 disabled:opacity-60"
                   >
-                    {isAdminWalletVerifying ? 'Verifying Wallet...' : 'Verify Wallet & Enter Portal'}
+                    {isAdminWalletVerifying
+                      ? 'Verifying Wallet...'
+                      : adminAccessStatus?.walletConfigured === false
+                        ? 'Wallet Not Configured'
+                        : adminAccessStatus?.adminAccountReady === false
+                          ? 'Admin Account Not Ready'
+                        : 'Verify Wallet & Enter Portal'}
                   </button>
                 </div>
-                <div className="flex items-center gap-3 text-[9px] font-black uppercase tracking-[0.3em] text-slate-600">
-                  <span className="h-px flex-1 bg-white/10" />
-                  Emergency Password Access
-                  <span className="h-px flex-1 bg-white/10" />
-                </div>
-                <form onSubmit={handleAdministrativeSignIn} className="space-y-5">
-                  <label className="block space-y-2">
-                    <span className="text-[10px] font-black uppercase tracking-widest text-slate-500">
-                      Administrator email
-                    </span>
-                    <input
-                      type="email"
-                      value={emailInput}
-                      onChange={(event) => setEmailInput(event.target.value)}
-                      className="w-full rounded-2xl border border-white/10 bg-white/[0.06] px-5 py-4 text-sm text-white outline-none transition focus:ring-2 focus:ring-amber-400/40"
-                      required
-                      placeholder="admin@example.com"
-                    />
-                  </label>
-                  <label className="block space-y-2">
-                    <span className="text-[10px] font-black uppercase tracking-widest text-slate-500">
-                      Password
-                    </span>
-                    <input
-                      type="password"
-                      value={passwordInput}
-                      onChange={(event) => setPasswordInput(event.target.value)}
-                      className="w-full rounded-2xl border border-white/10 bg-white/[0.06] px-5 py-4 text-sm text-white outline-none transition focus:ring-2 focus:ring-amber-400/40"
-                      required
-                      placeholder="********"
-                    />
-                  </label>
-                  {ACCOUNT_RECOVERY_UI_ENABLED && (
-                    <div className="space-y-3 rounded-2xl border border-white/10 bg-white/[0.03] p-4">
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setPasswordResetRequestOpen((open) => !open);
-                          setPasswordResetEmailInput(emailInput);
-                          setPasswordResetNotice('');
-                        }}
-                        className="text-[10px] font-black uppercase tracking-widest text-amber-200 hover:text-amber-100"
-                      >
-                        Forgot Administrator Password?
-                      </button>
-                      {isPasswordResetRequestOpen && (
-                        <div className="space-y-3">
-                          <input
-                            type="email"
-                            value={passwordResetEmailInput}
-                            onChange={(event) => setPasswordResetEmailInput(event.target.value)}
-                            className="w-full rounded-xl border border-white/10 bg-white/5 px-4 py-3 text-sm font-medium text-white outline-none transition focus:ring-2 focus:ring-amber-400/40"
-                            required
-                            placeholder="admin@example.com"
-                          />
+                {adminAccessStatus?.passwordFallbackEnabled === false ? (
+                  <p className="rounded-2xl border border-amber-200/20 bg-amber-500/[0.04] p-4 text-[10px] font-black uppercase tracking-widest text-amber-100">
+                    Emergency password access is disabled. Use wallet verification.
+                  </p>
+                ) : (
+                  <>
+                    <div className="flex items-center gap-3 text-[9px] font-black uppercase tracking-[0.3em] text-slate-600">
+                      <span className="h-px flex-1 bg-white/10" />
+                      Emergency Password Access
+                      <span className="h-px flex-1 bg-white/10" />
+                    </div>
+                    <form onSubmit={handleAdministrativeSignIn} className="space-y-5">
+                      <label className="block space-y-2">
+                        <span className="text-[10px] font-black uppercase tracking-widest text-slate-500">
+                          Administrator email
+                        </span>
+                        <input
+                          type="email"
+                          value={emailInput}
+                          onChange={(event) => setEmailInput(event.target.value)}
+                          className="w-full rounded-2xl border border-white/10 bg-white/[0.06] px-5 py-4 text-sm text-white outline-none transition focus:ring-2 focus:ring-amber-400/40"
+                          required
+                          placeholder="admin@example.com"
+                        />
+                      </label>
+                      <label className="block space-y-2">
+                        <span className="text-[10px] font-black uppercase tracking-widest text-slate-500">
+                          Password
+                        </span>
+                        <input
+                          type="password"
+                          value={passwordInput}
+                          onChange={(event) => setPasswordInput(event.target.value)}
+                          className="w-full rounded-2xl border border-white/10 bg-white/[0.06] px-5 py-4 text-sm text-white outline-none transition focus:ring-2 focus:ring-amber-400/40"
+                          required
+                          placeholder="********"
+                        />
+                      </label>
+                      {ACCOUNT_RECOVERY_UI_ENABLED && (
+                        <div className="space-y-3 rounded-2xl border border-white/10 bg-white/[0.03] p-4">
                           <button
                             type="button"
-                            onClick={() => handlePasswordResetRequest()}
-                            disabled={isPasswordResetPending}
-                            className="w-full rounded-xl border border-white/10 bg-white/5 py-3 text-[10px] font-black uppercase tracking-widest text-white transition hover:bg-white/10 disabled:opacity-60"
+                            onClick={() => {
+                              setPasswordResetRequestOpen((open) => !open);
+                              setPasswordResetEmailInput(emailInput);
+                              setPasswordResetNotice('');
+                            }}
+                            className="text-[10px] font-black uppercase tracking-widest text-amber-200 hover:text-amber-100"
                           >
-                            {isPasswordResetPending ? 'Sending...' : 'Send Reset Link'}
+                            Forgot Administrator Password?
                           </button>
-                          {passwordResetNotice && (
-                            <p className="text-[10px] leading-5 text-amber-100/80">{passwordResetNotice}</p>
+                          {isPasswordResetRequestOpen && (
+                            <div className="space-y-3">
+                              <input
+                                type="email"
+                                value={passwordResetEmailInput}
+                                onChange={(event) => setPasswordResetEmailInput(event.target.value)}
+                                className="w-full rounded-xl border border-white/10 bg-white/5 px-4 py-3 text-sm font-medium text-white outline-none transition focus:ring-2 focus:ring-amber-400/40"
+                                required
+                                placeholder="admin@example.com"
+                              />
+                              <button
+                                type="button"
+                                onClick={() => handlePasswordResetRequest()}
+                                disabled={isPasswordResetPending}
+                                className="w-full rounded-xl border border-white/10 bg-white/5 py-3 text-[10px] font-black uppercase tracking-widest text-white transition hover:bg-white/10 disabled:opacity-60"
+                              >
+                                {isPasswordResetPending ? 'Sending...' : 'Send Reset Link'}
+                              </button>
+                              {passwordResetNotice && (
+                                <p className="text-[10px] leading-5 text-amber-100/80">{passwordResetNotice}</p>
+                              )}
+                            </div>
                           )}
                         </div>
                       )}
-                    </div>
-                  )}
-                  <button
-                    type="submit"
-                    className="w-full rounded-2xl bg-amber-500 px-5 py-4 text-xs font-black uppercase tracking-widest text-slate-950 shadow-xl shadow-amber-950/30 transition hover:bg-amber-400"
-                  >
-                    Enter Administrative Portal
-                  </button>
-                </form>
+                      <button
+                        type="submit"
+                        className="w-full rounded-2xl bg-amber-500 px-5 py-4 text-xs font-black uppercase tracking-widest text-slate-950 shadow-xl shadow-amber-950/30 transition hover:bg-amber-400"
+                      >
+                        Enter Administrative Portal
+                      </button>
+                    </form>
+                  </>
+                )}
               </div>
             </div>
           </div>

@@ -216,6 +216,7 @@ describe('Sign-in logic', () => {
     users.clear();
     nextSessionId = 1;
     delete process.env.ENABLE_USER_2FA;
+    delete process.env.ENABLE_ADMIN_PASSWORD_FALLBACK;
     jest.clearAllMocks();
   });
 
@@ -293,5 +294,21 @@ describe('Sign-in logic', () => {
     expect(response.body?.success).toBe(true);
     expect(response.body?.user?.role).toBe('provider');
     expect(createUserSessionMock).toHaveBeenCalledTimes(1);
+  });
+
+  it('blocks administrator password sign-in when Administrative Access password fallback is disabled', async () => {
+    process.env.ENABLE_ADMIN_PASSWORD_FALLBACK = 'false';
+    const email = 'higherconscious.network1@gmail.com';
+    const password = 'AdminPass#1234';
+    const user = createMockUser(email, hashPassword(password));
+    user.role = 'admin';
+    users.set(user.id, user);
+
+    const response = await requestSignIn({ email, password });
+
+    expect(response.status).toBe(403);
+    expect(response.body?.code).toBe('ADMIN_PASSWORD_FALLBACK_DISABLED');
+    expect(createUserSessionMock).not.toHaveBeenCalled();
+    expect(users.get(user.id)?.failedSignInAttempts).toBe(0);
   });
 });

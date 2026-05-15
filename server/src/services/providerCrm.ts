@@ -1,7 +1,38 @@
+import { ethers } from 'ethers';
 import type { LocalUserRecord } from './persistenceStore';
 
 export const PROVIDER_CRM_SOLE_ADMIN_EMAIL = 'higherconscious.network1@gmail.com';
 export const PROVIDER_CRM_LEGACY_ADMIN_EMAILS = ['guidance@higherconscious.network'] as const;
+export const PROVIDER_CRM_ADMIN_WALLET_ENV_KEYS = [
+  'PROVIDER_CRM_ADMIN_WALLET_ADDRESS',
+  'ADMIN_WALLET_ADDRESS',
+] as const;
+
+export const normalizeProviderCrmAdminWalletAddress = (value: unknown): string | null => {
+  try {
+    const normalized = ethers.getAddress(String(value || '').trim());
+    return normalized || null;
+  } catch {
+    return null;
+  }
+};
+
+export const getConfiguredProviderCrmAdminWalletAddress = (): string | null => {
+  for (const key of PROVIDER_CRM_ADMIN_WALLET_ENV_KEYS) {
+    const normalized = normalizeProviderCrmAdminWalletAddress(process.env[key]);
+    if (normalized) return normalized;
+  }
+  return null;
+};
+
+export const maskProviderCrmAdminWalletAddress = (address: string | null | undefined): string | null => {
+  const normalized = normalizeProviderCrmAdminWalletAddress(address);
+  if (!normalized) return null;
+  return `${normalized.slice(0, 6)}...${normalized.slice(-4)}`;
+};
+
+export const isProviderCrmAdminPasswordFallbackEnabled = (): boolean =>
+  String(process.env.ENABLE_ADMIN_PASSWORD_FALLBACK || 'true').trim().toLowerCase() !== 'false';
 
 export type ProviderCrmToolId =
   | 'home'
