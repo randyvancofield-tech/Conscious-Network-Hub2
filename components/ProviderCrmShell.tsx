@@ -12,6 +12,7 @@ import {
 } from 'lucide-react';
 import { UserProfile } from '../types';
 import {
+  createNativeProviderControlSession,
   getProviderCrmAdminTools,
   getProviderCrmSummary,
   getProviderCrmTools,
@@ -22,10 +23,12 @@ import {
 import {
   getProviderControlSession,
   PROVIDER_SESSION_TOKEN_EVENT,
+  setProviderControlSession,
 } from '../services/sessionService';
 
 interface ProviderCrmShellProps {
   user: UserProfile | null;
+  onOpenAdministrativeAccess: () => void;
   onOpenProviderAccess: () => void;
 }
 
@@ -82,10 +85,15 @@ const renderPlaceholder = (tool: ProviderCrmTool | null): React.ReactNode => {
   );
 };
 
-const ProviderCrmShell: React.FC<ProviderCrmShellProps> = ({ user, onOpenProviderAccess }) => {
+const ProviderCrmShell: React.FC<ProviderCrmShellProps> = ({
+  user,
+  onOpenAdministrativeAccess,
+  onOpenProviderAccess,
+}) => {
   const [providerToken, setProviderToken] = useState(readProviderToken);
   const [tools, setTools] = useState<ProviderCrmTool[]>([]);
   const [adminTools, setAdminTools] = useState<ProviderCrmTool[]>([]);
+  const [soleAdminEmail, setSoleAdminEmail] = useState('');
   const [activeToolId, setActiveToolId] = useState<ProviderCrmToolId>('home');
   const [status, setStatus] = useState('Loading provider CRM shell...');
   const [isLoading, setLoading] = useState(false);
@@ -134,6 +142,7 @@ const ProviderCrmShell: React.FC<ProviderCrmShellProps> = ({ user, onOpenProvide
         const nextTools = toolResult?.tools || [];
         setTools(nextTools);
         setAdminTools(adminToolResult?.tools || []);
+        setSoleAdminEmail(adminToolResult?.soleAdminEmail || '');
         if (!nextTools.some((tool) => tool.id === activeToolId)) {
           setActiveToolId((nextTools[0]?.id || 'home') as ProviderCrmToolId);
         }
@@ -153,6 +162,33 @@ const ProviderCrmShell: React.FC<ProviderCrmShellProps> = ({ user, onOpenProvide
       cancelled = true;
     };
   }, [activeToolId, isAdmin, providerToken]);
+
+  useEffect(() => {
+    if (!isAdmin || providerToken.trim()) return;
+
+    let cancelled = false;
+    const initializeAdminProviderSession = async () => {
+      setLoading(true);
+      setStatus('Initializing administrative control session...');
+      try {
+        const session = await createNativeProviderControlSession();
+        if (cancelled) return;
+        if (session?.token) {
+          setProviderControlSession(session.token);
+          setStatus('Administrative control session initialized.');
+          return;
+        }
+        setStatus('Administrative control session could not be initialized. Re-enter through Administrative Access.');
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    };
+
+    void initializeAdminProviderSession();
+    return () => {
+      cancelled = true;
+    };
+  }, [isAdmin, providerToken]);
 
   const handleToggleAdminTool = async (tool: ProviderCrmTool) => {
     const token = providerToken.trim();
@@ -196,18 +232,25 @@ const ProviderCrmShell: React.FC<ProviderCrmShellProps> = ({ user, onOpenProvide
       <div className="mx-auto max-w-3xl p-4 sm:p-8">
         <div className="rounded-3xl border border-blue-300/20 bg-blue-500/[0.04] p-6 sm:p-8">
           <h2 className="text-2xl font-black uppercase tracking-tight text-white">
-            Provider CRM Requires Provider Access
+            {isAdmin ? 'Administrative Control Session Required' : 'Provider CRM Requires Provider Access'}
           </h2>
           <p className="mt-3 text-sm leading-7 text-slate-300">
-            Sign in through Provider Access and complete the provider entry boundary before CRM tools
-            unlock.
+            {isAdmin
+              ? 'Re-enter through Administrative Access to initialize the admin provider-operations session.'
+              : 'Sign in through Provider Access and complete the provider entry boundary before CRM tools unlock.'}
           </p>
+          {isLoading && (
+            <p className="mt-4 flex items-center gap-2 text-[10px] font-black uppercase tracking-widest text-blue-100">
+              <Loader2 className="h-3 w-3 animate-spin" />
+              {status}
+            </p>
+          )}
           <button
             type="button"
-            onClick={onOpenProviderAccess}
+            onClick={isAdmin ? onOpenAdministrativeAccess : onOpenProviderAccess}
             className="mt-6 rounded-xl bg-blue-600 px-5 py-3 text-xs font-black uppercase tracking-widest text-white transition hover:bg-blue-500"
           >
-            Open Provider Access
+            {isAdmin ? 'Open Administrative Access' : 'Open Provider Access'}
           </button>
         </div>
       </div>
@@ -219,14 +262,15 @@ const ProviderCrmShell: React.FC<ProviderCrmShellProps> = ({ user, onOpenProvide
       <div className="flex flex-col gap-4 border-b border-white/10 pb-6 lg:flex-row lg:items-end lg:justify-between">
         <div>
           <p className="text-[10px] font-black uppercase tracking-[0.35em] text-blue-300">
-            Provider Portal
+            {isAdmin ? 'Administrative Portal' : 'Provider Portal'}
           </p>
           <h2 className="mt-2 text-3xl font-black uppercase tracking-tight text-white">
-            Provider CRM
+            {isAdmin ? 'Provider CRM / Admin Operations' : 'Provider CRM'}
           </h2>
           <p className="mt-3 max-w-3xl text-sm leading-7 text-slate-300">
-            Phase 1 shell for approved-provider relationship, session, follow-up, referral,
-            resource, and impact workflows.
+            {isAdmin
+              ? 'Founder and administrator workspace for provider operations, CRM controls, tool visibility, and platform oversight.'
+              : 'Phase 1 shell for approved-provider relationship, session, follow-up, referral, resource, and impact workflows.'}
           </p>
         </div>
         <div className="rounded-2xl border border-white/10 bg-white/[0.03] px-4 py-3">
@@ -283,7 +327,7 @@ const ProviderCrmShell: React.FC<ProviderCrmShellProps> = ({ user, onOpenProvide
                   </p>
                 </div>
                 <span className="rounded-full border border-teal-300/20 bg-teal-400/10 px-3 py-2 text-[9px] font-black uppercase tracking-widest text-teal-100">
-                  guidance@higherconscious.network
+                  {soleAdminEmail || 'Administrative Access'}
                 </span>
               </div>
               <div className="mt-5 grid gap-3 md:grid-cols-2">

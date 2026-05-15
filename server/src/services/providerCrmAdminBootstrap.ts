@@ -1,17 +1,13 @@
 import { computePasswordFingerprint, hashPassword } from '../auth';
 import { getPrisma } from './prismaClient';
-import { PROVIDER_CRM_SOLE_ADMIN_EMAIL } from './providerCrm';
+import { PROVIDER_CRM_LEGACY_ADMIN_EMAILS, PROVIDER_CRM_SOLE_ADMIN_EMAIL } from './providerCrm';
 
 const INITIAL_PASSWORD_ENV = 'PROVIDER_CRM_ADMIN_INITIAL_PASSWORD';
 const MIN_BOOTSTRAP_PASSWORD_LENGTH = 12;
 
 export const ensureProviderCrmAdminFromEnv = async (): Promise<void> => {
   const initialPassword = String(process.env[INITIAL_PASSWORD_ENV] || '').trim();
-  if (!initialPassword) {
-    return;
-  }
-
-  if (initialPassword.length < MIN_BOOTSTRAP_PASSWORD_LENGTH) {
+  if (initialPassword.length > 0 && initialPassword.length < MIN_BOOTSTRAP_PASSWORD_LENGTH) {
     console.error(
       `[ProviderCRMAdminBootstrap] ${INITIAL_PASSWORD_ENV} must be at least ${MIN_BOOTSTRAP_PASSWORD_LENGTH} characters.`
     );
@@ -19,14 +15,24 @@ export const ensureProviderCrmAdminFromEnv = async (): Promise<void> => {
   }
 
   const db = getPrisma() as any;
-  const password = hashPassword(initialPassword);
-  const passwordFingerprint = computePasswordFingerprint(initialPassword);
+  const passwordData =
+    initialPassword.length > 0
+      ? {
+          password: hashPassword(initialPassword),
+          passwordFingerprint: computePasswordFingerprint(initialPassword),
+        }
+      : {};
+  const candidateEmails = Array.from(
+    new Set([PROVIDER_CRM_SOLE_ADMIN_EMAIL, ...PROVIDER_CRM_LEGACY_ADMIN_EMAILS])
+  );
   const existingUsers = await db.user.findMany({
     where: {
-      email: {
-        equals: PROVIDER_CRM_SOLE_ADMIN_EMAIL,
-        mode: 'insensitive',
-      },
+      OR: candidateEmails.map((email) => ({
+        email: {
+          equals: email,
+          mode: 'insensitive',
+        },
+      })),
     },
     select: {
       id: true,
@@ -37,7 +43,7 @@ export const ensureProviderCrmAdminFromEnv = async (): Promise<void> => {
 
   if (existingUsers.length > 1) {
     console.error(
-      `[ProviderCRMAdminBootstrap] Refusing to repair admin account because ${existingUsers.length} case-insensitive matches exist.`
+      `[ProviderCRMAdminBootstrap] Refusing to repair admin account because ${existingUsers.length} current/legacy admin email matches exist.`
     );
     return;
   }
@@ -45,8 +51,6 @@ export const ensureProviderCrmAdminFromEnv = async (): Promise<void> => {
   const adminData = {
     name: 'CNH Provider CRM Administrator',
     role: 'admin',
-    password,
-    passwordFingerprint,
     emailVerified: true,
     tier: 'Accelerated Tier',
     membershipStatus: 'active',
@@ -55,6 +59,7 @@ export const ensureProviderCrmAdminFromEnv = async (): Promise<void> => {
     lockoutUntil: null,
     passwordResetTokenHash: null,
     passwordResetExpiresAt: null,
+    ...passwordData,
   };
 
   const existing = existingUsers[0] || null;
@@ -67,6 +72,11 @@ export const ensureProviderCrmAdminFromEnv = async (): Promise<void> => {
       },
     });
     console.log('[ProviderCRMAdminBootstrap] Provider CRM administrator repaired from env.');
+    return;
+  }
+
+  if (!initialPassword) {
+    console.log('[ProviderCRMAdminBootstrap] Provider CRM administrator not found; no initial password supplied.');
     return;
   }
 

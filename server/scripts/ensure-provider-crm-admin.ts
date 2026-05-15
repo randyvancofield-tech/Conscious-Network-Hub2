@@ -2,30 +2,35 @@ import path from 'path';
 import dotenv from 'dotenv';
 import { PrismaClient } from '@prisma/client';
 import { computePasswordFingerprint, hashPassword } from '../src/auth';
+import { PROVIDER_CRM_LEGACY_ADMIN_EMAILS, PROVIDER_CRM_SOLE_ADMIN_EMAIL } from '../src/services/providerCrm';
 
 dotenv.config({ path: path.resolve(__dirname, '../.env.local') });
 dotenv.config({ path: path.resolve(__dirname, '../.env') });
 dotenv.config({ path: path.resolve(process.cwd(), '.env.local') });
 dotenv.config({ path: path.resolve(process.cwd(), '.env') });
 
-const PROVIDER_CRM_ADMIN_EMAIL = 'guidance@higherconscious.network';
 const INITIAL_PASSWORD_ENV = 'PROVIDER_CRM_ADMIN_INITIAL_PASSWORD';
 
 const prisma = new PrismaClient();
 
 async function main(): Promise<void> {
+  const candidateEmails = Array.from(
+    new Set([PROVIDER_CRM_SOLE_ADMIN_EMAIL, ...PROVIDER_CRM_LEGACY_ADMIN_EMAILS])
+  );
   const existingUsers = await prisma.user.findMany({
     where: {
-      email: {
-        equals: PROVIDER_CRM_ADMIN_EMAIL,
-        mode: 'insensitive',
-      },
+      OR: candidateEmails.map((email) => ({
+        email: {
+          equals: email,
+          mode: 'insensitive',
+        },
+      })),
     },
   });
 
   if (existingUsers.length > 1) {
     throw new Error(
-      `Refusing to repair ${PROVIDER_CRM_ADMIN_EMAIL}: ${existingUsers.length} case-insensitive user records exist.`
+      `Refusing to repair ${PROVIDER_CRM_SOLE_ADMIN_EMAIL}: ${existingUsers.length} current/legacy admin email records exist.`
     );
   }
 
@@ -43,7 +48,7 @@ async function main(): Promise<void> {
   }
 
   const adminData = {
-    email: PROVIDER_CRM_ADMIN_EMAIL,
+    email: PROVIDER_CRM_SOLE_ADMIN_EMAIL,
     name: 'CNH Provider CRM Administrator',
     role: 'admin',
     tier: 'Accelerated Tier',
@@ -63,13 +68,13 @@ async function main(): Promise<void> {
       where: { id: existing.id },
       data: adminData,
     });
-    console.log(`Provider CRM administrator repaired: ${PROVIDER_CRM_ADMIN_EMAIL}`);
+    console.log(`Provider CRM administrator repaired: ${PROVIDER_CRM_SOLE_ADMIN_EMAIL}`);
     return;
   }
 
   if (!initialPassword) {
     throw new Error(
-      `${PROVIDER_CRM_ADMIN_EMAIL} does not exist. Set ${INITIAL_PASSWORD_ENV} to a one-time password with at least 12 characters, run this script, then rotate the password immediately.`
+      `${PROVIDER_CRM_SOLE_ADMIN_EMAIL} does not exist. Set ${INITIAL_PASSWORD_ENV} to a one-time password with at least 12 characters, run this script, then rotate the password immediately.`
     );
   }
 
@@ -77,7 +82,7 @@ async function main(): Promise<void> {
     data: adminData,
   });
 
-  console.log(`Provider CRM administrator created: ${PROVIDER_CRM_ADMIN_EMAIL}`);
+  console.log(`Provider CRM administrator created: ${PROVIDER_CRM_SOLE_ADMIN_EMAIL}`);
   console.log('Rotate the one-time password immediately after first sign-in.');
 }
 

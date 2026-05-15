@@ -131,8 +131,10 @@ jest.mock('../services/persistenceStore', () => ({
 const providerCrmRoutes = require('../routes/providerCrm').default;
 const {
   clearProviderCrmRuntimeVisibilityForTests,
+  PROVIDER_CRM_SOLE_ADMIN_EMAIL,
 } = require('../services/providerCrm') as {
   clearProviderCrmRuntimeVisibilityForTests: () => void;
+  PROVIDER_CRM_SOLE_ADMIN_EMAIL: string;
 };
 
 let server: http.Server | null = null;
@@ -201,14 +203,14 @@ describe('Provider CRM shell and admin foundation', () => {
     clearProviderCrmRuntimeVisibilityForTests();
   });
 
-  it('recognizes guidance@higherconscious.network as the sole Provider CRM admin', async () => {
+  it('recognizes the configured email as the sole Provider CRM admin', async () => {
     users.set(
-      'guidance-admin',
-      createMockUser('guidance-admin', 'admin', {
-        email: 'guidance@higherconscious.network',
+      'sole-admin',
+      createMockUser('sole-admin', 'admin', {
+        email: PROVIDER_CRM_SOLE_ADMIN_EMAIL,
       })
     );
-    const { token } = createMockProviderSession('guidance-admin', ['provider:*']);
+    const { token } = createMockProviderSession('sole-admin', ['provider:*']);
 
     const response = await requestJson({
       method: 'GET',
@@ -217,9 +219,9 @@ describe('Provider CRM shell and admin foundation', () => {
     });
 
     expect(response.status).toBe(200);
-    expect(response.body?.soleAdminEmail).toBe('guidance@higherconscious.network');
-    expect(response.body?.guidanceUserExists).toBe(true);
-    expect(response.body?.guidanceUserIsAdmin).toBe(true);
+    expect(response.body?.soleAdminEmail).toBe(PROVIDER_CRM_SOLE_ADMIN_EMAIL);
+    expect(response.body?.soleAdminUserExists).toBe(true);
+    expect(response.body?.soleAdminUserIsAdmin).toBe(true);
     expect(response.body?.seedPath?.storesCredentialsInCode).toBe(false);
     expect(response.body?.seedPath?.createsAdditionalAdmins).toBe(false);
   });
@@ -240,17 +242,17 @@ describe('Provider CRM shell and admin foundation', () => {
     });
 
     expect(response.status).toBe(403);
-    expect(response.body?.requiredAdminEmail).toBe('guidance@higherconscious.network');
+    expect(response.body?.requiredAdminEmail).toBe(PROVIDER_CRM_SOLE_ADMIN_EMAIL);
   });
 
   it('allows the sole admin to access CRM admin tool visibility controls', async () => {
     users.set(
-      'guidance-admin',
-      createMockUser('guidance-admin', 'admin', {
-        email: 'guidance@higherconscious.network',
+      'sole-admin',
+      createMockUser('sole-admin', 'admin', {
+        email: PROVIDER_CRM_SOLE_ADMIN_EMAIL,
       })
     );
-    const { token } = createMockProviderSession('guidance-admin', ['provider:*']);
+    const { token } = createMockProviderSession('sole-admin', ['provider:*']);
 
     const response = await requestJson({
       method: 'GET',
@@ -292,13 +294,13 @@ describe('Provider CRM shell and admin foundation', () => {
 
   it('applies sole admin visibility control to provider tool access', async () => {
     users.set(
-      'guidance-admin',
-      createMockUser('guidance-admin', 'admin', {
-        email: 'guidance@higherconscious.network',
+      'sole-admin',
+      createMockUser('sole-admin', 'admin', {
+        email: PROVIDER_CRM_SOLE_ADMIN_EMAIL,
       })
     );
     users.set('provider-1', createMockUser('provider-1', 'provider'));
-    const admin = createMockProviderSession('guidance-admin', ['provider:*']);
+    const admin = createMockProviderSession('sole-admin', ['provider:*']);
     const provider = createMockProviderSession('provider-1');
 
     const update = await requestJson({

@@ -479,6 +479,8 @@ const App: React.FC = () => {
   const [isProviderWalletVerificationRequired, setProviderWalletVerificationRequired] = useState(false);
   const [isProviderWalletVerifying, setProviderWalletVerifying] = useState(false);
   const [providerWalletStatus, setProviderWalletStatus] = useState('');
+  const [isAdminWalletVerifying, setAdminWalletVerifying] = useState(false);
+  const [adminWalletStatus, setAdminWalletStatus] = useState('');
   const [isPasswordResetRequestOpen, setPasswordResetRequestOpen] = useState(false);
   const [passwordResetEmailInput, setPasswordResetEmailInput] = useState('');
   const [passwordResetNotice, setPasswordResetNotice] = useState('');
@@ -1460,6 +1462,88 @@ const App: React.FC = () => {
     }
   };
 
+  const handleAdministrativeWalletVerification = async () => {
+    setError('');
+    setAdminWalletStatus('');
+    const ethereum = (window as any).ethereum;
+    if (!ethereum?.request) {
+      setError('MetaMask is required for Administrative Access wallet verification.');
+      return;
+    }
+
+    setAdminWalletVerifying(true);
+    setAdminWalletStatus('Requesting the administrator wallet...');
+
+    try {
+      const accounts = await ethereum.request({ method: 'eth_requestAccounts' });
+      const walletAddress = Array.isArray(accounts) ? String(accounts[0] || '').trim() : '';
+      if (!walletAddress) {
+        setError('No wallet address was returned by MetaMask.');
+        return;
+      }
+
+      setAdminWalletStatus('Creating an Administrative Access challenge...');
+      const challenge = await api<ProviderWalletChallenge>('/provider/auth/admin/wallet/nonce', {
+        method: 'POST',
+        auth: false,
+        body: { walletAddress },
+      });
+
+      const message = buildProviderSiweMessage(challenge);
+      setAdminWalletStatus('Confirm the gasless administrative signature in MetaMask.');
+      const signature = await ethereum.request({
+        method: 'personal_sign',
+        params: [message, challenge.address],
+      });
+
+      setAdminWalletStatus('Verifying administrator wallet and opening operations...');
+      const result = await api<any>('/provider/auth/admin/wallet/verify', {
+        method: 'POST',
+        auth: false,
+        body: {
+          challengeId: challenge.challengeId,
+          walletAddress: challenge.address,
+          message,
+          signature,
+        },
+      });
+
+      const canonicalUser = toPlatformUser(result.user);
+      if (!hasAdminRole(canonicalUser)) {
+        setError('Administrative wallet verification did not return an administrator session.');
+        return;
+      }
+
+      setUserAuthSession(result.token, canonicalUser);
+      setUser(canonicalUser);
+      setSelectedTier(canonicalUser.tier || 'Accelerated Tier');
+      setIsSelectingTier(false);
+      setMembershipCheckoutPending(false);
+      setMembershipNotice('');
+      setPendingCheckoutSessionId(null);
+      if (result.providerControl?.token) {
+        setProviderControlSession(result.providerControl.token);
+      }
+      void refreshUserCourses();
+      resetSignInChallengeInputs();
+      closeModals();
+      setCurrentView(AppView.PROVIDER_CRM, {}, { replace: true });
+      setSidebarOpen(window.innerWidth >= 1024);
+    } catch (error) {
+      if (error instanceof ApiError) {
+        setError(error.message || 'Administrative wallet verification failed.');
+        return;
+      }
+      if (error instanceof Error) {
+        setError(error.message || 'Administrative wallet verification failed.');
+        return;
+      }
+      setError('Administrative wallet verification failed.');
+    } finally {
+      setAdminWalletVerifying(false);
+    }
+  };
+
   const handleApprovedProviderSignIn = async (event: React.FormEvent) => {
     event.preventDefault();
     setError('');
@@ -2354,6 +2438,34 @@ const App: React.FC = () => {
                     {error}
                   </p>
                 )}
+                <div className="space-y-4 rounded-3xl border border-amber-200/20 bg-amber-500/[0.04] p-5">
+                  <div>
+                    <h3 className="text-sm font-black uppercase tracking-widest text-white">
+                      Wallet Verification
+                    </h3>
+                    <p className="mt-2 text-xs leading-5 text-slate-300">
+                      Verify the configured founder wallet with a gasless signature to open admin operations.
+                    </p>
+                  </div>
+                  {adminWalletStatus && (
+                    <p className="rounded-xl border border-amber-200/20 bg-amber-500/10 p-3 text-[10px] font-black uppercase tracking-widest text-amber-100">
+                      {adminWalletStatus}
+                    </p>
+                  )}
+                  <button
+                    type="button"
+                    onClick={() => void handleAdministrativeWalletVerification()}
+                    disabled={isAdminWalletVerifying}
+                    className="w-full rounded-2xl bg-amber-500 px-5 py-4 text-xs font-black uppercase tracking-widest text-slate-950 shadow-xl shadow-amber-950/30 transition hover:bg-amber-400 disabled:opacity-60"
+                  >
+                    {isAdminWalletVerifying ? 'Verifying Wallet...' : 'Verify Wallet & Enter Portal'}
+                  </button>
+                </div>
+                <div className="flex items-center gap-3 text-[9px] font-black uppercase tracking-[0.3em] text-slate-600">
+                  <span className="h-px flex-1 bg-white/10" />
+                  Emergency Password Access
+                  <span className="h-px flex-1 bg-white/10" />
+                </div>
                 <form onSubmit={handleAdministrativeSignIn} className="space-y-5">
                   <label className="block space-y-2">
                     <span className="text-[10px] font-black uppercase tracking-widest text-slate-500">
@@ -2653,6 +2765,7 @@ const App: React.FC = () => {
         return hasProviderRole(user) ? (
           <ProviderCrmShell
             user={user}
+            onOpenAdministrativeAccess={() => setCurrentView(AppView.ADMINISTRATIVE_ACCESS)}
             onOpenProviderAccess={() => setCurrentView(AppView.PROVIDER_ACCESS)}
           />
         ) : (

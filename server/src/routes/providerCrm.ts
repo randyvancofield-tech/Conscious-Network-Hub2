@@ -110,15 +110,15 @@ router.get('/summary', requireProviderScope('provider:read'), (req: Request, res
 router.get('/admin/foundation', async (req: Request, res: Response): Promise<void> => {
   if (!(await requireSoleProviderCrmAdmin(req, res))) return;
 
-  const guidanceUser = await localStore.getUserByEmail(PROVIDER_CRM_SOLE_ADMIN_EMAIL);
+  const soleAdminUser = await localStore.getUserByEmail(PROVIDER_CRM_SOLE_ADMIN_EMAIL);
   const providerReq = getProviderRequestContext(req);
 
   res.json({
     success: true,
     soleAdminEmail: PROVIDER_CRM_SOLE_ADMIN_EMAIL,
-    guidanceUserExists: Boolean(guidanceUser),
-    guidanceUserRole: guidanceUser?.role || null,
-    guidanceUserIsAdmin: guidanceUser?.role === 'admin',
+    soleAdminUserExists: Boolean(soleAdminUser),
+    soleAdminUserRole: soleAdminUser?.role || null,
+    soleAdminUserIsAdmin: soleAdminUser?.role === 'admin',
     currentAdminUserId: providerReq.providerUserId || null,
     seedPath: {
       script: 'npm --prefix server run admin:ensure-provider-crm',

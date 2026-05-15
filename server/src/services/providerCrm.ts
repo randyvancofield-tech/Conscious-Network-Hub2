@@ -1,6 +1,7 @@
 import type { LocalUserRecord } from './persistenceStore';
 
-export const PROVIDER_CRM_SOLE_ADMIN_EMAIL = 'guidance@higherconscious.network';
+export const PROVIDER_CRM_SOLE_ADMIN_EMAIL = 'higherconscious.network1@gmail.com';
+export const PROVIDER_CRM_LEGACY_ADMIN_EMAILS = ['guidance@higherconscious.network'] as const;
 
 export type ProviderCrmToolId =
   | 'home'
