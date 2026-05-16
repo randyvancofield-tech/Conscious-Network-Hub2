@@ -116,6 +116,7 @@ const CommunityMembers: React.FC = () => {
   const [profileViewError, setProfileViewError] = useState('');
   const chatEndRef = useRef<HTMLDivElement>(null);
   const attachmentInputRef = useRef<HTMLInputElement>(null);
+  const profilePanelRef = useRef<HTMLDivElement>(null);
   const profileViewRequestRef = useRef(0);
 
   useEffect(() => {
@@ -190,6 +191,9 @@ const CommunityMembers: React.FC = () => {
 
   const openProfileView = async (memberId: string) => {
     if (!memberId || !getAuthToken()) return;
+    if (typeof window !== 'undefined' && window.innerWidth < 1024) {
+      setSelectedMember(null);
+    }
     const requestId = profileViewRequestRef.current + 1;
     profileViewRequestRef.current = requestId;
     setProfileViewError('');
@@ -280,6 +284,14 @@ const CommunityMembers: React.FC = () => {
   const emptyStateMessage = search.trim()
     ? 'No member matched this search.'
     : directoryError || 'No member profiles are available yet.';
+  const isProfileViewOpen = profileViewLoading || Boolean(profileViewError) || Boolean(selectedProfileView);
+
+  useEffect(() => {
+    if (!isProfileViewOpen) return;
+    window.setTimeout(() => {
+      profilePanelRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }, 0);
+  }, [isProfileViewOpen]);
 
   return (
     <div className="h-full flex flex-col space-y-4 md:space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-700">
@@ -299,6 +311,20 @@ const CommunityMembers: React.FC = () => {
           />
         </div>
       </header>
+
+      {isProfileViewOpen && (
+        <div ref={profilePanelRef} className="px-0 md:px-0">
+          <SocialProfileViewer
+            title="Member Profile"
+            isOpen={isProfileViewOpen}
+            loading={profileViewLoading}
+            error={profileViewError}
+            profileView={selectedProfileView}
+            onClose={closeProfileView}
+            presentation="inline"
+          />
+        </div>
+      )}
 
       <div className="flex-1 flex flex-col lg:grid lg:grid-cols-3 gap-6 min-h-0 overflow-visible lg:overflow-hidden pb-8">
         <div className={`lg:col-span-1 flex flex-col space-y-4 min-h-0 overflow-visible lg:overflow-hidden ${selectedMember ? 'hidden lg:flex' : 'flex'}`}>
@@ -573,14 +599,6 @@ const CommunityMembers: React.FC = () => {
         </div>
       )}
 
-      <SocialProfileViewer
-        title="Member Profile"
-        isOpen={profileViewLoading || Boolean(profileViewError) || Boolean(selectedProfileView)}
-        loading={profileViewLoading}
-        error={profileViewError}
-        profileView={selectedProfileView}
-        onClose={closeProfileView}
-      />
     </div>
   );
 };

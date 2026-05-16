@@ -21,6 +21,7 @@ interface SocialProfileViewerProps {
   error: string;
   profileView: SocialProfileView | null;
   onClose: () => void;
+  presentation?: 'modal' | 'inline';
 }
 
 const PROFILE_SCROLL_LOCK_CLASS = 'profile-viewer-scroll-lock';
@@ -114,9 +115,10 @@ const SocialProfileViewer: React.FC<SocialProfileViewerProps> = ({
   error,
   profileView,
   onClose,
+  presentation = 'modal',
 }) => {
   useEffect(() => {
-    if (!isOpen) return;
+    if (!isOpen || presentation !== 'modal') return;
 
     const previousBodyOverflow = document.body.style.overflow;
     const previousHtmlOverflow = document.documentElement.style.overflow;
@@ -135,7 +137,7 @@ const SocialProfileViewer: React.FC<SocialProfileViewerProps> = ({
       document.body.classList.remove(PROFILE_SCROLL_LOCK_CLASS);
       window.removeEventListener('keydown', handleKeyDown);
     };
-  }, [isOpen, onClose]);
+  }, [isOpen, onClose, presentation]);
 
   if (!isOpen) return null;
 
@@ -151,15 +153,26 @@ const SocialProfileViewer: React.FC<SocialProfileViewerProps> = ({
         profileView.profile?.websiteUrl,
       ].filter((value) => String(value || '').trim().length > 0)
     : [];
+  const isInline = presentation === 'inline';
 
   return (
     <div
-      className="fixed inset-0 z-[190] flex items-stretch justify-center overflow-hidden bg-[#05070a]/95 p-0 backdrop-blur-xl lg:p-6"
-      role="dialog"
-      aria-modal="true"
+      className={
+        isInline
+          ? 'w-full'
+          : 'fixed inset-0 z-[190] flex items-stretch justify-center overflow-hidden bg-[#05070a]/95 p-0 backdrop-blur-xl lg:p-6'
+      }
+      role={isInline ? 'region' : 'dialog'}
+      aria-modal={isInline ? undefined : true}
       aria-label={title}
     >
-      <div className="glass-panel flex h-full w-full flex-col overflow-hidden border-white/10 shadow-2xl animate-in fade-in zoom-in duration-300 lg:max-w-6xl lg:rounded-[1.5rem]">
+      <div
+        className={
+          isInline
+            ? 'glass-panel flex w-full flex-col overflow-visible rounded-[1.5rem] border-white/10 bg-black/35 shadow-2xl animate-in fade-in slide-in-from-top-2 duration-300'
+            : 'glass-panel flex h-full w-full flex-col overflow-hidden border-white/10 shadow-2xl animate-in fade-in zoom-in duration-300 lg:max-w-6xl lg:rounded-[1.5rem]'
+        }
+      >
         <header className="shrink-0 border-b border-white/10 bg-black/35 px-4 py-4 sm:px-6 lg:px-8">
           <div className="flex items-center justify-between gap-4">
             <div className="min-w-0">
@@ -176,7 +189,13 @@ const SocialProfileViewer: React.FC<SocialProfileViewerProps> = ({
           </div>
         </header>
 
-        <div className="flex-1 min-h-0 overflow-y-auto custom-scrollbar scrollable px-4 py-5 sm:px-6 lg:px-8 lg:py-8">
+        <div
+          className={
+            isInline
+              ? 'overflow-visible px-4 py-5 sm:px-6 lg:px-8 lg:py-8'
+              : 'flex-1 min-h-0 overflow-y-auto custom-scrollbar scrollable px-4 py-5 sm:px-6 lg:px-8 lg:py-8'
+          }
+        >
           {loading && (
             <div className="flex min-h-[40vh] items-center justify-center">
               <div className="rounded-2xl border border-white/10 bg-white/5 px-6 py-5 text-sm text-slate-300 shadow-xl">

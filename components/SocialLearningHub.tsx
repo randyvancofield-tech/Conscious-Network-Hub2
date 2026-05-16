@@ -148,6 +148,7 @@ const SocialLearningHub: React.FC<SocialLearningHubProps> = ({ user }) => {
   
   const fileInputRef = useRef<HTMLInputElement>(null);
   const injectionPanelRef = useRef<HTMLDivElement>(null);
+  const profilePanelRef = useRef<HTMLDivElement>(null);
   const profileViewRequestRef = useRef(0);
 
   const detectedUrl = useMemo(() => getFirstUrl(newPost), [newPost]);
@@ -508,6 +509,14 @@ const SocialLearningHub: React.FC<SocialLearningHubProps> = ({ user }) => {
       // no-op if share is canceled
     }
   };
+  const isProfileViewOpen = profileViewLoading || Boolean(profileViewError) || Boolean(selectedProfileView);
+
+  useEffect(() => {
+    if (!isProfileViewOpen) return;
+    window.setTimeout(() => {
+      profilePanelRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }, 0);
+  }, [isProfileViewOpen]);
 
   return (
     <div className="flex flex-col space-y-8 animate-in fade-in slide-in-from-bottom-6 duration-1000 relative">
@@ -576,6 +585,20 @@ const SocialLearningHub: React.FC<SocialLearningHubProps> = ({ user }) => {
         {/* Floating Background Element */}
         <div className="absolute -top-10 -right-20 w-64 sm:w-96 h-64 sm:h-96 bg-blue-500/5 blur-[100px] rounded-full pointer-events-none" />
       </header>
+
+      {isProfileViewOpen && (
+        <div ref={profilePanelRef}>
+          <SocialProfileViewer
+            title="User Profile"
+            isOpen={isProfileViewOpen}
+            loading={profileViewLoading}
+            error={profileViewError}
+            profileView={selectedProfileView}
+            onClose={closeProfileView}
+            presentation="inline"
+          />
+        </div>
+      )}
 
       <div className="grid grid-cols-1 lg:grid-cols-4 gap-8">
         
@@ -1019,15 +1042,6 @@ const SocialLearningHub: React.FC<SocialLearningHubProps> = ({ user }) => {
           </div>
         </div>
       </div>
-
-      <SocialProfileViewer
-        title="User Profile"
-        isOpen={profileViewLoading || Boolean(profileViewError) || Boolean(selectedProfileView)}
-        loading={profileViewLoading}
-        error={profileViewError}
-        profileView={selectedProfileView}
-        onClose={closeProfileView}
-      />
 
       <style>{`
         .perspective-1000 { perspective: 1000px; }
