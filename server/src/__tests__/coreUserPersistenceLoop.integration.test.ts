@@ -1047,7 +1047,9 @@ describe('Core user persistence loop', () => {
 
     expect(ai.status).toBe(200);
     expect(ai.body?.provider).toBe('local');
-    expect(ai.body?.reply || ai.body?.wisdom).toContain('local response');
+    expect(ai.body?.reply || ai.body?.wisdom).toContain('Conscious Network Hub');
+    expect(ai.body?.reply || ai.body?.wisdom).not.toContain('backend');
+    expect(ai.body?.reply || ai.body?.wisdom).not.toContain('configure');
   });
 
   it('returns actionable auth recovery when profile persists but session setup fails', async () => {

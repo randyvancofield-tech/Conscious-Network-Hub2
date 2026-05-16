@@ -252,24 +252,23 @@ const generateAiResponse = async (
 
 const buildDailyWisdomPrompt = (refreshNonce: string): string => {
   const focusThemes = [
-    'privacy-preserving AI design',
-    'community governance for digital well-being',
-    'decentralized trust and cybersecurity resilience',
-    'responsible identity systems and user autonomy',
-    'ethical deployment practices in social learning platforms',
+    'spirituality, mental wellness, and lifelong education',
+    'collaboration among providers, institutions, cultural leaders, and members',
+    'privacy-preserving trust in a decentralized social learning ecosystem',
+    'ethical SaaS leadership for communities that serve people across disciplines',
+    'high-value guidance that blends wisdom, care, evidence, and consent',
   ];
   const seed = Date.now() + refreshNonce.length;
   const selectedTheme = focusThemes[seed % focusThemes.length];
-  const nowIso = new Date().toISOString();
 
   return [
     'Generate one concise Daily Wisdom insight for Conscious Network Hub.',
-    'Write a fresh perspective that is not a repeated phrase.',
-    'Keep it factual, practical, and under 90 words.',
+    'Conscious Network Hub is a decentralized SaaS social learning ecosystem integrating spirituality, mental wellness, holistic care, cultural education, provider collaboration, religious and institutional leadership, and member learning.',
+    'Write for a global community of users, professional providers, organizational leaders, educators, life coaches, spiritualists, cultural enthusiasts, and mental wellness experts.',
+    'Keep the tone elevated, practical, inclusive, current, and values-aligned without sounding technical or promotional.',
+    'Do not mention backend providers, model availability, prompts, timestamps, nonces, implementation details, or configuration.',
+    'Keep it under 90 words and include one grounded action the reader can take today.',
     `Theme: ${selectedTheme}.`,
-    `Timestamp: ${nowIso}.`,
-    `Refresh nonce: ${refreshNonce}.`,
-    'Include one specific action the user can take today.',
   ].join(' ');
 };
 

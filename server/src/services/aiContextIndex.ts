@@ -59,8 +59,13 @@ const envEnabled = (name: string, defaultValue = true): boolean => {
   return raw !== 'false' && raw !== '0' && raw !== 'off';
 };
 
-const isCrawlerEnabled = (): boolean =>
-  envEnabled('AI_CRAWLER_ENABLED', String(process.env.NODE_ENV || '').trim().toLowerCase() !== 'test');
+const isCrawlerEnabled = (): boolean => {
+  const nodeEnv = String(process.env.NODE_ENV || '').trim().toLowerCase();
+  if (nodeEnv === 'test' && !envEnabled('AI_CRAWLER_ENABLED_IN_TESTS', false)) {
+    return false;
+  }
+  return envEnabled('AI_CRAWLER_ENABLED', true);
+};
 
 const crawlIntervalMs = (): number => {
   const parsed = Number(process.env.AI_CRAWLER_INTERVAL_MS || '');

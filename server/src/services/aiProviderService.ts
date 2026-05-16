@@ -150,16 +150,35 @@ const callOpenAiCompatible = async (
 
 const localFallback = async (input: RuntimeAiRequest): Promise<RuntimeAiResponse> => {
   const start = Date.now();
-  const trimmedMessage = input.message.slice(0, 300);
-  const reply = [
-    'I can help with a privacy-first local response while the live model provider is unavailable.',
-    '',
-    `Your request: ${trimmedMessage}`,
-    '',
-    'Immediate path: use the indexed platform context, keep private profile data isolated to this session, and escalate medical, mental-health, legal, or safety-critical concerns to qualified local professionals.',
-    '',
-    'For a fuller generative answer, start Ollama locally or configure Groq/OpenRouter/OpenAI/Vertex in the backend environment.',
-  ].join('\n');
+  const isDailyWisdom = /Daily Wisdom insight for Conscious Network Hub/i.test(input.message);
+  const isMeetingSummary = /Summarize this meeting transcript/i.test(input.message);
+  const isIssueReport = /Analyze this platform issue report/i.test(input.message);
+
+  let reply: string;
+  if (isDailyWisdom) {
+    const dailyWisdomOptions = [
+      'Conscious Network Hub grows strongest when wisdom moves with care: spiritual insight, mental wellness, education, and professional guidance each have a place. Today, choose one conversation or course that deepens understanding across disciplines, and protect trust by sharing only what serves the community.',
+      'Conscious Network Hub becomes a decentralized learning community one responsible exchange at a time. Let faith leaders, wellness experts, educators, providers, and members meet around dignity, evidence, and lived experience. Today, engage one resource that expands your perspective while keeping privacy and consent at the center.',
+      'High-value technology should make people feel safer, not more exposed. Conscious Network Hub connects spiritual growth, mental wellness, culture, education, and professional care through trust-first participation. Today, contribute with clarity: share knowledge that uplifts, verify what you pass along, and honor each person’s boundaries.',
+      'Conscious Network Hub works best when collaboration becomes stewardship. Religious institutions, holistic providers, life coaches, cultural leaders, educators, and members each hold part of the learning field. Today, bridge one discipline with another, and let integrity guide what you ask, answer, and amplify.',
+    ];
+    const seed = input.message.length + input.systemPrompt.length;
+    reply = dailyWisdomOptions[seed % dailyWisdomOptions.length];
+  } else if (isMeetingSummary) {
+    reply = JSON.stringify({
+      summary: 'Meeting summary is unavailable while the live AI model is offline.',
+      decisions: [],
+      actionItems: [],
+    });
+  } else if (isIssueReport) {
+    reply = 'MEDIUM priority. Issue received for review. Next steps: confirm the affected page or workflow, capture the user role and device type, and route the report to the platform team for triage.';
+  } else {
+    reply = [
+      'I can offer a privacy-first platform response while the enhanced AI model is temporarily unavailable.',
+      '',
+      'For personal health, mental-health, legal, financial, or safety-critical concerns, please rely on qualified local professionals. Within Conscious Network Hub, keep sensitive details minimal, use trusted learning spaces, and choose resources that support dignity, consent, and practical next steps.',
+    ].join('\n');
+  }
 
   return {
     provider: 'local',

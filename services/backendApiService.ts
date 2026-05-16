@@ -479,7 +479,7 @@ class BackendAPIService {
         lowered.includes('networkerror');
       if (isNetworkError) {
         return {
-          text: `Local fallback wisdom: backend unreachable at ${this.getBackendLabel()}.`,
+          text: 'Conscious Network Hub invites learning that protects dignity: bring spirituality, mental wellness, education, and community leadership into one thoughtful exchange today, while sharing only what supports trust and care.',
           groundingChunks: [],
           confidenceScore: 60,
           sourceCount: 0,
