@@ -216,6 +216,13 @@ export const validateRequiredEnv = (): void => {
 
 export const hasOpenAiApiKey = (): boolean => hasNonEmptyEnv('OPENAI_API_KEY');
 
+export const hasConfiguredAiProvider = (): boolean =>
+  hasOpenAiApiKey() ||
+  hasNonEmptyEnv('OPENROUTER_API_KEY') ||
+  hasNonEmptyEnv('GROQ_API_KEY') ||
+  (trimEnv('AI_LOCAL_FALLBACK_ENABLED') || 'true').toLowerCase() !== 'false' ||
+  (trimEnv('AI_ENABLE_OLLAMA') || 'true').toLowerCase() !== 'false';
+
 export const logStripeEnvironmentLoaded = (): void => {
   const requiredStripeKeys = [
     'STRIPE_SECRET_KEY',

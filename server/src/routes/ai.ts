@@ -8,12 +8,28 @@ import {
 import { getVertexAIService } from '../services/vertexAiService';
 import emailService from '../services/emailService';
 import { chatWithOpenAI, isOpenAIConfigured } from "../services/openAiService";
+import {
+  buildAiContext,
+  getAiContextIndexStatus,
+  triggerAiContextCrawl,
+} from '../services/aiContextIndex';
+import {
+  AI_SECURITY_SYSTEM_PROMPT,
+  buildRuntimeGuardrailContext,
+  sanitizeAiInput,
+} from '../services/aiSafetyPolicy';
+import {
+  chatWithRuntimeAiProvider,
+  getRuntimeProviderStatus,
+  hasRuntimeAiProvider,
+  type RuntimeAiProvider,
+} from '../services/aiProviderService';
 
 const router = Router();
 router.use(requireCanonicalIdentity);
 
 interface AiProviderResponse {
-  provider: 'openai' | 'vertex';
+  provider: 'openai' | 'vertex' | RuntimeAiProvider;
   reply: string;
   citations: Array<{
     text?: string;
@@ -35,7 +51,7 @@ const getVertexServiceOrNull = () => {
 };
 
 const ensureAiAvailability = (res: Response): boolean => {
-  if (getVertexServiceOrNull() || isOpenAIConfigured()) {
+  if (getVertexServiceOrNull() || isOpenAIConfigured() || hasRuntimeAiProvider()) {
     return true;
   }
 
@@ -44,6 +60,29 @@ const ensureAiAvailability = (res: Response): boolean => {
     code: 'AI_PROVIDER_UNAVAILABLE',
   });
   return false;
+};
+
+const buildGroundedPrompt = (input: {
+  message: string;
+  contextText?: string;
+  userProfileContext?: string;
+}): { systemPrompt: string; userPrompt: string } => {
+  const safetyContext = buildRuntimeGuardrailContext(input.message);
+  const systemPrompt = [
+    AI_SECURITY_SYSTEM_PROMPT,
+    safetyContext,
+    input.contextText
+      ? 'Ground platform-specific answers in the supplied context. Do not expose private session personalization data as a source.'
+      : '',
+  ].filter(Boolean).join('\n\n');
+
+  const userPrompt = [
+    'User request:',
+    input.message,
+    input.contextText ? `\nPlatform context:\n${input.contextText}` : '',
+  ].filter(Boolean).join('\n\n');
+
+  return { systemPrompt, userPrompt };
 };
 
 const normalizeConversationHistory = (
@@ -158,26 +197,57 @@ const generateAiResponse = async (
     context?: { category?: string; userId?: string };
   }
 ): Promise<AiProviderResponse> => {
+  const safeMessage = sanitizeAiInput(message);
+  const aiContext = await buildAiContext(safeMessage, options?.context?.userId);
+  const { systemPrompt, userPrompt } = buildGroundedPrompt({
+    message: safeMessage,
+    contextText: aiContext.contextText,
+    userProfileContext: aiContext.userProfileContext,
+  });
   const vertexService = getVertexServiceOrNull();
 
   if (vertexService) {
-    const vertex = await vertexService.chat(message, options?.conversationHistory, options?.context);
+    const vertex = await vertexService.chat(userPrompt, options?.conversationHistory, {
+      ...options?.context,
+      knowledgeContext: aiContext.contextText,
+      sources: aiContext.sources,
+    });
     if (!isVertexFallbackText(vertex.reply)) {
       return {
         provider: 'vertex',
         reply: vertex.reply,
-        citations: mapVertexCitations(vertex.citations),
+        citations: [...mapVertexCitations(vertex.citations), ...mapVertexCitations(aiContext.sources)],
         confidenceScore: vertex.confidenceScore ?? 75,
         processingTimeMs: vertex.processingTimeMs ?? 0,
       };
     }
   }
 
-  if (!isOpenAIConfigured()) {
-    throw new Error('AI provider unavailable');
+  if (isOpenAIConfigured()) {
+    try {
+      const openAi = await generateOpenAiResponse(userPrompt);
+      return {
+        ...openAi,
+        citations: mapVertexCitations(aiContext.sources),
+      };
+    } catch (error) {
+      console.warn('[AI] OpenAI provider failed; falling back to runtime provider chain:', error instanceof Error ? error.message : error);
+    }
   }
 
-  return generateOpenAiResponse(message);
+  const runtime = await chatWithRuntimeAiProvider({
+    message: userPrompt,
+    systemPrompt,
+    conversationHistory: options?.conversationHistory as Array<{ role: 'user' | 'assistant'; content: string }> | undefined,
+  });
+
+  return {
+    provider: runtime.provider,
+    reply: runtime.reply,
+    citations: mapVertexCitations(aiContext.sources),
+    confidenceScore: runtime.provider === 'local' ? 55 : 78,
+    processingTimeMs: runtime.processingTimeMs,
+  };
 };
 
 const buildDailyWisdomPrompt = (refreshNonce: string): string => {
@@ -313,7 +383,7 @@ router.post('/chat', validateChatInput, async (req: Request, res: Response): Pro
     const authUserId = getAuthenticatedUserId(req) || undefined;
     const conversationHistory = normalizeConversationHistory(req.body?.conversationHistory);
     const context = normalizeAiContext(req.body?.context, authUserId);
-    const response = await generateAiResponse(message, {
+    const response = await generateAiResponse(sanitizeAiInput(message), {
       conversationHistory,
       context,
     });
@@ -415,7 +485,7 @@ router.post('/summarize-meeting', async (req: Request, res: Response): Promise<v
       '{"summary":"string","decisions":["string"],"actionItems":[{"owner":"string","task":"string","dueDate":"string"}]}',
       'Use empty strings or empty arrays when details are missing.',
       'Transcript:',
-      normalizedTranscript.join('\n'),
+      sanitizeAiInput(normalizedTranscript.join('\n'), 12000),
     ].join('\n\n');
 
     const authUserId = getAuthenticatedUserId(req) || undefined;
@@ -464,22 +534,36 @@ router.post('/report-issue', validateChatInput, async (req: Request, res: Respon
     let analysis = '';
     let emailSent = false;
 
-    // Wrap Vertex AI call with timeout to prevent hanging
+    // Wrap AI call with timeout to prevent hanging
     const aiTimeout = new Promise<{ priority: string; analysis: string }>((resolve) => {
       let completed = false;
       
       // Start AI analysis in parallel
       (async () => {
         try {
-          console.log('[API] Attempting Vertex AI analysis...');
-          const vertexAI = getVertexAIService();
-          const response = await vertexAI.processPlatformIssue(title, description, category);
+          console.log('[API] Attempting AI issue analysis...');
+          const response = await generateAiResponse(
+            [
+              'Analyze this platform issue report.',
+              `Title: ${sanitizeAiInput(title, 160)}`,
+              `Category: ${sanitizeAiInput(category, 80)}`,
+              `Description: ${sanitizeAiInput(description, 4000)}`,
+              'Return a concise triage note with priority level CRITICAL, HIGH, MEDIUM, or LOW and 2-3 next steps.',
+            ].join('\n'),
+            {
+              context: {
+                category: 'platform-issue',
+                userId: getAuthenticatedUserId(req) || undefined,
+              },
+            }
+          );
           
           if (!completed) {
             completed = true;
-            console.log('[API] Vertex AI analysis complete');
+            console.log('[API] AI issue analysis complete');
+            const priorityMatch = /\b(CRITICAL|HIGH|MEDIUM|LOW)\b/i.exec(response.reply);
             resolve({
-              priority: response.priority || 'MEDIUM',
+              priority: priorityMatch?.[1]?.toUpperCase() || 'MEDIUM',
               analysis: response.reply,
             });
           }
@@ -601,6 +685,35 @@ router.get('/trending', async (_req: Request, res: Response): Promise<void> => {
       error: classified.message,
     });
   }
+});
+
+/**
+ * GET /api/ai/status
+ * Operational diagnostics for AI provider and crawler health.
+ */
+router.get('/status', async (req: Request, res: Response): Promise<void> => {
+  res.json({
+    success: true,
+    userId: getAuthenticatedUserId(req),
+    providers: {
+      vertex: Boolean(getVertexServiceOrNull()),
+      openai: isOpenAIConfigured(),
+      runtime: getRuntimeProviderStatus(),
+    },
+    index: getAiContextIndexStatus(),
+  });
+});
+
+/**
+ * POST /api/ai/reindex
+ * Refresh the public-only AI context index.
+ */
+router.post('/reindex', async (_req: Request, res: Response): Promise<void> => {
+  const status = await triggerAiContextCrawl('api');
+  res.json({
+    success: true,
+    index: status,
+  });
 });
 
 export default router;

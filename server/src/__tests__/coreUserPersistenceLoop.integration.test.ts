@@ -1028,8 +1028,8 @@ describe('Core user persistence loop', () => {
     expect(ai.body?.provider).toBe('openai');
   });
 
-  it('returns a graceful 503 when no AI provider is configured', async () => {
-    const user = createMockUser('no-ai-provider-user', 'no-provider@example.com', {
+  it('falls back to the local safety provider when no external AI provider is configured', async () => {
+    const user = createMockUser('local-ai-provider-user', 'local-ai-provider@example.com', {
       tier: 'Free / Community Tier',
       initialTwoFactorRequiredAt: new Date(Date.now() - 1000),
       initialTwoFactorCompletedAt: new Date(),
@@ -1045,8 +1045,9 @@ describe('Core user persistence loop', () => {
       body: { refreshNonce: 'test' },
     });
 
-    expect(ai.status).toBe(503);
-    expect(ai.body?.code).toBe('AI_PROVIDER_UNAVAILABLE');
+    expect(ai.status).toBe(200);
+    expect(ai.body?.provider).toBe('local');
+    expect(ai.body?.reply || ai.body?.wisdom).toContain('local response');
   });
 
   it('returns actionable auth recovery when profile persists but session setup fails', async () => {

@@ -40,7 +40,7 @@ export interface KnowledgeContextResult {
 
 const ROOT_DIR = path.resolve(__dirname, '../../..');
 const HCN_KNOWLEDGE_URL =
-  process.env.HCN_KNOWLEDGE_URL || 'https://higherconscious.network/hcn-knowledge.json';
+  process.env.HCN_KNOWLEDGE_URL || 'https://conscious-network.org/hcn-knowledge.json';
 const KNOWLEDGE_TTL_MS = 10 * 60 * 1000;
 const MAX_CHUNK_CHARS = 900;
 const MAX_CONTEXT_CHARS = 4000;

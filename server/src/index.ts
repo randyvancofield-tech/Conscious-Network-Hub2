@@ -40,8 +40,9 @@ import {
 } from './routes/providerApplicants';
 import { initializeVertexAI } from './services/vertexAiService';
 import { ensureProviderCrmAdminFromEnv } from './services/providerCrmAdminBootstrap';
+import { startAiContextCrawler } from './services/aiContextIndex';
 import {
-  hasOpenAiApiKey,
+  hasConfiguredAiProvider,
   logDeliveryEnvironmentLoaded,
   logStripeEnvironmentLoaded,
   validateRequiredEnv,
@@ -65,9 +66,9 @@ try {
   process.exit(1);
 }
 
-if (!hasOpenAiApiKey()) {
+if (!hasConfiguredAiProvider()) {
   console.warn(
-    '[STARTUP][WARN] OPENAI_API_KEY is not set. Authentication/profile routes remain available, but /api/ai routes will return 503 until configured.'
+    '[STARTUP][WARN] No AI provider is configured. Authentication/profile routes remain available, but /api/ai routes will return 503 until configured.'
   );
 }
 const GOOGLE_CLOUD_PROJECT =
@@ -144,6 +145,8 @@ try {
 } catch (error) {
   console.error('Failed to initialize Vertex AI:', error);
 }
+
+startAiContextCrawler();
 
 // Security middleware. HSTS is scoped below so local/dev hosts are never pinned.
 app.use(helmet({ strictTransportSecurity: false }));

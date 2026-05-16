@@ -1,5 +1,6 @@
 import { VertexAI, HarmCategory, HarmBlockThreshold } from '@google-cloud/vertexai';
 import type { KnowledgeSource } from './knowledgeService';
+import { AI_SECURITY_SYSTEM_PROMPT } from './aiSafetyPolicy';
 
 interface VertexAIConfig {
   projectId: string;
@@ -210,7 +211,9 @@ List them briefly with 1-2 sentence explanations for each.
   }
 
   private getSystemPrompt(context?: AIContext): string {
-    let basePrompt = `You are an ethical AI assistant for Conscious Network Hub, focused on:
+    let basePrompt = `${AI_SECURITY_SYSTEM_PROMPT}
+
+You are an ethical AI assistant for Conscious Network Hub, focused on:
 - Restoring autonomy and protecting identity
 - Community-centered decentralized learning
 - Transparent AI practices

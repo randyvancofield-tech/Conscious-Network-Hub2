@@ -6,6 +6,24 @@
     "tags": ["risk", "governance", "trustworthy-ai", "policy"]
   },
   {
+    "title": "EU GDPR Article 5",
+    "url": "https://eur-lex.europa.eu/eli/reg/2016/679/2016-05-04/eng",
+    "summary": "Requires personal data processing to follow lawfulness, fairness, transparency, purpose limitation, data minimization, accuracy, storage limitation, integrity, and confidentiality principles.",
+    "tags": ["privacy", "gdpr", "data-minimization", "security"]
+  },
+  {
+    "title": "HHS HIPAA Security Rule",
+    "url": "https://www.hhs.gov/hipaa/for-professionals/security/index.html",
+    "summary": "Establishes administrative, physical, and technical safeguard expectations for protecting the confidentiality, integrity, and availability of electronic protected health information.",
+    "tags": ["privacy", "hipaa", "security", "health-data"]
+  },
+  {
+    "title": "EU Artificial Intelligence Act",
+    "url": "https://eur-lex.europa.eu/eli/reg/2024/1689/oj/eng",
+    "summary": "Creates an EU framework for human-centric and trustworthy AI with protections for health, safety, and fundamental rights, including transparency and human oversight obligations for high-risk AI systems.",
+    "tags": ["ai-act", "ai-governance", "human-oversight", "transparency"]
+  },
+  {
     "title": "OECD AI Principles",
     "url": "https://oecd.ai/en/ai-principles",
     "summary": "Recommends AI systems respect human-centered values, transparency, robustness, security, and accountability, with responsible stewardship across the AI lifecycle.",

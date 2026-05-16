@@ -1,4 +1,5 @@
-﻿import OpenAI from "openai";
+import OpenAI from "openai";
+import { AI_SECURITY_SYSTEM_PROMPT } from './aiSafetyPolicy';
 
 let client: OpenAI | null = null;
 
@@ -24,8 +25,7 @@ export async function chatWithOpenAI(message: string) {
     messages: [
       {
         role: "system",
-        content:
-          "You are a calm, ethical, spiritually grounded assistant supporting development and reflection.",
+        content: `${AI_SECURITY_SYSTEM_PROMPT}\n\nYou are a calm, ethical, spiritually grounded assistant supporting development and reflection.`,
       },
       {
         role: "user",
