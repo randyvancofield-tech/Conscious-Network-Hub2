@@ -587,7 +587,7 @@ const SocialLearningHub: React.FC<SocialLearningHubProps> = ({ user }) => {
       </header>
 
       {isProfileViewOpen && (
-        <div ref={profilePanelRef}>
+        <div ref={profilePanelRef} className="scroll-mt-24 md:scroll-mt-28 lg:scroll-mt-6">
           <SocialProfileViewer
             title="User Profile"
             isOpen={isProfileViewOpen}

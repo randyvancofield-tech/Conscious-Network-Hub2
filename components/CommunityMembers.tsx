@@ -313,7 +313,7 @@ const CommunityMembers: React.FC = () => {
       </header>
 
       {isProfileViewOpen && (
-        <div ref={profilePanelRef} className="px-0 md:px-0">
+        <div ref={profilePanelRef} className="scroll-mt-24 px-0 md:scroll-mt-28 md:px-0 lg:scroll-mt-6">
           <SocialProfileViewer
             title="Member Profile"
             isOpen={isProfileViewOpen}

@@ -169,30 +169,40 @@ const SocialProfileViewer: React.FC<SocialProfileViewerProps> = ({
       <div
         className={
           isInline
-            ? 'glass-panel flex w-full flex-col overflow-visible rounded-[1.5rem] border-white/10 bg-black/35 shadow-2xl animate-in fade-in slide-in-from-top-2 duration-300'
+            ? 'glass-panel relative flex w-full flex-col overflow-visible rounded-[1.5rem] border-white/10 bg-black/35 shadow-2xl animate-in fade-in slide-in-from-top-2 duration-300'
             : 'glass-panel flex h-full w-full flex-col overflow-hidden border-white/10 shadow-2xl animate-in fade-in zoom-in duration-300 lg:max-w-6xl lg:rounded-[1.5rem]'
         }
       >
-        <header className="shrink-0 border-b border-white/10 bg-black/35 px-4 py-4 sm:px-6 lg:px-8">
-          <div className="flex items-center justify-between gap-4">
-            <div className="min-w-0">
-              <p className="text-[10px] font-black uppercase tracking-widest text-blue-300">Public Identity</p>
-              <h4 className="mt-1 truncate text-xl font-black tracking-tight text-white sm:text-2xl">{title}</h4>
+        {isInline ? (
+          <button
+            onClick={onClose}
+            className="absolute right-3 top-3 z-30 rounded-xl border border-white/15 bg-black/70 p-3 text-slate-200 shadow-2xl backdrop-blur-xl transition-colors hover:bg-black/85 hover:text-white sm:right-5 sm:top-5"
+            aria-label="Close profile"
+          >
+            <X className="h-5 w-5" />
+          </button>
+        ) : (
+          <header className="shrink-0 border-b border-white/10 bg-black/35 px-4 py-4 sm:px-6 lg:px-8">
+            <div className="flex items-center justify-between gap-4">
+              <div className="min-w-0">
+                <p className="text-[10px] font-black uppercase tracking-widest text-blue-300">Public Identity</p>
+                <h4 className="mt-1 truncate text-xl font-black tracking-tight text-white sm:text-2xl">{title}</h4>
+              </div>
+              <button
+                onClick={onClose}
+                className="shrink-0 rounded-xl border border-white/10 bg-white/5 p-3 text-slate-300 transition-colors hover:bg-white/10 hover:text-white"
+                aria-label="Close profile"
+              >
+                <X className="h-5 w-5" />
+              </button>
             </div>
-            <button
-              onClick={onClose}
-              className="shrink-0 rounded-xl border border-white/10 bg-white/5 p-3 text-slate-300 transition-colors hover:bg-white/10 hover:text-white"
-              aria-label="Close profile"
-            >
-              <X className="h-5 w-5" />
-            </button>
-          </div>
-        </header>
+          </header>
+        )}
 
         <div
           className={
             isInline
-              ? 'overflow-visible px-4 py-5 sm:px-6 lg:px-8 lg:py-8'
+              ? 'overflow-visible px-3 py-3 sm:px-5 sm:py-5 lg:px-6 lg:py-6'
               : 'flex-1 min-h-0 overflow-y-auto custom-scrollbar scrollable px-4 py-5 sm:px-6 lg:px-8 lg:py-8'
           }
         >
