@@ -131,7 +131,7 @@ const buildVerifySessionSuccessUrl = (rawUrl: string): string => {
       .replace(CHECKOUT_SESSION_PLACEHOLDER, '')
       .replace(/[?#].*$/, '')
       .replace(/\/+$/, '');
-    return `${base || 'https://higherconscious.network'}/verify-session?session_id=${CHECKOUT_SESSION_PLACEHOLDER}`;
+    return `${base || 'https://conscious-network.org'}/verify-session?session_id=${CHECKOUT_SESSION_PLACEHOLDER}`;
   }
 };
 
@@ -146,7 +146,7 @@ const resolveSuccessUrl = (): string => {
     return buildVerifySessionSuccessUrl(frontendBaseUrl);
   }
 
-  return buildVerifySessionSuccessUrl('https://higherconscious.network');
+  return buildVerifySessionSuccessUrl('https://conscious-network.org');
 };
 
 const resolveCancelUrl = (): string => {

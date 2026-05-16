@@ -140,7 +140,7 @@ const ProviderAccessPage: React.FC<ProviderAccessPageProps> = ({
   }, []);
 
   return (
-    <div className="min-h-[100dvh] max-h-[100dvh] overflow-y-auto overscroll-y-auto custom-scrollbar animate-in fade-in duration-700 relative z-10 scrollable p-4 pt-20 text-slate-100 sm:p-6 sm:pt-24 md:p-8 lg:p-12 xl:p-20">
+    <div className="min-h-[100dvh] animate-in fade-in duration-700 relative z-10 p-4 pt-20 text-slate-100 sm:p-6 sm:pt-24 md:p-8 lg:p-10 xl:p-14">
       <svg
         className={`pointer-events-none absolute inset-0 z-0 hidden h-full w-full transition-opacity duration-500 lg:block ${
           hoveredProviderPath ? 'opacity-100' : 'opacity-70'

@@ -19,14 +19,14 @@ const Dashboard: React.FC<DashboardProps> = ({
   insightRef,
 }) => {
   return (
-    <div className="space-y-12 animate-in fade-in duration-700 pb-20">
+    <div className="space-y-8 lg:space-y-10 animate-in fade-in duration-700 pb-12">
       {/* Welcome Hero - Ethical AI Insight */}
-      <section className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+      <section className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         <div className="lg:col-span-2" id="latest-wisdom" ref={insightRef}>
           {user ? (
             <EthicalAIInsight userEmail={user.email} userId={user.id} />
           ) : (
-            <div className="glass-panel p-10 rounded-[2.5rem] border border-white/10 h-full flex flex-col justify-center items-center text-center space-y-4">
+            <div className="glass-panel p-6 lg:p-8 rounded-2xl border border-white/10 h-full flex flex-col justify-center items-center text-center space-y-4">
               <ShieldCheck className="w-10 h-10 text-blue-400" />
               <h3 className="text-lg font-black text-white uppercase tracking-widest">AI Insight Locked</h3>
               <p className="text-slate-400 text-sm max-w-md">
@@ -36,7 +36,7 @@ const Dashboard: React.FC<DashboardProps> = ({
           )}
         </div>
 
-        <div className="glass-panel p-10 rounded-[2.5rem] flex flex-col justify-between border-blue-500/10 shadow-2xl">
+        <div className="glass-panel p-6 lg:p-8 rounded-2xl flex flex-col justify-between border-blue-500/10 shadow-2xl">
           <div>
             <h3 className="text-sm font-black mb-8 flex items-center gap-3 uppercase tracking-widest">
               <TrendingUp className="text-teal-400 w-5 h-5" /> Network Integrity
@@ -65,19 +65,19 @@ const Dashboard: React.FC<DashboardProps> = ({
 
       {/* Strategic Protocol */}
       <section className="space-y-8">
-        <div className="flex items-center gap-4 border-b border-white/5 pb-6">
+        <div className="flex items-center gap-4 border-b border-white/5 pb-5">
           <Target className="w-7 h-7 text-blue-400" />
           <h2 className="text-xl font-black text-white tracking-widest uppercase">STRATEGIC PROTOCOL</h2>
         </div>
         
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-          <div className="glass-panel p-10 rounded-[2.5rem] border-l-4 border-blue-500 shadow-2xl">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+          <div className="glass-panel p-6 lg:p-8 rounded-2xl border-l-4 border-blue-500 shadow-2xl">
             <h3 className="text-[9px] font-black text-blue-400 uppercase tracking-[0.4em] mb-6">MISSION STATEMENT</h3>
             <p className="text-lg font-light text-slate-300 leading-relaxed italic opacity-80">
               "Higher Conscious Network exists to empower individuals, providers, and institutions with ethical technology that restores autonomy, protects identity, and creates equitable economic opportunity through a community-centered decentralized social learning infrastructure."
             </p>
           </div>
-          <div className="glass-panel p-10 rounded-[2.5rem] border-l-4 border-teal-500 shadow-2xl">
+          <div className="glass-panel p-6 lg:p-8 rounded-2xl border-l-4 border-teal-500 shadow-2xl">
             <h3 className="text-[9px] font-black text-teal-400 uppercase tracking-[0.4em] mb-6">VISION STATEMENT</h3>
             <p className="text-lg font-light text-slate-300 leading-relaxed italic opacity-80">
               "We envision a global, community-centered ecosystem where data ownership, economic mobility, and values-aligned human development are accessible to all—especially those historically excluded from the digital and economic landscape."
@@ -86,8 +86,8 @@ const Dashboard: React.FC<DashboardProps> = ({
         </div>
 
         {/* Conscious Careers */}
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-          <div className="lg:col-span-2 glass-panel p-10 rounded-[2.5rem] border-white/5 shadow-2xl space-y-8">
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+          <div className="lg:col-span-2 glass-panel p-6 lg:p-8 rounded-2xl border-white/5 shadow-2xl space-y-6">
             <div className="flex items-center gap-4">
               <Rocket className="w-7 h-7 text-orange-400" />
               <h3 className="text-xl font-black text-white uppercase tracking-tighter">Conscious Careers: Entrepreneurship</h3>
@@ -107,7 +107,7 @@ const Dashboard: React.FC<DashboardProps> = ({
             </div>
           </div>
 
-          <div className="glass-panel p-10 rounded-[2.5rem] border-white/5 shadow-2xl space-y-8">
+          <div className="glass-panel p-6 lg:p-8 rounded-2xl border-white/5 shadow-2xl space-y-6">
             <div className="flex items-center gap-4">
               <BarChart3 className="w-7 h-7 text-purple-400" />
               <h3 className="text-xl font-black text-white uppercase tracking-tighter">Impact KPIs</h3>
@@ -137,7 +137,7 @@ const Dashboard: React.FC<DashboardProps> = ({
         </h2>
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
           {CORE_COMPONENTS.map((comp, idx) => (
-            <div key={idx} className="glass-panel p-8 rounded-[2rem] border-t-2 border-blue-500/20 hover:bg-blue-900/10 transition-all cursor-pointer group shadow-2xl hover:-translate-y-2">
+            <div key={idx} className="glass-panel p-6 rounded-2xl border-t-2 border-blue-500/20 hover:bg-blue-900/10 transition-all cursor-pointer group shadow-2xl hover:-translate-y-1">
               <div className="bg-blue-500/10 w-14 h-14 rounded-2xl flex items-center justify-center mb-6 group-hover:scale-110 transition-transform shadow-inner">
                 {comp.icon}
               </div>

@@ -364,7 +364,7 @@ const EthicalAIInsight: React.FC<EthicalAIInsightProps> = ({ userEmail, userId =
   }
 
   return (
-    <div className="glass-panel p-5 sm:p-6 md:p-8 rounded-[1.75rem] sm:rounded-[2.5rem] border-blue-500/10 shadow-2xl space-y-6 animate-in fade-in duration-500 max-h-none lg:max-h-[90vh] overflow-visible lg:overflow-y-auto custom-scrollbar flex flex-col">
+    <div className="glass-panel p-5 sm:p-6 md:p-8 rounded-[1.75rem] sm:rounded-[2rem] border-blue-500/10 shadow-2xl space-y-6 animate-in fade-in duration-500 overflow-visible flex flex-col">
       {/* Header */}
       <div className="flex items-center justify-between sticky top-0 bg-black/20 -mx-6 -mt-6 px-6 md:px-8 pt-6 pb-4 z-10">
         <div className="flex items-center gap-3">

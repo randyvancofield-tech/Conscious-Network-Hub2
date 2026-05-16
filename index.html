@@ -67,20 +67,17 @@
         }
 
         .scrollable,
-        .custom-scrollbar,
-        [class*="overflow-y-auto"],
-        [class*="overflow-auto"] {
+        .custom-scrollbar {
             -webkit-overflow-scrolling: touch;
             overscroll-behavior: contain;
-            scrollbar-gutter: stable;
+            scrollbar-gutter: auto;
             touch-action: pan-y;
         }
 
-        .scrollable-x,
-        [class*="overflow-x-auto"] {
+        .scrollable-x {
             -webkit-overflow-scrolling: touch;
             overscroll-behavior-inline: contain;
-            scrollbar-gutter: stable;
+            scrollbar-gutter: auto;
             touch-action: pan-x;
         }
 
@@ -237,9 +234,7 @@
             }
 
             .scrollable,
-            .custom-scrollbar,
-            [class*="overflow-y-auto"],
-            [class*="overflow-auto"] {
+            .custom-scrollbar {
                 overscroll-behavior: auto;
             }
         }

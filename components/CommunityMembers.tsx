@@ -21,12 +21,10 @@ import { getAuthToken } from '../services/sessionService';
 import { api, backendAssetUrl } from '../services/apiClient';
 import {
   getProfileAvatarMedia,
-  getProfileBackgroundMedia,
-  getProfileHeroMedia,
   isVideoMediaAsset,
-  normalizeMediaAsset,
   type NormalizedMediaAsset,
 } from '../services/mediaAssets';
+import SocialProfileViewer, { type SocialProfileView } from './SocialProfileViewer';
 
 interface Member {
   id: string;
@@ -41,31 +39,7 @@ interface Member {
   verified: boolean;
 }
 
-interface SocialProfileView {
-  profile: any;
-  posts: any[];
-}
-
 const AUTOMATED_PROFILE_PATTERN = /\b(bot|agent|assistant|seed|system)\b/i;
-
-const toRelativeTimestamp = (value: string): string => {
-  const parsed = new Date(value);
-  if (Number.isNaN(parsed.getTime())) return 'Just now';
-  const deltaMs = Date.now() - parsed.getTime();
-  const deltaMinutes = Math.floor(deltaMs / (60 * 1000));
-  if (deltaMinutes < 1) return 'Just now';
-  if (deltaMinutes < 60) return `${deltaMinutes}m ago`;
-  const deltaHours = Math.floor(deltaMinutes / 60);
-  if (deltaHours < 24) return `${deltaHours}h ago`;
-  const deltaDays = Math.floor(deltaHours / 24);
-  return `${deltaDays}d ago`;
-};
-
-const toDateLabel = (value: string | null | undefined): string => {
-  const parsed = new Date(String(value || ''));
-  if (Number.isNaN(parsed.getTime())) return 'N/A';
-  return parsed.toLocaleDateString();
-};
 
 const toInitials = (value: string): string => {
   const parts = String(value || '')
@@ -127,21 +101,6 @@ const renderAvatarMedia = (
   );
 };
 
-const renderWideMedia = (media: NormalizedMediaAsset, alt: string, className: string) => {
-  if (!media.url) return null;
-  if (isVideoMediaAsset(media)) {
-    return (
-      <video
-        src={media.url}
-        className={className}
-        controls
-        playsInline
-      />
-    );
-  }
-  return <img src={media.url} alt={alt} className={className} />;
-};
-
 const CommunityMembers: React.FC = () => {
   const [search, setSearch] = useState('');
   const [selectedMember, setSelectedMember] = useState<Member | null>(null);
@@ -157,6 +116,7 @@ const CommunityMembers: React.FC = () => {
   const [profileViewError, setProfileViewError] = useState('');
   const chatEndRef = useRef<HTMLDivElement>(null);
   const attachmentInputRef = useRef<HTMLInputElement>(null);
+  const profileViewRequestRef = useRef(0);
 
   useEffect(() => {
     const loadMembers = async () => {
@@ -230,7 +190,10 @@ const CommunityMembers: React.FC = () => {
 
   const openProfileView = async (memberId: string) => {
     if (!memberId || !getAuthToken()) return;
+    const requestId = profileViewRequestRef.current + 1;
+    profileViewRequestRef.current = requestId;
     setProfileViewError('');
+    setSelectedProfileView(null);
     setProfileViewLoading(true);
     try {
       let profile: any = null;
@@ -255,15 +218,28 @@ const CommunityMembers: React.FC = () => {
         cursor = nextCursor;
       }
 
-      setSelectedProfileView({
-        profile,
-        posts: allPosts,
-      });
+      if (profileViewRequestRef.current === requestId) {
+        setSelectedProfileView({
+          profile,
+          posts: allPosts,
+        });
+      }
     } catch (error) {
-      setProfileViewError(error instanceof Error ? error.message : 'Unable to load member profile.');
+      if (profileViewRequestRef.current === requestId) {
+        setProfileViewError(error instanceof Error ? error.message : 'Unable to load member profile.');
+      }
     } finally {
-      setProfileViewLoading(false);
+      if (profileViewRequestRef.current === requestId) {
+        setProfileViewLoading(false);
+      }
     }
+  };
+
+  const closeProfileView = () => {
+    profileViewRequestRef.current += 1;
+    setProfileViewLoading(false);
+    setSelectedProfileView(null);
+    setProfileViewError('');
   };
 
   const handleSendMessage = (e: React.FormEvent) => {
@@ -597,170 +573,14 @@ const CommunityMembers: React.FC = () => {
         </div>
       )}
 
-      {(profileViewLoading || profileViewError || selectedProfileView) && (
-        <div className="fixed inset-0 z-[190] bg-black/85 backdrop-blur-sm p-4 flex items-start sm:items-center justify-center overflow-y-auto custom-scrollbar">
-          <div className="glass-panel w-full max-w-4xl my-4 max-h-[calc(100dvh-2rem)] overflow-y-auto custom-scrollbar rounded-[2rem] border border-white/10 shadow-2xl p-6 sm:p-8 animate-in zoom-in duration-300">
-            <div className="flex items-start justify-between gap-4 mb-6">
-              <h4 className="text-2xl sm:text-3xl font-black text-white tracking-tight">Member Profile</h4>
-              <button
-                onClick={() => {
-                  setSelectedProfileView(null);
-                  setProfileViewError('');
-                }}
-                className="p-2 rounded-xl hover:bg-white/5 text-slate-500"
-              >
-                <X className="w-5 h-5" />
-              </button>
-            </div>
-
-            {profileViewLoading && (
-              <div className="p-6 rounded-2xl bg-white/5 border border-white/10 text-slate-300 text-sm flex items-center gap-2">
-                <Loader2 className="w-4 h-4 animate-spin text-blue-400" /> Loading profile...
-              </div>
-            )}
-
-            {profileViewError && !profileViewLoading && (
-              <div className="p-6 rounded-2xl bg-red-500/10 border border-red-500/30 text-red-200 text-sm">{profileViewError}</div>
-            )}
-
-            {selectedProfileView && !profileViewLoading && (() => {
-              const heroMedia = getProfileHeroMedia(selectedProfileView.profile);
-              const avatarMedia = getProfileAvatarMedia(selectedProfileView.profile);
-              const backgroundMedia = getProfileBackgroundMedia(selectedProfileView.profile);
-              const shouldShowBackgroundMedia = Boolean(backgroundMedia.url && backgroundMedia.url !== heroMedia.url);
-
-              return (
-              <div className="space-y-6">
-                <div className="rounded-[1.5rem] overflow-hidden border border-white/10 bg-white/5">
-                  {heroMedia.url ? (
-                    renderWideMedia(heroMedia, selectedProfileView.profile?.name || 'Node', 'w-full h-44 sm:h-56 object-cover')
-                  ) : (
-                    <div className="w-full h-44 sm:h-56 bg-gradient-to-r from-blue-900/40 to-teal-900/20" />
-                  )}
-                  <div className="p-4 sm:p-6 flex flex-col sm:flex-row sm:items-center gap-4">
-                    {renderAvatarMedia(
-                      avatarMedia,
-                      selectedProfileView.profile?.name || 'Node',
-                      'w-16 h-16 sm:w-20 sm:h-20 rounded-2xl object-cover ring-2 ring-white/10'
-                    )}
-                    <div className="min-w-0">
-                      <h5 className="text-xl sm:text-2xl font-black text-white tracking-tight break-words">
-                        {selectedProfileView.profile?.name || 'Node'}
-                      </h5>
-                      <p className="text-[10px] uppercase tracking-widest text-blue-300 font-black mt-1 break-all">
-                        @{selectedProfileView.profile?.handle || 'node'}
-                      </p>
-                    </div>
-                  </div>
-                </div>
-
-                {shouldShowBackgroundMedia && (
-                  <div className="rounded-[1.5rem] overflow-hidden border border-white/10 bg-white/5">
-                    {renderWideMedia(backgroundMedia, `${selectedProfileView.profile?.name || 'Node'} background`, 'w-full h-44 sm:h-56 object-cover bg-black')}
-                  </div>
-                )}
-
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                  <div className="p-4 rounded-xl bg-white/5 border border-white/10">
-                    <p className="text-[10px] uppercase tracking-widest text-slate-500 font-black">Location</p>
-                    <p className="text-sm text-slate-200 mt-1 break-words">{selectedProfileView.profile?.location || 'Not specified'}</p>
-                  </div>
-                  <div className="p-4 rounded-xl bg-white/5 border border-white/10">
-                    <p className="text-[10px] uppercase tracking-widest text-slate-500 font-black">Joined</p>
-                    <p className="text-sm text-slate-200 mt-1">{toDateLabel(selectedProfileView.profile?.createdAt)}</p>
-                  </div>
-                  <div className="p-4 rounded-xl bg-white/5 border border-white/10 sm:col-span-2">
-                    <p className="text-[10px] uppercase tracking-widest text-slate-500 font-black">Bio</p>
-                    <p className="text-sm text-slate-200 mt-1 whitespace-pre-wrap break-words">
-                      {selectedProfileView.profile?.bio || 'No biography provided yet.'}
-                    </p>
-                  </div>
-                  <div className="p-4 rounded-xl bg-white/5 border border-white/10 sm:col-span-2">
-                    <p className="text-[10px] uppercase tracking-widest text-slate-500 font-black">Links</p>
-                    <div className="mt-2 flex flex-wrap gap-2">
-                      {[selectedProfileView.profile?.twitterUrl, selectedProfileView.profile?.githubUrl, selectedProfileView.profile?.websiteUrl]
-                        .filter((value) => String(value || '').trim().length > 0)
-                        .map((link) => (
-                          <a
-                            key={link}
-                            href={link}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="px-3 py-2 rounded-lg bg-blue-600/10 hover:bg-blue-600/20 border border-blue-500/20 text-blue-300 text-xs font-bold break-all"
-                          >
-                            {link}
-                          </a>
-                        ))}
-                      {!selectedProfileView.profile?.twitterUrl &&
-                        !selectedProfileView.profile?.githubUrl &&
-                        !selectedProfileView.profile?.websiteUrl && (
-                          <p className="text-sm text-slate-400">No public links.</p>
-                        )}
-                    </div>
-                  </div>
-                </div>
-
-                <div className="space-y-3">
-                  <h6 className="text-[10px] uppercase tracking-widest text-slate-500 font-black">
-                    Social Posts ({selectedProfileView.posts.length})
-                  </h6>
-                  {selectedProfileView.posts.length === 0 ? (
-                    <div className="p-4 rounded-xl bg-white/5 border border-white/10 text-sm text-slate-400">No public posts available.</div>
-                  ) : (
-                    <div className="space-y-3">
-                      {selectedProfileView.posts.map((post) => (
-                        <div key={post.id} className="p-4 rounded-xl bg-white/5 border border-white/10">
-                          <div className="flex flex-wrap items-center gap-2 mb-2">
-                            <p className="text-[10px] uppercase tracking-widest text-slate-500 font-black">
-                              {toRelativeTimestamp(String(post.createdAt || ''))}
-                            </p>
-                            <span className="text-[9px] uppercase tracking-widest text-slate-400 bg-white/5 px-2 py-1 rounded-md border border-white/10">
-                              {String(post.visibility || 'public')}
-                            </span>
-                          </div>
-                          <p className="text-sm text-slate-200 break-words whitespace-pre-wrap">
-                            {String(post.text || '').trim() || 'Media post'}
-                          </p>
-                          {Array.isArray(post.media) && post.media.length > 0 && (
-                            <div className="mt-3 grid grid-cols-1 sm:grid-cols-2 gap-3">
-                              {post.media.map((entry: any) => {
-                                const mediaAsset = normalizeMediaAsset(entry, entry?.url);
-                                const mediaUrl = mediaAsset.url;
-                                if (!mediaUrl) return null;
-                                const mediaType = String(entry?.mediaType || '').toLowerCase();
-                                if (mediaType === 'video' || isVideoMediaAsset(mediaAsset)) {
-                                  return (
-                                    <video
-                                      key={String(entry?.id || mediaUrl)}
-                                      src={mediaUrl}
-                                      className="w-full rounded-xl border border-white/10 bg-black"
-                                      controls
-                                      playsInline
-                                    />
-                                  );
-                                }
-                                return (
-                                  <img
-                                    key={String(entry?.id || mediaUrl)}
-                                    src={mediaUrl}
-                                    alt="Post media"
-                                    className="w-full rounded-xl border border-white/10 object-cover"
-                                  />
-                                );
-                              })}
-                            </div>
-                          )}
-                        </div>
-                      ))}
-                    </div>
-                  )}
-                </div>
-              </div>
-              );
-            })()}
-          </div>
-        </div>
-      )}
+      <SocialProfileViewer
+        title="Member Profile"
+        isOpen={profileViewLoading || Boolean(profileViewError) || Boolean(selectedProfileView)}
+        loading={profileViewLoading}
+        error={profileViewError}
+        profileView={selectedProfileView}
+        onClose={closeProfileView}
+      />
     </div>
   );
 };

@@ -37,6 +37,7 @@ interface ProvidersMarketProps {
   providerId?: string;
   onOpenProvider?: (id: string) => void;
   onBackToList?: () => void;
+  onApplyAsProvider?: () => void;
 }
 
 const normalizeProvider = (rawProvider: any): ProviderProfile => {
@@ -87,7 +88,12 @@ const renderProviderMedia = (
   return <img src={media.url || ''} alt={alt} className={className} />;
 };
 
-const ProvidersMarket: React.FC<ProvidersMarketProps> = ({ providerId, onOpenProvider, onBackToList }) => {
+const ProvidersMarket: React.FC<ProvidersMarketProps> = ({
+  providerId,
+  onOpenProvider,
+  onBackToList,
+  onApplyAsProvider,
+}) => {
   const [filter, setFilter] = useState<string>('All');
   const [searchQuery, setSearchQuery] = useState('');
   const [providers, setProviders] = useState<ProviderProfile[]>([]);
@@ -453,21 +459,26 @@ const ProvidersMarket: React.FC<ProvidersMarketProps> = ({ providerId, onOpenPro
         </section>
       )}
 
-      <footer className="glass-panel p-10 rounded-[3rem] border-l-8 border-blue-600 flex flex-col md:flex-row items-center justify-between gap-8 shadow-2xl mt-20">
+      <footer className="glass-panel p-6 lg:p-8 rounded-2xl border-l-4 border-blue-600 flex flex-col md:flex-row items-center justify-between gap-6 shadow-2xl mt-12">
         <div className="space-y-2">
           <h4 className="text-xl font-black text-white uppercase tracking-tighter">Become a Sovereign Provider</h4>
           <p className="text-slate-400 text-sm font-light max-w-xl">
             Provider authority is issued through CNH review and verification. Approved provider users appear in this market automatically.
           </p>
         </div>
-        <a
-          href="https://www.higherconscious.network/contact-us"
-          target="_blank"
-          rel="noopener noreferrer"
-          className="px-10 py-5 bg-gradient-to-r from-blue-600 to-teal-600 text-white rounded-2xl font-black text-xs uppercase tracking-widest shadow-xl hover:shadow-blue-500/20 transition-all flex items-center gap-2 group whitespace-nowrap"
+        <button
+          type="button"
+          onClick={() => {
+            if (onApplyAsProvider) {
+              onApplyAsProvider();
+              return;
+            }
+            window.location.assign('/provider-access');
+          }}
+          className="px-6 py-4 bg-gradient-to-r from-blue-600 to-teal-600 text-white rounded-2xl font-black text-xs uppercase tracking-widest shadow-xl hover:shadow-blue-500/20 transition-all flex items-center gap-2 group whitespace-nowrap"
         >
           Apply as Node <ChevronRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" />
-        </a>
+        </button>
       </footer>
 
       {selectedProvider && (

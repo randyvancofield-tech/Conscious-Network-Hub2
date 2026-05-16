@@ -2885,6 +2885,7 @@ const App: React.FC = () => {
           <ProvidersMarket
             onOpenProvider={(id) => setCurrentView(AppView.PROVIDER_DETAIL, { id })}
             onBackToList={() => setCurrentView(AppView.PROVIDERS)}
+            onApplyAsProvider={() => setCurrentView(AppView.PROVIDER_ACCESS)}
           />
         );
       case AppView.PROVIDER_DETAIL:
@@ -2893,6 +2894,7 @@ const App: React.FC = () => {
             providerId={routeParams.id}
             onOpenProvider={(id) => setCurrentView(AppView.PROVIDER_DETAIL, { id })}
             onBackToList={() => setCurrentView(AppView.PROVIDERS)}
+            onApplyAsProvider={() => setCurrentView(AppView.PROVIDER_ACCESS)}
           />
         );
       case AppView.MEMBERSHIP:
@@ -3288,7 +3290,7 @@ const App: React.FC = () => {
         )}
 
         {currentView === AppView.MEMBERSHIP_ACCESS && !isMembershipAuthGuardChecking && (
-          <div className="min-h-[100dvh] max-h-[100dvh] overflow-y-auto overscroll-y-auto custom-scrollbar animate-in fade-in duration-700 relative z-10 scrollable p-4 pt-20 sm:p-6 sm:pt-24 md:p-8 lg:p-12 xl:p-20">
+          <div className="min-h-[100dvh] animate-in fade-in duration-700 relative z-10 p-4 pt-20 sm:p-6 sm:pt-24 md:p-8 lg:p-10 xl:p-14">
             <svg
               className={`pointer-events-none absolute inset-0 z-0 hidden h-full w-full transition-opacity duration-500 lg:block ${
                 hoveredMembershipPath ? 'opacity-100' : 'opacity-70'
@@ -3599,15 +3601,15 @@ const App: React.FC = () => {
             )}
 
             <aside
-              className={`fixed inset-y-0 left-0 z-[110] w-80 glass-panel border-r border-white/5 transition-all duration-500 ease-in-out overflow-hidden ${
+              className={`fixed inset-y-0 left-0 z-[110] w-80 glass-panel border-r border-white/5 transition-all duration-500 ease-in-out overflow-hidden lg:w-72 xl:w-80 ${
                 isSidebarOpen ? 'translate-x-0' : '-translate-x-full'
               } ${
                 isSidebarOpen
-                  ? 'lg:static lg:translate-x-0 lg:w-80 lg:opacity-100'
+                  ? 'lg:static lg:translate-x-0 lg:w-72 lg:opacity-100 xl:w-80'
                   : 'lg:static lg:translate-x-0 lg:w-0 lg:opacity-0 lg:border-r-0 lg:pointer-events-none'
               }`}
             >
-              <div className="h-full flex flex-col p-6 sm:p-8 lg:p-10 overflow-y-auto custom-scrollbar scrollable">
+              <div className="h-full flex flex-col p-6 sm:p-8 lg:p-6 xl:p-8 overflow-y-auto custom-scrollbar scrollable">
                 <button 
                   onClick={() => setSidebarOpen(false)} 
                   className="absolute top-8 right-8 p-3 hover:bg-white/5 rounded-2xl text-slate-500"
@@ -3624,7 +3626,7 @@ const App: React.FC = () => {
                   </div>
                 </div>
                 
-                <nav className="flex-1 space-y-4 pr-1">
+                <nav className="flex-1 space-y-3 pr-1">
                   {filteredNavigationItems.map((item) => {
                     const view = navViewMap[item.id];
                     const parentView =
@@ -3830,7 +3832,7 @@ const App: React.FC = () => {
             </aside>
 
             <div className="flex-1 flex flex-col min-h-0 overflow-hidden relative">
-              <header className="min-h-20 sm:min-h-24 flex items-center justify-between gap-3 px-4 sm:px-6 md:px-8 lg:px-12 border-b border-white/5 z-20 backdrop-blur-3xl bg-black/20">
+              <header className="min-h-16 sm:min-h-20 flex items-center justify-between gap-3 px-4 sm:px-6 md:px-8 lg:px-8 xl:px-10 border-b border-white/5 z-20 backdrop-blur-3xl bg-black/20">
                 <div className="flex items-center gap-6">
                   {!isSidebarOpen && (
                     <button onClick={toggleSidebar} className="p-3 bg-white/5 hover:bg-white/10 rounded-xl text-slate-400 border border-white/10 shadow-lg">
@@ -3923,10 +3925,10 @@ const App: React.FC = () => {
                 </div>
               </header>
 
-              <main className="flex-1 min-h-0 overflow-y-auto custom-scrollbar scrollable p-4 sm:p-6 md:p-8 lg:p-12 relative z-10" tabIndex={-1}>
+              <main className="flex-1 min-h-0 overflow-y-auto custom-scrollbar scrollable p-4 sm:p-5 md:p-6 lg:p-8 xl:p-10 relative z-10" tabIndex={-1}>
                 {renderActiveView()}
               </main>
-              <footer className="shrink-0 max-h-[28dvh] overflow-y-auto custom-scrollbar p-4 bg-black/20 backdrop-blur-sm border-t border-white/5">
+              <footer className="shrink-0 overflow-hidden p-3 sm:p-4 bg-black/20 backdrop-blur-sm border-t border-white/5">
                 <div className="max-w-7xl mx-auto flex flex-wrap justify-center gap-4 text-xs">
                   <button onClick={() => setCurrentView(AppView.PRIVACY_POLICY)} className="max-w-full whitespace-normal text-center leading-5 text-slate-400 hover:text-white transition-colors">Privacy Policy</button>
                   <button onClick={() => setCurrentView(AppView.TERMS_OF_SERVICE)} className="max-w-full whitespace-normal text-center leading-5 text-slate-400 hover:text-white transition-colors">Terms of Service</button>
