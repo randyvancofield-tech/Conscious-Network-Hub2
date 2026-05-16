@@ -165,13 +165,13 @@ const configuredCorsOrigins = String(process.env.CORS_ORIGINS || '')
   .map((origin) => origin.trim().replace(/\/+$/, ''))
   .filter(Boolean);
 
+const defaultCorsOrigins = isProductionRuntime
+  ? ['https://conscious-network.org']
+  : ['https://conscious-network.org', 'http://localhost:3000', 'http://localhost:5173'];
+
 const allowedOrigins = Array.from(
   new Set([
-    'https://conscious-network.org',
-    'https://higherconscious.network',
-    'https://www.higherconscious.network',
-    'http://localhost:3000',
-    'http://localhost:5173',
+    ...defaultCorsOrigins,
     ...configuredCorsOrigins,
   ])
 );

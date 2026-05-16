@@ -26,7 +26,7 @@ Required Render Stripe values:
 
 Render should also ensure:
 
-   - `CORS_ORIGINS=https://conscious-network.org,https://higherconscious.network,https://consciousnetwork1.wordpress.com,http://localhost:5173`
+   - `CORS_ORIGINS=https://conscious-network.org`
    - `FRONTEND_BASE_URL=https://conscious-network.org` (used for redirects, emails, and Stripe)
    - `AUTH_TOKEN_SECRET` is set
    - `DATABASE_URL` is the Neon pooled Postgres URL, usually a `-pooler` host (not `file:`)
@@ -35,7 +35,7 @@ Render should also ensure:
    - `AUTH_PERSISTENCE_BACKEND=shared_db`
    - `DATABASE_PROVIDER=postgresql`
    - `HSTS_ALLOWED_HOSTS` contains only the final production API/custom domain host when it differs from `FRONTEND_BASE_URL`
-   - `OPENAI_API_KEY` (optional; required only for `/api/ai/*` routes)
+   - At least one live AI provider key if production AI should be generative beyond local fallback
 
 ### Required Secrets (Backend Startup)
 
@@ -57,6 +57,12 @@ The backend now fails startup if any required secret is missing.
 Optional for AI routes only:
 
 - `OPENAI_API_KEY`
+- `GOOGLE_CLOUD_PROJECT`, `GOOGLE_CLOUD_REGION`, `VERTEX_AI_MODEL`
+- `OPENROUTER_API_KEY`, `OPENROUTER_MODEL`
+- `GROQ_API_KEY`, `GROQ_MODEL`
+- `AI_ENABLE_OLLAMA`, `OLLAMA_BASE_URL`, `OLLAMA_MODEL`
+- `AI_LOCAL_FALLBACK_ENABLED`
+- `AI_CRAWLER_ENABLED`, `AI_CRAWLER_INTERVAL_MS`
 
 Production delivery integrations:
 
@@ -88,7 +94,7 @@ npm run check:render
 
 Expected:
 
-- `GET /health` with `Origin: https://consciousnetwork1.wordpress.com` returns `200`.
+- `GET /health` with `Origin: https://conscious-network.org` returns `200`.
 - `POST /api/ai/chat` without `Authorization` returns `401` (auth enforcement).
 - `GET /api/membership/tiers` returns `200` (public route still accessible).
 - `POST /api/user/create` with empty JSON returns `400` (profile creation validation active).
@@ -109,19 +115,19 @@ Confirm production backend target before deployment:
 - `.env.production` must contain:
   - `VITE_BACKEND_URL=https://conscious-network-backend.onrender.com`
 
-Deploy `dist/` to the hosting provider for `consciousnetwork1.wordpress.com` using that provider's release workflow.
+Deploy `dist/` to the current frontend host for `https://conscious-network.org` using that provider's release workflow.
 
 ## Post-release verification
 
-1. Open `https://consciousnetwork1.wordpress.com` in a browser.
+1. Open `https://conscious-network.org` in a browser.
 2. In AI Insight, submit a test prompt.
 3. Confirm network request goes to:
    - `https://conscious-network-backend.onrender.com/api/ai/chat`
 4. Confirm response status `200` and no frontend fallback message.
 5. Check Render logs for latest deploy and verify absence of:
-   - `OPENAI_API_KEY is not set` (when AI routes are expected to be enabled)
+   - repeated AI provider failures when a live AI provider is expected
    - `Unexpected token` JSON parse errors
-   - CORS denials for origin `https://consciousnetwork1.wordpress.com`
+   - CORS denials for origin `https://conscious-network.org`
 
 ## Legacy Cloud Run Scripts
 

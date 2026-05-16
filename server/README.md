@@ -9,7 +9,7 @@ This package contains the Express API for Conscious Network Hub. It owns authent
 - Database: PostgreSQL through Prisma
 - Auth: custom HMAC-signed session tokens plus persisted session records
 - Security middleware: Helmet, CORS allowlist, request size limits, rate limiting, route validation
-- Integrations: OpenAI, Google Cloud Vertex AI, Stripe, email, blockchain RPC
+- Integrations: Vertex AI, OpenAI, OpenRouter, Groq, Ollama/local AI fallback, Stripe, email, blockchain RPC
 - Tests: Jest integration tests
 
 ## Install
@@ -47,6 +47,11 @@ Optional integration values:
 
 - `OPENAI_API_KEY`: enables OpenAI-backed AI route responses.
 - `GOOGLE_CLOUD_PROJECT`, `GOOGLE_CLOUD_REGION`, `VERTEX_AI_MODEL`: enable Vertex AI service initialization.
+- `OPENROUTER_API_KEY`, `OPENROUTER_MODEL`: enable OpenRouter runtime AI fallback.
+- `GROQ_API_KEY`, `GROQ_MODEL`: enable Groq runtime AI fallback.
+- `AI_ENABLE_OLLAMA`, `OLLAMA_BASE_URL`, `OLLAMA_MODEL`: enable local Ollama runtime AI fallback.
+- `AI_LOCAL_FALLBACK_ENABLED`: enables the deterministic privacy-safe local fallback when external models are unavailable.
+- `AI_CRAWLER_ENABLED`, `AI_CRAWLER_INTERVAL_MS`: control the public-only AI context crawler.
 - `STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET`, `STRIPE_PRICE_FREE`, `STRIPE_PRICE_GUIDED`, `STRIPE_PRICE_ACCELERATED`, `STRIPE_MODE`, `STRIPE_SUCCESS_URL`, `STRIPE_CANCEL_URL`: enable membership checkout and webhooks.
 - `SMTP_*` / email secrets: optional delivery for native password reset only.
 - `TWILIO_*`: optional legacy SMS settings only; default member sign-in and onboarding do not require Twilio.

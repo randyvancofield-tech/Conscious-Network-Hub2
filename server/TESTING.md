@@ -112,10 +112,12 @@ curl.exe -sS -X POST http://localhost:3001/api/user/create `
 
 ## Deployment Smoke Checks
 
-For Cloud Run checks, use:
+For the current Render backend checks, use:
 
 ```powershell
-npm run check:cloudrun
+npm run check:render
 ```
 
 That script validates health, CORS, auth enforcement, membership tiers, signup/signin validation, and the production auth flow.
+
+Legacy Cloud Run helpers remain in `package.json` for historical operations only; Render is the active backend deployment target.

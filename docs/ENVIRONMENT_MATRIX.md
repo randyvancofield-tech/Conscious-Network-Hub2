@@ -42,6 +42,13 @@ Canonical environment values for the current backend architecture.
 | Render | `ENABLE_PASSWORD_RESET` | `true` | No | Set to `false` only to deliberately disable native password reset. |
 | Render | `ENABLE_USER_2FA` | `false` | No | Optional legacy enrolled 2FA flag. Default member sign-in does not require SMS. |
 | Render | `TWILIO_ACCOUNT_SID`, `TWILIO_AUTH_TOKEN`, `TWILIO_FROM_NUMBER` | none | No | Optional legacy SMS settings only; not required for member sign-in, onboarding, or Render startup. |
+| Render | `OPENAI_API_KEY` | none | No | Optional OpenAI provider for `/api/ai/*`. |
+| Render | `GOOGLE_CLOUD_PROJECT`, `GOOGLE_CLOUD_REGION`, `VERTEX_AI_MODEL` | none | No | Optional Vertex AI provider. |
+| Render | `OPENROUTER_API_KEY`, `OPENROUTER_MODEL` | none | No | Optional OpenRouter runtime provider. |
+| Render | `GROQ_API_KEY`, `GROQ_MODEL` | none | No | Optional Groq runtime provider. |
+| Render | `AI_ENABLE_OLLAMA`, `OLLAMA_BASE_URL`, `OLLAMA_MODEL` | disabled in hosted production unless explicitly provisioned | No | Optional local-model provider. Do not enable on Render unless an Ollama service is reachable. |
+| Render | `AI_LOCAL_FALLBACK_ENABLED` | `true` | No | Enables privacy-safe deterministic fallback text if external models are unavailable. |
+| Render | `AI_CRAWLER_ENABLED`, `AI_CRAWLER_INTERVAL_MS` | `true`, `600000` | No | Controls the public-only AI context crawler. |
 
 ## Hardening Rules
 

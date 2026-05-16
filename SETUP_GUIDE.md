@@ -106,19 +106,15 @@ Use your app UI or API calls to verify:
 3. Log in again
 4. Confirm profile reloads from backend
 
-## 8. Cloud Run Deployment (Existing Production Path)
+## 8. Render Deployment Checks (Current Production Path)
 
-From `server/`:
-
-```powershell
-npm run deploy:cloudrun
-```
-
-Then run:
+From `server/` after Render has been deployed/configured:
 
 ```powershell
-npm run check:cloudrun
+npm run check:render
 ```
+
+Legacy Cloud Run helpers remain under `server/scripts/` for historical operations only. Do not use the Cloud Run URL for the current Stripe webhook or launch backend.
 
 Expected: full smoke checks pass, including `create -> current -> logout -> login`.
 

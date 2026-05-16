@@ -1,7 +1,7 @@
 {
     "name": "conscious-network-hub-backend",
     "version": "1.0.0",
-    "description": "Backend API for Conscious Network Hub - Vertex AI/Gemini integration",
+    "description": "Backend API for Conscious Network Hub authentication, persistence, membership, provider, admin, and AI services",
     "main": "dist/index.js",
     "type": "commonjs",
     "scripts": {

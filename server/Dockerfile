@@ -41,7 +41,7 @@ COPY --from=builder /app/node_modules/@prisma ./node_modules/@prisma
 # Copy compiled backend code.
 COPY --from=builder /app/dist ./dist
 
-# Expose Cloud Run default port
+# Expose backend runtime port
 EXPOSE 8080
 
 # Set environment

@@ -9,7 +9,7 @@ Conscious Network Hub is a full-stack TypeScript application with a React/Vite f
 - Database: PostgreSQL via Prisma
 - Authentication: custom signed session tokens plus persisted session records
 - Security: Helmet, CORS allowlist, request validation, rate limiting
-- AI integrations: OpenAI and Google Cloud Vertex AI, enabled by backend env configuration
+- AI integrations: Vertex AI, OpenAI, OpenRouter, Groq, Ollama, and a privacy-safe local fallback, enabled by backend env configuration
 - Payments: Stripe membership checkout/webhooks
 - Contracts tooling: Solidity compiler and deployment scripts under `contracts/`
 - Testing: Jest integration tests for backend auth/persistence flows
@@ -112,7 +112,7 @@ Express backend
 Prisma data layer
   -> PostgreSQL users, sessions, profiles, posts, memberships, uploads, provider state
 External services
-  -> OpenAI / Vertex AI, Stripe, email, blockchain RPC when configured
+  -> Vertex AI / OpenAI / OpenRouter / Groq / Ollama, Stripe, email, blockchain RPC when configured
 ```
 
 Authentication flow:
