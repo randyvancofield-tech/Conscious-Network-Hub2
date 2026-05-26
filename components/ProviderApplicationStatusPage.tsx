@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { CalendarCheck, ChevronRight, FileText, LockKeyhole, RefreshCw } from 'lucide-react';
 import { api } from '../services/apiClient';
+import { openPrivateUpload } from '../services/privateUploadService';
 
 const CALENDLY_URL = 'https://calendly.com/randycofield/buildingconnections';
 
@@ -59,11 +60,15 @@ const toList = (value: unknown): string[] => {
 const FileLink: React.FC<{ label: string; file?: ApplicantFileRef }> = ({ label, file }) => {
   if (!file) return null;
   const name = file.originalName || label;
+  const openFile = () => {
+    void openPrivateUpload(file).catch((error) => {
+      window.alert(error instanceof Error ? error.message : 'Unable to open private file.');
+    });
+  };
   return (
-    <a
-      href={file.url || '#'}
-      target="_blank"
-      rel="noreferrer"
+    <button
+      type="button"
+      onClick={openFile}
       className="flex items-center justify-between gap-3 rounded-2xl border border-white/10 bg-white/[0.04] p-4 text-sm text-slate-200 transition hover:bg-white/[0.08]"
     >
       <span className="flex min-w-0 items-center gap-3">
@@ -71,7 +76,7 @@ const FileLink: React.FC<{ label: string; file?: ApplicantFileRef }> = ({ label,
         <span className="truncate">{name}</span>
       </span>
       <ChevronRight className="h-4 w-4 shrink-0 text-slate-500" />
-    </a>
+    </button>
   );
 };
 

@@ -18,9 +18,9 @@ const PROD_DATABASE_POOLER_MISMATCH_PATTERN =
 const BASE_REQUIRED_ENV = {
   STRIPE_SECRET_KEY: 'sk_test_required_secret_check',
   STRIPE_WEBHOOK_SECRET: 'whsec_required_secret_check',
-  STRIPE_PRICE_FREE: 'price_required_free',
-  STRIPE_PRICE_GUIDED: 'price_required_guided',
-  STRIPE_PRICE_ACCELERATED: 'price_required_accelerated',
+  STRIPE_PRICE_FREE: 'price_1TR1ErE9ozmNlTR0peEA7Ska',
+  STRIPE_PRICE_GUIDED: 'price_1TR1HpE9ozmNlTR0To2XvmuW',
+  STRIPE_PRICE_ACCELERATED: 'price_1TR1JTE9ozmNlTR090ftqnGn',
   STRIPE_MODE: 'test',
   STRIPE_SUCCESS_URL: 'http://localhost:3000/verify-session?session_id={CHECKOUT_SESSION_ID}',
   STRIPE_CANCEL_URL: 'http://localhost:3000/membership-access',
@@ -103,7 +103,9 @@ const runExpectSuccess = () =>
         PORT: String(testPort),
         AUTH_TOKEN_SECRET: 'integration-test-auth-secret',
         DATABASE_URL: 'file:./prisma/dev.db',
+        AUTH_PERSISTENCE_BACKEND: 'local_file',
         CORS_ORIGINS: 'http://localhost:3000',
+        SKIP_PROVIDER_CRM_ADMIN_BOOTSTRAP: 'true',
       },
     });
 

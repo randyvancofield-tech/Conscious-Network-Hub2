@@ -250,7 +250,7 @@ const SocialLearningHub: React.FC<SocialLearningHubProps> = ({ user }) => {
           const uploadPayload = new FormData();
           uploadPayload.append('file', selectedFile.file);
 
-          const uploadData = await api<any>('/upload/reflection', {
+          const uploadData = await api<any>('/upload/social', {
             method: 'POST',
             body: uploadPayload,
           });

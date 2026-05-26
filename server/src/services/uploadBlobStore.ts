@@ -3,12 +3,16 @@ import { PrismaClient } from '@prisma/client';
 import { getPrisma } from './prismaClient';
 
 type UploadStorageProvider = 'postgres_large_object';
+export type UploadObjectAccess = 'public' | 'private';
 
 interface PostgresUploadKeyPayload {
   v: 1;
   oid: number;
   mimeType: string;
   originalName: string;
+  userId?: string;
+  access?: UploadObjectAccess;
+  category?: string;
 }
 
 export interface PersistedUploadObject {
@@ -17,12 +21,23 @@ export interface PersistedUploadObject {
   publicPath: string;
   mimeType: string;
   sizeBytes: number;
+  access: UploadObjectAccess;
+  category: string | null;
 }
 
 export interface ResolvedUploadObject {
   buffer: Buffer;
   mimeType: string;
   sizeBytes: number;
+}
+
+export interface UploadObjectAccessMetadata {
+  objectKey: string;
+  storageProvider: UploadStorageProvider;
+  access: UploadObjectAccess | 'legacy';
+  ownerUserId: string | null;
+  category: string | null;
+  isLegacy: boolean;
 }
 
 const toStoreError = (message: string, cause?: unknown): Error & { code: string } => {
@@ -37,6 +52,17 @@ const toStoreError = (message: string, cause?: unknown): Error & { code: string 
 const sanitizeOriginalName = (input: string): string => {
   const normalized = path.basename(String(input || '').trim()).replace(/[^\w.\-]/g, '_');
   return normalized || 'upload.bin';
+};
+
+const sanitizeOptionalText = (input: unknown): string | undefined => {
+  const normalized = String(input || '').trim();
+  return normalized || undefined;
+};
+
+const normalizeUploadAccess = (input: unknown): UploadObjectAccess | null => {
+  const normalized = String(input || '').trim().toLowerCase();
+  if (normalized === 'public' || normalized === 'private') return normalized;
+  return null;
 };
 
 const encodePostgresUploadKey = (payload: PostgresUploadKeyPayload): string => {
@@ -63,10 +89,42 @@ const decodePostgresUploadKey = (objectKey: string): PostgresUploadKeyPayload | 
       oid: Math.floor(Number(parsed.oid)),
       mimeType: parsed.mimeType.trim(),
       originalName: sanitizeOriginalName(parsed.originalName),
+      userId: sanitizeOptionalText(parsed.userId),
+      access: normalizeUploadAccess(parsed.access) || undefined,
+      category: sanitizeOptionalText(parsed.category),
     };
   } catch {
     return null;
   }
+};
+
+const isLegacyPublicObjectAccessAllowed = (): boolean =>
+  String(process.env.UPLOAD_ALLOW_LEGACY_PUBLIC_OBJECTS || '').trim().toLowerCase() === 'true';
+
+const getUploadObjectPath = (access: UploadObjectAccess, objectKey: string): string =>
+  `${access === 'public' ? '/uploads/object' : '/api/upload/object'}/${objectKey}`;
+
+export const getUploadObjectAccessMetadata = (
+  objectKey: string
+): UploadObjectAccessMetadata | null => {
+  const parsedKey = decodePostgresUploadKey(objectKey);
+  if (!parsedKey) return null;
+  const access = parsedKey.access || 'legacy';
+  return {
+    objectKey,
+    storageProvider: 'postgres_large_object',
+    access,
+    ownerUserId: parsedKey.userId || null,
+    category: parsedKey.category || null,
+    isLegacy: !parsedKey.access,
+  };
+};
+
+export const isUploadObjectPubliclyReadable = (objectKey: string): boolean => {
+  const metadata = getUploadObjectAccessMetadata(objectKey);
+  if (!metadata) return false;
+  if (metadata.access === 'public') return true;
+  return metadata.access === 'legacy' && isLegacyPublicObjectAccessAllowed();
 };
 
 const ensurePrisma = (): PrismaClient => {
@@ -74,9 +132,12 @@ const ensurePrisma = (): PrismaClient => {
 };
 
 const persistPostgresLargeObjectUpload = async (input: {
+  userId: string;
   mimeType: string;
   originalName: string;
   buffer: Buffer;
+  access: UploadObjectAccess;
+  category?: string | null;
 }): Promise<PersistedUploadObject> => {
   try {
     const rows = await ensurePrisma().$queryRaw<Array<{ oid: bigint | number }>>`
@@ -93,14 +154,19 @@ const persistPostgresLargeObjectUpload = async (input: {
       oid: Math.floor(oid),
       mimeType: input.mimeType,
       originalName: sanitizeOriginalName(input.originalName),
+      userId: input.access === 'private' ? sanitizeOptionalText(input.userId) : undefined,
+      access: input.access,
+      category: sanitizeOptionalText(input.category),
     });
 
     return {
       objectKey,
       storageProvider: 'postgres_large_object',
-      publicPath: `/uploads/object/${objectKey}`,
+      publicPath: getUploadObjectPath(input.access, objectKey),
       mimeType: input.mimeType,
       sizeBytes: input.buffer.length,
+      access: input.access,
+      category: sanitizeOptionalText(input.category) || null,
     };
   } catch (error) {
     throw toStoreError('[UPLOAD][FATAL] Failed to persist upload blob', error);
@@ -112,8 +178,13 @@ export const persistUploadObject = async (input: {
   mimeType: string;
   originalName: string;
   buffer: Buffer;
+  access?: UploadObjectAccess;
+  category?: string | null;
 }): Promise<PersistedUploadObject> => {
-  return persistPostgresLargeObjectUpload(input);
+  return persistPostgresLargeObjectUpload({
+    ...input,
+    access: normalizeUploadAccess(input.access) || 'private',
+  });
 };
 
 export const resolveUploadObjectByKey = async (

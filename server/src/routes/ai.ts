@@ -607,8 +607,8 @@ router.post('/report-issue', validateChatInput, async (req: Request, res: Respon
         priority,
         analysis
       });
-      emailSent = emailResult?.success !== false;
-      console.log('[API] ✅ Issue report email result:', emailResult);
+      emailSent = emailResult?.ok === true && emailResult?.skipped !== true;
+      console.log('[API] Issue report email result:', emailResult);
     } catch (emailError) {
       console.error('[API] Failed to send email:', emailError);
       emailSent = false;

@@ -405,6 +405,34 @@ const hasProviderTrustRole = (user: any): boolean => {
   return role === 'provider' || role === 'admin';
 };
 
+const isIntegrityConfigurationError = (error: unknown): boolean => {
+  const message = error instanceof Error ? error.message : String(error || '');
+  return (
+    /(required|missing|invalid|chain mismatch)/i.test(message) &&
+    /(PINATA|INFURA|IPFS|SENSITIVE_DATA_KEY|INTEGRITY|ANCHOR|CONTRACT|PRIVATE_KEY|RPC|HCN_PROFILE_ANCHOR)/i.test(message)
+  );
+};
+
+const toIntegrityErrorResponse = (
+  error: unknown,
+  fallbackMessage: string
+): { statusCode: number; body: { error: string; code?: string } } => {
+  if (isIntegrityConfigurationError(error)) {
+    return {
+      statusCode: 503,
+      body: {
+        error: 'Profile integrity verification is not configured for this environment.',
+        code: 'INTEGRITY_PROVIDER_NOT_CONFIGURED',
+      },
+    };
+  }
+
+  return {
+    statusCode: 500,
+    body: { error: fallbackMessage },
+  };
+};
+
 protectedRouter.post('/profile/verify', async (req: Request, res: Response): Promise<void> => {
   const authUserId = getAuthenticatedUserId(req);
   if (!authUserId) {
@@ -495,8 +523,8 @@ protectedRouter.post('/profile/verify', async (req: Request, res: Response): Pro
         : {}),
     });
   } catch (error) {
-    const message = error instanceof Error ? error.message : 'Profile integrity verification failed';
-    res.status(500).json({ error: message });
+    const response = toIntegrityErrorResponse(error, 'Profile integrity verification failed');
+    res.status(response.statusCode).json(response.body);
   }
 });
 
@@ -556,8 +584,8 @@ protectedRouter.get('/profile/record', async (req: Request, res: Response): Prom
         : {}),
     });
   } catch (error) {
-    const message = error instanceof Error ? error.message : 'Failed to read integrity record';
-    res.status(500).json({ error: message });
+    const response = toIntegrityErrorResponse(error, 'Failed to read integrity record');
+    res.status(response.statusCode).json(response.body);
   }
 });
 

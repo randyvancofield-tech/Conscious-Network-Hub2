@@ -8,6 +8,8 @@
         "dev": "nodemon --exec ts-node src/index.ts",
         "build": "tsc",
         "db:warmup": "node scripts/neon-direct-check.js",
+        "db:reconcile-launch": "node scripts/reconcile-launch-schema.js",
+        "db:reconcile-launch:apply": "node scripts/reconcile-launch-schema.js --apply",
         "db:push": "npm run db:warmup && prisma db push",
         "start": "node dist/index.js",
         "test": "jest",

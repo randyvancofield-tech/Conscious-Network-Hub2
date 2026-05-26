@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { FileText, KeyRound, RefreshCw, Save, ShieldCheck, Users } from 'lucide-react';
 import { api, ApiError } from '../services/apiClient';
+import { openPrivateUpload } from '../services/privateUploadService';
 import { getAdminElevationToken, setAdminElevationToken } from '../services/sessionService';
 import { ActionButton, EmptyState, PageHeader, PageShell, SurfacePanel } from './ui/PlatformPrimitives';
 
@@ -328,16 +329,21 @@ const AdminProviderApplicantsPage: React.FC = () => {
                   ].map(([label, file]) => {
                     const ref = file as ApplicantFileRef | undefined;
                     return (
-                      <a
+                      <button
                         key={String(label)}
-                        href={ref?.url || '#'}
-                        target="_blank"
-                        rel="noreferrer"
+                        type="button"
+                        onClick={() => {
+                          if (!ref) return;
+                          void openPrivateUpload(ref).catch((error) => {
+                            window.alert(error instanceof Error ? error.message : 'Unable to open private file.');
+                          });
+                        }}
+                        disabled={!ref}
                         className="flex items-center gap-3 rounded-2xl border border-white/10 bg-white/[0.04] p-4 text-sm text-slate-200 transition hover:bg-white/[0.08]"
                       >
                         <FileText className="h-5 w-5 text-amber-100" />
                         <span className="min-w-0 truncate">{ref?.originalName || String(label)}</span>
-                      </a>
+                      </button>
                     );
                   })}
                 </div>

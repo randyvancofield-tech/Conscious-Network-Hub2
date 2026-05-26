@@ -69,6 +69,9 @@ interface StoredUpload {
   buffer: Buffer;
   mimeType: string;
   sizeBytes: number;
+  access: 'public' | 'private';
+  ownerUserId: string;
+  category: string;
 }
 
 const users = new Map<string, MockUser>();
@@ -431,18 +434,42 @@ const mockSocialStore = {
 
 const persistUploadObjectMock = jest.fn(async (input: any) => {
   const objectKey = `upload-${nextUploadId++}`;
+  const access = input.access === 'public' ? 'public' : 'private';
   uploads.set(objectKey, {
     buffer: Buffer.from(input.buffer),
     mimeType: String(input.mimeType || 'application/octet-stream'),
     sizeBytes: Buffer.from(input.buffer).length,
+    access,
+    ownerUserId: String(input.userId || ''),
+    category: String(input.category || ''),
   });
   return {
     objectKey,
     storageProvider: 'postgres_large_object',
-    publicPath: `/uploads/object/${objectKey}`,
+    publicPath: `${access === 'public' ? '/uploads/object' : '/api/upload/object'}/${objectKey}`,
     mimeType: String(input.mimeType || 'application/octet-stream'),
     sizeBytes: Buffer.from(input.buffer).length,
+    access,
+    category: String(input.category || '') || null,
   };
+});
+
+const getUploadObjectAccessMetadataMock = jest.fn((objectKey: string) => {
+  const found = uploads.get(objectKey);
+  if (!found) return null;
+  return {
+    objectKey,
+    storageProvider: 'postgres_large_object',
+    access: found.access,
+    ownerUserId: found.ownerUserId || null,
+    category: found.category || null,
+    isLegacy: false,
+  };
+});
+
+const isUploadObjectPubliclyReadableMock = jest.fn((objectKey: string) => {
+  const found = uploads.get(objectKey);
+  return found?.access === 'public';
 });
 
 const resolveUploadObjectByKeyMock = jest.fn(async (objectKey: string) => {
@@ -511,6 +538,8 @@ jest.mock('../services/socialStore', () => ({
 jest.mock('../services/uploadBlobStore', () => ({
   persistUploadObject: persistUploadObjectMock,
   resolveUploadObjectByKey: resolveUploadObjectByKeyMock,
+  getUploadObjectAccessMetadata: getUploadObjectAccessMetadataMock,
+  isUploadObjectPubliclyReadable: isUploadObjectPubliclyReadableMock,
 }));
 
 jest.mock('../services/userSessionStore', () => ({
@@ -741,14 +770,43 @@ describe('Core user persistence loop', () => {
     expect(upload.body?.media?.storageProvider).toBe('postgres_large_object');
     const uploadUrl = String(upload.body?.fileUrl || '');
     const uploadObjectKey = String(upload.body?.media?.objectKey || '');
-    expect(uploadUrl).toContain('/uploads/object/');
+    expect(uploadUrl).toContain('/api/upload/object/');
     expect(uploadObjectKey).toBeTruthy();
 
-    const uploadedObjectResponse = await fetch(
+    const publicReflectionResponse = await fetch(
       `${baseUrl}/uploads/object/${encodeURIComponent(uploadObjectKey)}`
     );
-    expect(uploadedObjectResponse.status).toBe(200);
-    expect(await uploadedObjectResponse.text()).toBe('durable-upload-content');
+    expect(publicReflectionResponse.status).toBe(404);
+
+    const privateReflectionResponse = await fetch(
+      `${baseUrl}/api/upload/object/${encodeURIComponent(uploadObjectKey)}`,
+      { headers: { Authorization: `Bearer ${alphaToken}` } }
+    );
+    expect(privateReflectionResponse.status).toBe(200);
+    expect(await privateReflectionResponse.text()).toBe('durable-upload-content');
+
+    const socialForm = new FormData();
+    socialForm.set(
+      'file',
+      new Blob(['public-social-upload-content'], { type: 'text/plain' }),
+      'social.txt'
+    );
+    const socialUpload = await requestMultipart({
+      method: 'POST',
+      path: '/api/upload/social',
+      token: alphaToken,
+      form: socialForm,
+    });
+    expect(socialUpload.status).toBe(200);
+    const socialUploadUrl = String(socialUpload.body?.fileUrl || '');
+    const socialUploadObjectKey = String(socialUpload.body?.media?.objectKey || '');
+    expect(socialUploadUrl).toContain('/uploads/object/');
+
+    const publicSocialResponse = await fetch(
+      `${baseUrl}/uploads/object/${encodeURIComponent(socialUploadObjectKey)}`
+    );
+    expect(publicSocialResponse.status).toBe(200);
+    expect(await publicSocialResponse.text()).toBe('public-social-upload-content');
 
     const createPost = await requestJson({
       method: 'POST',
@@ -760,9 +818,9 @@ describe('Core user persistence loop', () => {
         media: [
           {
             mediaType: 'file',
-            url: uploadUrl,
-            storageProvider: upload.body?.media?.storageProvider,
-            objectKey: uploadObjectKey,
+            url: socialUploadUrl,
+            storageProvider: socialUpload.body?.media?.storageProvider,
+            objectKey: socialUploadObjectKey,
           },
         ],
       },
@@ -808,7 +866,7 @@ describe('Core user persistence loop', () => {
     expect(alphaProfileAfterRelogin.status).toBe(200);
     expect(alphaProfileAfterRelogin.body?.posts?.length).toBeGreaterThan(0);
     expect(alphaProfileAfterRelogin.body?.posts?.[0]?.id).toBe(postId);
-    expect(alphaProfileAfterRelogin.body?.posts?.[0]?.media?.[0]?.objectKey).toBe(uploadObjectKey);
+    expect(alphaProfileAfterRelogin.body?.posts?.[0]?.media?.[0]?.objectKey).toBe(socialUploadObjectKey);
 
     const betaBlocksAlpha = await requestJson({
       method: 'POST',

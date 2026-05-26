@@ -248,6 +248,8 @@ const persistApplicantDocument = async (
     mimeType: file.mimetype,
     originalName: file.originalname,
     buffer: file.buffer,
+    access: 'private',
+    category: 'provider-application',
   });
   return {
     originalName: file.originalname,

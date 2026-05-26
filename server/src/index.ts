@@ -280,7 +280,12 @@ app.use(errorHandler);
 
 // Start server
 const startServer = async (): Promise<void> => {
-  await ensureProviderCrmAdminFromEnv();
+  const skipProviderCrmAdminBootstrap =
+    String(process.env.NODE_ENV || '').trim().toLowerCase() === 'test' &&
+    String(process.env.SKIP_PROVIDER_CRM_ADMIN_BOOTSTRAP || '').trim().toLowerCase() === 'true';
+  if (!skipProviderCrmAdminBootstrap) {
+    await ensureProviderCrmAdminFromEnv();
+  }
 
   app.listen(PORT, '0.0.0.0', () => {
     console.log(`Backend listening on port ${PORT}`);

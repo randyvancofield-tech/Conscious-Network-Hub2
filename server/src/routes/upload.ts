@@ -1,9 +1,16 @@
 import { Router, Request, Response, NextFunction } from 'express';
 import multer, { MulterError } from 'multer';
-import { getAuthenticatedUserId, requireCanonicalIdentity } from '../middleware';
 import {
+  getAuthenticatedRole,
+  getAuthenticatedUserId,
+  requireCanonicalIdentity,
+} from '../middleware';
+import {
+  getUploadObjectAccessMetadata,
+  isUploadObjectPubliclyReadable,
   persistUploadObject,
   resolveUploadObjectByKey,
+  UploadObjectAccess,
 } from '../services/uploadBlobStore';
 
 const publicRouter = Router();
@@ -36,10 +43,13 @@ const upload = multer({
 });
 
 type MulterRequest = Request & { file?: Express.Multer.File };
-type UploadCategory = 'avatar' | 'cover' | 'profile-background' | 'reflection';
+type UploadCategory = 'avatar' | 'cover' | 'profile-background' | 'reflection' | 'social';
 const isAllowedProfileMediaMimeType = (mimeType: string): boolean => {
   return mimeType.startsWith('image/') || mimeType.startsWith('video/');
 };
+
+const getUploadAccessForCategory = (category: UploadCategory): UploadObjectAccess =>
+  category === 'reflection' ? 'private' : 'public';
 
 async function buildUploadResponse(
   req: Request,
@@ -56,13 +66,17 @@ async function buildUploadResponse(
     objectKey: string;
     mimeType: string;
     sizeBytes: number;
+    access: UploadObjectAccess;
   };
 }> {
+  const access = getUploadAccessForCategory(category);
   const persisted = await persistUploadObject({
     userId: authUserId,
     mimeType: file.mimetype,
     originalName: file.originalname,
     buffer: file.buffer,
+    access,
+    category,
   });
   const fileUrl = `${getPublicBaseUrl(req)}${persisted.publicPath}`;
   return {
@@ -75,6 +89,7 @@ async function buildUploadResponse(
       objectKey: persisted.objectKey,
       mimeType: file.mimetype,
       sizeBytes: file.size,
+      access: persisted.access,
     },
   };
 }
@@ -125,14 +140,12 @@ const sendStoredUpload = async (
   }
 };
 
-// Public read endpoint for durable upload objects.
-publicRouter.get('/object/:objectKey', async (req: Request, res: Response): Promise<void> => {
-  const objectKey = String(req.params.objectKey || '').trim();
-  if (!objectKey) {
-    res.status(400).json({ error: 'objectKey is required' });
-    return;
-  }
-
+const sendResolvedUploadObject = async (
+  req: Request,
+  res: Response,
+  objectKey: string,
+  cacheScope: 'public' | 'private'
+): Promise<void> => {
   try {
     const resolved = await resolveUploadObjectByKey(objectKey);
     if (!resolved) {
@@ -145,10 +158,17 @@ publicRouter.get('/object/:objectKey', async (req: Request, res: Response): Prom
     const rangeHeader = String(req.headers.range || '').trim();
 
     res.setHeader('Content-Type', mimeType);
-    res.setHeader('Cache-Control', 'public, max-age=31536000, immutable');
+    res.setHeader(
+      'Cache-Control',
+      cacheScope === 'public'
+        ? 'public, max-age=31536000, immutable'
+        : 'private, no-store, max-age=0'
+    );
     res.setHeader('ETag', `"upload-${objectKey}"`);
-    // Allow media embedding from frontend origins hosted on a different domain.
-    res.setHeader('Cross-Origin-Resource-Policy', 'cross-origin');
+    res.setHeader(
+      'Cross-Origin-Resource-Policy',
+      cacheScope === 'public' ? 'cross-origin' : 'same-site'
+    );
     res.setHeader('Accept-Ranges', 'bytes');
 
     if (!rangeHeader) {
@@ -199,6 +219,62 @@ publicRouter.get('/object/:objectKey', async (req: Request, res: Response): Prom
     console.error('[UPLOAD] Failed to resolve upload object', error);
     res.status(500).json({ error: 'Failed to resolve upload object' });
   }
+};
+
+const canReadProtectedUploadObject = (req: Request, objectKey: string): boolean => {
+  const metadata = getUploadObjectAccessMetadata(objectKey);
+  if (!metadata) return false;
+  if (metadata.access === 'public') return true;
+
+  const role = getAuthenticatedRole(req);
+  if (role === 'admin') return true;
+
+  if (metadata.access === 'legacy') {
+    return String(process.env.UPLOAD_ALLOW_LEGACY_AUTHENTICATED_OBJECTS || '')
+      .trim()
+      .toLowerCase() === 'true';
+  }
+
+  const authUserId = getAuthenticatedUserId(req);
+  return Boolean(authUserId && metadata.ownerUserId && metadata.ownerUserId === authUserId);
+};
+
+// Public read endpoint for durable upload objects. New private keys are not readable here.
+publicRouter.get('/object/:objectKey', async (req: Request, res: Response): Promise<void> => {
+  const objectKey = String(req.params.objectKey || '').trim();
+  if (!objectKey) {
+    res.status(400).json({ error: 'objectKey is required' });
+    return;
+  }
+
+  if (!isUploadObjectPubliclyReadable(objectKey)) {
+    res.status(404).json({ error: 'Upload object not found' });
+    return;
+  }
+
+  await sendResolvedUploadObject(req, res, objectKey, 'public');
+});
+
+// Authenticated read endpoint for private upload objects.
+protectedRouter.get('/object/:objectKey', async (req: Request, res: Response): Promise<void> => {
+  const objectKey = String(req.params.objectKey || '').trim();
+  if (!objectKey) {
+    res.status(400).json({ error: 'objectKey is required' });
+    return;
+  }
+
+  if (!canReadProtectedUploadObject(req, objectKey)) {
+    res.status(404).json({ error: 'Upload object not found' });
+    return;
+  }
+
+  const metadata = getUploadObjectAccessMetadata(objectKey);
+  await sendResolvedUploadObject(
+    req,
+    res,
+    objectKey,
+    metadata?.access === 'public' ? 'public' : 'private'
+  );
 });
 
 // Upload endpoint for profile background video
@@ -241,6 +317,16 @@ protectedRouter.post('/reflection', upload.single('file'), async (req: Request, 
     return;
   }
   await sendStoredUpload(req, res, 'reflection', mReq.file);
+});
+
+// Upload endpoint for public social post media.
+protectedRouter.post('/social', upload.single('file'), async (req: Request, res: Response): Promise<void> => {
+  const mReq = req as MulterRequest;
+  if (!mReq.file) {
+    res.status(400).json({ error: 'No file uploaded' });
+    return;
+  }
+  await sendStoredUpload(req, res, 'social', mReq.file);
 });
 
 const handleUploadMiddlewareError = (

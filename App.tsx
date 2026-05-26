@@ -762,9 +762,6 @@ const App: React.FC = () => {
   const hasAdminRole = (profile: UserProfile | null | undefined): boolean =>
     profile?.role === 'admin';
 
-  const requiresInitialTwoFactorSetup = (_profile: UserProfile | null | undefined): boolean =>
-    false;
-
   const MIN_PASSWORD_LENGTH = 12;
 
   const validatePasswordStrength = (email: string, password: string): string | null => {
@@ -848,12 +845,6 @@ const App: React.FC = () => {
           ) {
             setCurrentView(AppView.PROVIDER_APPLICATION_STATUS, {}, { replace: true });
           }
-          return;
-        }
-        if (requiresInitialTwoFactorSetup(canonicalUser)) {
-          setIsSelectingTier(false);
-          setMembershipNotice('');
-          setCurrentView(AppView.DASHBOARD, {}, { replace: true });
           return;
         }
         void refreshUserCourses();
@@ -1346,38 +1337,30 @@ const App: React.FC = () => {
         await completeAdminPortalSignIn(data.token, canonicalUser);
         return;
       }
-      const needsInitialTwoFactorSetup = requiresInitialTwoFactorSetup(canonicalUser);
       const needsMembershipSelection = !hasConfirmedMembership(canonicalUser);
       const storedCheckoutSessionId = getStoredPendingCheckoutSessionId();
       const shouldVerifyStoredCheckout =
-        Boolean(storedCheckoutSessionId) && !needsInitialTwoFactorSetup && needsMembershipSelection;
-      const preserveCareersView =
-        !needsInitialTwoFactorSetup && shouldPreserveNoTierViewAfterAuth(currentView);
+        Boolean(storedCheckoutSessionId) && needsMembershipSelection;
+      const preserveCareersView = shouldPreserveNoTierViewAfterAuth(currentView);
       if (storedCheckoutSessionId && !shouldVerifyStoredCheckout) {
         setStoredPendingCheckoutSessionId(null);
       }
       setUserAuthSession(data.token, canonicalUser);
       setUser(canonicalUser);
-      if (!needsInitialTwoFactorSetup) {
-        void refreshUserCourses();
-      }
+      void refreshUserCourses();
       setSelectedTier(canonicalUser.tier || FREE_TIER_NAME);
       setIsSelectingTier(
-        !needsInitialTwoFactorSetup &&
-          !preserveCareersView &&
-          (needsMembershipSelection || shouldVerifyStoredCheckout)
+        !preserveCareersView && (needsMembershipSelection || shouldVerifyStoredCheckout)
       );
       setMembershipCheckoutPending(shouldVerifyStoredCheckout);
       setMembershipNotice(
-        needsInitialTwoFactorSetup
+        shouldVerifyStoredCheckout
+          ? 'Redirecting to your platform...'
+          : preserveCareersView
           ? ''
-          : shouldVerifyStoredCheckout
-            ? 'Redirecting to your platform...'
-            : preserveCareersView
-            ? ''
-            : needsMembershipSelection
-            ? 'Select a membership tier to continue.'
-            : ''
+          : needsMembershipSelection
+          ? 'Select a membership tier to continue.'
+          : ''
       );
       setPendingCheckoutSessionId(shouldVerifyStoredCheckout ? storedCheckoutSessionId : null);
       resetSignInChallengeInputs();
@@ -1387,29 +1370,24 @@ const App: React.FC = () => {
         setSidebarOpen(window.innerWidth >= 1024);
         return;
       }
-      if (!needsInitialTwoFactorSetup && hasConfirmedMembership(canonicalUser)) {
+      if (hasConfirmedMembership(canonicalUser)) {
         routeActiveMemberToDashboard(canonicalUser);
         return;
       }
 
       setCurrentView(
-        needsInitialTwoFactorSetup
-          ? AppView.DASHBOARD
-          : shouldVerifyStoredCheckout
-            ? AppView.VERIFY_SESSION
+        shouldVerifyStoredCheckout
+          ? AppView.VERIFY_SESSION
           : preserveCareersView
-            ? currentView
+          ? currentView
           : needsMembershipSelection
-            ? AppView.MEMBERSHIP_ACCESS
-            : AppView.DASHBOARD,
+          ? AppView.MEMBERSHIP_ACCESS
+          : AppView.DASHBOARD,
         {},
         { replace: true }
       );
       setSidebarOpen(
-        !needsInitialTwoFactorSetup &&
-          !needsMembershipSelection &&
-          !shouldVerifyStoredCheckout &&
-          window.innerWidth >= 1024
+        !needsMembershipSelection && !shouldVerifyStoredCheckout && window.innerWidth >= 1024
       );
     } catch (error) {
       if (error instanceof ApiError) {
@@ -1733,21 +1711,15 @@ const App: React.FC = () => {
       }
 
       const canonicalUser = toPlatformUser(data.user);
-      const needsInitialTwoFactorSetup = requiresInitialTwoFactorSetup(canonicalUser);
       const needsMembershipSelection = !hasConfirmedMembership(canonicalUser);
-      const preserveCareersView =
-        !needsInitialTwoFactorSetup && shouldPreserveNoTierViewAfterAuth(currentView);
+      const preserveCareersView = shouldPreserveNoTierViewAfterAuth(currentView);
       setUserAuthSession(data.token, canonicalUser);
       setUser(canonicalUser);
-      if (!needsInitialTwoFactorSetup) {
-        void refreshUserCourses();
-      }
+      void refreshUserCourses();
       setSelectedTier((currentTier) => currentTier || canonicalUser.tier || FREE_TIER_NAME);
       setMembershipCheckoutPending(false);
       setMembershipNotice(
-        needsInitialTwoFactorSetup
-          ? ''
-          : preserveCareersView
+        preserveCareersView
             ? ''
           : needsMembershipSelection
             ? 'Select a membership tier to continue.'
@@ -1755,18 +1727,16 @@ const App: React.FC = () => {
       );
       closeModals();
       setCurrentView(
-        needsInitialTwoFactorSetup
-          ? AppView.DASHBOARD
-          : preserveCareersView
-            ? currentView
+        preserveCareersView
+          ? currentView
           : needsMembershipSelection
-            ? AppView.MEMBERSHIP_ACCESS
-            : AppView.DASHBOARD,
+          ? AppView.MEMBERSHIP_ACCESS
+          : AppView.DASHBOARD,
         {},
         { replace: true }
       );
-      setIsSelectingTier(!needsInitialTwoFactorSetup && needsMembershipSelection && !preserveCareersView);
-      setSidebarOpen(!needsInitialTwoFactorSetup && !needsMembershipSelection && window.innerWidth >= 1024);
+      setIsSelectingTier(needsMembershipSelection && !preserveCareersView);
+      setSidebarOpen(!needsMembershipSelection && window.innerWidth >= 1024);
     } catch (error) {
       if (error instanceof ApiError) {
         const data = error.data as any;
@@ -2107,8 +2077,6 @@ const App: React.FC = () => {
     );
   }, [user]);
 
-  const renderInitialTwoFactorSetup = () => null;
-
   const renderActiveView = () => {
     if (!user && currentView === AppView.PROVIDER_APPLICATION_STATUS) {
       return (
@@ -2185,10 +2153,6 @@ const App: React.FC = () => {
           </div>
         </div>
       );
-    }
-
-    if (user && requiresInitialTwoFactorSetup(user)) {
-      return renderInitialTwoFactorSetup();
     }
 
     if (

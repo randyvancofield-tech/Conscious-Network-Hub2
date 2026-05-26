@@ -43,6 +43,12 @@ const resolveDatabasePoolMode = (): string | null => {
   return value ? value.toLowerCase() : null;
 };
 
+const LAUNCH_STRIPE_PRICE_IDS = {
+  STRIPE_PRICE_FREE: 'price_1TR1ErE9ozmNlTR0peEA7Ska',
+  STRIPE_PRICE_GUIDED: 'price_1TR1HpE9ozmNlTR0To2XvmuW',
+  STRIPE_PRICE_ACCELERATED: 'price_1TR1JTE9ozmNlTR090ftqnGn',
+} as const;
+
 // Required high-risk secrets/environment variables for backend startup.
 // - AUTH_TOKEN_SECRET (or legacy SESSION_SECRET alias)
 // - DATABASE_URL
@@ -155,6 +161,22 @@ export const validateRequiredEnv = (): void => {
   const stripeMode = (trimEnv('STRIPE_MODE') || '').toLowerCase();
   if (isProduction && stripeMode !== 'live') {
     throw new Error('[STARTUP][FATAL] STRIPE_MODE must be set to live in production.');
+  }
+
+  const stripePriceMismatches = Object.entries(LAUNCH_STRIPE_PRICE_IDS)
+    .filter(([key, expected]) => trimEnv(key) !== expected)
+    .map(([key]) => key);
+  if (stripePriceMismatches.length > 0) {
+    const message = `[STARTUP][FATAL] Stripe launch price env mismatch: ${stripePriceMismatches.join(', ')}`;
+    const enforceLaunchPrices =
+      isProduction ||
+      ['true', '1', 'yes', 'on'].includes(
+        (trimEnv('ENFORCE_STRIPE_LAUNCH_PRICE_IDS') || '').toLowerCase()
+      );
+    if (enforceLaunchPrices) {
+      throw new Error(message);
+    }
+    console.warn(message.replace('[FATAL]', '[WARN]'));
   }
 
   if (requireSharedDbPersistence && persistenceBackend !== 'shared_db') {

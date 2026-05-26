@@ -37,7 +37,7 @@ function extractUploadObjectKey(fileUrl?: string | null): string | null {
     const parsed = /^https?:\/\//i.test(value)
       ? new URL(value)
       : new URL(value.startsWith('/') ? value : `/${value}`, 'http://localhost');
-    const match = /^\/uploads\/object\/([^/?#]+)/i.exec(parsed.pathname);
+    const match = /^\/(?:api\/upload|uploads)\/object\/([^/?#]+)/i.exec(parsed.pathname);
     return match?.[1] ? decodeURIComponent(match[1]) : null;
   } catch {
     return null;

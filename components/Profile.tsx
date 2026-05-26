@@ -1,6 +1,7 @@
 import React, { useState, useEffect, ChangeEvent } from 'react';
 import { UserProfile } from '../types';
 import { api, backendAssetUrl } from '../services/apiClient';
+import { openPrivateUpload } from '../services/privateUploadService';
 
 interface Reflection {
   id: string;
@@ -354,9 +355,27 @@ const Profile: React.FC<ProfileProps> = ({ user, onUserUpdate }) => {
         {reflections.map(ref => (
           <div key={ref.id} className="reflection-item" style={{ marginBottom: '14px' }}>
             {ref.fileType === 'video' ? (
-              <video src={ref.fileUrl} controls style={{ width: '100%', maxWidth: '420px' }} />
+              <button
+                type="button"
+                onClick={() => {
+                  void openPrivateUpload({ url: ref.fileUrl, originalName: 'reflection-video' }).catch((error) => {
+                    window.alert(error instanceof Error ? error.message : 'Unable to open private reflection.');
+                  });
+                }}
+              >
+                Open Private Video
+              </button>
             ) : (
-              <a href={ref.fileUrl} target="_blank" rel="noopener noreferrer">View Document</a>
+              <button
+                type="button"
+                onClick={() => {
+                  void openPrivateUpload({ url: ref.fileUrl, originalName: 'reflection-document' }).catch((error) => {
+                    window.alert(error instanceof Error ? error.message : 'Unable to open private reflection.');
+                  });
+                }}
+              >
+                View Private Document
+              </button>
             )}
             {editingReflectionId === ref.id ? (
               <div style={{ display: 'grid', gap: '8px', marginTop: '8px' }}>

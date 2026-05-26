@@ -31,8 +31,13 @@ export const maskProviderCrmAdminWalletAddress = (address: string | null | undef
   return `${normalized.slice(0, 6)}...${normalized.slice(-4)}`;
 };
 
-export const isProviderCrmAdminPasswordFallbackEnabled = (): boolean =>
-  String(process.env.ENABLE_ADMIN_PASSWORD_FALLBACK || 'true').trim().toLowerCase() !== 'false';
+export const isProviderCrmAdminPasswordFallbackEnabled = (): boolean => {
+  const configured = String(process.env.ENABLE_ADMIN_PASSWORD_FALLBACK || '').trim().toLowerCase();
+  if (configured) {
+    return !['false', '0', 'off', 'no'].includes(configured);
+  }
+  return String(process.env.NODE_ENV || '').trim().toLowerCase() !== 'production';
+};
 
 export type ProviderCrmToolId =
   | 'home'
