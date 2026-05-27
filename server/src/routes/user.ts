@@ -417,6 +417,9 @@ const toPublicUser = (req: Request, user: any) => ({
   initialTwoFactorCompleted: Boolean(user.initialTwoFactorCompletedAt),
   canAccessFullPlatform: !isInitialTwoFactorRequired(user),
   emailVerified: user.emailVerified === true,
+  providerApproved: user.providerApproved === true,
+  providerApprovalStatus: user.providerApprovalStatus || null,
+  providerRevokedAt: user.providerRevokedAt || null,
 });
 
 const buildPublicUser = async (req: Request, user: any) => {

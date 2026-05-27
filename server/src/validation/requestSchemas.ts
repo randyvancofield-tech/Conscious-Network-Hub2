@@ -224,6 +224,29 @@ export const adminRoleUpdateSchema: JsonSchema = {
   },
 };
 
+export const supportContactSchema: JsonSchema = {
+  type: 'object',
+  additionalProperties: false,
+  required: ['name', 'email', 'message'],
+  properties: {
+    name: { type: 'string', minLength: 1, maxLength: 200 },
+    email: { type: 'string', minLength: 3, maxLength: 320 },
+    message: { type: 'string', minLength: 10, maxLength: 5000 },
+    subject: {
+      anyOf: [
+        { type: 'string', maxLength: 200 },
+        { type: 'null' },
+      ],
+    },
+    route: {
+      anyOf: [
+        { type: 'string', maxLength: 512 },
+        { type: 'null' },
+      ],
+    },
+  },
+};
+
 export const immersiveSessionEventSchema: JsonSchema = {
   type: 'object',
   additionalProperties: false,

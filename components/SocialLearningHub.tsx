@@ -219,6 +219,10 @@ const SocialLearningHub: React.FC<SocialLearningHubProps> = ({ user }) => {
   };
 
   const triggerUpload = (type: 'image' | 'video' | 'file') => {
+    if (!user) {
+      setInjectError('Sign in to publish social posts or upload media.');
+      return;
+    }
     if (fileInputRef.current) {
       setInjectError('');
       const accept =
@@ -233,79 +237,62 @@ const SocialLearningHub: React.FC<SocialLearningHubProps> = ({ user }) => {
   const handleInject = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!newPost.trim() && !selectedFile) return;
+    if (!user) {
+      setInjectError('Sign in to publish social posts. Guest posting is disabled for launch integrity.');
+      return;
+    }
 
     setIsInjecting(true);
     setInjectError('');
 
     try {
-      if (user) {
-        let media: Array<{
-          mediaType: 'image' | 'video' | 'file';
-          url: string;
-          storageProvider: string | null;
-          objectKey: string | null;
-        }> = [];
+      let media: Array<{
+        mediaType: 'image' | 'video' | 'file';
+        url: string;
+        storageProvider: string | null;
+        objectKey: string | null;
+      }> = [];
 
-        if (selectedFile) {
-          const uploadPayload = new FormData();
-          uploadPayload.append('file', selectedFile.file);
+      if (selectedFile) {
+        const uploadPayload = new FormData();
+        uploadPayload.append('file', selectedFile.file);
 
-          const uploadData = await api<any>('/upload/social', {
-            method: 'POST',
-            body: uploadPayload,
-          });
+        const uploadData = await api<any>('/upload/social', {
+          method: 'POST',
+          body: uploadPayload,
+        });
 
-          const uploadedUrl = String(uploadData?.fileUrl || '').trim();
-          if (!uploadedUrl) {
-            throw new Error('Media upload completed without a file URL');
-          }
-
-          media = [
-            {
-              mediaType: selectedFile.type,
-              url: uploadedUrl,
-              storageProvider:
-                typeof uploadData?.media?.storageProvider === 'string'
-                  ? uploadData.media.storageProvider
-                  : null,
-              objectKey:
-                typeof uploadData?.media?.objectKey === 'string'
-                  ? uploadData.media.objectKey
-                  : null,
-            },
-          ];
+        const uploadedUrl = String(uploadData?.fileUrl || '').trim();
+        if (!uploadedUrl) {
+          throw new Error('Media upload completed without a file URL');
         }
 
-        const data = await api<any>('/social/posts', {
-          method: 'POST',
-          body: {
-            text: newPost.trim(),
-            visibility: 'public',
-            media,
+        media = [
+          {
+            mediaType: selectedFile.type,
+            url: uploadedUrl,
+            storageProvider:
+              typeof uploadData?.media?.storageProvider === 'string'
+                ? uploadData.media.storageProvider
+                : null,
+            objectKey:
+              typeof uploadData?.media?.objectKey === 'string'
+                ? uploadData.media.objectKey
+                : null,
           },
-        });
-        const mapped = mapSocialPostToNode(data.post);
-        setNodes((prev) => [mapped, ...prev.filter((entry) => entry.id !== mapped.id)]);
-      } else {
-        const fallbackAvatar = defaultAvatarUrl(user?.id || 'guest');
-        const avatarMedia = user ? getProfileAvatarMedia(user) : normalizeMediaAsset({ url: fallbackAvatar });
-        const newNode: NodeContent = {
-          id: Date.now().toString(),
-          authorId: user?.id || 'guest',
-          author: user?.name || 'Guest Node',
-          avatar: avatarMedia.url || fallbackAvatar,
-          avatarMedia,
-          type: selectedFile?.type || 'text',
-          title: selectedFile ? `New ${selectedFile.type.toUpperCase()} Node` : 'New Cognitive Node',
-          content: selectedFile ? selectedFile.data : newPost,
-          timestamp: 'Just now',
-          resonances: 0,
-          links: 0,
-          visibility: 'public',
-          comments: []
-        };
-        setNodes((prev) => [newNode, ...prev]);
+        ];
       }
+
+      const data = await api<any>('/social/posts', {
+        method: 'POST',
+        body: {
+          text: newPost.trim(),
+          visibility: 'public',
+          media,
+        },
+      });
+      const mapped = mapSocialPostToNode(data.post);
+      setNodes((prev) => [mapped, ...prev.filter((entry) => entry.id !== mapped.id)]);
       setNewPost('');
       clearSelectedFile();
     } catch (error) {
@@ -317,41 +304,31 @@ const SocialLearningHub: React.FC<SocialLearningHubProps> = ({ user }) => {
   };
 
   const toggleResonance = async (nodeId: string) => {
-    if (user) {
-      try {
-        const data = await api<any>(`/social/posts/${nodeId}/like`, {
-          method: 'POST',
-        });
-        setNodes((prev) =>
-          prev.map((node) =>
-            node.id === nodeId
-              ? {
-                  ...node,
-                  hasResonated: Boolean(data?.liked),
-                  resonances: Number(data?.likeCount || 0),
-                }
-              : node
-          )
-        );
-        return;
-      } catch {
-        // Fallback to local optimistic behavior below.
-      }
+    if (!user) {
+      setPostActionError('Sign in to resonate with social posts.');
+      return;
     }
 
-    setNodes((prev) =>
-      prev.map((node) => {
-        if (node.id === nodeId) {
-          const hasResonated = !node.hasResonated;
-          return {
-            ...node,
-            hasResonated,
-            resonances: hasResonated ? node.resonances + 1 : Math.max(0, node.resonances - 1),
-          };
-        }
-        return node;
-      })
-    );
+    try {
+      const data = await api<any>(`/social/posts/${nodeId}/like`, {
+        method: 'POST',
+      });
+      setNodes((prev) =>
+        prev.map((node) =>
+          node.id === nodeId
+            ? {
+                ...node,
+                hasResonated: Boolean(data?.liked),
+                resonances: Number(data?.likeCount || 0),
+              }
+            : node
+        )
+      );
+      setPostActionError('');
+      return;
+    } catch (error) {
+      setPostActionError(error instanceof Error ? error.message : 'Unable to update resonance.');
+    }
   };
 
   const toggleComments = (nodeId: string) => {
@@ -363,27 +340,7 @@ const SocialLearningHub: React.FC<SocialLearningHubProps> = ({ user }) => {
   const handleAddComment = (nodeId: string) => {
     const text = commentInput[nodeId];
     if (!text?.trim()) return;
-
-    const newComment: Comment = {
-      id: Date.now().toString(),
-      author: user?.name || 'Guest Node',
-      avatar: user?.avatarUrl || `https://api.dicebear.com/7.x/avataaars/svg?seed=${user?.id || 'guest'}`,
-      text,
-      timestamp: 'Just now'
-    };
-
-    setNodes(prev => prev.map(node => {
-      if (node.id === nodeId) {
-        return {
-          ...node,
-          comments: [...node.comments, newComment],
-          links: node.links + 1
-        };
-      }
-      return node;
-    }));
-
-    setCommentInput(prev => ({ ...prev, [nodeId]: '' }));
+    setPostActionError('Comments and linkages require the Phase 4 backend comments service before they can be used.');
   };
 
   const openProfileView = async (authorId: string) => {
@@ -632,7 +589,8 @@ const SocialLearningHub: React.FC<SocialLearningHubProps> = ({ user }) => {
                 <textarea 
                   value={newPost}
                   onChange={(e) => setNewPost(e.target.value)}
-                  placeholder="Inject cognitive input or links..."
+                  placeholder={user ? 'Share a social learning post...' : 'Sign in to publish social posts'}
+                  disabled={!user}
                   className="w-full bg-white/[0.03] border border-white/10 rounded-2xl p-5 text-sm text-white focus:outline-none focus:ring-2 focus:ring-blue-500/30 transition-all min-h-[160px] resize-none placeholder:text-slate-700 font-mono"
                 />
                 
@@ -693,6 +651,7 @@ const SocialLearningHub: React.FC<SocialLearningHubProps> = ({ user }) => {
                 <button 
                   type="button"
                   onClick={() => triggerUpload('image')}
+                  disabled={!user}
                   className="flex flex-col items-center gap-2 p-3 bg-white/[0.02] hover:bg-blue-600/10 border border-white/10 rounded-xl text-slate-500 hover:text-blue-400 transition-all group/btn"
                 >
                   <ImageIcon className="w-5 h-5 transition-transform" />
@@ -701,6 +660,7 @@ const SocialLearningHub: React.FC<SocialLearningHubProps> = ({ user }) => {
                 <button 
                   type="button"
                   onClick={() => triggerUpload('video')}
+                  disabled={!user}
                   className="flex flex-col items-center gap-2 p-3 bg-white/[0.02] hover:bg-teal-600/10 border border-white/10 rounded-xl text-slate-500 hover:text-teal-400 transition-all group/btn"
                 >
                   <FileVideo className="w-5 h-5 transition-transform" />
@@ -709,6 +669,7 @@ const SocialLearningHub: React.FC<SocialLearningHubProps> = ({ user }) => {
                 <button 
                   type="button"
                   onClick={() => triggerUpload('file')}
+                  disabled={!user}
                   className="flex flex-col items-center gap-2 p-3 bg-white/[0.02] hover:bg-white/5 border border-white/10 rounded-xl text-slate-500 hover:text-white transition-all group/btn"
                 >
                   <FileText className="w-5 h-5 transition-transform" />
@@ -720,7 +681,7 @@ const SocialLearningHub: React.FC<SocialLearningHubProps> = ({ user }) => {
               
               <button 
                 type="submit"
-                disabled={(!newPost.trim() && !selectedFile) || isInjecting}
+                disabled={!user || (!newPost.trim() && !selectedFile) || isInjecting}
                 className="w-full p-5 bg-blue-600 hover:bg-blue-500 disabled:bg-slate-800/50 disabled:text-slate-600 rounded-2xl text-white font-black text-xs uppercase tracking-widest transition-all shadow-[0_20px_40px_-10px_rgba(37,99,235,0.4)] flex items-center justify-center gap-3 relative overflow-hidden active:scale-95"
               >
                 {isInjecting ? (
@@ -732,7 +693,7 @@ const SocialLearningHub: React.FC<SocialLearningHubProps> = ({ user }) => {
                 ) : (
                   <>
                     <Send className="w-4 h-4 lg:group-hover:translate-x-1 lg:group-hover:-translate-y-1 transition-transform" />
-                    Commit to Network
+                    {user ? 'Commit to Network' : 'Sign In Required'}
                   </>
                 )}
               </button>
@@ -746,7 +707,7 @@ const SocialLearningHub: React.FC<SocialLearningHubProps> = ({ user }) => {
 
             <div className="mt-6 pt-6 border-t border-white/5 flex items-center justify-between">
               <span className="text-[8px] font-black text-slate-600 uppercase tracking-widest flex items-center gap-1">
-                <ShieldCheck className="w-3 h-3" /> P2P Encryption Active
+                <ShieldCheck className="w-3 h-3" /> Backend Auth Required
               </span>
               <div className="flex gap-1">
                 <div className="w-1 h-1 bg-blue-500 rounded-full animate-bounce" style={{ animationDelay: '0s' }} />
@@ -1015,13 +976,14 @@ const SocialLearningHub: React.FC<SocialLearningHubProps> = ({ user }) => {
                               type="text" 
                               value={commentInput[node.id] || ''}
                               onChange={(e) => setCommentInput(prev => ({ ...prev, [node.id]: e.target.value }))}
-                              placeholder="Link your insight..."
+                              placeholder="Comments require the Phase 4 comments service"
+                              disabled
                               className="flex-1 bg-white/5 border border-white/10 rounded-xl sm:rounded-2xl px-4 sm:px-5 py-2.5 sm:py-3 text-[10px] sm:text-xs text-white focus:outline-none focus:ring-2 focus:ring-blue-500/30 transition-all"
                               onKeyDown={(e) => e.key === 'Enter' && handleAddComment(node.id)}
                             />
                             <button 
                               onClick={() => handleAddComment(node.id)}
-                              disabled={!commentInput[node.id]?.trim()}
+                              disabled
                               className="p-2.5 sm:p-3 bg-blue-600 hover:bg-blue-500 disabled:bg-slate-800 disabled:text-slate-600 rounded-xl text-white transition-all active:scale-95"
                             >
                               <Send className="w-4 h-4" />

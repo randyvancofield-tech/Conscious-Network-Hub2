@@ -29,6 +29,7 @@ type ConsciousMeetingRoomPageProps = {
   sessionId?: string;
   user: UserProfile | null;
   onBack: () => void;
+  onSignIn?: () => void;
 };
 
 type RoomMode = 'standard' | 'immersive-5d';
@@ -44,7 +45,7 @@ const timeFormatter = new Intl.DateTimeFormat(undefined, {
   timeStyle: 'short',
 });
 
-const ConsciousMeetingRoomPage: React.FC<ConsciousMeetingRoomPageProps> = ({ sessionId = '', user, onBack }) => {
+const ConsciousMeetingRoomPage: React.FC<ConsciousMeetingRoomPageProps> = ({ sessionId = '', user, onBack, onSignIn }) => {
   const [session, setSession] = useState<MeetingSessionSummary | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [roomMode, setRoomMode] = useState<RoomMode>('standard');
@@ -67,11 +68,16 @@ const ConsciousMeetingRoomPage: React.FC<ConsciousMeetingRoomPageProps> = ({ ses
       setIsLoading(false);
       return;
     }
+    if (!user) {
+      setSession(null);
+      setIsLoading(false);
+      return;
+    }
     setIsLoading(true);
     const nextSession = await getMeetingSession(sessionId);
     setSession(nextSession);
     setIsLoading(false);
-  }, [sessionId]);
+  }, [sessionId, user]);
 
   useEffect(() => {
     void refreshSession();
@@ -244,6 +250,29 @@ const ConsciousMeetingRoomPage: React.FC<ConsciousMeetingRoomPageProps> = ({ ses
           <Loader2 className="h-4 w-4 animate-spin text-blue-300" />
           Loading internal meeting room...
         </SurfacePanel>
+      </PageShell>
+    );
+  }
+
+  if (!user) {
+    return (
+      <PageShell>
+        <EmptyState
+          icon={<ShieldCheck className="h-7 w-7" />}
+          title="Sign in required"
+          description="Meeting rooms are protected member spaces. Sign in with your CNH account, then reopen the meeting link."
+          action={
+            onSignIn ? (
+              <ActionButton type="button" onClick={onSignIn} icon={<ShieldCheck className="h-4 w-4" />}>
+                Sign In
+              </ActionButton>
+            ) : (
+              <ActionButton type="button" variant="secondary" onClick={onBack} icon={<ArrowLeft className="h-4 w-4" />}>
+                Upcoming Sessions
+              </ActionButton>
+            )
+          }
+        />
       </PageShell>
     );
   }

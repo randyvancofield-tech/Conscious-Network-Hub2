@@ -20,7 +20,6 @@ import {
   listUpcomingMeetingSessions,
   MeetingSessionSummary,
 } from '../services/backendApiService';
-import { MEETING_SURFACE_RECORDS } from '../services/platformData';
 import { ActionButton, EmptyState, LoadingPanel, PageHeader, PageShell, SurfacePanel } from './ui/PlatformPrimitives';
 
 type ConsciousMeetingsUpcomingPageProps = {
@@ -62,19 +61,6 @@ const getFocusArea = (session: MeetingSessionSummary): string =>
   session.focusArea || (session.mode === 'immersive-5d' ? 'Spatial 5D Practice' : 'Conscious Development');
 
 const toRoomEndpoint = (session: MeetingSessionSummary): string => session.routeKey || session.id;
-
-const fallbackArchiveEntries: ArchiveEntry[] = MEETING_SURFACE_RECORDS
-  .filter((meeting) => meeting.status === 'completed' || meeting.status === 'replay')
-  .map((meeting) => ({
-    id: meeting.id,
-    title: meeting.title,
-    description: meeting.description,
-    providerName: meeting.providerName,
-    focusArea: meeting.deliveryMode,
-    startTimeMs: new Date(meeting.startTime).getTime(),
-    vodPath: `/vod/conscious-meetings/${meeting.id}.mp4`,
-    source: 'surface',
-  }));
 
 const ConsciousMeetingsUpcomingPage: React.FC<ConsciousMeetingsUpcomingPageProps> = ({
   user,
@@ -123,7 +109,6 @@ const ConsciousMeetingsUpcomingPage: React.FC<ConsciousMeetingsUpcomingPageProps
     const topicSet = new Set<string>();
     upcomingSessions.forEach((session) => topicSet.add(getFocusArea(session)));
     archivedSessions.forEach((session) => topicSet.add(getFocusArea(session)));
-    fallbackArchiveEntries.forEach((entry) => topicSet.add(entry.focusArea));
     return Array.from(topicSet).filter(Boolean).sort();
   }, [archivedSessions, upcomingSessions]);
 
@@ -145,7 +130,7 @@ const ConsciousMeetingsUpcomingPage: React.FC<ConsciousMeetingsUpcomingPageProps
       source: 'cloud' as const,
     }));
     const search = archiveSearch.trim().toLowerCase();
-    return [...backendArchive, ...fallbackArchiveEntries]
+    return backendArchive
       .filter((entry) => topicFilter === 'all' || entry.focusArea === topicFilter)
       .filter((entry) => {
         if (!search) return true;
@@ -320,9 +305,11 @@ const ConsciousMeetingsUpcomingPage: React.FC<ConsciousMeetingsUpcomingPageProps
                 : 'Sign in to see member-ready provider meeting sessions.'
             }
             action={
-              <ActionButton type="button" variant="secondary" onClick={onOpenPortal} icon={<Video className="h-4 w-4" />}>
-                Open Meeting Portal
-              </ActionButton>
+              user ? (
+                <ActionButton type="button" variant="secondary" onClick={onOpenPortal} icon={<Video className="h-4 w-4" />}>
+                  Open Meeting Portal
+                </ActionButton>
+              ) : undefined
             }
           />
         )}

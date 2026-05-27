@@ -13,7 +13,6 @@ import {
   normalizeMediaAsset,
   type NormalizedMediaAsset,
 } from '../services/mediaAssets';
-import { PROVIDER_SURFACE_RECORDS } from '../services/platformData';
 import { ActionButton, EmptyState, PageHeader, PageShell, SurfacePanel } from './ui/PlatformPrimitives';
 
 interface ProviderProfile {
@@ -38,6 +37,7 @@ interface ProvidersMarketProps {
   onOpenProvider?: (id: string) => void;
   onBackToList?: () => void;
   onApplyAsProvider?: () => void;
+  onSignInRequired?: () => void;
 }
 
 const normalizeProvider = (rawProvider: any): ProviderProfile => {
@@ -93,6 +93,7 @@ const ProvidersMarket: React.FC<ProvidersMarketProps> = ({
   onOpenProvider,
   onBackToList,
   onApplyAsProvider,
+  onSignInRequired,
 }) => {
   const [filter, setFilter] = useState<string>('All');
   const [searchQuery, setSearchQuery] = useState('');
@@ -104,11 +105,7 @@ const ProvidersMarket: React.FC<ProvidersMarketProps> = ({
   const [connectionNote, setConnectionNote] = useState('');
   const [connectionStatus, setConnectionStatus] = useState('');
 
-  const fallbackProviderRecords = useMemo(
-    () => PROVIDER_SURFACE_RECORDS.map((provider) => normalizeProvider(provider)),
-    []
-  );
-  const providerRecords: ProviderProfile[] = providers.length > 0 ? providers : fallbackProviderRecords;
+  const providerRecords: ProviderProfile[] = providers;
 
   const categories = useMemo(
     () => ['All', ...Array.from(new Set(providerRecords.map((provider) => provider.category))).sort()],
@@ -169,7 +166,7 @@ const ProvidersMarket: React.FC<ProvidersMarketProps> = ({
   const submitAnchorLinkRequest = async () => {
     if (!connectionTarget || !connectionNote.trim()) return;
     if (!getAuthToken()) {
-      setConnectionStatus('Sign in is required before sending provider requests.');
+      setConnectionStatus('Sign in or create a CNH profile before sending provider requests.');
       return;
     }
 
@@ -192,6 +189,32 @@ const ProvidersMarket: React.FC<ProvidersMarketProps> = ({
   const routeProvider = providerId
     ? providerRecords.find((provider) => provider.id === providerId) || null
     : null;
+
+  if (providerId && isLoading) {
+    return (
+      <PageShell>
+        <div className="glass-panel p-10 rounded-[2rem] border-white/10 text-center text-slate-300">
+          Loading verified provider...
+        </div>
+      </PageShell>
+    );
+  }
+
+  if (providerId && loadError) {
+    return (
+      <PageShell>
+        <EmptyState
+          title="Provider records unavailable"
+          description={`${loadError}. Provider detail routes are hidden until live verified records are reachable.`}
+          action={
+            <ActionButton type="button" onClick={onBackToList} icon={<ArrowLeft className="w-4 h-4" />}>
+              Providers
+            </ActionButton>
+          }
+        />
+      </PageShell>
+    );
+  }
 
   if (providerId && !routeProvider) {
     return (
@@ -291,6 +314,15 @@ const ProvidersMarket: React.FC<ProvidersMarketProps> = ({
                 <div className="p-3 rounded-xl bg-emerald-500/10 border border-emerald-500/30 text-emerald-200 text-[11px] font-black uppercase tracking-widest">
                   {connectionStatus}
                 </div>
+              )}
+              {!getAuthToken() && onSignInRequired && (
+                <button
+                  type="button"
+                  onClick={onSignInRequired}
+                  className="w-full rounded-xl border border-blue-300/20 bg-blue-600/15 px-4 py-3 text-[11px] font-black uppercase tracking-widest text-blue-100 transition hover:bg-blue-600/25"
+                >
+                  Sign In Or Create Profile
+                </button>
               )}
               <div className="flex flex-col sm:flex-row gap-3">
                 <button
@@ -461,9 +493,9 @@ const ProvidersMarket: React.FC<ProvidersMarketProps> = ({
 
       <footer className="glass-panel p-6 lg:p-8 rounded-2xl border-l-4 border-blue-600 flex flex-col md:flex-row items-center justify-between gap-6 shadow-2xl mt-12">
         <div className="space-y-2">
-          <h4 className="text-xl font-black text-white uppercase tracking-tighter">Become a Sovereign Provider</h4>
+          <h4 className="text-xl font-black text-white uppercase tracking-tighter">Apply To Become A CNH Provider</h4>
           <p className="text-slate-400 text-sm font-light max-w-xl">
-            Provider authority is issued through CNH review and verification. Approved provider users appear in this market automatically.
+            New applicants use the provider application. Returning applicants use Provider Access to check status, and approved providers sign in through Provider Access.
           </p>
         </div>
         <button
@@ -477,7 +509,7 @@ const ProvidersMarket: React.FC<ProvidersMarketProps> = ({
           }}
           className="px-6 py-4 bg-gradient-to-r from-blue-600 to-teal-600 text-white rounded-2xl font-black text-xs uppercase tracking-widest shadow-xl hover:shadow-blue-500/20 transition-all flex items-center gap-2 group whitespace-nowrap"
         >
-          Apply as Node <ChevronRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" />
+          Apply To Become A Provider <ChevronRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" />
         </button>
       </footer>
 
@@ -553,6 +585,15 @@ const ProvidersMarket: React.FC<ProvidersMarketProps> = ({
               <div className="p-3 rounded-xl bg-emerald-500/10 border border-emerald-500/30 text-emerald-200 text-[11px] font-black uppercase tracking-widest">
                 {connectionStatus}
               </div>
+            )}
+            {!getAuthToken() && onSignInRequired && (
+              <button
+                type="button"
+                onClick={onSignInRequired}
+                className="w-full rounded-xl border border-blue-300/20 bg-blue-600/15 px-4 py-3 text-[11px] font-black uppercase tracking-widest text-blue-100 transition hover:bg-blue-600/25"
+              >
+                Sign In Or Create Profile
+              </button>
             )}
             <div className="flex flex-col sm:flex-row gap-3">
               <button

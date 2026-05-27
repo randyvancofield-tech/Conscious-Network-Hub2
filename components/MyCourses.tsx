@@ -107,16 +107,8 @@ const MyCourses: React.FC<MyCoursesProps> = ({ enrolledCourses, onNavigateToUniv
           <h3 className="text-xl font-bold text-white mb-6 flex items-center gap-2">
             <Trophy className="text-teal-400 w-5 h-5" /> Suggested Next Steps
           </h3>
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-6">
-            {[1, 2, 3].map(i => (
-              <div key={i} className="glass-panel p-5 rounded-3xl border-white/5 hover:bg-white/10 transition-colors cursor-pointer group">
-                <div className="w-full aspect-video rounded-2xl overflow-hidden mb-4">
-                  <img src={`https://picsum.photos/seed/suggest${i}/400/225`} className="w-full h-full object-cover group-hover:scale-105 transition-transform" />
-                </div>
-                <h5 className="font-bold text-white text-sm mb-1 group-hover:text-blue-400 transition-colors">Advanced Node Security {i}</h5>
-                <p className="text-[10px] text-slate-500 uppercase tracking-widest font-bold">Provider Alpha</p>
-              </div>
-            ))}
+          <div className="glass-panel rounded-3xl border-amber-300/20 bg-amber-300/[0.04] p-5 text-sm leading-6 text-slate-300">
+            Static recommendations have been removed. Backend-backed learning recommendations will be completed with the course continuity work in Phase 6.
           </div>
         </section>
       )}
@@ -155,8 +147,8 @@ const MyCourses: React.FC<MyCoursesProps> = ({ enrolledCourses, onNavigateToUniv
               </div>
               <div className="p-4 bg-blue-600/5 rounded-xl border border-blue-500/20 text-sm text-slate-300">
                 {activeCourse.mode === 'resume'
-                  ? 'Module resume path initialized. Continue where you left off from your latest checkpoint.'
-                  : 'Course detail view ready. Expand syllabus, sessions, and materials from this node.'}
+                  ? 'Course player resume is locked until the Phase 6 backend progress and module flow is complete.'
+                  : 'Detailed course continuity is locked until Phase 6. Published course catalog details remain available in Courses.'}
               </div>
               <div className="flex flex-col sm:flex-row gap-3">
                 <button

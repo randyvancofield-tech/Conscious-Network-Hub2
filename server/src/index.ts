@@ -29,6 +29,7 @@ import identitySecurityRoutes from './routes/identitySecurity';
 import integrityRoutes from './routes/integrity';
 import immersiveRoutes from './routes/immersive';
 import meetingRoutes from './routes/meeting';
+import supportRoutes from './routes/support';
 import { coursesPublicRoutes, coursesProtectedRoutes } from './routes/courses';
 import userCoursesRoutes from './routes/userCourses';
 import { providersRouter, userRequestsRouter, providerRequestsRouter } from './routes/providers';
@@ -239,6 +240,7 @@ app.use('/api/provider-applicants', providerApplicantPublicRoutes);
 app.use('/api/provider/auth', providerAuthRoutes);
 app.use('/api/identity-security', identitySecurityRoutes);
 app.use('/api/integrity', integrityRoutes);
+app.use('/api/support', supportRoutes);
 
 // Protected routes enforce canonical identity within their own routers.
 // This avoids duplicate middleware execution while preserving route-level security.

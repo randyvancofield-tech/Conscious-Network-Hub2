@@ -87,7 +87,12 @@ export const ConsciousIdentity: React.FC<ConsciousIdentityProps> = ({
     );
   }
 
-  const isProviderTrustProfile = user.role === 'provider' || user.role === 'admin';
+  const isProviderTrustProfile =
+    user.role === 'admin' ||
+    (user.role === 'provider' &&
+      user.providerApproved === true &&
+      String(user.providerApprovalStatus || '').trim().toLowerCase() === 'approved' &&
+      !user.providerRevokedAt);
 
   const [isEditing, setIsEditing] = useState(!user.hasProfile);
   const [step, setStep] = useState(1);
@@ -102,8 +107,8 @@ export const ConsciousIdentity: React.FC<ConsciousIdentityProps> = ({
     location: user.location || '',
     dateOfBirth: user.dateOfBirth || '',
     interests: user.interests || [] as string[],
-    avatarUrl: user.avatarUrl || `https://picsum.photos/seed/${user.name}/200`,
-    bannerUrl: user.bannerUrl || `https://picsum.photos/seed/${user.name}_banner/1200/400`,
+    avatarUrl: user.avatarUrl || '',
+    bannerUrl: user.bannerUrl || '',
     profileMedia: user.profileMedia || {
       avatar: {
         url: user.avatarUrl || null,
@@ -148,10 +153,7 @@ export const ConsciousIdentity: React.FC<ConsciousIdentityProps> = ({
   const bannerIsVideo = isVideoMediaAsset(formData.bannerUrl, bannerMimeType);
   const avatarIsVideo = isVideoMediaAsset(formData.avatarUrl, avatarMimeType);
 
-  const [reflections, setReflections] = useState([
-    { id: 1, text: "The journey toward digital autonomy begins with the first verified identity node.", date: "Today" },
-    { id: 2, text: "Reflecting on the intersection of AI ethics and decentralized learning today.", date: "Yesterday" }
-  ]);
+  const [reflections, setReflections] = useState<Array<{ id: number; text: string; date: string }>>([]);
   const [newReflection, setNewReflection] = useState('');
 
   const handleFileUpload = async (
@@ -218,8 +220,6 @@ export const ConsciousIdentity: React.FC<ConsciousIdentityProps> = ({
   };
 
   const addReflection = () => {
-    if (!newReflection.trim()) return;
-    setReflections([{ id: Date.now(), text: newReflection, date: "Just now" }, ...reflections]);
     setNewReflection('');
   };
 
@@ -734,12 +734,13 @@ export const ConsciousIdentity: React.FC<ConsciousIdentityProps> = ({
               <textarea 
                 value={newReflection}
                 onChange={e => setNewReflection(e.target.value)}
-                placeholder="Cast a thought into your sovereign node..."
+                placeholder="Private reflections require the Phase 7 backend reflection service"
+                disabled
                 className="w-full bg-white/5 border border-white/10 rounded-[1.5rem] sm:rounded-[2.5rem] p-5 sm:p-8 text-base sm:text-lg text-white focus:outline-none focus:ring-2 focus:ring-blue-500/30 transition-all min-h-[160px] resize-none shadow-inner placeholder:text-slate-600"
               />
               <button 
                 onClick={addReflection}
-                disabled={!newReflection.trim()}
+                disabled
                 className="absolute bottom-4 right-4 sm:bottom-6 sm:right-6 w-11 h-11 sm:w-14 sm:h-14 bg-blue-600 hover:bg-blue-500 disabled:opacity-50 text-white rounded-xl sm:rounded-2xl shadow-2xl transition-all active:scale-90 flex items-center justify-center"
               >
                 <Plus className="w-6 h-6 sm:w-8 sm:h-8" />
@@ -747,6 +748,11 @@ export const ConsciousIdentity: React.FC<ConsciousIdentityProps> = ({
             </div>
 
             <div className="space-y-4 sm:space-y-6 max-h-[500px] overflow-y-auto pr-2 sm:pr-6 custom-scrollbar">
+              {reflections.length === 0 && (
+                <div className="rounded-[1.5rem] border border-amber-300/20 bg-amber-300/[0.04] p-5 text-sm leading-6 text-slate-300">
+                  Local sample reflections have been removed. Reflection writing will persist through protected backend storage in Phase 7.
+                </div>
+              )}
               {reflections.map(r => (
                 <div key={r.id} className="p-5 sm:p-8 bg-white/5 border border-white/5 rounded-[1.5rem] sm:rounded-[2.5rem] hover:bg-white/10 transition-all group/ref relative">
                   <p className="text-slate-200 text-base sm:text-lg leading-relaxed mb-4">{r.text}</p>

@@ -14,6 +14,7 @@ interface AdminUserSummary {
   tier: string | null;
   subscriptionStatus: string | null;
   providerApproved: boolean;
+  providerApprovalStatus: string | null;
   twoFactorMethod: string;
   createdAt: string;
 }
@@ -98,7 +99,10 @@ const AdminDashboard: React.FC = () => {
         headers: adminHeaders(),
         body: {
           role,
-          reason: 'Admin dashboard role management',
+          reason:
+            role === 'provider'
+              ? 'Admin dashboard role management. Provider role assignment does not approve provider access; applicant approval is still required.'
+              : 'Admin dashboard role management',
         },
       });
       await loadDashboard();
@@ -148,7 +152,7 @@ const AdminDashboard: React.FC = () => {
       <PageHeader
         eyebrow="Superuser Access"
         title="Admin Console"
-        description="Full platform visibility for user roles, memberships, provider access, and governance checks."
+        description="Full platform visibility for user roles, memberships, provider approval state, and governance checks."
         actions={
           <ActionButton type="button" variant="secondary" onClick={loadDashboard} icon={<RefreshCw className="h-4 w-4" />}>
             Refresh
@@ -185,6 +189,7 @@ const AdminDashboard: React.FC = () => {
                 <th className="py-3 pr-4">Identity</th>
                 <th className="py-3 pr-4">Role</th>
                 <th className="py-3 pr-4">Tier</th>
+                <th className="py-3 pr-4">Provider Approval</th>
                 <th className="py-3 pr-4">2FA</th>
                 <th className="py-3 pr-4">Role Change</th>
               </tr>
@@ -198,6 +203,17 @@ const AdminDashboard: React.FC = () => {
                   </td>
                   <td className="py-4 pr-4 text-slate-200">{user.role}</td>
                   <td className="py-4 pr-4 text-slate-400">{user.tier || 'None'}</td>
+                  <td className="py-4 pr-4">
+                    <span
+                      className={`inline-flex rounded-full border px-3 py-1 text-[10px] font-black uppercase tracking-widest ${
+                        user.providerApproved
+                          ? 'border-emerald-300/30 bg-emerald-300/10 text-emerald-100'
+                          : 'border-white/10 bg-white/5 text-slate-400'
+                      }`}
+                    >
+                      {user.providerApproved ? 'Approved' : user.providerApprovalStatus || 'Not approved'}
+                    </span>
+                  </td>
                   <td className="py-4 pr-4 text-slate-400">{user.twoFactorMethod}</td>
                   <td className="py-4 pr-4">
                     <select
@@ -208,9 +224,14 @@ const AdminDashboard: React.FC = () => {
                     >
                       <option value="user">Member</option>
                       <option value="applicant">Applicant</option>
-                      <option value="provider">Provider</option>
+                      <option value="provider">Provider Role Only</option>
                       <option value="admin">Admin</option>
                     </select>
+                    {user.role === 'provider' && !user.providerApproved && (
+                      <p className="mt-2 max-w-xs text-[10px] leading-4 text-amber-200">
+                        Provider role is not the same as approved provider access. Approve through Provider Applicants to unlock provider tools.
+                      </p>
+                    )}
                   </td>
                 </tr>
               ))}

@@ -172,6 +172,7 @@ router.get('/dashboard', async (req: Request, res: Response): Promise<void> => {
       guest: ['public:read'],
       member: ['self:read', 'self:update', 'courses:enroll', 'social:write', 'meetings:join'],
       applicant: ['provider-application:read'],
+      provider: ['provider-session:request-after-approval', 'provider-crm:use-after-wallet'],
       admin: ['platform:read', 'users:read', 'roles:update', 'audit:read'],
     },
     summary: {

@@ -6,7 +6,6 @@ import {
 } from 'lucide-react';
 import { Course } from '../types';
 import { api } from '../services/apiClient';
-import { COURSE_SURFACE_RECORDS } from '../services/platformData';
 import { ActionButton, EmptyState, PageHeader, PageShell, SurfacePanel } from './ui/PlatformPrimitives';
 
 interface KnowledgePathwaysProps {
@@ -76,7 +75,7 @@ const KnowledgePathways: React.FC<KnowledgePathwaysProps> = ({
   const [pathways, setPathways] = useState<Course[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [loadError, setLoadError] = useState('');
-  const courseRecords = pathways.length > 0 ? pathways : COURSE_SURFACE_RECORDS;
+  const courseRecords = pathways;
   const selectedSyllabus = courseRecords.find((pathway) => pathway.id === selectedSyllabusId) || null;
   const routeCourse = courseId ? courseRecords.find((pathway) => pathway.id === courseId) || null : null;
 
@@ -120,6 +119,33 @@ const KnowledgePathways: React.FC<KnowledgePathwaysProps> = ({
       window.clearTimeout(timeoutId);
     };
   }, []);
+
+  if (courseId && isLoading) {
+    return (
+      <PageShell>
+        <div className="glass-panel p-10 rounded-[2rem] border-white/10 text-center text-slate-300">
+          Loading published course...
+        </div>
+      </PageShell>
+    );
+  }
+
+  if (courseId && loadError) {
+    return (
+      <PageShell>
+        <EmptyState
+          icon={<BookOpen className="w-7 h-7" />}
+          title="Course records unavailable"
+          description={`${loadError}. Course detail routes are hidden until live published course records are reachable.`}
+          action={
+            <ActionButton type="button" onClick={onBackToCatalog || onGoBack} icon={<ArrowLeft className="w-4 h-4" />}>
+              Courses
+            </ActionButton>
+          }
+        />
+      </PageShell>
+    );
+  }
 
   if (courseId && !routeCourse) {
     return (
@@ -244,7 +270,7 @@ const KnowledgePathways: React.FC<KnowledgePathwaysProps> = ({
         <div className="glass-panel p-5 sm:p-6 rounded-2xl border-amber-500/20 bg-amber-500/5">
           <h3 className="text-sm font-black text-white uppercase tracking-tight">Live courses unavailable</h3>
           <p className="text-sm text-slate-400 mt-2">
-            {loadError}. Showing the bundled launch curriculum fallback until live courses are reachable.
+            {loadError}. Course cards are hidden until live published course records are reachable.
           </p>
         </div>
       )}

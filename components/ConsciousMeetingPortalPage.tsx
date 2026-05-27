@@ -18,6 +18,7 @@ import { ActionButton, PageHeader, PageShell, SurfacePanel } from './ui/Platform
 type ConsciousMeetingPortalPageProps = {
   user: UserProfile | null;
   onOpenUpcoming: () => void;
+  operationsEnabled?: boolean;
 };
 
 type DeviceCheck = {
@@ -41,7 +42,11 @@ const getPlatformLabel = (): string => {
   return platform;
 };
 
-const ConsciousMeetingPortalPage: React.FC<ConsciousMeetingPortalPageProps> = ({ user, onOpenUpcoming }) => {
+const ConsciousMeetingPortalPage: React.FC<ConsciousMeetingPortalPageProps> = ({
+  user,
+  onOpenUpcoming,
+  operationsEnabled = false,
+}) => {
   const [deviceCheck, setDeviceCheck] = useState<DeviceCheck | null>(null);
   const [history, setHistory] = useState<DeviceCheck[]>([]);
   const [isChecking, setIsChecking] = useState(false);
@@ -236,10 +241,27 @@ const ConsciousMeetingPortalPage: React.FC<ConsciousMeetingPortalPageProps> = ({
         <div>
           <h2 className="text-sm font-black uppercase tracking-widest text-white">Internal Live Stream Pipeline</h2>
           <p className="mt-2 text-xs leading-5 text-slate-500">
-            Certified hosts can create, start, invite, and publish native CNH meeting sessions below. New public sessions are routed directly to Upcoming Sessions.
+            Certified host operations are limited to backend-issued sessions. Demo or local-only meeting controls are disabled for launch integrity.
           </p>
         </div>
-        <ConsciousMeetings user={user} />
+        {operationsEnabled ? (
+          <ConsciousMeetings user={user} />
+        ) : (
+          <SurfacePanel className="space-y-4 border-amber-300/20 bg-amber-300/[0.04]">
+            <div className="flex items-start gap-3">
+              <ShieldCheck className="mt-1 h-5 w-5 text-amber-200" />
+              <div>
+                <h3 className="text-sm font-black uppercase tracking-widest text-white">Provider Host Console Locked</h3>
+                <p className="mt-2 text-sm leading-6 text-slate-300">
+                  The legacy meeting console is not launch-facing. Provider host controls will return after the Phase 9 backend-only meeting portal completion.
+                </p>
+              </div>
+            </div>
+            <ActionButton type="button" variant="secondary" onClick={onOpenUpcoming} icon={<Video className="h-4 w-4" />}>
+              View Upcoming Sessions
+            </ActionButton>
+          </SurfacePanel>
+        )}
       </section>
     </PageShell>
   );

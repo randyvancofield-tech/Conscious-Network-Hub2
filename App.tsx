@@ -76,6 +76,37 @@ type ProviderWalletChallenge = {
   expirationTime: string;
 };
 
+type PlatformSearchResult = {
+  id: string;
+  title: string;
+  description: string;
+  view: AppView;
+  keywords: string[];
+};
+
+const PLATFORM_SEARCH_CATALOG: PlatformSearchResult[] = [
+  { id: 'dashboard', title: 'Portal Home', description: 'Member dashboard and latest platform overview.', view: AppView.DASHBOARD, keywords: ['home', 'dashboard', 'portal'] },
+  { id: 'courses', title: 'Courses', description: 'Published learning pathways and course enrollment.', view: AppView.KNOWLEDGE_PATHWAYS, keywords: ['learning', 'classes', 'pathways'] },
+  { id: 'my-courses', title: 'My Courses', description: 'Your enrolled learning pathways.', view: AppView.MY_COURSES, keywords: ['enrolled', 'resume', 'learning'] },
+  { id: 'social', title: 'Social Learning', description: 'Member social learning feed.', view: AppView.CONSCIOUS_SOCIAL_LEARNING, keywords: ['posts', 'feed', 'community'] },
+  { id: 'community', title: 'Community', description: 'Member directory and profiles.', view: AppView.COMMUNITY, keywords: ['members', 'directory', 'profiles'] },
+  { id: 'meetings', title: 'Conscious Meetings', description: 'Upcoming provider-created meeting sessions.', view: AppView.CONSCIOUS_MEETINGS_UPCOMING, keywords: ['sessions', 'events', 'video'] },
+  { id: 'providers', title: 'Providers Market', description: 'Approved public provider profiles.', view: AppView.PROVIDERS, keywords: ['provider', 'services', 'market'] },
+  { id: 'careers', title: 'Conscious Careers', description: 'Grant and entrepreneurship readiness pathways.', view: AppView.CONSCIOUS_CAREERS, keywords: ['grant', 'career', 'entrepreneurship'] },
+  { id: 'grant', title: 'Grant Application', description: 'Conscious Careers grant application.', view: AppView.GRANT_APPLICATION, keywords: ['funding', 'application', 'careers'] },
+  { id: 'entrepreneurship', title: 'Entrepreneurship Support', description: 'Readiness and external resource pathway.', view: AppView.ENTREPRENEURSHIP_SUPPORT, keywords: ['business', 'sbdc', 'readiness'] },
+  { id: 'provider-access', title: 'Provider Access', description: 'Approved provider sign-in, application, and applicant status.', view: AppView.PROVIDER_ACCESS, keywords: ['provider sign in', 'apply', 'applicant'] },
+  { id: 'provider-apply', title: 'Provider Application', description: 'Apply to become a CNH provider.', view: AppView.PROVIDER_APPLY, keywords: ['provider apply', 'application'] },
+  { id: 'provider-status', title: 'Provider Applicant Status', description: 'Returning applicant sign-in and review status.', view: AppView.PROVIDER_APPLICANT_SIGN_IN, keywords: ['candidate', 'applicant', 'status'] },
+  { id: 'provider-crm', title: 'Provider CRM', description: 'Approved provider operations workspace.', view: AppView.PROVIDER_CRM, keywords: ['provider tools', 'crm', 'operations'] },
+  { id: 'profile', title: 'My Conscious Identity', description: 'Profile, privacy, and identity settings.', view: AppView.MY_CONSCIOUS_IDENTITY, keywords: ['profile', 'settings', 'identity'] },
+  { id: 'membership', title: 'Memberships', description: 'Membership tier and access management.', view: AppView.MEMBERSHIP, keywords: ['tier', 'stripe', 'subscription'] },
+  { id: 'admin', title: 'Admin Console', description: 'Admin dashboard and governance controls.', view: AppView.ADMIN_DASHBOARD, keywords: ['admin', 'governance', 'users'] },
+  { id: 'privacy', title: 'Privacy Policy', description: 'CNH privacy and data handling policy.', view: AppView.PRIVACY_POLICY, keywords: ['privacy', 'data'] },
+  { id: 'terms', title: 'Terms Of Service', description: 'Platform terms and conditions.', view: AppView.TERMS_OF_SERVICE, keywords: ['terms', 'legal'] },
+  { id: 'ai-policy', title: 'AI Transparency', description: 'AI transparency and safety policy.', view: AppView.AI_TRANSPARENCY_POLICY, keywords: ['ai', 'transparency', 'safety'] },
+];
+
 const FREE_TIER_NAME = 'Free / Community Tier';
 const PENDING_CHECKOUT_SESSION_KEY = 'hcn.pendingCheckoutSessionId';
 const ACCOUNT_RECOVERY_UI_ENABLED = true;
@@ -506,6 +537,11 @@ const App: React.FC = () => {
   const [isContactModalOpen, setContactModalOpen] = useState(false);
   const [contactName, setContactName] = useState('');
   const [contactEmail, setContactEmail] = useState('');
+  const [contactSubject, setContactSubject] = useState('');
+  const [contactStatus, setContactStatus] = useState('');
+  const [isContactSubmitting, setContactSubmitting] = useState(false);
+  const [globalSearchQuery, setGlobalSearchQuery] = useState('');
+  const [isGlobalSearchOpen, setGlobalSearchOpen] = useState(false);
   
   // Membership checkout states
   const [isSelectingTier, setIsSelectingTier] = useState(false);
@@ -760,6 +796,9 @@ const App: React.FC = () => {
       hasProfile: rawUser.hasProfile ?? false,
       identityVerified: true,
       emailVerified: rawUser.emailVerified === true,
+      providerApproved: rawUser.providerApproved === true,
+      providerApprovalStatus: toNullableTrimmedString(rawUser.providerApprovalStatus),
+      providerRevokedAt: toNullableTrimmedString(rawUser.providerRevokedAt),
       reputationScore: rawUser.reputationScore ?? 100,
       accessKeyIndex: rawUser.accessKeyIndex ?? 200,
       avatarUrl: toAbsoluteAssetUrl(rawUser.avatarUrl),
@@ -798,18 +837,25 @@ const App: React.FC = () => {
     return canonicalUser;
   };
 
+  const hasApprovedProviderProfile = (profile: UserProfile | null | undefined): boolean =>
+    Boolean(
+      profile?.role === 'provider' &&
+        profile.providerApproved === true &&
+        String(profile.providerApprovalStatus || '').trim().toLowerCase() === 'approved' &&
+        !profile.providerRevokedAt
+    );
+
+  const hasProviderOperationsAccess = (profile: UserProfile | null | undefined): boolean =>
+    Boolean(profile?.role === 'admin' || hasApprovedProviderProfile(profile));
+
   const hasConfirmedMembership = (profile: UserProfile | null | undefined): boolean =>
     Boolean(
       profile?.hasActiveMembership === true ||
         ['active', 'trialing', 'free'].includes(
           String(profile?.membershipStatus || '').trim().toLowerCase()
         ) ||
-        profile?.role === 'provider' ||
-        profile?.role === 'admin'
+        hasProviderOperationsAccess(profile)
     );
-
-  const hasProviderRole = (profile: UserProfile | null | undefined): boolean =>
-    profile?.role === 'provider' || profile?.role === 'admin';
 
   const hasApplicantRole = (profile: UserProfile | null | undefined): boolean =>
     profile?.role === 'applicant';
@@ -1651,6 +1697,14 @@ const App: React.FC = () => {
       setMembershipNotice('');
       setPendingCheckoutSessionId(null);
 
+      if (!hasApprovedProviderProfile(canonicalUser)) {
+        setProviderWalletVerificationRequired(false);
+        setProviderWalletStatus('');
+        setError('This account has a provider role but is not approved for provider tools. Provider access unlocks only after applicant approval.');
+        setPasswordInput('');
+        return;
+      }
+
       setProviderWalletVerificationRequired(true);
       setProviderWalletStatus('Provider account confirmed. Complete wallet verification to open provider tools.');
       setPasswordInput('');
@@ -1666,7 +1720,7 @@ const App: React.FC = () => {
   };
 
   const handleProviderWalletVerification = async () => {
-    if (!user || !hasProviderRole(user)) {
+    if (!user || !hasApprovedProviderProfile(user)) {
       setError('Sign in with an approved provider account before wallet verification.');
       return;
     }
@@ -2131,9 +2185,11 @@ const App: React.FC = () => {
     if (hasAdminRole(user)) {
       return NAVIGATION_ITEMS;
     }
-    if (hasProviderRole(user)) {
+    if (hasApprovedProviderProfile(user)) {
       return NAVIGATION_ITEMS.filter(
-        (item) => item.id !== 'admin' && (item.id === 'provider-crm' || canTierAccessNavItem(user.tier, item.id))
+        (item) =>
+          item.id !== 'admin' &&
+          (item.id === 'provider-crm' || item.id === 'providers' || canTierAccessNavItem(user.tier, item.id))
       );
     }
     if (!hasConfirmedMembership(user)) {
@@ -2143,6 +2199,93 @@ const App: React.FC = () => {
       (item) => item.id !== 'admin' && item.id !== 'provider-crm' && canTierAccessNavItem(user.tier, item.id)
     );
   }, [user]);
+
+  const isPlatformSearchResultAllowed = (result: PlatformSearchResult): boolean => {
+    const view = result.view;
+    if (hasAdminRole(user)) return true;
+    if (!user) return isGuestAllowedView(view);
+    if (hasApplicantRole(user)) {
+      return [
+        AppView.PROVIDER_ACCESS,
+        AppView.PROVIDER_APPLY,
+        AppView.PROVIDER_APPLICANT_SIGN_IN,
+        AppView.PROVIDER_APPLICATION_STATUS,
+        AppView.CONSCIOUS_CAREERS,
+        AppView.ENTREPRENEURSHIP_SUPPORT,
+        AppView.PRIVACY_POLICY,
+        AppView.TERMS_OF_SERVICE,
+        AppView.AI_TRANSPARENCY_POLICY,
+      ].includes(view);
+    }
+    if (hasProviderOperationsAccess(user) && [AppView.PROVIDER_CRM, AppView.PROVIDERS].includes(view)) {
+      return true;
+    }
+    if (!hasConfirmedMembership(user)) {
+      return view === AppView.MEMBERSHIP || view === AppView.CONSCIOUS_CAREERS || isNoTierSignedInAllowedView(view);
+    }
+    return canTierAccessView(user.tier, view);
+  };
+
+  const globalSearchResults = useMemo(() => {
+    const query = globalSearchQuery.trim().toLowerCase();
+    if (query.length < 2) return [];
+    return PLATFORM_SEARCH_CATALOG
+      .filter((result) => isPlatformSearchResultAllowed(result))
+      .filter((result) => {
+        const searchable = `${result.title} ${result.description} ${result.keywords.join(' ')}`.toLowerCase();
+        return searchable.includes(query);
+      })
+      .slice(0, 6);
+  }, [globalSearchQuery, user]);
+
+  const openPlatformSearchResult = (result: PlatformSearchResult) => {
+    setCurrentView(result.view);
+    setGlobalSearchQuery('');
+    setGlobalSearchOpen(false);
+  };
+
+  const handleGlobalSearchSubmit = (event: React.FormEvent) => {
+    event.preventDefault();
+    const firstResult = globalSearchResults[0];
+    if (firstResult) {
+      openPlatformSearchResult(firstResult);
+    }
+  };
+
+  const openContactModal = () => {
+    setContactName(user?.name || '');
+    setContactEmail(user?.email || '');
+    setContactSubject('');
+    setContactMessage('');
+    setContactStatus('');
+    setContactModalOpen(true);
+  };
+
+  const handleContactSubmit = async (event: React.FormEvent) => {
+    event.preventDefault();
+    setContactSubmitting(true);
+    setContactStatus('');
+    try {
+      const data = await api<{ ticketId?: string; delivery?: string }>('/support/contact', {
+        method: 'POST',
+        auth: false,
+        body: {
+          name: contactName.trim(),
+          email: contactEmail.trim(),
+          subject: contactSubject.trim() || 'Platform contact request',
+          message: contactMessage.trim(),
+          route: typeof window !== 'undefined' ? window.location.pathname : routePathForView(currentView, routeParams),
+        },
+      });
+      setContactStatus(`Request received${data.ticketId ? `: ${data.ticketId}` : ''}.`);
+      setContactMessage('');
+      setContactSubject('');
+    } catch (error) {
+      setContactStatus(error instanceof Error ? error.message : 'Unable to send contact request.');
+    } finally {
+      setContactSubmitting(false);
+    }
+  };
 
   const renderActiveView = () => {
     if (!user && currentView === AppView.PROVIDER_APPLICATION_STATUS) {
@@ -2285,6 +2428,10 @@ const App: React.FC = () => {
       !hasAdminRole(user) &&
       hasConfirmedMembership(user) &&
       currentView !== AppView.NOT_FOUND &&
+      !(
+        hasProviderOperationsAccess(user) &&
+        [AppView.PROVIDER_CRM, AppView.PROVIDERS, AppView.PROVIDER_DETAIL].includes(currentView)
+      ) &&
       !canTierAccessView(user.tier, currentView)
     ) {
       return (
@@ -2891,7 +3038,14 @@ const App: React.FC = () => {
       case AppView.CONSCIOUS_SOCIAL_LEARNING:
         return <SocialLearningHub user={user} />;
       case AppView.COMMUNITY:
-        return <CommunityMembers />;
+        return (
+          <CommunityMembers
+            onSignInPrompt={() => {
+              resetSignInChallengeInputs();
+              setSigninModalOpen(true);
+            }}
+          />
+        );
       case AppView.CONSCIOUS_MEETINGS:
       case AppView.CONSCIOUS_MEETINGS_UPCOMING:
         return (
@@ -2902,7 +3056,7 @@ const App: React.FC = () => {
           />
         );
       case AppView.PROVIDER_CRM:
-        return hasProviderRole(user) ? (
+        return hasProviderOperationsAccess(user) ? (
           <ProviderCrmShell
             user={user}
             onOpenAdministrativeAccess={() => setCurrentView(AppView.ADMINISTRATIVE_ACCESS)}
@@ -2928,6 +3082,10 @@ const App: React.FC = () => {
             sessionId={routeParams.id}
             user={user}
             onBack={() => setCurrentView(AppView.CONSCIOUS_MEETINGS_UPCOMING)}
+            onSignIn={() => {
+              resetSignInChallengeInputs();
+              setSigninModalOpen(true);
+            }}
           />
         );
       case AppView.MY_CONSCIOUS_IDENTITY: 
@@ -2951,7 +3109,11 @@ const App: React.FC = () => {
           <ProvidersMarket
             onOpenProvider={(id) => setCurrentView(AppView.PROVIDER_DETAIL, { id })}
             onBackToList={() => setCurrentView(AppView.PROVIDERS)}
-            onApplyAsProvider={() => setCurrentView(AppView.PROVIDER_ACCESS)}
+            onApplyAsProvider={() => setCurrentView(AppView.PROVIDER_APPLY)}
+            onSignInRequired={() => {
+              resetSignInChallengeInputs();
+              setSigninModalOpen(true);
+            }}
           />
         );
       case AppView.PROVIDER_DETAIL:
@@ -2960,7 +3122,11 @@ const App: React.FC = () => {
             providerId={routeParams.id}
             onOpenProvider={(id) => setCurrentView(AppView.PROVIDER_DETAIL, { id })}
             onBackToList={() => setCurrentView(AppView.PROVIDERS)}
-            onApplyAsProvider={() => setCurrentView(AppView.PROVIDER_ACCESS)}
+            onApplyAsProvider={() => setCurrentView(AppView.PROVIDER_APPLY)}
+            onSignInRequired={() => {
+              resetSignInChallengeInputs();
+              setSigninModalOpen(true);
+            }}
           />
         );
       case AppView.MEMBERSHIP:
@@ -3874,7 +4040,7 @@ const App: React.FC = () => {
                 </nav>
 
                 <div className="pt-10 border-t border-white/5 space-y-4">
-                  {hasProviderRole(user) && (
+                  {hasProviderOperationsAccess(user) && (
                     <button
                       onClick={() => {
                         setIdentitySecurityOpen(true);
@@ -3905,10 +4071,43 @@ const App: React.FC = () => {
                       <Menu className="w-5 h-5" />
                     </button>
                   )}
-                  <div className="relative group hidden md:block">
+                  <form onSubmit={handleGlobalSearchSubmit} className="relative group hidden md:block">
                     <Search className="absolute left-4 sm:left-5 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-600 group-focus-within:text-blue-400 transition-colors" />
-                    <input type="text" placeholder="Search..." className="pl-12 sm:pl-14 pr-6 sm:pr-8 py-3 sm:py-3.5 bg-white/5 border border-white/10 rounded-lg sm:rounded-xl text-xs outline-none focus:ring-2 focus:ring-blue-500/30 w-56 sm:w-72 md:w-80 transition-all font-medium placeholder:tracking-wider uppercase" />
-                  </div>
+                    <input
+                      type="search"
+                      value={globalSearchQuery}
+                      onChange={(event) => {
+                        setGlobalSearchQuery(event.target.value);
+                        setGlobalSearchOpen(true);
+                      }}
+                      onFocus={() => setGlobalSearchOpen(true)}
+                      onBlur={() => window.setTimeout(() => setGlobalSearchOpen(false), 140)}
+                      placeholder="Search platform..."
+                      className="pl-12 sm:pl-14 pr-6 sm:pr-8 py-3 sm:py-3.5 bg-white/5 border border-white/10 rounded-lg sm:rounded-xl text-xs outline-none focus:ring-2 focus:ring-blue-500/30 w-56 sm:w-72 md:w-80 transition-all font-medium placeholder:tracking-wider uppercase"
+                    />
+                    {isGlobalSearchOpen && globalSearchQuery.trim().length >= 2 && (
+                      <div className="absolute left-0 right-0 top-[calc(100%+0.5rem)] z-50 overflow-hidden rounded-2xl border border-white/10 bg-slate-950/95 shadow-2xl backdrop-blur-2xl">
+                        {globalSearchResults.length > 0 ? (
+                          globalSearchResults.map((result) => (
+                            <button
+                              key={result.id}
+                              type="button"
+                              onMouseDown={(event) => event.preventDefault()}
+                              onClick={() => openPlatformSearchResult(result)}
+                              className="block w-full border-b border-white/5 px-4 py-3 text-left last:border-b-0 hover:bg-white/5"
+                            >
+                              <span className="block text-[10px] font-black uppercase tracking-widest text-white">{result.title}</span>
+                              <span className="mt-1 block text-[10px] leading-4 text-slate-400">{result.description}</span>
+                            </button>
+                          ))
+                        ) : (
+                          <div className="px-4 py-3 text-[10px] font-black uppercase tracking-widest text-slate-500">
+                            No accessible results
+                          </div>
+                        )}
+                      </div>
+                    )}
+                  </form>
                   <button
                     onClick={() => {
                       if (currentView !== AppView.DASHBOARD) {
@@ -4003,6 +4202,7 @@ const App: React.FC = () => {
                   <button onClick={() => setCurrentView(AppView.VENDOR_API_GOVERNANCE_POLICY)} className="max-w-full whitespace-normal text-center leading-5 text-slate-400 hover:text-white transition-colors">Vendor API Governance Policy</button>
                   <button onClick={() => setCurrentView(AppView.NIST_MAPPING_SUMMARY)} className="max-w-full whitespace-normal text-center leading-5 text-slate-400 hover:text-white transition-colors">NIST Mapping Summary</button>
                   <button onClick={() => setCurrentView(AppView.AI_SAFETY_GOVERNANCE)} className="max-w-full whitespace-normal text-center leading-5 text-slate-400 hover:text-white transition-colors">AI Safety & Governance</button>
+                  <button onClick={openContactModal} className="max-w-full whitespace-normal text-center leading-5 text-slate-400 hover:text-white transition-colors">Contact</button>
                 </div>
               </footer>
             </div>
@@ -4158,8 +4358,8 @@ const App: React.FC = () => {
               <button onClick={() => setContactModalOpen(false)} className="absolute top-8 right-8 p-3 hover:bg-white/5 rounded-full transition-colors">
                 <X className="w-5 h-5 text-slate-500" />
               </button>
-              <h3 className="text-3xl font-black mb-10 text-white uppercase tracking-tighter">Contact Us</h3>
-              <form onSubmit={(e) => { e.preventDefault(); alert('Message sent!'); setContactModalOpen(false); setContactName(''); setContactEmail(''); setContactMessage(''); }} className="space-y-6">
+              <h3 className="text-3xl font-black mb-10 text-white uppercase tracking-tighter">Contact Support</h3>
+              <form onSubmit={handleContactSubmit} className="space-y-6">
                 <div className="space-y-3">
                   <label className="text-[9px] font-black text-slate-500 uppercase tracking-widest ml-2">Name</label>
                   <input type="text" value={contactName} onChange={e => setContactName(e.target.value)} className="w-full px-8 py-4 bg-white/5 border border-white/10 rounded-2xl text-white outline-none focus:ring-2 focus:ring-blue-500/50 transition-all font-medium text-sm" required />
@@ -4169,11 +4369,20 @@ const App: React.FC = () => {
                   <input type="email" value={contactEmail} onChange={e => setContactEmail(e.target.value)} className="w-full px-8 py-4 bg-white/5 border border-white/10 rounded-2xl text-white outline-none focus:ring-2 focus:ring-blue-500/50 transition-all font-medium text-sm" required />
                 </div>
                 <div className="space-y-3">
-                  <label className="text-[9px] font-black text-slate-500 uppercase tracking-widest ml-2">Message</label>
-                  <textarea value={contactMessage} onChange={e => setContactMessage(e.target.value)} className="w-full px-8 py-4 bg-white/5 border border-white/10 rounded-2xl text-white outline-none focus:ring-2 focus:ring-blue-500/50 transition-all font-medium text-sm" required rows={4}></textarea>
+                  <label className="text-[9px] font-black text-slate-500 uppercase tracking-widest ml-2">Subject</label>
+                  <input type="text" value={contactSubject} onChange={e => setContactSubject(e.target.value)} className="w-full px-8 py-4 bg-white/5 border border-white/10 rounded-2xl text-white outline-none focus:ring-2 focus:ring-blue-500/50 transition-all font-medium text-sm" />
                 </div>
-                <button type="submit" className="w-full py-5 bg-blue-600 hover:bg-blue-500 text-white rounded-2xl font-black text-sm uppercase tracking-widest transition-all shadow-2xl shadow-blue-900/40 mt-6">
-                  Send Message
+                <div className="space-y-3">
+                  <label className="text-[9px] font-black text-slate-500 uppercase tracking-widest ml-2">Message</label>
+                  <textarea value={contactMessage} onChange={e => setContactMessage(e.target.value)} className="w-full px-8 py-4 bg-white/5 border border-white/10 rounded-2xl text-white outline-none focus:ring-2 focus:ring-blue-500/50 transition-all font-medium text-sm" required rows={4} minLength={10}></textarea>
+                </div>
+                {contactStatus && (
+                  <p className="rounded-2xl border border-blue-300/20 bg-blue-600/10 px-4 py-3 text-[10px] font-black uppercase tracking-widest text-blue-100">
+                    {contactStatus}
+                  </p>
+                )}
+                <button type="submit" disabled={isContactSubmitting} className="w-full py-5 bg-blue-600 hover:bg-blue-500 disabled:opacity-60 text-white rounded-2xl font-black text-sm uppercase tracking-widest transition-all shadow-2xl shadow-blue-900/40 mt-6">
+                  {isContactSubmitting ? 'Sending...' : 'Send Message'}
                 </button>
               </form>
             </div>

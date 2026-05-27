@@ -7,6 +7,7 @@ export const NAVIGATION_ITEMS = [
   { id: 'meetings', label: 'Conscious Meetings', icon: <Video className="w-5 h-5" /> },
   { id: 'provider-crm', label: 'Provider CRM', icon: <Handshake className="w-5 h-5" /> },
   { id: 'courses', label: 'Courses', icon: <BookOpen className="w-5 h-5" /> },
+  { id: 'my-courses', label: 'My Courses', icon: <GraduationCap className="w-5 h-5" /> },
   { id: 'providers', label: 'Providers Market', icon: <Briefcase className="w-5 h-5" /> },
   { id: 'careers', label: 'Conscious Careers', icon: <Rocket className="w-5 h-5" /> },
   { id: 'profile', label: 'My Conscious Identity', icon: <UserCircle className="w-5 h-5" /> },

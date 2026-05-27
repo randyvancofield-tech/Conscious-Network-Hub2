@@ -115,6 +115,9 @@ export interface UserProfile {
   membershipEndDate?: string | null;
   identityVerified?: boolean;
   emailVerified?: boolean;
+  providerApproved?: boolean;
+  providerApprovalStatus?: string | null;
+  providerRevokedAt?: string | null;
   reputationScore?: number;
   accessKeyIndex?: number;
   createdAt?: string;
