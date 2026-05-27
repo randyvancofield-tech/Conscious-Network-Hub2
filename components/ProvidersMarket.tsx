@@ -361,7 +361,7 @@ const ProvidersMarket: React.FC<ProvidersMarketProps> = ({
         <div className="glass-panel p-5 sm:p-6 rounded-2xl border-amber-500/20 bg-amber-500/5">
           <h3 className="text-sm font-black text-white uppercase tracking-tight">Live providers unavailable</h3>
           <p className="text-sm text-slate-400 mt-2">
-            {loadError}. Showing the frontend-ready provider surface so marketplace flows can be completed.
+            {loadError}. Provider listings are hidden until verified provider records are reachable.
           </p>
         </div>
       )}

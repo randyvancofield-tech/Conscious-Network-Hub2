@@ -42,22 +42,7 @@ export type MembershipTierRecord = {
   checkoutEnabled: boolean;
 };
 
-export const PROVIDER_SURFACE_RECORDS: ProviderSurfaceRecord[] = [
-  {
-    id: 'provider-readiness-guide',
-    name: 'Provider Readiness Guide',
-    category: 'Provider Onboarding',
-    location: 'Global',
-    specialty: 'Native identity access, service publishing, session readiness',
-    bio: 'A structured provider profile surface used to validate the native CNH marketplace flow while provider records are reviewed.',
-    rating: null,
-    experience: 'Integration Ready',
-    image: '/images/provider-readiness.svg',
-    verificationStatus: 'review_pending',
-    accessMode: 'request',
-    services: ['Provider profile intake', 'Session readiness', 'Service catalog setup'],
-  },
-];
+export const PROVIDER_SURFACE_RECORDS: ProviderSurfaceRecord[] = [];
 
 export const COURSE_SURFACE_RECORDS: Course[] = [
   {
@@ -71,7 +56,7 @@ export const COURSE_SURFACE_RECORDS: Course[] = [
     image: '/images/course-identity.svg',
     progress: 0,
     progressScore: 0,
-    status: 'frontend-ready',
+    status: 'published',
     enrollmentStatus: null,
   },
   {
@@ -85,43 +70,12 @@ export const COURSE_SURFACE_RECORDS: Course[] = [
     image: '/images/course-provider.svg',
     progress: 0,
     progressScore: 0,
-    status: 'frontend-ready',
+    status: 'published',
     enrollmentStatus: null,
   },
 ];
 
-export const MEETING_SURFACE_RECORDS: MeetingSurfaceRecord[] = [
-  {
-    id: 'session-intake-architecture',
-    title: 'Provider Session Intake Architecture',
-    providerId: 'provider-readiness-guide',
-    providerName: 'Provider Readiness Guide',
-    description:
-      'Structured meeting surface for provider-hosted session intake, capacity visibility, and future live/replay connection.',
-    startTime: '2026-05-05T18:00:00.000Z',
-    endTime: '2026-05-05T19:00:00.000Z',
-    status: 'scheduled',
-    capacity: 24,
-    participantCount: 0,
-    accessTier: 'Guided Tier',
-    deliveryMode: 'scheduled',
-  },
-  {
-    id: 'session-replay-readiness',
-    title: 'Replay Session Readiness Review',
-    providerId: 'provider-readiness-guide',
-    providerName: 'Provider Readiness Guide',
-    description:
-      'Replay-ready meeting structure for post-session resources, notes, and recording access once backend storage is connected.',
-    startTime: '2026-04-18T17:00:00.000Z',
-    endTime: '2026-04-18T18:00:00.000Z',
-    status: 'replay',
-    capacity: 50,
-    participantCount: 0,
-    accessTier: 'Accelerated Tier',
-    deliveryMode: 'replay',
-  },
-];
+export const MEETING_SURFACE_RECORDS: MeetingSurfaceRecord[] = [];
 
 export const MEMBERSHIP_TIERS: MembershipTierRecord[] = [
   {

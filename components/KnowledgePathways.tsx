@@ -214,7 +214,7 @@ const KnowledgePathways: React.FC<KnowledgePathwaysProps> = ({
         <div className="glass-panel p-5 sm:p-6 rounded-2xl border-amber-500/20 bg-amber-500/5">
           <h3 className="text-sm font-black text-white uppercase tracking-tight">Live courses unavailable</h3>
           <p className="text-sm text-slate-400 mt-2">
-            {loadError}. Showing the frontend-ready catalog structure so enrollment flows can be completed.
+            {loadError}. Showing the bundled launch curriculum fallback until live courses are reachable.
           </p>
         </div>
       )}

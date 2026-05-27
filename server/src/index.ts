@@ -2,8 +2,6 @@ import express, { Express, NextFunction, Request, Response } from 'express';
 import cors from 'cors';
 import helmet from 'helmet';
 import rateLimit from 'express-rate-limit';
-import dotenv from 'dotenv';
-import path from 'path';
 import {
   requestLogger,
   errorHandler,
@@ -47,13 +45,10 @@ import {
   logStripeEnvironmentLoaded,
   validateRequiredEnv,
 } from './requiredEnv';
+import { loadServerEnv, logServerEnvDiagnostics } from './envLoader';
 
-// Load environment variables with local override first.
-// Use absolute paths so startup works whether launched from project root or /server.
-dotenv.config({ path: path.resolve(__dirname, '../.env.local') });
-dotenv.config({ path: path.resolve(__dirname, '../.env') });
-dotenv.config({ path: '.env.local' });
-dotenv.config({ path: '.env' });
+loadServerEnv();
+logServerEnvDiagnostics();
 
 try {
   validateRequiredEnv();

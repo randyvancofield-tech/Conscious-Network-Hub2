@@ -27,6 +27,13 @@ const BASE_REQUIRED_ENV = {
   FRONTEND_BASE_URL: 'http://localhost:3000',
 };
 
+const PROD_RETURN_URL_ENV = {
+  FRONTEND_BASE_URL: 'https://conscious-network.org',
+  STRIPE_SUCCESS_URL:
+    'https://conscious-network.org/verify-session?session_id={CHECKOUT_SESSION_ID}',
+  STRIPE_CANCEL_URL: 'https://conscious-network.org/membership-access',
+};
+
 const buildEnv = ({ unset = [], set = {} } = {}) => {
   const env = { ...process.env };
   for (const key of unset) {
@@ -198,6 +205,8 @@ const runExpectFailureProdBackendMisconfig = () =>
     const env = buildEnv({
       set: {
         ...BASE_REQUIRED_ENV,
+        ...PROD_RETURN_URL_ENV,
+        STRIPE_SECRET_KEY: 'sk_live_required_secret_check',
         STRIPE_MODE: 'live',
         NODE_ENV: 'production',
         PORT: '3984',
@@ -251,6 +260,8 @@ const runExpectFailureProdDatabaseUrlMisconfig = () =>
     const env = buildEnv({
       set: {
         ...BASE_REQUIRED_ENV,
+        ...PROD_RETURN_URL_ENV,
+        STRIPE_SECRET_KEY: 'sk_live_required_secret_check',
         STRIPE_MODE: 'live',
         NODE_ENV: 'production',
         PORT: '3985',
@@ -304,6 +315,8 @@ const runExpectFailureProdDatabasePoolerMisconfig = () =>
     const env = buildEnv({
       set: {
         ...BASE_REQUIRED_ENV,
+        ...PROD_RETURN_URL_ENV,
+        STRIPE_SECRET_KEY: 'sk_live_required_secret_check',
         STRIPE_MODE: 'live',
         NODE_ENV: 'production',
         PORT: '3986',

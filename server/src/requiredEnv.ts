@@ -38,6 +38,26 @@ const isPooledDatabaseUrl = (value: string): boolean => {
   );
 };
 
+const STRIPE_CHECKOUT_SESSION_PLACEHOLDER = '{CHECKOUT_SESSION_ID}';
+
+const parseUrlEnv = (value: string | null): URL | null => {
+  if (!value) return null;
+  try {
+    return new URL(value.replace(STRIPE_CHECKOUT_SESSION_PLACEHOLDER, 'cs_placeholder'));
+  } catch {
+    return null;
+  }
+};
+
+const isLocalUrl = (url: URL): boolean =>
+  ['localhost', '127.0.0.1', '::1'].includes(url.hostname.toLowerCase());
+
+const isLiveStripeSecretKey = (value: string | null): boolean =>
+  Boolean(value && /^(sk|rk)_live_/i.test(value));
+
+const isTestStripeSecretKey = (value: string | null): boolean =>
+  Boolean(value && /^(sk|rk)_test_/i.test(value));
+
 const resolveDatabasePoolMode = (): string | null => {
   const value = trimEnv('DATABASE_POOL_MODE');
   return value ? value.toLowerCase() : null;
@@ -161,6 +181,36 @@ export const validateRequiredEnv = (): void => {
   const stripeMode = (trimEnv('STRIPE_MODE') || '').toLowerCase();
   if (isProduction && stripeMode !== 'live') {
     throw new Error('[STARTUP][FATAL] STRIPE_MODE must be set to live in production.');
+  }
+
+  const stripeSecretKey = trimEnv('STRIPE_SECRET_KEY');
+  if (isProduction && !isLiveStripeSecretKey(stripeSecretKey)) {
+    throw new Error(
+      '[STARTUP][FATAL] STRIPE_SECRET_KEY must be a live Stripe secret or restricted key in production.'
+    );
+  }
+  if (stripeMode === 'test' && isLiveStripeSecretKey(stripeSecretKey)) {
+    console.warn(
+      '[STARTUP][WARN] STRIPE_MODE is test but STRIPE_SECRET_KEY appears to be live.'
+    );
+  }
+  if (stripeMode === 'live' && isTestStripeSecretKey(stripeSecretKey)) {
+    throw new Error(
+      '[STARTUP][FATAL] STRIPE_MODE is live but STRIPE_SECRET_KEY appears to be a test key.'
+    );
+  }
+
+  if (isProduction) {
+    const productionUrlKeys = ['FRONTEND_BASE_URL', 'STRIPE_SUCCESS_URL', 'STRIPE_CANCEL_URL'];
+    const insecureUrlKeys = productionUrlKeys.filter((key) => {
+      const parsed = parseUrlEnv(trimEnv(key));
+      return !parsed || parsed.protocol !== 'https:' || isLocalUrl(parsed);
+    });
+    if (insecureUrlKeys.length > 0) {
+      throw new Error(
+        `[STARTUP][FATAL] Production frontend and Stripe return URLs must be HTTPS non-local URLs: ${insecureUrlKeys.join(', ')}`
+      );
+    }
   }
 
   const stripePriceMismatches = Object.entries(LAUNCH_STRIPE_PRICE_IDS)

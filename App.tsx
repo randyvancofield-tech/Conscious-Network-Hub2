@@ -1010,7 +1010,7 @@ const App: React.FC = () => {
           walletConfigured: status?.walletConfigured === true,
           walletAddressMasked: status?.walletAddressMasked || null,
           adminAccountReady: status?.adminAccountReady === true,
-          passwordFallbackEnabled: status?.passwordFallbackEnabled !== false,
+          passwordFallbackEnabled: status?.passwordFallbackEnabled === true,
         });
       } catch {
         if (!cancelled) setAdminAccessStatus(null);
@@ -2491,7 +2491,7 @@ const App: React.FC = () => {
                         : 'Verify Wallet & Enter Portal'}
                   </button>
                 </div>
-                {adminAccessStatus?.passwordFallbackEnabled === false ? (
+                {adminAccessStatus?.passwordFallbackEnabled !== true ? (
                   <p className="rounded-2xl border border-amber-200/20 bg-amber-500/[0.04] p-4 text-[10px] font-black uppercase tracking-widest text-amber-100">
                     Emergency password access is disabled. Use wallet verification.
                   </p>

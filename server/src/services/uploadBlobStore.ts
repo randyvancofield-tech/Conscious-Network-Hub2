@@ -1,4 +1,5 @@
 import path from 'path';
+import crypto from 'crypto';
 import { PrismaClient } from '@prisma/client';
 import { getPrisma } from './prismaClient';
 
@@ -6,13 +7,15 @@ type UploadStorageProvider = 'postgres_large_object';
 export type UploadObjectAccess = 'public' | 'private';
 
 interface PostgresUploadKeyPayload {
-  v: 1;
+  v: 1 | 2;
   oid: number;
   mimeType: string;
   originalName: string;
   userId?: string;
   access?: UploadObjectAccess;
   category?: string;
+  sig?: string;
+  signed?: boolean;
 }
 
 export interface PersistedUploadObject {
@@ -65,8 +68,59 @@ const normalizeUploadAccess = (input: unknown): UploadObjectAccess | null => {
   return null;
 };
 
+const resolveUploadKeySecret = (): string => {
+  const secret =
+    String(process.env.UPLOAD_OBJECT_KEY_SECRET || '').trim() ||
+    String(process.env.SENSITIVE_DATA_KEY || '').trim() ||
+    String(process.env.AUTH_TOKEN_SECRET || process.env.SESSION_SECRET || '').trim();
+  if (!secret) {
+    throw toStoreError('[UPLOAD][FATAL] Upload object key signing secret is not configured');
+  }
+  return secret;
+};
+
+const timingSafeEqualText = (left: string, right: string): boolean => {
+  const leftBuffer = Buffer.from(left);
+  const rightBuffer = Buffer.from(right);
+  return leftBuffer.length === rightBuffer.length && crypto.timingSafeEqual(leftBuffer, rightBuffer);
+};
+
+const buildUploadKeySignaturePayload = (
+  payload: Omit<PostgresUploadKeyPayload, 'sig' | 'signed'>
+): string =>
+  JSON.stringify({
+    v: payload.v,
+    oid: payload.oid,
+    mimeType: payload.mimeType,
+    originalName: payload.originalName,
+    userId: payload.userId || null,
+    access: payload.access || null,
+    category: payload.category || null,
+  });
+
+const signUploadKeyPayload = (payload: Omit<PostgresUploadKeyPayload, 'sig' | 'signed'>): string =>
+  crypto
+    .createHmac('sha256', resolveUploadKeySecret())
+    .update(buildUploadKeySignaturePayload(payload), 'utf8')
+    .digest('base64url');
+
 const encodePostgresUploadKey = (payload: PostgresUploadKeyPayload): string => {
-  return Buffer.from(JSON.stringify(payload), 'utf8').toString('base64url');
+  const normalizedPayload: Omit<PostgresUploadKeyPayload, 'sig' | 'signed'> = {
+    v: 2,
+    oid: Math.floor(Number(payload.oid)),
+    mimeType: String(payload.mimeType || '').trim(),
+    originalName: sanitizeOriginalName(payload.originalName),
+    userId: sanitizeOptionalText(payload.userId),
+    access: normalizeUploadAccess(payload.access) || undefined,
+    category: sanitizeOptionalText(payload.category),
+  };
+  return Buffer.from(
+    JSON.stringify({
+      ...normalizedPayload,
+      sig: signUploadKeyPayload(normalizedPayload),
+    }),
+    'utf8'
+  ).toString('base64url');
 };
 
 const decodePostgresUploadKey = (objectKey: string): PostgresUploadKeyPayload | null => {
@@ -74,7 +128,7 @@ const decodePostgresUploadKey = (objectKey: string): PostgresUploadKeyPayload | 
     const decoded = Buffer.from(objectKey, 'base64url').toString('utf8');
     const parsed = JSON.parse(decoded) as Partial<PostgresUploadKeyPayload>;
     if (
-      parsed?.v !== 1 ||
+      (parsed?.v !== 1 && parsed?.v !== 2) ||
       !Number.isFinite(parsed.oid) ||
       Number(parsed.oid) <= 0 ||
       typeof parsed.mimeType !== 'string' ||
@@ -84,14 +138,31 @@ const decodePostgresUploadKey = (objectKey: string): PostgresUploadKeyPayload | 
     ) {
       return null;
     }
-    return {
-      v: 1,
+    const normalized: Omit<PostgresUploadKeyPayload, 'sig' | 'signed'> = {
+      v: parsed.v,
       oid: Math.floor(Number(parsed.oid)),
       mimeType: parsed.mimeType.trim(),
       originalName: sanitizeOriginalName(parsed.originalName),
       userId: sanitizeOptionalText(parsed.userId),
       access: normalizeUploadAccess(parsed.access) || undefined,
       category: sanitizeOptionalText(parsed.category),
+    };
+
+    if (normalized.v === 2) {
+      const signature = String(parsed.sig || '').trim();
+      if (!signature) return null;
+      const expected = signUploadKeyPayload(normalized);
+      if (!timingSafeEqualText(signature, expected)) return null;
+      return {
+        ...normalized,
+        sig: signature,
+        signed: true,
+      };
+    }
+
+    return {
+      ...normalized,
+      signed: false,
     };
   } catch {
     return null;
@@ -109,14 +180,14 @@ export const getUploadObjectAccessMetadata = (
 ): UploadObjectAccessMetadata | null => {
   const parsedKey = decodePostgresUploadKey(objectKey);
   if (!parsedKey) return null;
-  const access = parsedKey.access || 'legacy';
+  const access = parsedKey.signed ? parsedKey.access || 'private' : 'legacy';
   return {
     objectKey,
     storageProvider: 'postgres_large_object',
     access,
     ownerUserId: parsedKey.userId || null,
     category: parsedKey.category || null,
-    isLegacy: !parsedKey.access,
+    isLegacy: !parsedKey.signed,
   };
 };
 
@@ -150,7 +221,7 @@ const persistPostgresLargeObjectUpload = async (input: {
     }
 
     const objectKey = encodePostgresUploadKey({
-      v: 1,
+      v: 2,
       oid: Math.floor(oid),
       mimeType: input.mimeType,
       originalName: sanitizeOriginalName(input.originalName),

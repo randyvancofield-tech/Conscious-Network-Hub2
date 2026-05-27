@@ -5,7 +5,6 @@ import {
   Building2,
   CalendarClock,
   CheckCircle2,
-  Clock3,
   ClipboardList,
   Handshake,
   LifeBuoy,
@@ -14,18 +13,39 @@ import {
   MessageSquare,
   Network,
   PanelLeft,
+  Save,
   Target,
+  Trash2,
   Users,
 } from 'lucide-react';
 import { UserProfile } from '../types';
 import {
-  createProviderCrmRecord,
   createNativeProviderControlSession,
+  createProviderCrmCollaboration,
+  createProviderCrmContent,
+  createProviderCrmFollowUp,
+  createProviderCrmNote,
+  createProviderCrmRecord,
   createProviderRoundtableReservation,
+  deleteProviderCrmCollaboration,
+  deleteProviderCrmFollowUp,
+  deleteProviderCrmNote,
   getProviderCrmAdminTools,
+  getProviderCrmAnalytics,
   getProviderCrmSummary,
   getProviderCrmTools,
   getProviderCrmWorkspace,
+  listProviderCrmCollaborations,
+  listProviderCrmContent,
+  listProviderCrmFollowUps,
+  listProviderCrmNotes,
+  ProviderCrmAnalytics,
+  ProviderCrmCollaboration,
+  ProviderCrmContentItem,
+  ProviderCrmContentStatus,
+  ProviderCrmFollowUp,
+  ProviderCrmFollowUpStatus,
+  ProviderCrmNote,
   ProviderCrmPriority,
   ProviderCrmRecordKind,
   ProviderCrmRecordStatus,
@@ -33,6 +53,10 @@ import {
   ProviderCrmToolId,
   ProviderCrmWorkspace,
   ProviderRoundtableReservation,
+  updateProviderCrmCollaboration,
+  updateProviderCrmContent,
+  updateProviderCrmFollowUp,
+  updateProviderCrmNote,
   updateProviderCrmToolVisibility,
 } from '../services/backendApiService';
 import {
@@ -46,6 +70,67 @@ interface ProviderCrmShellProps {
   onOpenAdministrativeAccess: () => void;
   onOpenProviderAccess: () => void;
 }
+
+type NoteForm = {
+  title: string;
+  body: string;
+  category: string;
+  status: ProviderCrmNote['status'];
+};
+
+type ContentForm = {
+  title: string;
+  description: string;
+  tier: string;
+  status: ProviderCrmContentStatus;
+};
+
+type CollaborationForm = {
+  title: string;
+  description: string;
+  status: ProviderCrmCollaboration['status'];
+};
+
+type FollowUpForm = {
+  title: string;
+  details: string;
+  dueAt: string;
+  status: ProviderCrmFollowUpStatus;
+  priority: ProviderCrmPriority;
+};
+
+const emptyNoteForm: NoteForm = {
+  title: '',
+  body: '',
+  category: 'general',
+  status: 'active',
+};
+
+const emptyContentForm: ContentForm = {
+  title: '',
+  description: '',
+  tier: 'Professional',
+  status: 'draft',
+};
+
+const emptyCollaborationForm: CollaborationForm = {
+  title: '',
+  description: '',
+  status: 'open',
+};
+
+const buildDefaultFollowUpForm = (): FollowUpForm => {
+  const due = new Date();
+  due.setDate(due.getDate() + 2);
+  due.setMinutes(0, 0, 0);
+  return {
+    title: '',
+    details: '',
+    dueAt: toDateTimeLocalValue(due),
+    status: 'open',
+    priority: 'normal',
+  };
+};
 
 const TOOL_ICONS: Record<string, React.ReactNode> = {
   home: <PanelLeft className="h-4 w-4" />,
@@ -65,28 +150,29 @@ const TOOL_ICONS: Record<string, React.ReactNode> = {
 
 const readProviderToken = (): string => getProviderControlSession() || '';
 
-const getLocalTimezone = (): string => {
+function getLocalTimezone(): string {
   try {
     return Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC';
   } catch {
     return 'UTC';
   }
-};
+}
 
-const toDateInputValue = (date: Date): string => {
+function toDateInputValue(date: Date): string {
   const year = date.getFullYear();
   const month = `${date.getMonth() + 1}`.padStart(2, '0');
   const day = `${date.getDate()}`.padStart(2, '0');
   return `${year}-${month}-${day}`;
-};
+}
 
-const toDateTimeLocalValue = (date: Date): string => {
+function toDateTimeLocalValue(date: Date): string {
   const hours = `${date.getHours()}`.padStart(2, '0');
   const minutes = `${date.getMinutes()}`.padStart(2, '0');
   return `${toDateInputValue(date)}T${hours}:${minutes}`;
-};
+}
 
-const formatLocalDateTime = (value: string, timezone: string): string => {
+function formatLocalDateTime(value: string | null, timezone: string): string {
+  if (!value) return 'Unscheduled';
   const date = new Date(value);
   if (!Number.isFinite(date.getTime())) return 'Unscheduled';
   return new Intl.DateTimeFormat(undefined, {
@@ -94,9 +180,9 @@ const formatLocalDateTime = (value: string, timezone: string): string => {
     timeStyle: 'short',
     timeZone: timezone || undefined,
   }).format(date);
-};
+}
 
-const buildRoundtableStartIso = (dateValue: string, hourValue: number): string => {
+function buildRoundtableStartIso(dateValue: string, hourValue: number): string {
   const [year, month, day] = dateValue.split('-').map((entry) => Number.parseInt(entry, 10));
   const date = new Date(
     Number.isFinite(year) ? year : new Date().getFullYear(),
@@ -108,64 +194,38 @@ const buildRoundtableStartIso = (dateValue: string, hourValue: number): string =
     0
   );
   return date.toISOString();
-};
+}
 
-const toAbsoluteAppUrl = (path: string): string => {
+function toAbsoluteAppUrl(path: string): string {
   if (/^https?:\/\//i.test(path)) return path;
   const normalizedPath = path.startsWith('/') ? path : `/${path}`;
   if (typeof window === 'undefined' || !window.location?.origin) return normalizedPath;
   return `${window.location.origin}${normalizedPath}`;
-};
+}
 
-const isReservationForSlot = (
+function isReservationForSlot(
   reservation: ProviderRoundtableReservation,
   dateValue: string,
   hourValue: number
-): boolean => {
+): boolean {
   const start = new Date(reservation.startAt);
   return (
     toDateInputValue(start) === dateValue &&
     start.getHours() === hourValue &&
     reservation.status !== 'cancelled'
   );
-};
+}
 
-const renderPlaceholder = (tool: ProviderCrmTool | null): React.ReactNode => {
-  if (!tool) {
-    return (
-      <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-6">
-        <p className="text-xs font-black uppercase tracking-widest text-slate-400">
-          Select a CRM tool to begin.
-        </p>
-      </div>
-    );
-  }
+function isRelationshipKind(kind: ProviderCrmRecordKind): boolean {
+  return kind === 'client' || kind === 'organization' || kind === 'institution';
+}
 
-  return (
-    <div className="space-y-5 rounded-2xl border border-white/10 bg-white/[0.03] p-5 sm:p-6">
-      <div className="flex items-center gap-3">
-        <div className="flex h-10 w-10 items-center justify-center rounded-xl border border-blue-300/20 bg-blue-500/10 text-blue-100">
-          {TOOL_ICONS[tool.id] || <PanelLeft className="h-4 w-4" />}
-        </div>
-        <div>
-          <h3 className="text-sm font-black uppercase tracking-widest text-white">
-            {tool.label}
-          </h3>
-          <p className="mt-1 text-[10px] font-black uppercase tracking-widest text-slate-500">
-            {tool.phase}
-          </p>
-        </div>
-      </div>
-      <p className="text-sm leading-7 text-slate-300">{tool.description}</p>
-      <div className="rounded-xl border border-amber-300/20 bg-amber-400/[0.05] p-4">
-        <p className="text-[10px] font-black uppercase tracking-widest text-amber-100">
-          Placeholder shell only. Workflow data, notes, referrals, analytics, and relationship
-          management are not enabled in Phase 1.
-        </p>
-      </div>
-    </div>
-  );
-};
+const controlClass =
+  'rounded-xl border border-white/10 bg-black/20 px-4 py-3 text-xs font-bold text-white outline-none focus:ring-2 focus:ring-blue-500/30';
+const actionClass =
+  'inline-flex items-center justify-center gap-2 rounded-xl bg-blue-600 px-4 py-3 text-[10px] font-black uppercase tracking-widest text-white transition hover:bg-blue-500 disabled:bg-slate-700 disabled:text-slate-500';
+const secondaryActionClass =
+  'inline-flex items-center justify-center gap-2 rounded-xl border border-white/10 bg-white/5 px-4 py-3 text-[10px] font-black uppercase tracking-widest text-slate-200 transition hover:bg-white/10 disabled:opacity-50';
 
 const ProviderCrmShell: React.FC<ProviderCrmShellProps> = ({
   user,
@@ -177,10 +237,16 @@ const ProviderCrmShell: React.FC<ProviderCrmShellProps> = ({
   const [adminTools, setAdminTools] = useState<ProviderCrmTool[]>([]);
   const [soleAdminEmail, setSoleAdminEmail] = useState('');
   const [activeToolId, setActiveToolId] = useState<ProviderCrmToolId>('home');
-  const [status, setStatus] = useState('Loading provider CRM shell...');
+  const [status, setStatus] = useState('Loading provider CRM workspace...');
   const [isLoading, setLoading] = useState(false);
   const [summaryText, setSummaryText] = useState('');
   const [workspace, setWorkspace] = useState<ProviderCrmWorkspace | null>(null);
+  const [notes, setNotes] = useState<ProviderCrmNote[]>([]);
+  const [contentItems, setContentItems] = useState<ProviderCrmContentItem[]>([]);
+  const [collaborations, setCollaborations] = useState<ProviderCrmCollaboration[]>([]);
+  const [followUps, setFollowUps] = useState<ProviderCrmFollowUp[]>([]);
+  const [analytics, setAnalytics] = useState<ProviderCrmAnalytics | null>(null);
+
   const [recordKindInput, setRecordKindInput] = useState<ProviderCrmRecordKind>('client');
   const [recordTitleInput, setRecordTitleInput] = useState('');
   const [recordClientInput, setRecordClientInput] = useState('');
@@ -189,12 +255,16 @@ const ProviderCrmShell: React.FC<ProviderCrmShellProps> = ({
   const [recordBusinessInput, setRecordBusinessInput] = useState('');
   const [recordStatusInput, setRecordStatusInput] = useState<ProviderCrmRecordStatus>('active');
   const [recordPriorityInput, setRecordPriorityInput] = useState<ProviderCrmPriority>('normal');
-  const [recordNextActionInput, setRecordNextActionInput] = useState(() => {
-    const date = new Date();
-    date.setDate(date.getDate() + 2);
-    date.setMinutes(0, 0, 0);
-    return toDateTimeLocalValue(date);
-  });
+
+  const [noteEditId, setNoteEditId] = useState<string | null>(null);
+  const [noteForm, setNoteForm] = useState<NoteForm>(emptyNoteForm);
+  const [contentEditId, setContentEditId] = useState<string | null>(null);
+  const [contentForm, setContentForm] = useState<ContentForm>(emptyContentForm);
+  const [collaborationEditId, setCollaborationEditId] = useState<string | null>(null);
+  const [collaborationForm, setCollaborationForm] = useState<CollaborationForm>(emptyCollaborationForm);
+  const [followUpEditId, setFollowUpEditId] = useState<string | null>(null);
+  const [followUpForm, setFollowUpForm] = useState<FollowUpForm>(() => buildDefaultFollowUpForm());
+
   const [roundtableDateInput, setRoundtableDateInput] = useState(() => toDateInputValue(new Date()));
   const [roundtableHourInput, setRoundtableHourInput] = useState(9);
   const [roundtableRoomInput, setRoundtableRoomInput] = useState(1);
@@ -206,7 +276,10 @@ const ProviderCrmShell: React.FC<ProviderCrmShellProps> = ({
     () => tools.find((tool) => tool.id === activeToolId) || tools[0] || null,
     [activeToolId, tools]
   );
-  const visibleRecords = workspace?.records || [];
+  const relationshipRecords = useMemo(
+    () => (workspace?.records || []).filter((record) => isRelationshipKind(record.kind)),
+    [workspace]
+  );
   const roundtableReservations = workspace?.roundtable.reservations || [];
   const latestRoundtableReservation = roundtableReservations[0] || null;
   const reservedRoomsForSelectedHour = useMemo(
@@ -218,6 +291,26 @@ const ProviderCrmShell: React.FC<ProviderCrmShellProps> = ({
       ),
     [roundtableDateInput, roundtableHourInput, roundtableReservations]
   );
+
+  const refreshCrmData = async (tokenOverride?: string): Promise<void> => {
+    const token = String(tokenOverride || providerToken).trim();
+    if (!token) return;
+    const [workspaceResult, noteResult, contentResult, collaborationResult, followUpResult, analyticsResult] =
+      await Promise.all([
+        getProviderCrmWorkspace(token, localTimezone),
+        listProviderCrmNotes(token),
+        listProviderCrmContent(token),
+        listProviderCrmCollaborations(token),
+        listProviderCrmFollowUps(token),
+        getProviderCrmAnalytics(token),
+      ]);
+    setWorkspace(workspaceResult);
+    setNotes(noteResult);
+    setContentItems(contentResult);
+    setCollaborations(collaborationResult);
+    setFollowUps(followUpResult);
+    setAnalytics(analyticsResult);
+  };
 
   useEffect(() => {
     if (typeof window === 'undefined') return;
@@ -240,6 +333,11 @@ const ProviderCrmShell: React.FC<ProviderCrmShellProps> = ({
         setAdminTools([]);
         setSummaryText('');
         setWorkspace(null);
+        setNotes([]);
+        setContentItems([]);
+        setCollaborations([]);
+        setFollowUps([]);
+        setAnalytics(null);
         setStatus('Provider CRM requires an active native provider session.');
         return;
       }
@@ -247,17 +345,17 @@ const ProviderCrmShell: React.FC<ProviderCrmShellProps> = ({
       setLoading(true);
       setStatus('Loading provider CRM tools...');
       try {
-        const [toolResult, summaryResult, workspaceResult, adminToolResult] = await Promise.all([
+        const [toolResult, summaryResult, adminToolResult] = await Promise.all([
           getProviderCrmTools(token),
           getProviderCrmSummary(token),
-          getProviderCrmWorkspace(token, localTimezone),
           isAdmin ? getProviderCrmAdminTools(token) : Promise.resolve(null),
         ]);
+        if (cancelled) return;
+        await refreshCrmData(token);
         if (cancelled) return;
 
         const nextTools = toolResult?.tools || [];
         setTools(nextTools);
-        setWorkspace(workspaceResult);
         setAdminTools(adminToolResult?.tools || []);
         setSoleAdminEmail(adminToolResult?.soleAdminEmail || '');
         if (!nextTools.some((tool) => tool.id === activeToolId)) {
@@ -265,10 +363,12 @@ const ProviderCrmShell: React.FC<ProviderCrmShellProps> = ({
         }
         setSummaryText(
           summaryResult?.summary
-            ? `${summaryResult.summary.activeToolCount} CRM tools active | ${workspaceResult?.scope.visibility || 'scoped'}`
-            : 'Provider CRM shell active'
+            ? `${summaryResult.summary.activeToolCount} CRM tools active | ${summaryResult.summary.shellStatus}`
+            : 'Provider CRM workspace active'
         );
-        setStatus(nextTools.length > 0 ? 'Provider CRM shell active.' : 'No CRM tools are currently enabled.');
+        setStatus(nextTools.length > 0 ? 'Provider CRM workspace active.' : 'No CRM tools are currently enabled.');
+      } catch {
+        if (!cancelled) setStatus('Provider CRM could not be loaded. Verify provider session and backend connectivity.');
       } finally {
         if (!cancelled) setLoading(false);
       }
@@ -318,9 +418,7 @@ const ProviderCrmShell: React.FC<ProviderCrmShellProps> = ({
         setStatus('Tool visibility could not be updated.');
         return;
       }
-      setAdminTools((current) =>
-        current.map((entry) => (entry.id === updated.id ? updated : entry))
-      );
+      setAdminTools((current) => current.map((entry) => (entry.id === updated.id ? updated : entry)));
       const refreshed = await getProviderCrmTools(token);
       setTools(refreshed?.tools || []);
       setStatus(`${updated.label} visibility updated for this runtime.`);
@@ -329,17 +427,10 @@ const ProviderCrmShell: React.FC<ProviderCrmShellProps> = ({
     }
   };
 
-  const refreshWorkspace = async (tokenOverride?: string) => {
-    const token = String(tokenOverride || providerToken).trim();
-    if (!token) return;
-    const nextWorkspace = await getProviderCrmWorkspace(token, localTimezone);
-    setWorkspace(nextWorkspace);
-  };
-
   const handleCreateRecord = async () => {
     const token = providerToken.trim();
-    if (!token) return;
     const title = recordTitleInput.trim();
+    if (!token) return;
     if (!title) {
       setStatus('Add a record title before saving.');
       return;
@@ -357,7 +448,6 @@ const ProviderCrmShell: React.FC<ProviderCrmShellProps> = ({
         businessFocus: recordBusinessInput.trim() || undefined,
         status: recordStatusInput,
         priority: recordPriorityInput,
-        nextActionAt: recordNextActionInput ? new Date(recordNextActionInput).toISOString() : null,
         timezone: localTimezone,
       });
       if (!created) {
@@ -369,8 +459,112 @@ const ProviderCrmShell: React.FC<ProviderCrmShellProps> = ({
       setRecordOrganizationInput('');
       setRecordTreatmentInput('');
       setRecordBusinessInput('');
-      await refreshWorkspace(token);
+      await refreshCrmData(token);
       setStatus('CRM relationship record saved.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleSaveNote = async () => {
+    const token = providerToken.trim();
+    if (!token) return;
+    if (!noteForm.title.trim() || !noteForm.body.trim()) {
+      setStatus('Add a note title and body before saving.');
+      return;
+    }
+    setLoading(true);
+    try {
+      const saved = noteEditId
+        ? await updateProviderCrmNote(token, noteEditId, noteForm)
+        : await createProviderCrmNote(token, noteForm);
+      if (!saved) {
+        setStatus('CRM note could not be saved.');
+        return;
+      }
+      setNoteEditId(null);
+      setNoteForm(emptyNoteForm);
+      await refreshCrmData(token);
+      setStatus('CRM note saved.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleSaveContent = async () => {
+    const token = providerToken.trim();
+    if (!token) return;
+    if (!contentForm.title.trim() || !contentForm.description.trim()) {
+      setStatus('Add a content title and description before saving.');
+      return;
+    }
+    setLoading(true);
+    try {
+      const saved = contentEditId
+        ? await updateProviderCrmContent(token, contentEditId, contentForm)
+        : await createProviderCrmContent(token, contentForm);
+      if (!saved) {
+        setStatus('Content item could not be saved.');
+        return;
+      }
+      setContentEditId(null);
+      setContentForm(emptyContentForm);
+      await refreshCrmData(token);
+      setStatus('Content item saved.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleSaveCollaboration = async () => {
+    const token = providerToken.trim();
+    if (!token) return;
+    if (!collaborationForm.title.trim() || !collaborationForm.description.trim()) {
+      setStatus('Add a collaboration title and description before saving.');
+      return;
+    }
+    setLoading(true);
+    try {
+      const saved = collaborationEditId
+        ? await updateProviderCrmCollaboration(token, collaborationEditId, collaborationForm)
+        : await createProviderCrmCollaboration(token, collaborationForm);
+      if (!saved) {
+        setStatus('Collaboration item could not be saved.');
+        return;
+      }
+      setCollaborationEditId(null);
+      setCollaborationForm(emptyCollaborationForm);
+      await refreshCrmData(token);
+      setStatus('Collaboration item saved.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleSaveFollowUp = async () => {
+    const token = providerToken.trim();
+    if (!token) return;
+    if (!followUpForm.title.trim()) {
+      setStatus('Add a follow-up title before saving.');
+      return;
+    }
+    setLoading(true);
+    try {
+      const input = {
+        ...followUpForm,
+        dueAt: followUpForm.dueAt ? new Date(followUpForm.dueAt).toISOString() : null,
+      };
+      const saved = followUpEditId
+        ? await updateProviderCrmFollowUp(token, followUpEditId, input)
+        : await createProviderCrmFollowUp(token, input);
+      if (!saved) {
+        setStatus('Follow-up could not be saved.');
+        return;
+      }
+      setFollowUpEditId(null);
+      setFollowUpForm(buildDefaultFollowUpForm());
+      await refreshCrmData(token);
+      setStatus('Follow-up saved.');
     } finally {
       setLoading(false);
     }
@@ -393,7 +587,7 @@ const ProviderCrmShell: React.FC<ProviderCrmShellProps> = ({
         setStatus('Roundtable room could not be reserved. Select another room or hour.');
         return;
       }
-      await refreshWorkspace(token);
+      await refreshCrmData(token);
       setStatus(`Conscious Roundtable Room ${reservation.roomNumber} reserved.`);
     } finally {
       setLoading(false);
@@ -404,44 +598,30 @@ const ProviderCrmShell: React.FC<ProviderCrmShellProps> = ({
     icon: React.ReactNode,
     label: string,
     value: number | string,
-    tone = 'blue'
-  ): React.ReactNode => (
-    <div
-      className={`rounded-2xl border p-4 ${
-        tone === 'amber'
-          ? 'border-amber-300/20 bg-amber-500/[0.05]'
-          : tone === 'teal'
-          ? 'border-teal-300/20 bg-teal-500/[0.05]'
+    tone: 'blue' | 'amber' | 'teal' | 'indigo' | 'emerald' | 'red' = 'blue'
+  ): React.ReactNode => {
+    const toneClass =
+      tone === 'amber'
+        ? 'border-amber-300/20 bg-amber-500/[0.05] text-amber-100'
+        : tone === 'teal'
+          ? 'border-teal-300/20 bg-teal-500/[0.05] text-teal-100'
           : tone === 'indigo'
-          ? 'border-indigo-300/20 bg-indigo-500/[0.05]'
-          : tone === 'emerald'
-          ? 'border-emerald-300/20 bg-emerald-500/[0.05]'
-          : tone === 'red'
-          ? 'border-red-300/20 bg-red-500/[0.05]'
-          : 'border-blue-300/20 bg-blue-500/[0.05]'
-      }`}
-    >
-      <div
-        className={`mb-3 flex h-10 w-10 items-center justify-center rounded-xl border ${
-          tone === 'amber'
-            ? 'border-amber-300/20 bg-amber-500/10 text-amber-100'
-            : tone === 'teal'
-            ? 'border-teal-300/20 bg-teal-500/10 text-teal-100'
-            : tone === 'indigo'
-            ? 'border-indigo-300/20 bg-indigo-500/10 text-indigo-100'
+            ? 'border-indigo-300/20 bg-indigo-500/[0.05] text-indigo-100'
             : tone === 'emerald'
-            ? 'border-emerald-300/20 bg-emerald-500/10 text-emerald-100'
-            : tone === 'red'
-            ? 'border-red-300/20 bg-red-500/10 text-red-100'
-            : 'border-blue-300/20 bg-blue-500/10 text-blue-100'
-        }`}
-      >
-        {icon}
+              ? 'border-emerald-300/20 bg-emerald-500/[0.05] text-emerald-100'
+              : tone === 'red'
+                ? 'border-red-300/20 bg-red-500/[0.05] text-red-100'
+                : 'border-blue-300/20 bg-blue-500/[0.05] text-blue-100';
+    return (
+      <div className={`rounded-2xl border p-4 ${toneClass}`}>
+        <div className="mb-3 flex h-10 w-10 items-center justify-center rounded-xl border border-white/10 bg-black/20">
+          {icon}
+        </div>
+        <p className="text-2xl font-black text-white">{value}</p>
+        <p className="mt-1 text-[9px] font-black uppercase tracking-widest text-slate-400">{label}</p>
       </div>
-      <p className="text-2xl font-black text-white">{value}</p>
-      <p className="mt-1 text-[9px] font-black uppercase tracking-widest text-slate-400">{label}</p>
-    </div>
-  );
+    );
+  };
 
   const renderBusinessHome = (): React.ReactNode => (
     <div className="space-y-6">
@@ -461,7 +641,7 @@ const ProviderCrmShell: React.FC<ProviderCrmShellProps> = ({
         </div>
         <div className="mt-5 grid gap-3 md:grid-cols-3">
           {renderMetric(<Users className="h-4 w-4" />, 'Active care relationships', workspace?.metrics.treatment.activeClientRecords || 0)}
-          {renderMetric(<Clock3 className="h-4 w-4" />, 'Follow-ups due', workspace?.metrics.treatment.dueFollowUps || 0, 'amber')}
+          {renderMetric(<ClipboardList className="h-4 w-4" />, 'Open follow-ups', analytics?.followUps.open || 0, 'amber')}
           {renderMetric(<Building2 className="h-4 w-4" />, 'Organizations / institutions', workspace?.metrics.businessGrowth.organizationsTracked || 0, 'teal')}
         </div>
         <div className="mt-3 grid gap-3 md:grid-cols-3">
@@ -472,22 +652,14 @@ const ProviderCrmShell: React.FC<ProviderCrmShellProps> = ({
       </section>
 
       <section className="rounded-2xl border border-white/10 bg-white/[0.03] p-5 sm:p-6">
-        <h3 className="text-sm font-black uppercase tracking-widest text-white">
-          Actionable Guidance
-        </h3>
+        <h3 className="text-sm font-black uppercase tracking-widest text-white">Actionable Guidance</h3>
         <div className="mt-4 grid gap-3 lg:grid-cols-3">
           {(workspace?.guidanceAlerts || []).map((alert) => (
             <div key={alert.id} className="rounded-xl border border-white/10 bg-black/20 p-4">
-              <p className="text-[9px] font-black uppercase tracking-widest text-blue-200">
-                {alert.severity}
-              </p>
-              <p className="mt-2 text-sm font-black uppercase tracking-widest text-white">
-                {alert.title}
-              </p>
+              <p className="text-[9px] font-black uppercase tracking-widest text-blue-200">{alert.severity}</p>
+              <p className="mt-2 text-sm font-black uppercase tracking-widest text-white">{alert.title}</p>
               <p className="mt-2 text-xs leading-6 text-slate-300">{alert.detail}</p>
-              <p className="mt-3 text-[9px] font-black uppercase tracking-widest text-slate-500">
-                {alert.action}
-              </p>
+              <p className="mt-3 text-[9px] font-black uppercase tracking-widest text-slate-500">{alert.action}</p>
             </div>
           ))}
           {(workspace?.guidanceAlerts || []).length === 0 && (
@@ -500,7 +672,7 @@ const ProviderCrmShell: React.FC<ProviderCrmShellProps> = ({
     </div>
   );
 
-  const renderRecordWorkspace = (): React.ReactNode => (
+  const renderRelationshipWorkspace = (): React.ReactNode => (
     <div className="space-y-6">
       <section className="rounded-2xl border border-white/10 bg-white/[0.03] p-5 sm:p-6">
         <div className="flex items-center gap-3">
@@ -508,104 +680,52 @@ const ProviderCrmShell: React.FC<ProviderCrmShellProps> = ({
             <ClipboardList className="h-4 w-4" />
           </div>
           <div>
-            <h3 className="text-sm font-black uppercase tracking-widest text-white">
-              Add Treatment / Business Record
-            </h3>
+            <h3 className="text-sm font-black uppercase tracking-widest text-white">Add Treatment / Business Record</h3>
             <p className="mt-1 text-[10px] uppercase tracking-widest text-slate-500">
               Provider records are server-scoped to the owner. Admin sees the holistic view.
             </p>
           </div>
         </div>
         <div className="mt-5 grid gap-3 md:grid-cols-6">
-          <select
-            value={recordKindInput}
-            onChange={(event) => setRecordKindInput(event.target.value as ProviderCrmRecordKind)}
-            className="md:col-span-2 rounded-xl border border-white/10 bg-black/20 px-4 py-3 text-xs font-bold text-white outline-none focus:ring-2 focus:ring-blue-500/30"
-          >
+          <select value={recordKindInput} onChange={(event) => setRecordKindInput(event.target.value as ProviderCrmRecordKind)} className={`md:col-span-2 ${controlClass}`}>
             <option value="client">User / Client</option>
             <option value="organization">Organization</option>
             <option value="institution">Institution</option>
-            <option value="follow_up">Follow-Up</option>
           </select>
-          <input
-            value={recordTitleInput}
-            onChange={(event) => setRecordTitleInput(event.target.value)}
-            placeholder="Record title"
-            className="md:col-span-4 rounded-xl border border-white/10 bg-black/20 px-4 py-3 text-xs font-bold text-white outline-none focus:ring-2 focus:ring-blue-500/30"
-          />
-          <input
-            value={recordClientInput}
-            onChange={(event) => setRecordClientInput(event.target.value)}
-            placeholder="User/client name or handle"
-            className="md:col-span-3 rounded-xl border border-white/10 bg-black/20 px-4 py-3 text-xs font-bold text-white outline-none focus:ring-2 focus:ring-blue-500/30"
-          />
-          <input
-            value={recordOrganizationInput}
-            onChange={(event) => setRecordOrganizationInput(event.target.value)}
-            placeholder="Organization / institution"
-            className="md:col-span-3 rounded-xl border border-white/10 bg-black/20 px-4 py-3 text-xs font-bold text-white outline-none focus:ring-2 focus:ring-blue-500/30"
-          />
-          <textarea
-            value={recordTreatmentInput}
-            onChange={(event) => setRecordTreatmentInput(event.target.value)}
-            placeholder="Treatment focus / service delivery notes"
-            className="md:col-span-3 min-h-[110px] rounded-xl border border-white/10 bg-black/20 px-4 py-3 text-xs font-bold text-white outline-none focus:ring-2 focus:ring-blue-500/30"
-          />
-          <textarea
-            value={recordBusinessInput}
-            onChange={(event) => setRecordBusinessInput(event.target.value)}
-            placeholder="Business growth / contract opportunity notes"
-            className="md:col-span-3 min-h-[110px] rounded-xl border border-white/10 bg-black/20 px-4 py-3 text-xs font-bold text-white outline-none focus:ring-2 focus:ring-blue-500/30"
-          />
-          <select
-            value={recordStatusInput}
-            onChange={(event) => setRecordStatusInput(event.target.value as ProviderCrmRecordStatus)}
-            className="md:col-span-2 rounded-xl border border-white/10 bg-black/20 px-4 py-3 text-xs font-bold text-white outline-none focus:ring-2 focus:ring-blue-500/30"
-          >
+          <input value={recordTitleInput} onChange={(event) => setRecordTitleInput(event.target.value)} placeholder="Record title" className={`md:col-span-4 ${controlClass}`} />
+          <input value={recordClientInput} onChange={(event) => setRecordClientInput(event.target.value)} placeholder="User/client name or handle" className={`md:col-span-3 ${controlClass}`} />
+          <input value={recordOrganizationInput} onChange={(event) => setRecordOrganizationInput(event.target.value)} placeholder="Organization / institution" className={`md:col-span-3 ${controlClass}`} />
+          <textarea value={recordTreatmentInput} onChange={(event) => setRecordTreatmentInput(event.target.value)} placeholder="Treatment focus / service delivery notes" className={`md:col-span-3 min-h-[110px] ${controlClass}`} />
+          <textarea value={recordBusinessInput} onChange={(event) => setRecordBusinessInput(event.target.value)} placeholder="Business growth / contract opportunity notes" className={`md:col-span-3 min-h-[110px] ${controlClass}`} />
+          <select value={recordStatusInput} onChange={(event) => setRecordStatusInput(event.target.value as ProviderCrmRecordStatus)} className={`md:col-span-2 ${controlClass}`}>
             <option value="active">Active</option>
             <option value="watching">Watching</option>
             <option value="contracting">Contracting</option>
             <option value="completed">Completed</option>
             <option value="archived">Archived</option>
           </select>
-          <select
-            value={recordPriorityInput}
-            onChange={(event) => setRecordPriorityInput(event.target.value as ProviderCrmPriority)}
-            className="md:col-span-2 rounded-xl border border-white/10 bg-black/20 px-4 py-3 text-xs font-bold text-white outline-none focus:ring-2 focus:ring-blue-500/30"
-          >
+          <select value={recordPriorityInput} onChange={(event) => setRecordPriorityInput(event.target.value as ProviderCrmPriority)} className={`md:col-span-2 ${controlClass}`}>
             <option value="low">Low</option>
             <option value="normal">Normal</option>
             <option value="high">High</option>
             <option value="urgent">Urgent</option>
           </select>
-          <input
-            type="datetime-local"
-            value={recordNextActionInput}
-            onChange={(event) => setRecordNextActionInput(event.target.value)}
-            className="md:col-span-2 rounded-xl border border-white/10 bg-black/20 px-4 py-3 text-xs font-bold text-white outline-none focus:ring-2 focus:ring-blue-500/30"
-          />
+          <button type="button" onClick={() => void handleCreateRecord()} disabled={isLoading} className={`md:col-span-2 ${actionClass}`}>
+            <Save className="h-3.5 w-3.5" />
+            Save Record
+          </button>
         </div>
-        <button
-          type="button"
-          onClick={() => void handleCreateRecord()}
-          disabled={isLoading}
-          className="mt-4 rounded-xl bg-teal-600 px-5 py-3 text-xs font-black uppercase tracking-widest text-white transition hover:bg-teal-500 disabled:bg-slate-700 disabled:text-slate-500"
-        >
-          Save CRM Record
-        </button>
       </section>
 
       <section className="rounded-2xl border border-white/10 bg-white/[0.03] p-5 sm:p-6">
-        <h3 className="text-sm font-black uppercase tracking-widest text-white">
-          Connected Records
-        </h3>
+        <h3 className="text-sm font-black uppercase tracking-widest text-white">Connected Records</h3>
         <div className="mt-4 space-y-3">
-          {visibleRecords.length === 0 && (
+          {relationshipRecords.length === 0 && (
             <p className="rounded-xl border border-white/10 bg-black/20 p-4 text-xs leading-6 text-slate-400">
-              No CRM records yet. Add the first user, organization, or institution interaction above.
+              No CRM relationship records yet. Add the first user, organization, or institution interaction above.
             </p>
           )}
-          {visibleRecords.map((record) => (
+          {relationshipRecords.map((record) => (
             <div key={record.id} className="rounded-xl border border-white/10 bg-black/20 p-4">
               <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
                 <div>
@@ -614,11 +734,6 @@ const ProviderCrmShell: React.FC<ProviderCrmShellProps> = ({
                     {record.kind} | {record.status} | {record.priority}
                   </p>
                 </div>
-                {record.nextActionAt && (
-                  <span className="rounded-full border border-amber-300/20 bg-amber-400/10 px-3 py-2 text-[9px] font-black uppercase tracking-widest text-amber-100">
-                    {formatLocalDateTime(record.nextActionAt, localTimezone)}
-                  </span>
-                )}
               </div>
               {(record.clientDisplayName || record.organizationName) && (
                 <p className="mt-3 text-xs leading-6 text-slate-300">
@@ -646,6 +761,322 @@ const ProviderCrmShell: React.FC<ProviderCrmShellProps> = ({
     </div>
   );
 
+  const renderNotesWorkspace = (): React.ReactNode => (
+    <div className="space-y-6">
+      <section className="rounded-2xl border border-white/10 bg-white/[0.03] p-5 sm:p-6">
+        <h3 className="text-sm font-black uppercase tracking-widest text-white">
+          {noteEditId ? 'Edit Private Note' : 'Create Private Note'}
+        </h3>
+        <div className="mt-5 grid gap-3 md:grid-cols-6">
+          <input value={noteForm.title} onChange={(event) => setNoteForm({ ...noteForm, title: event.target.value })} placeholder="Note title" className={`md:col-span-3 ${controlClass}`} />
+          <input value={noteForm.category} onChange={(event) => setNoteForm({ ...noteForm, category: event.target.value })} placeholder="Category" className={`md:col-span-2 ${controlClass}`} />
+          <select value={noteForm.status} onChange={(event) => setNoteForm({ ...noteForm, status: event.target.value as ProviderCrmNote['status'] })} className={`md:col-span-1 ${controlClass}`}>
+            <option value="active">Active</option>
+            <option value="archived">Archived</option>
+          </select>
+          <textarea value={noteForm.body} onChange={(event) => setNoteForm({ ...noteForm, body: event.target.value })} placeholder="Private note body" className={`md:col-span-6 min-h-[140px] ${controlClass}`} />
+        </div>
+        <div className="mt-4 flex flex-wrap gap-3">
+          <button type="button" onClick={() => void handleSaveNote()} disabled={isLoading} className={actionClass}>
+            <Save className="h-3.5 w-3.5" />
+            {noteEditId ? 'Update Note' : 'Save Note'}
+          </button>
+          {noteEditId && (
+            <button type="button" onClick={() => { setNoteEditId(null); setNoteForm(emptyNoteForm); }} className={secondaryActionClass}>
+              Cancel Edit
+            </button>
+          )}
+        </div>
+      </section>
+
+      <section className="rounded-2xl border border-white/10 bg-white/[0.03] p-5 sm:p-6">
+        <h3 className="text-sm font-black uppercase tracking-widest text-white">Private Notes</h3>
+        <div className="mt-4 space-y-3">
+          {notes.length === 0 && (
+            <p className="rounded-xl border border-white/10 bg-black/20 p-4 text-xs leading-6 text-slate-400">
+              No private CRM notes yet.
+            </p>
+          )}
+          {notes.map((note) => (
+            <div key={note.id} className="rounded-xl border border-white/10 bg-black/20 p-4">
+              <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                <div>
+                  <p className="text-sm font-black uppercase tracking-widest text-white">{note.title}</p>
+                  <p className="mt-1 text-[9px] font-black uppercase tracking-widest text-slate-500">
+                    {note.category} | {note.status} | {formatLocalDateTime(note.updatedAt, localTimezone)}
+                  </p>
+                </div>
+                <div className="flex gap-2">
+                  <button type="button" className={secondaryActionClass} onClick={() => { setNoteEditId(note.id); setNoteForm({ title: note.title, body: note.body, category: note.category, status: note.status }); }}>
+                    Edit
+                  </button>
+                  <button type="button" className={secondaryActionClass} onClick={async () => { const token = providerToken.trim(); if (!token) return; setLoading(true); try { await deleteProviderCrmNote(token, note.id); await refreshCrmData(token); setStatus('CRM note deleted.'); } finally { setLoading(false); } }}>
+                    <Trash2 className="h-3.5 w-3.5" />
+                    Delete
+                  </button>
+                </div>
+              </div>
+              <p className="mt-3 whitespace-pre-wrap text-xs leading-6 text-slate-300">{note.body}</p>
+            </div>
+          ))}
+        </div>
+      </section>
+    </div>
+  );
+
+  const renderContentWorkspace = (): React.ReactNode => (
+    <div className="space-y-6">
+      <section className="rounded-2xl border border-white/10 bg-white/[0.03] p-5 sm:p-6">
+        <h3 className="text-sm font-black uppercase tracking-widest text-white">
+          {contentEditId ? 'Edit Course / Content Item' : 'Create Draft Course / Content Item'}
+        </h3>
+        <div className="mt-5 grid gap-3 md:grid-cols-6">
+          <input value={contentForm.title} onChange={(event) => setContentForm({ ...contentForm, title: event.target.value })} placeholder="Title" className={`md:col-span-3 ${controlClass}`} />
+          <select value={contentForm.tier} onChange={(event) => setContentForm({ ...contentForm, tier: event.target.value })} className={`md:col-span-1 ${controlClass}`}>
+            <option value="Basic">Basic</option>
+            <option value="Professional">Professional</option>
+            <option value="Elite">Elite</option>
+          </select>
+          <select value={contentForm.status} onChange={(event) => setContentForm({ ...contentForm, status: event.target.value as ProviderCrmContentStatus })} className={`md:col-span-2 ${controlClass}`}>
+            <option value="draft">Draft</option>
+            <option value="published">Published</option>
+            <option value="archived">Archived</option>
+          </select>
+          <textarea value={contentForm.description} onChange={(event) => setContentForm({ ...contentForm, description: event.target.value })} placeholder="Description" className={`md:col-span-6 min-h-[130px] ${controlClass}`} />
+        </div>
+        <div className="mt-4 flex flex-wrap gap-3">
+          <button type="button" onClick={() => void handleSaveContent()} disabled={isLoading} className={actionClass}>
+            <Save className="h-3.5 w-3.5" />
+            {contentEditId ? 'Update Content' : 'Save Draft'}
+          </button>
+          {contentEditId && (
+            <button type="button" onClick={() => { setContentEditId(null); setContentForm(emptyContentForm); }} className={secondaryActionClass}>
+              Cancel Edit
+            </button>
+          )}
+        </div>
+      </section>
+
+      <section className="rounded-2xl border border-white/10 bg-white/[0.03] p-5 sm:p-6">
+        <h3 className="text-sm font-black uppercase tracking-widest text-white">Course / Content Items</h3>
+        <div className="mt-4 space-y-3">
+          {contentItems.length === 0 && (
+            <p className="rounded-xl border border-white/10 bg-black/20 p-4 text-xs leading-6 text-slate-400">
+              No provider-owned course or content items yet.
+            </p>
+          )}
+          {contentItems.map((item) => (
+            <div key={item.id} className="rounded-xl border border-white/10 bg-black/20 p-4">
+              <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                <div>
+                  <p className="text-sm font-black uppercase tracking-widest text-white">{item.title}</p>
+                  <p className="mt-1 text-[9px] font-black uppercase tracking-widest text-slate-500">
+                    {item.status} | {item.tier} | enrolled {item.enrolledCount}
+                  </p>
+                </div>
+                <button type="button" className={secondaryActionClass} onClick={() => { setContentEditId(item.id); setContentForm({ title: item.title, description: item.description, tier: item.tier, status: item.status }); }}>
+                  Edit
+                </button>
+              </div>
+              <p className="mt-3 text-xs leading-6 text-slate-300">{item.description}</p>
+            </div>
+          ))}
+        </div>
+      </section>
+    </div>
+  );
+
+  const renderCollaborationWorkspace = (): React.ReactNode => (
+    <div className="space-y-6">
+      <section className="rounded-2xl border border-white/10 bg-white/[0.03] p-5 sm:p-6">
+        <h3 className="text-sm font-black uppercase tracking-widest text-white">
+          {collaborationEditId ? 'Edit Collaboration Record' : 'Create Collaboration Record'}
+        </h3>
+        <div className="mt-5 grid gap-3 md:grid-cols-6">
+          <input value={collaborationForm.title} onChange={(event) => setCollaborationForm({ ...collaborationForm, title: event.target.value })} placeholder="Topic / title" className={`md:col-span-4 ${controlClass}`} />
+          <select value={collaborationForm.status} onChange={(event) => setCollaborationForm({ ...collaborationForm, status: event.target.value as ProviderCrmCollaboration['status'] })} className={`md:col-span-2 ${controlClass}`}>
+            <option value="open">Open</option>
+            <option value="in_progress">In Progress</option>
+            <option value="completed">Completed</option>
+            <option value="archived">Archived</option>
+          </select>
+          <textarea value={collaborationForm.description} onChange={(event) => setCollaborationForm({ ...collaborationForm, description: event.target.value })} placeholder="Coordination message or handoff description" className={`md:col-span-6 min-h-[130px] ${controlClass}`} />
+        </div>
+        <div className="mt-4 flex flex-wrap gap-3">
+          <button type="button" onClick={() => void handleSaveCollaboration()} disabled={isLoading} className={actionClass}>
+            <Save className="h-3.5 w-3.5" />
+            {collaborationEditId ? 'Update Collaboration' : 'Save Collaboration'}
+          </button>
+          {collaborationEditId && (
+            <button type="button" onClick={() => { setCollaborationEditId(null); setCollaborationForm(emptyCollaborationForm); }} className={secondaryActionClass}>
+              Cancel Edit
+            </button>
+          )}
+        </div>
+      </section>
+
+      <section className="rounded-2xl border border-white/10 bg-white/[0.03] p-5 sm:p-6">
+        <h3 className="text-sm font-black uppercase tracking-widest text-white">Collaboration Records</h3>
+        <div className="mt-4 space-y-3">
+          {collaborations.length === 0 && (
+            <p className="rounded-xl border border-white/10 bg-black/20 p-4 text-xs leading-6 text-slate-400">
+              No provider collaboration records yet.
+            </p>
+          )}
+          {collaborations.map((item) => (
+            <div key={item.id} className="rounded-xl border border-white/10 bg-black/20 p-4">
+              <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                <div>
+                  <p className="text-sm font-black uppercase tracking-widest text-white">{item.title}</p>
+                  <p className="mt-1 text-[9px] font-black uppercase tracking-widest text-slate-500">
+                    {item.status} | {formatLocalDateTime(item.updatedAt, localTimezone)}
+                  </p>
+                </div>
+                <div className="flex gap-2">
+                  <button type="button" className={secondaryActionClass} onClick={() => { setCollaborationEditId(item.id); setCollaborationForm({ title: item.title, description: item.description, status: item.status }); }}>
+                    Edit
+                  </button>
+                  <button type="button" className={secondaryActionClass} onClick={async () => { const token = providerToken.trim(); if (!token) return; setLoading(true); try { await deleteProviderCrmCollaboration(token, item.id); await refreshCrmData(token); setStatus('Collaboration item deleted.'); } finally { setLoading(false); } }}>
+                    <Trash2 className="h-3.5 w-3.5" />
+                    Delete
+                  </button>
+                </div>
+              </div>
+              <p className="mt-3 whitespace-pre-wrap text-xs leading-6 text-slate-300">{item.description}</p>
+            </div>
+          ))}
+        </div>
+      </section>
+    </div>
+  );
+
+  const renderFollowUpsWorkspace = (): React.ReactNode => (
+    <div className="space-y-6">
+      <section className="rounded-2xl border border-white/10 bg-white/[0.03] p-5 sm:p-6">
+        <h3 className="text-sm font-black uppercase tracking-widest text-white">
+          {followUpEditId ? 'Edit Follow-Up' : 'Create Follow-Up'}
+        </h3>
+        <div className="mt-5 grid gap-3 md:grid-cols-6">
+          <input value={followUpForm.title} onChange={(event) => setFollowUpForm({ ...followUpForm, title: event.target.value })} placeholder="Follow-up title" className={`md:col-span-3 ${controlClass}`} />
+          <input type="datetime-local" value={followUpForm.dueAt} onChange={(event) => setFollowUpForm({ ...followUpForm, dueAt: event.target.value })} className={`md:col-span-1 ${controlClass}`} />
+          <select value={followUpForm.status} onChange={(event) => setFollowUpForm({ ...followUpForm, status: event.target.value as ProviderCrmFollowUpStatus })} className={`md:col-span-1 ${controlClass}`}>
+            <option value="open">Open</option>
+            <option value="in_progress">In Progress</option>
+            <option value="completed">Completed</option>
+            <option value="canceled">Canceled</option>
+          </select>
+          <select value={followUpForm.priority} onChange={(event) => setFollowUpForm({ ...followUpForm, priority: event.target.value as ProviderCrmPriority })} className={`md:col-span-1 ${controlClass}`}>
+            <option value="low">Low</option>
+            <option value="normal">Normal</option>
+            <option value="high">High</option>
+            <option value="urgent">Urgent</option>
+          </select>
+          <textarea value={followUpForm.details} onChange={(event) => setFollowUpForm({ ...followUpForm, details: event.target.value })} placeholder="Follow-up details" className={`md:col-span-6 min-h-[120px] ${controlClass}`} />
+        </div>
+        <div className="mt-4 flex flex-wrap gap-3">
+          <button type="button" onClick={() => void handleSaveFollowUp()} disabled={isLoading} className={actionClass}>
+            <Save className="h-3.5 w-3.5" />
+            {followUpEditId ? 'Update Follow-Up' : 'Save Follow-Up'}
+          </button>
+          {followUpEditId && (
+            <button type="button" onClick={() => { setFollowUpEditId(null); setFollowUpForm(buildDefaultFollowUpForm()); }} className={secondaryActionClass}>
+              Cancel Edit
+            </button>
+          )}
+        </div>
+      </section>
+
+      <section className="rounded-2xl border border-white/10 bg-white/[0.03] p-5 sm:p-6">
+        <h3 className="text-sm font-black uppercase tracking-widest text-white">Follow-Ups</h3>
+        <div className="mt-4 space-y-3">
+          {followUps.length === 0 && (
+            <p className="rounded-xl border border-white/10 bg-black/20 p-4 text-xs leading-6 text-slate-400">
+              No follow-ups yet.
+            </p>
+          )}
+          {followUps.map((item) => (
+            <div key={item.id} className="rounded-xl border border-white/10 bg-black/20 p-4">
+              <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                <div>
+                  <p className="text-sm font-black uppercase tracking-widest text-white">{item.title}</p>
+                  <p className="mt-1 text-[9px] font-black uppercase tracking-widest text-slate-500">
+                    {item.status} | {item.priority} | due {formatLocalDateTime(item.dueAt, localTimezone)}
+                  </p>
+                </div>
+                <div className="flex gap-2">
+                  <button type="button" className={secondaryActionClass} onClick={() => { setFollowUpEditId(item.id); setFollowUpForm({ title: item.title, details: item.details || '', dueAt: item.dueAt ? toDateTimeLocalValue(new Date(item.dueAt)) : '', status: item.status, priority: item.priority }); }}>
+                    Edit
+                  </button>
+                  <button type="button" className={secondaryActionClass} onClick={async () => { const token = providerToken.trim(); if (!token) return; setLoading(true); try { await deleteProviderCrmFollowUp(token, item.id); await refreshCrmData(token); setStatus('Follow-up deleted.'); } finally { setLoading(false); } }}>
+                    <Trash2 className="h-3.5 w-3.5" />
+                    Delete
+                  </button>
+                </div>
+              </div>
+              {item.details && <p className="mt-3 whitespace-pre-wrap text-xs leading-6 text-slate-300">{item.details}</p>}
+            </div>
+          ))}
+        </div>
+      </section>
+    </div>
+  );
+
+  const renderAnalyticsWorkspace = (): React.ReactNode => {
+    const membershipEntries = Object.entries(analytics?.admin?.membershipsByTier || {});
+    return (
+      <div className="space-y-6">
+        <section className="rounded-2xl border border-white/10 bg-white/[0.03] p-5 sm:p-6">
+          <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+            <div>
+              <h3 className="text-sm font-black uppercase tracking-widest text-white">Operational Analytics</h3>
+              <p className="mt-2 text-xs leading-6 text-slate-400">
+                These metrics are aggregate counts from CRM, course, meeting, membership, applicant, and AI tables where the current role can access them.
+              </p>
+            </div>
+            <span className="rounded-full border border-white/10 bg-black/20 px-3 py-2 text-[9px] font-black uppercase tracking-widest text-slate-300">
+              {analytics?.scope.visibility || 'scoped'}
+            </span>
+          </div>
+          <div className="mt-5 grid gap-3 md:grid-cols-3">
+            {renderMetric(<Users className="h-4 w-4" />, 'Relationship records', analytics?.relationships.total || 0)}
+            {renderMetric(<ClipboardList className="h-4 w-4" />, 'Notes', analytics?.notes.total || 0, 'teal')}
+            {renderMetric(<Network className="h-4 w-4" />, 'Collaboration records', analytics?.collaboration.total || 0, 'indigo')}
+            {renderMetric(<CalendarClock className="h-4 w-4" />, 'Follow-ups due', analytics?.followUps.due || 0, 'amber')}
+            {renderMetric(<BookOpen className="h-4 w-4" />, 'Content items', analytics?.content.total || 0, 'emerald')}
+            {renderMetric(<CalendarClock className="h-4 w-4" />, 'Meetings', analytics?.meetings.total || 0, 'blue')}
+          </div>
+        </section>
+
+        {analytics?.admin && (
+          <section className="rounded-2xl border border-white/10 bg-white/[0.03] p-5 sm:p-6">
+            <h3 className="text-sm font-black uppercase tracking-widest text-white">Administrator Aggregates</h3>
+            <div className="mt-5 grid gap-3 md:grid-cols-4">
+              {renderMetric(<Users className="h-4 w-4" />, 'Provider applicants', analytics.admin.providerApplicants.total)}
+              {renderMetric(<Target className="h-4 w-4" />, 'Pending applicants', analytics.admin.providerApplicants.pending, 'amber')}
+              {renderMetric(<CheckCircle2 className="h-4 w-4" />, 'Approved providers', analytics.admin.approvedProviders, 'emerald')}
+              {renderMetric(<MessageSquare className="h-4 w-4" />, 'AI interactions tracked', analytics.admin.aiInteractions.total, 'indigo')}
+            </div>
+            <div className="mt-5 rounded-xl border border-white/10 bg-black/20 p-4">
+              <p className="text-[10px] font-black uppercase tracking-widest text-slate-500">Membership tiers</p>
+              {membershipEntries.length === 0 ? (
+                <p className="mt-3 text-xs leading-6 text-slate-400">No membership aggregate rows are available yet.</p>
+              ) : (
+                <div className="mt-3 grid gap-2 sm:grid-cols-3">
+                  {membershipEntries.map(([tier, count]) => (
+                    <div key={tier} className="rounded-lg border border-white/10 bg-white/[0.03] p-3">
+                      <p className="text-sm font-black text-white">{count}</p>
+                      <p className="mt-1 text-[9px] font-black uppercase tracking-widest text-slate-500">{tier}</p>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          </section>
+        )}
+      </div>
+    );
+  };
+
   const renderRoundtable = (): React.ReactNode => {
     const hours = Array.from({ length: workspace?.roundtable.hourCount || 12 }, (_, index) => (
       (workspace?.roundtable.dayStartHour || 8) + index
@@ -660,12 +1091,8 @@ const ProviderCrmShell: React.FC<ProviderCrmShellProps> = ({
         <section className="rounded-2xl border border-cyan-300/20 bg-cyan-500/[0.04] p-5 sm:p-6">
           <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
             <div>
-              <p className="text-[10px] font-black uppercase tracking-widest text-cyan-200">
-                Conscious Roundtable
-              </p>
-              <h3 className="mt-2 text-xl font-black uppercase tracking-tight text-white">
-                Reserve 1 of 12 Private Rooms
-              </h3>
+              <p className="text-[10px] font-black uppercase tracking-widest text-cyan-200">Conscious Roundtable</p>
+              <h3 className="mt-2 text-xl font-black uppercase tracking-tight text-white">Reserve 1 of 12 Private Rooms</h3>
               <p className="mt-3 max-w-3xl text-sm leading-7 text-slate-300">
                 Each reservation creates a CNH-native meeting session and branded room link for providers,
                 users, administrators, and institutional partners.
@@ -675,48 +1102,24 @@ const ProviderCrmShell: React.FC<ProviderCrmShellProps> = ({
               {localTimezone}
             </span>
           </div>
-
           <div className="mt-5 grid gap-3 md:grid-cols-6">
-            <input
-              value={roundtableTitleInput}
-              onChange={(event) => setRoundtableTitleInput(event.target.value)}
-              placeholder="Roundtable title"
-              className="md:col-span-2 rounded-xl border border-white/10 bg-black/20 px-4 py-3 text-xs font-bold text-white outline-none focus:ring-2 focus:ring-cyan-500/30"
-            />
-            <input
-              type="date"
-              value={roundtableDateInput}
-              onChange={(event) => setRoundtableDateInput(event.target.value)}
-              className="md:col-span-1 rounded-xl border border-white/10 bg-black/20 px-4 py-3 text-xs font-bold text-white outline-none focus:ring-2 focus:ring-cyan-500/30"
-            />
-            <select
-              value={roundtableHourInput}
-              onChange={(event) => setRoundtableHourInput(Number(event.target.value))}
-              className="md:col-span-1 rounded-xl border border-white/10 bg-black/20 px-4 py-3 text-xs font-bold text-white outline-none focus:ring-2 focus:ring-cyan-500/30"
-            >
+            <input value={roundtableTitleInput} onChange={(event) => setRoundtableTitleInput(event.target.value)} placeholder="Roundtable title" className={`md:col-span-2 ${controlClass}`} />
+            <input type="date" value={roundtableDateInput} onChange={(event) => setRoundtableDateInput(event.target.value)} className={`md:col-span-1 ${controlClass}`} />
+            <select value={roundtableHourInput} onChange={(event) => setRoundtableHourInput(Number(event.target.value))} className={`md:col-span-1 ${controlClass}`}>
               {hours.map((hour) => (
                 <option key={hour} value={hour}>
                   {`${hour}`.padStart(2, '0')}:00
                 </option>
               ))}
             </select>
-            <select
-              value={roundtableRoomInput}
-              onChange={(event) => setRoundtableRoomInput(Number(event.target.value))}
-              className="md:col-span-1 rounded-xl border border-white/10 bg-black/20 px-4 py-3 text-xs font-bold text-white outline-none focus:ring-2 focus:ring-cyan-500/30"
-            >
+            <select value={roundtableRoomInput} onChange={(event) => setRoundtableRoomInput(Number(event.target.value))} className={`md:col-span-1 ${controlClass}`}>
               {rooms.map((room) => (
                 <option key={room} value={room} disabled={reservedRoomsForSelectedHour.has(room)}>
                   Room {room}{reservedRoomsForSelectedHour.has(room) ? ' reserved' : ''}
                 </option>
               ))}
             </select>
-            <button
-              type="button"
-              onClick={() => void handleReserveRoundtable()}
-              disabled={isLoading || reservedRoomsForSelectedHour.has(roundtableRoomInput)}
-              className="md:col-span-1 rounded-xl bg-cyan-600 px-4 py-3 text-[10px] font-black uppercase tracking-widest text-white transition hover:bg-cyan-500 disabled:bg-slate-700 disabled:text-slate-500"
-            >
+            <button type="button" onClick={() => void handleReserveRoundtable()} disabled={isLoading || reservedRoomsForSelectedHour.has(roundtableRoomInput)} className={actionClass}>
               Reserve
             </button>
           </div>
@@ -724,9 +1127,7 @@ const ProviderCrmShell: React.FC<ProviderCrmShellProps> = ({
 
         <section className="grid gap-4 lg:grid-cols-[1.2fr_0.8fr]">
           <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-5 sm:p-6">
-            <h3 className="text-sm font-black uppercase tracking-widest text-white">
-              12-Room Hour Grid
-            </h3>
+            <h3 className="text-sm font-black uppercase tracking-widest text-white">12-Room Hour Grid</h3>
             <div className="mt-4 grid grid-cols-3 gap-2 sm:grid-cols-4 lg:grid-cols-6">
               {rooms.map((room) => {
                 const reserved = reservedRoomsForSelectedHour.has(room);
@@ -740,8 +1141,8 @@ const ProviderCrmShell: React.FC<ProviderCrmShellProps> = ({
                       roundtableRoomInput === room
                         ? 'border-cyan-300/40 bg-cyan-500/20 text-white'
                         : reserved
-                        ? 'border-red-300/20 bg-red-500/[0.05] text-red-200 opacity-60'
-                        : 'border-white/10 bg-black/20 text-slate-300 hover:bg-white/10'
+                          ? 'border-red-300/20 bg-red-500/[0.05] text-red-200 opacity-60'
+                          : 'border-white/10 bg-black/20 text-slate-300 hover:bg-white/10'
                     }`}
                   >
                     Room {room}
@@ -752,16 +1153,10 @@ const ProviderCrmShell: React.FC<ProviderCrmShellProps> = ({
           </div>
 
           <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-5 sm:p-6">
-            <h3 className="text-sm font-black uppercase tracking-widest text-white">
-              Branded Room Frame
-            </h3>
+            <h3 className="text-sm font-black uppercase tracking-widest text-white">Branded Room Frame</h3>
             <div className="mt-4 overflow-hidden rounded-xl border border-white/10 bg-black/30">
               {selectedReservationUrl ? (
-                <iframe
-                  title="Conscious Roundtable"
-                  src={selectedReservationUrl}
-                  className="h-[320px] w-full"
-                />
+                <iframe title="Conscious Roundtable" src={selectedReservationUrl} className="h-[320px] w-full" />
               ) : (
                 <div className="flex h-[320px] items-center justify-center p-6 text-center text-xs leading-6 text-slate-400">
                   Reserve a room to generate the private Conscious Roundtable frame.
@@ -772,9 +1167,7 @@ const ProviderCrmShell: React.FC<ProviderCrmShellProps> = ({
         </section>
 
         <section className="rounded-2xl border border-white/10 bg-white/[0.03] p-5 sm:p-6">
-          <h3 className="text-sm font-black uppercase tracking-widest text-white">
-            Reserved Roundtables
-          </h3>
+          <h3 className="text-sm font-black uppercase tracking-widest text-white">Reserved Roundtables</h3>
           <div className="mt-4 space-y-3">
             {roundtableReservations.length === 0 && (
               <p className="rounded-xl border border-white/10 bg-black/20 p-4 text-xs leading-6 text-slate-400">
@@ -804,7 +1197,7 @@ const ProviderCrmShell: React.FC<ProviderCrmShellProps> = ({
                           setStatus('Copy failed. Open the room link and copy it from the browser.');
                         }
                       }}
-                      className="inline-flex items-center justify-center gap-2 rounded-xl border border-white/10 bg-white/5 px-4 py-3 text-[9px] font-black uppercase tracking-widest text-slate-200 transition hover:bg-white/10"
+                      className={secondaryActionClass}
                     >
                       <Link2 className="h-3.5 w-3.5" />
                       Copy Link
@@ -829,9 +1222,7 @@ const ProviderCrmShell: React.FC<ProviderCrmShellProps> = ({
           <BookOpen className="h-4 w-4" />
         </div>
         <div>
-          <h3 className="text-sm font-black uppercase tracking-widest text-white">
-            Best Practices & Knowledge Center
-          </h3>
+          <h3 className="text-sm font-black uppercase tracking-widest text-white">Best Practices & Knowledge Center</h3>
           <p className="mt-1 text-[10px] uppercase tracking-widest text-slate-500">
             Standardized provider operating guidance for consistent service delivery.
           </p>
@@ -840,12 +1231,8 @@ const ProviderCrmShell: React.FC<ProviderCrmShellProps> = ({
       <div className="mt-5 grid gap-4 lg:grid-cols-3">
         {(workspace?.resources || []).map((resource) => (
           <div key={resource.id} className="rounded-xl border border-white/10 bg-black/20 p-4">
-            <p className="text-[9px] font-black uppercase tracking-widest text-blue-200">
-              {resource.category}
-            </p>
-            <h4 className="mt-2 text-sm font-black uppercase tracking-widest text-white">
-              {resource.title}
-            </h4>
+            <p className="text-[9px] font-black uppercase tracking-widest text-blue-200">{resource.category}</p>
+            <h4 className="mt-2 text-sm font-black uppercase tracking-widest text-white">{resource.title}</h4>
             <p className="mt-3 text-xs leading-6 text-slate-300">{resource.summary}</p>
             <div className="mt-4 space-y-2">
               {resource.checklist.map((item) => (
@@ -861,63 +1248,33 @@ const ProviderCrmShell: React.FC<ProviderCrmShellProps> = ({
     </section>
   );
 
-  const renderCollaboration = (): React.ReactNode => (
-    <section className="rounded-2xl border border-white/10 bg-white/[0.03] p-5 sm:p-6">
-      <div className="flex items-center gap-3">
-        <div className="flex h-10 w-10 items-center justify-center rounded-xl border border-indigo-300/20 bg-indigo-500/10 text-indigo-100">
-          <MessageSquare className="h-4 w-4" />
-        </div>
-        <div>
-          <h3 className="text-sm font-black uppercase tracking-widest text-white">
-            Collaborative Chat & Directional Work
-          </h3>
-          <p className="mt-1 text-[10px] uppercase tracking-widest text-slate-500">
-            Native room signals power live Roundtable collaboration without adding a paid chat vendor.
-          </p>
-        </div>
-      </div>
-      <div className="mt-5 grid gap-3 md:grid-cols-3">
-        <div className="rounded-xl border border-white/10 bg-black/20 p-4">
-          <p className="text-xs font-black uppercase tracking-widest text-white">Provider Direction</p>
-          <p className="mt-2 text-xs leading-6 text-slate-300">
-            Action alerts are generated from due follow-ups, urgent opportunities, and missing Roundtable reservations.
-          </p>
-        </div>
-        <div className="rounded-xl border border-white/10 bg-black/20 p-4">
-          <p className="text-xs font-black uppercase tracking-widest text-white">Shared Context</p>
-          <p className="mt-2 text-xs leading-6 text-slate-300">
-            Administrators can see the holistic data picture while providers stay limited to their own records.
-          </p>
-        </div>
-        <div className="rounded-xl border border-white/10 bg-black/20 p-4">
-          <p className="text-xs font-black uppercase tracking-widest text-white">Room Signals</p>
-          <p className="mt-2 text-xs leading-6 text-slate-300">
-            Conscious Roundtable rooms use the internal CNH signaling layer for immediate interactive communication.
-          </p>
-        </div>
-      </div>
-    </section>
+  const renderFallbackPanel = (): React.ReactNode => (
+    <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-6">
+      <p className="text-xs font-black uppercase tracking-widest text-slate-400">
+        Select a CRM tool to begin.
+      </p>
+    </div>
   );
 
   const renderActiveToolPanel = (): React.ReactNode => {
-    if (!activeTool) return renderPlaceholder(null);
-    if (activeTool.id === 'home' || activeTool.id === 'analytics') return renderBusinessHome();
-    if (activeTool.id === 'members' || activeTool.id === 'follow-ups' || activeTool.id === 'referrals') {
-      return renderRecordWorkspace();
-    }
+    if (!activeTool) return renderFallbackPanel();
+    if (activeTool.id === 'home') return renderBusinessHome();
+    if (activeTool.id === 'members' || activeTool.id === 'referrals') return renderRelationshipWorkspace();
+    if (activeTool.id === 'notes') return renderNotesWorkspace();
+    if (activeTool.id === 'content-courses') return renderContentWorkspace();
+    if (activeTool.id === 'collaboration') return renderCollaborationWorkspace();
+    if (activeTool.id === 'follow-ups') return renderFollowUpsWorkspace();
+    if (activeTool.id === 'analytics') return renderAnalyticsWorkspace();
     if (activeTool.id === 'sessions' || activeTool.id === 'roundtable') return renderRoundtable();
     if (activeTool.id === 'resources' || activeTool.id === 'knowledge-center') return renderKnowledgeCenter();
-    if (activeTool.id === 'collaboration') return renderCollaboration();
-    return renderPlaceholder(activeTool);
+    return renderFallbackPanel();
   };
 
   if (!user || (user.role !== 'provider' && user.role !== 'admin')) {
     return (
       <div className="mx-auto max-w-3xl p-4 sm:p-8">
         <div className="rounded-3xl border border-red-400/20 bg-red-400/[0.04] p-6 sm:p-8">
-          <h2 className="text-2xl font-black uppercase tracking-tight text-white">
-            Provider CRM Unavailable
-          </h2>
+          <h2 className="text-2xl font-black uppercase tracking-tight text-white">Provider CRM Unavailable</h2>
           <p className="mt-3 text-sm leading-7 text-slate-300">
             This workspace is limited to approved providers and the Provider CRM administrator.
           </p>
@@ -969,7 +1326,7 @@ const ProviderCrmShell: React.FC<ProviderCrmShellProps> = ({
           <p className="mt-3 max-w-3xl text-sm leading-7 text-slate-300">
             {isAdmin
               ? 'Founder and administrator workspace for provider operations, CRM controls, tool visibility, and platform oversight.'
-              : 'Phase 1 shell for approved-provider relationship, session, follow-up, referral, resource, and impact workflows.'}
+              : 'Approved-provider workspace for relationships, notes, content, collaboration, follow-ups, sessions, resources, and impact metrics.'}
           </p>
         </div>
         <div className="rounded-2xl border border-white/10 bg-white/[0.03] px-4 py-3">
@@ -1018,9 +1375,7 @@ const ProviderCrmShell: React.FC<ProviderCrmShellProps> = ({
             <section className="rounded-2xl border border-teal-300/20 bg-teal-500/[0.04] p-5 sm:p-6">
               <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
                 <div>
-                  <h3 className="text-sm font-black uppercase tracking-widest text-white">
-                    Provider CRM Admin Controls
-                  </h3>
+                  <h3 className="text-sm font-black uppercase tracking-widest text-white">Provider CRM Admin Controls</h3>
                   <p className="mt-2 text-xs leading-6 text-slate-300">
                     Tool visibility controls for the sole Provider CRM administrator.
                   </p>
@@ -1031,14 +1386,9 @@ const ProviderCrmShell: React.FC<ProviderCrmShellProps> = ({
               </div>
               <div className="mt-5 grid gap-3 md:grid-cols-2">
                 {adminTools.map((tool) => (
-                  <div
-                    key={tool.id}
-                    className="flex items-center justify-between gap-4 rounded-xl border border-white/10 bg-black/20 p-3"
-                  >
+                  <div key={tool.id} className="flex items-center justify-between gap-4 rounded-xl border border-white/10 bg-black/20 p-3">
                     <div>
-                      <p className="text-[10px] font-black uppercase tracking-widest text-white">
-                        {tool.label}
-                      </p>
+                      <p className="text-[10px] font-black uppercase tracking-widest text-white">{tool.label}</p>
                       <p className="mt-1 text-[9px] uppercase tracking-widest text-slate-500">
                         {tool.enabled ? 'Enabled' : 'Disabled'}
                       </p>

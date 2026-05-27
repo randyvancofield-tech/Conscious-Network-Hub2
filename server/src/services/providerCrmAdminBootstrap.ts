@@ -9,6 +9,8 @@ import {
 const INITIAL_PASSWORD_ENV = 'PROVIDER_CRM_ADMIN_INITIAL_PASSWORD';
 const MIN_BOOTSTRAP_PASSWORD_LENGTH = 12;
 const normalizeEmail = (value: unknown): string => String(value || '').trim().toLowerCase();
+const DEFAULT_BOOTSTRAP_MAX_ATTEMPTS = 3;
+const DEFAULT_BOOTSTRAP_RETRY_MS = 1500;
 
 const legacyAdminCleanupData = {
   role: 'user',
@@ -22,7 +24,35 @@ const legacyAdminCleanupData = {
   pendingPhoneOtpAttempts: 0,
 };
 
-export const ensureProviderCrmAdminFromEnv = async (): Promise<void> => {
+const parsePositiveIntEnv = (name: string, fallback: number): number => {
+  const parsed = Number(process.env[name]);
+  return Number.isFinite(parsed) && parsed > 0 ? Math.floor(parsed) : fallback;
+};
+
+const wait = (ms: number): Promise<void> => new Promise((resolve) => setTimeout(resolve, ms));
+
+const isRetryableDatabaseError = (error: unknown): boolean => {
+  const maybeError = error as Error & { code?: string; errorCode?: string };
+  const code = String(maybeError?.code || maybeError?.errorCode || '').trim().toUpperCase();
+  const message = error instanceof Error ? error.message : String(error || '');
+  return (
+    ['P1000', 'P1001', 'P1002', 'P1017'].includes(code) ||
+    /can't reach database server|timed out|timeout|connection terminated|connection refused|econnreset|enotfound|network/i.test(
+      message
+    )
+  );
+};
+
+const errorSummary = (error: unknown): Record<string, string | null> => {
+  const maybeError = error as Error & { code?: string; errorCode?: string };
+  return {
+    name: error instanceof Error ? error.name : 'UnknownError',
+    code: String(maybeError?.code || maybeError?.errorCode || '') || null,
+    message: error instanceof Error ? error.message : String(error || ''),
+  };
+};
+
+const ensureProviderCrmAdminFromEnvOnce = async (): Promise<void> => {
   const initialPassword = String(process.env[INITIAL_PASSWORD_ENV] || '').trim();
   if (initialPassword.length > 0 && initialPassword.length < MIN_BOOTSTRAP_PASSWORD_LENGTH) {
     console.error(
@@ -137,4 +167,47 @@ export const ensureProviderCrmAdminFromEnv = async (): Promise<void> => {
     },
   });
   console.log('[ProviderCRMAdminBootstrap] Provider CRM administrator created from env.');
+};
+
+export const ensureProviderCrmAdminFromEnv = async (): Promise<void> => {
+  const maxAttempts = parsePositiveIntEnv(
+    'PROVIDER_CRM_ADMIN_BOOTSTRAP_MAX_ATTEMPTS',
+    DEFAULT_BOOTSTRAP_MAX_ATTEMPTS
+  );
+  const retryMs = parsePositiveIntEnv(
+    'PROVIDER_CRM_ADMIN_BOOTSTRAP_RETRY_MS',
+    DEFAULT_BOOTSTRAP_RETRY_MS
+  );
+
+  let lastError: unknown = null;
+  for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
+    try {
+      await ensureProviderCrmAdminFromEnvOnce();
+      return;
+    } catch (error) {
+      lastError = error;
+      if (!isRetryableDatabaseError(error) || attempt >= maxAttempts) {
+        break;
+      }
+      console.warn(
+        '[ProviderCRMAdminBootstrap] Database unavailable during admin repair; retrying.',
+        JSON.stringify({
+          attempt,
+          maxAttempts,
+          retryMs,
+          error: errorSummary(error),
+        })
+      );
+      await wait(retryMs);
+    }
+  }
+
+  console.error(
+    '[ProviderCRMAdminBootstrap] Provider CRM administrator repair failed.',
+    JSON.stringify({
+      maxAttempts,
+      error: errorSummary(lastError),
+    })
+  );
+  throw lastError;
 };

@@ -1,3 +1,8 @@
+const { loadServerEnv, logServerEnvDiagnostics } = require('./load-env');
+
+loadServerEnv();
+logServerEnvDiagnostics('PRISMA_RUNTIME_CHECK');
+
 const { PrismaClient } = require('@prisma/client');
 
 const prisma = new PrismaClient();

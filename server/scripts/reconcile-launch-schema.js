@@ -1,9 +1,9 @@
 const path = require('path');
-const dotenv = require('dotenv');
 const { Client } = require('pg');
+const { loadServerEnv, logServerEnvDiagnostics } = require('./load-env');
 
-dotenv.config({ path: path.resolve(__dirname, '../.env.local') });
-dotenv.config({ path: path.resolve(__dirname, '../.env') });
+loadServerEnv();
+logServerEnvDiagnostics('RECONCILE_LAUNCH_SCHEMA');
 
 const apply = process.argv.includes('--apply');
 

@@ -125,6 +125,8 @@ export interface ProviderCrmAdminToolsResult {
 export type ProviderCrmRecordKind = 'client' | 'organization' | 'institution' | 'follow_up';
 export type ProviderCrmRecordStatus = 'active' | 'watching' | 'contracting' | 'completed' | 'archived';
 export type ProviderCrmPriority = 'low' | 'normal' | 'high' | 'urgent';
+export type ProviderCrmFollowUpStatus = 'open' | 'in_progress' | 'completed' | 'canceled';
+export type ProviderCrmContentStatus = 'draft' | 'published' | 'archived';
 
 export interface ProviderCrmRecord {
   id: string;
@@ -143,6 +145,115 @@ export interface ProviderCrmRecord {
   details: Record<string, unknown>;
   createdAt: string;
   updatedAt: string;
+}
+
+export interface ProviderCrmNote {
+  id: string;
+  providerId: string;
+  authorUserId: string;
+  title: string;
+  body: string;
+  category: string;
+  status: 'active' | 'archived';
+  relatedType: string | null;
+  relatedId: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface ProviderCrmContentItem {
+  id: string;
+  ownerId: string | null;
+  ownerType: string;
+  provider: string;
+  title: string;
+  description: string;
+  tier: string;
+  status: ProviderCrmContentStatus;
+  image: string | null;
+  enrolledCount: number;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface ProviderCrmCollaboration {
+  id: string;
+  providerId: string;
+  authorUserId: string;
+  title: string;
+  description: string;
+  status: 'open' | 'in_progress' | 'completed' | 'archived';
+  relatedType: string | null;
+  relatedId: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface ProviderCrmFollowUp {
+  id: string;
+  providerId: string;
+  ownerUserId: string;
+  assignedToUserId: string | null;
+  title: string;
+  details: string | null;
+  dueAt: string | null;
+  status: ProviderCrmFollowUpStatus;
+  priority: ProviderCrmPriority;
+  relatedType: string | null;
+  relatedId: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface ProviderCrmAnalytics {
+  scope: {
+    role: 'provider' | 'admin';
+    visibility: 'provider-owned' | 'administrator-aggregate';
+  };
+  generatedAt: string;
+  relationships: {
+    total: number;
+    active: number;
+    byKind: Record<string, number>;
+    byStatus: Record<string, number>;
+  };
+  notes: { total: number; active: number; archived: number };
+  collaboration: {
+    total: number;
+    open: number;
+    inProgress: number;
+    completed: number;
+    archived: number;
+  };
+  followUps: {
+    total: number;
+    open: number;
+    inProgress: number;
+    completed: number;
+    canceled: number;
+    due: number;
+  };
+  content: {
+    total: number;
+    draft: number;
+    published: number;
+    archived: number;
+  };
+  meetings: {
+    total: number;
+    upcoming: number;
+  };
+  admin?: {
+    providerApplicants: {
+      total: number;
+      pending: number;
+      approved: number;
+      declined: number;
+    };
+    approvedProviders: number;
+    membershipsByTier: Record<string, number>;
+    aiInteractions: { total: number };
+  };
 }
 
 export interface ProviderRoundtableReservation {
@@ -716,6 +827,304 @@ class BackendAPIService {
         body: input,
       });
       return data?.record || null;
+    } catch {
+      return null;
+    }
+  }
+
+  async listProviderCrmNotes(providerToken: string): Promise<ProviderCrmNote[]> {
+    const token = String(providerToken || '').trim();
+    if (!token) return [];
+    try {
+      const data = await api<{ success: boolean; notes: ProviderCrmNote[] }>('/provider/crm/notes', {
+        method: 'GET',
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      return Array.isArray(data?.notes) ? data.notes : [];
+    } catch {
+      return [];
+    }
+  }
+
+  async createProviderCrmNote(
+    providerToken: string,
+    input: Pick<ProviderCrmNote, 'title' | 'body'> & Partial<Pick<ProviderCrmNote, 'category' | 'status' | 'relatedType' | 'relatedId'>>
+  ): Promise<ProviderCrmNote | null> {
+    const token = String(providerToken || '').trim();
+    if (!token) return null;
+    try {
+      const data = await api<{ success: boolean; note: ProviderCrmNote }>('/provider/crm/notes', {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${token}` },
+        body: input,
+      });
+      return data?.note || null;
+    } catch {
+      return null;
+    }
+  }
+
+  async updateProviderCrmNote(
+    providerToken: string,
+    id: string,
+    input: Partial<Pick<ProviderCrmNote, 'title' | 'body' | 'category' | 'status' | 'relatedType' | 'relatedId'>>
+  ): Promise<ProviderCrmNote | null> {
+    const token = String(providerToken || '').trim();
+    const noteId = String(id || '').trim();
+    if (!token || !noteId) return null;
+    try {
+      const data = await api<{ success: boolean; note: ProviderCrmNote }>(
+        `/provider/crm/notes/${encodeURIComponent(noteId)}`,
+        {
+          method: 'PATCH',
+          headers: { Authorization: `Bearer ${token}` },
+          body: input,
+        }
+      );
+      return data?.note || null;
+    } catch {
+      return null;
+    }
+  }
+
+  async deleteProviderCrmNote(providerToken: string, id: string): Promise<boolean> {
+    const token = String(providerToken || '').trim();
+    const noteId = String(id || '').trim();
+    if (!token || !noteId) return false;
+    try {
+      await api<{ success: boolean }>(`/provider/crm/notes/${encodeURIComponent(noteId)}`, {
+        method: 'DELETE',
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      return true;
+    } catch {
+      return false;
+    }
+  }
+
+  async listProviderCrmContent(providerToken: string): Promise<ProviderCrmContentItem[]> {
+    const token = String(providerToken || '').trim();
+    if (!token) return [];
+    try {
+      const data = await api<{ success: boolean; items: ProviderCrmContentItem[] }>('/provider/crm/content', {
+        method: 'GET',
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      return Array.isArray(data?.items) ? data.items : [];
+    } catch {
+      return [];
+    }
+  }
+
+  async createProviderCrmContent(
+    providerToken: string,
+    input: { title: string; description: string; tier?: string; status?: ProviderCrmContentStatus }
+  ): Promise<ProviderCrmContentItem | null> {
+    const token = String(providerToken || '').trim();
+    if (!token) return null;
+    try {
+      const data = await api<{ success: boolean; item: ProviderCrmContentItem }>('/provider/crm/content', {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${token}` },
+        body: input,
+      });
+      return data?.item || null;
+    } catch {
+      return null;
+    }
+  }
+
+  async updateProviderCrmContent(
+    providerToken: string,
+    id: string,
+    input: { title?: string; description?: string; tier?: string; status?: ProviderCrmContentStatus }
+  ): Promise<ProviderCrmContentItem | null> {
+    const token = String(providerToken || '').trim();
+    const itemId = String(id || '').trim();
+    if (!token || !itemId) return null;
+    try {
+      const data = await api<{ success: boolean; item: ProviderCrmContentItem }>(
+        `/provider/crm/content/${encodeURIComponent(itemId)}`,
+        {
+          method: 'PATCH',
+          headers: { Authorization: `Bearer ${token}` },
+          body: input,
+        }
+      );
+      return data?.item || null;
+    } catch {
+      return null;
+    }
+  }
+
+  async listProviderCrmCollaborations(providerToken: string): Promise<ProviderCrmCollaboration[]> {
+    const token = String(providerToken || '').trim();
+    if (!token) return [];
+    try {
+      const data = await api<{ success: boolean; items: ProviderCrmCollaboration[] }>('/provider/crm/collaboration', {
+        method: 'GET',
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      return Array.isArray(data?.items) ? data.items : [];
+    } catch {
+      return [];
+    }
+  }
+
+  async createProviderCrmCollaboration(
+    providerToken: string,
+    input: Pick<ProviderCrmCollaboration, 'title' | 'description'> &
+      Partial<Pick<ProviderCrmCollaboration, 'status' | 'relatedType' | 'relatedId'>>
+  ): Promise<ProviderCrmCollaboration | null> {
+    const token = String(providerToken || '').trim();
+    if (!token) return null;
+    try {
+      const data = await api<{ success: boolean; item: ProviderCrmCollaboration }>('/provider/crm/collaboration', {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${token}` },
+        body: input,
+      });
+      return data?.item || null;
+    } catch {
+      return null;
+    }
+  }
+
+  async updateProviderCrmCollaboration(
+    providerToken: string,
+    id: string,
+    input: Partial<Pick<ProviderCrmCollaboration, 'title' | 'description' | 'status' | 'relatedType' | 'relatedId'>>
+  ): Promise<ProviderCrmCollaboration | null> {
+    const token = String(providerToken || '').trim();
+    const itemId = String(id || '').trim();
+    if (!token || !itemId) return null;
+    try {
+      const data = await api<{ success: boolean; item: ProviderCrmCollaboration }>(
+        `/provider/crm/collaboration/${encodeURIComponent(itemId)}`,
+        {
+          method: 'PATCH',
+          headers: { Authorization: `Bearer ${token}` },
+          body: input,
+        }
+      );
+      return data?.item || null;
+    } catch {
+      return null;
+    }
+  }
+
+  async deleteProviderCrmCollaboration(providerToken: string, id: string): Promise<boolean> {
+    const token = String(providerToken || '').trim();
+    const itemId = String(id || '').trim();
+    if (!token || !itemId) return false;
+    try {
+      await api<{ success: boolean }>(`/provider/crm/collaboration/${encodeURIComponent(itemId)}`, {
+        method: 'DELETE',
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      return true;
+    } catch {
+      return false;
+    }
+  }
+
+  async listProviderCrmFollowUps(providerToken: string): Promise<ProviderCrmFollowUp[]> {
+    const token = String(providerToken || '').trim();
+    if (!token) return [];
+    try {
+      const data = await api<{ success: boolean; followUps: ProviderCrmFollowUp[] }>('/provider/crm/follow-ups', {
+        method: 'GET',
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      return Array.isArray(data?.followUps) ? data.followUps : [];
+    } catch {
+      return [];
+    }
+  }
+
+  async createProviderCrmFollowUp(
+    providerToken: string,
+    input: {
+      title: string;
+      details?: string;
+      dueAt?: string | null;
+      status?: ProviderCrmFollowUpStatus;
+      priority?: ProviderCrmPriority;
+      assignedToUserId?: string | null;
+      relatedType?: string | null;
+      relatedId?: string | null;
+    }
+  ): Promise<ProviderCrmFollowUp | null> {
+    const token = String(providerToken || '').trim();
+    if (!token) return null;
+    try {
+      const data = await api<{ success: boolean; followUp: ProviderCrmFollowUp }>('/provider/crm/follow-ups', {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${token}` },
+        body: input,
+      });
+      return data?.followUp || null;
+    } catch {
+      return null;
+    }
+  }
+
+  async updateProviderCrmFollowUp(
+    providerToken: string,
+    id: string,
+    input: Partial<{
+      title: string;
+      details: string;
+      dueAt: string | null;
+      status: ProviderCrmFollowUpStatus;
+      priority: ProviderCrmPriority;
+      assignedToUserId: string | null;
+      relatedType: string | null;
+      relatedId: string | null;
+    }>
+  ): Promise<ProviderCrmFollowUp | null> {
+    const token = String(providerToken || '').trim();
+    const itemId = String(id || '').trim();
+    if (!token || !itemId) return null;
+    try {
+      const data = await api<{ success: boolean; followUp: ProviderCrmFollowUp }>(
+        `/provider/crm/follow-ups/${encodeURIComponent(itemId)}`,
+        {
+          method: 'PATCH',
+          headers: { Authorization: `Bearer ${token}` },
+          body: input,
+        }
+      );
+      return data?.followUp || null;
+    } catch {
+      return null;
+    }
+  }
+
+  async deleteProviderCrmFollowUp(providerToken: string, id: string): Promise<boolean> {
+    const token = String(providerToken || '').trim();
+    const itemId = String(id || '').trim();
+    if (!token || !itemId) return false;
+    try {
+      await api<{ success: boolean }>(`/provider/crm/follow-ups/${encodeURIComponent(itemId)}`, {
+        method: 'DELETE',
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      return true;
+    } catch {
+      return false;
+    }
+  }
+
+  async getProviderCrmAnalytics(providerToken: string): Promise<ProviderCrmAnalytics | null> {
+    const token = String(providerToken || '').trim();
+    if (!token) return null;
+    try {
+      const data = await api<{ success: boolean; analytics: ProviderCrmAnalytics }>('/provider/crm/analytics', {
+        method: 'GET',
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      return data?.analytics || null;
     } catch {
       return null;
     }
@@ -1445,6 +1854,117 @@ export async function createProviderCrmRecord(
   }
 ): Promise<ProviderCrmRecord | null> {
   return backendAPI.createProviderCrmRecord(providerToken, input);
+}
+
+export async function listProviderCrmNotes(providerToken: string): Promise<ProviderCrmNote[]> {
+  return backendAPI.listProviderCrmNotes(providerToken);
+}
+
+export async function createProviderCrmNote(
+  providerToken: string,
+  input: Pick<ProviderCrmNote, 'title' | 'body'> & Partial<Pick<ProviderCrmNote, 'category' | 'status' | 'relatedType' | 'relatedId'>>
+): Promise<ProviderCrmNote | null> {
+  return backendAPI.createProviderCrmNote(providerToken, input);
+}
+
+export async function updateProviderCrmNote(
+  providerToken: string,
+  id: string,
+  input: Partial<Pick<ProviderCrmNote, 'title' | 'body' | 'category' | 'status' | 'relatedType' | 'relatedId'>>
+): Promise<ProviderCrmNote | null> {
+  return backendAPI.updateProviderCrmNote(providerToken, id, input);
+}
+
+export async function deleteProviderCrmNote(providerToken: string, id: string): Promise<boolean> {
+  return backendAPI.deleteProviderCrmNote(providerToken, id);
+}
+
+export async function listProviderCrmContent(providerToken: string): Promise<ProviderCrmContentItem[]> {
+  return backendAPI.listProviderCrmContent(providerToken);
+}
+
+export async function createProviderCrmContent(
+  providerToken: string,
+  input: { title: string; description: string; tier?: string; status?: ProviderCrmContentStatus }
+): Promise<ProviderCrmContentItem | null> {
+  return backendAPI.createProviderCrmContent(providerToken, input);
+}
+
+export async function updateProviderCrmContent(
+  providerToken: string,
+  id: string,
+  input: { title?: string; description?: string; tier?: string; status?: ProviderCrmContentStatus }
+): Promise<ProviderCrmContentItem | null> {
+  return backendAPI.updateProviderCrmContent(providerToken, id, input);
+}
+
+export async function listProviderCrmCollaborations(providerToken: string): Promise<ProviderCrmCollaboration[]> {
+  return backendAPI.listProviderCrmCollaborations(providerToken);
+}
+
+export async function createProviderCrmCollaboration(
+  providerToken: string,
+  input: Pick<ProviderCrmCollaboration, 'title' | 'description'> &
+    Partial<Pick<ProviderCrmCollaboration, 'status' | 'relatedType' | 'relatedId'>>
+): Promise<ProviderCrmCollaboration | null> {
+  return backendAPI.createProviderCrmCollaboration(providerToken, input);
+}
+
+export async function updateProviderCrmCollaboration(
+  providerToken: string,
+  id: string,
+  input: Partial<Pick<ProviderCrmCollaboration, 'title' | 'description' | 'status' | 'relatedType' | 'relatedId'>>
+): Promise<ProviderCrmCollaboration | null> {
+  return backendAPI.updateProviderCrmCollaboration(providerToken, id, input);
+}
+
+export async function deleteProviderCrmCollaboration(providerToken: string, id: string): Promise<boolean> {
+  return backendAPI.deleteProviderCrmCollaboration(providerToken, id);
+}
+
+export async function listProviderCrmFollowUps(providerToken: string): Promise<ProviderCrmFollowUp[]> {
+  return backendAPI.listProviderCrmFollowUps(providerToken);
+}
+
+export async function createProviderCrmFollowUp(
+  providerToken: string,
+  input: {
+    title: string;
+    details?: string;
+    dueAt?: string | null;
+    status?: ProviderCrmFollowUpStatus;
+    priority?: ProviderCrmPriority;
+    assignedToUserId?: string | null;
+    relatedType?: string | null;
+    relatedId?: string | null;
+  }
+): Promise<ProviderCrmFollowUp | null> {
+  return backendAPI.createProviderCrmFollowUp(providerToken, input);
+}
+
+export async function updateProviderCrmFollowUp(
+  providerToken: string,
+  id: string,
+  input: Partial<{
+    title: string;
+    details: string;
+    dueAt: string | null;
+    status: ProviderCrmFollowUpStatus;
+    priority: ProviderCrmPriority;
+    assignedToUserId: string | null;
+    relatedType: string | null;
+    relatedId: string | null;
+  }>
+): Promise<ProviderCrmFollowUp | null> {
+  return backendAPI.updateProviderCrmFollowUp(providerToken, id, input);
+}
+
+export async function deleteProviderCrmFollowUp(providerToken: string, id: string): Promise<boolean> {
+  return backendAPI.deleteProviderCrmFollowUp(providerToken, id);
+}
+
+export async function getProviderCrmAnalytics(providerToken: string): Promise<ProviderCrmAnalytics | null> {
+  return backendAPI.getProviderCrmAnalytics(providerToken);
 }
 
 export async function createProviderRoundtableReservation(

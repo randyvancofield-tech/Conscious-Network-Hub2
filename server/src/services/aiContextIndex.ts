@@ -1,5 +1,4 @@
 import { getPrisma } from './prismaClient';
-import { localStore } from './persistenceStore';
 import { normalizePrivacySettings } from './profileNormalization';
 import { socialStore } from './socialStore';
 import {
@@ -144,7 +143,22 @@ const crawlPublicPosts = async (docs: IndexedDocument[]): Promise<void> => {
 };
 
 const crawlPublicProfiles = async (docs: IndexedDocument[]): Promise<void> => {
-  const users = await localStore.listUsers(250);
+  const users = await (getPrisma() as any).user.findMany({
+    select: {
+      id: true,
+      name: true,
+      role: true,
+      tier: true,
+      handle: true,
+      bio: true,
+      location: true,
+      interests: true,
+      privacySettings: true,
+      updatedAt: true,
+    },
+    orderBy: { createdAt: 'desc' },
+    take: 250,
+  });
   for (const user of users) {
     const privacy = normalizePrivacySettings(user.privacySettings);
     if (privacy.profileVisibility === 'private') continue;
@@ -255,7 +269,15 @@ export const getAiContextIndexStatus = (): AiIndexStatus => {
 const buildUserProfileContext = async (userId?: string): Promise<string | undefined> => {
   if (!userId) return undefined;
   try {
-    const user = await localStore.getUserById(userId);
+    const user = await (getPrisma() as any).user.findUnique({
+      where: { id: userId },
+      select: {
+        role: true,
+        tier: true,
+        providerApprovalStatus: true,
+        interests: true,
+      },
+    });
     if (!user) return undefined;
     return compactText([
       `Authenticated role: ${user.role || 'user'}`,

@@ -1,9 +1,9 @@
 const path = require('path');
-const dotenv = require('dotenv');
 const { Client } = require('pg');
+const { loadServerEnv, logServerEnvDiagnostics } = require('./load-env');
 
-dotenv.config({ path: path.resolve(__dirname, '../.env.local') });
-dotenv.config({ path: path.resolve(__dirname, '../.env') });
+loadServerEnv();
+logServerEnvDiagnostics('NEON_DIRECT_CHECK');
 
 async function main() {
   const connectionString = process.env.DATABASE_URL;

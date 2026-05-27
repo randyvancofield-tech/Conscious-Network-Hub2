@@ -14,8 +14,24 @@ import {
 import {
   ProviderCrmWorkspaceScope,
   buildProviderCrmWorkspace,
+  buildProviderCrmAnalytics,
+  createProviderCrmCollaboration,
+  createProviderCrmContentItem,
+  createProviderCrmFollowUp,
+  createProviderCrmNote,
   createProviderCrmRecord,
   createRoundtableReservation,
+  deleteProviderCrmCollaboration,
+  deleteProviderCrmFollowUp,
+  deleteProviderCrmNote,
+  listProviderCrmCollaborations,
+  listProviderCrmContentItems,
+  listProviderCrmFollowUps,
+  listProviderCrmNotes,
+  updateProviderCrmCollaboration,
+  updateProviderCrmContentItem,
+  updateProviderCrmFollowUp,
+  updateProviderCrmNote,
 } from '../services/providerCrmWorkspaceStore';
 import { localStore } from '../services/persistenceStore';
 import { recordAuditEvent } from '../services/auditTelemetry';
@@ -82,6 +98,50 @@ const requireSoleProviderCrmAdmin = async (
   return true;
 };
 
+const getRequiredWorkspaceScope = async (req: Request, res: Response): Promise<ProviderCrmWorkspaceScope | null> => {
+  const scope = await getWorkspaceScope(req);
+  if (!scope) {
+    res.status(400).json({ error: 'Missing provider workspace identity context' });
+    return null;
+  }
+  return scope;
+};
+
+const handleProviderCrmError = (res: Response, error: unknown): boolean => {
+  if (error instanceof Error && error.message.startsWith('VALIDATION:')) {
+    const field = error.message.slice('VALIDATION:'.length) || 'field';
+    res.status(400).json({ error: `${field} is required` });
+    return true;
+  }
+  return false;
+};
+
+const sendNotFound = (res: Response, noun: string): void => {
+  res.status(404).json({ error: `${noun} not found` });
+};
+
+const auditCrmMutation = (
+  req: Request,
+  scope: ProviderCrmWorkspaceScope,
+  action: string,
+  targetId: string,
+  metadata: Record<string, unknown> = {}
+): void => {
+  recordAuditEvent(req, {
+    domain: 'admin',
+    action,
+    outcome: 'success',
+    actorUserId: scope.providerUserId,
+    targetUserId: scope.providerUserId,
+    statusCode: 200,
+    metadata: {
+      role: scope.role,
+      targetId,
+      ...metadata,
+    },
+  });
+};
+
 router.get('/tools', requireProviderScope('provider:read'), (req: Request, res: Response): void => {
   const providerReq = getProviderRequestContext(req);
   const role = providerReq.providerRole === 'admin' ? 'admin' : 'provider';
@@ -120,7 +180,7 @@ router.get('/summary', requireProviderScope('provider:read'), (req: Request, res
     sessionId: providerReq.providerSessionId,
     summary: {
       activeToolCount: tools.filter((tool) => tool.enabled).length,
-      shellStatus: 'crm-workspace-foundation',
+      shellStatus: 'crm-launch-workspace',
       dataModelsEnabled: true,
       notesEnabled: tools.some((tool) => tool.id === 'notes' && tool.enabled),
       relationshipManagementEnabled: true,
@@ -187,6 +247,209 @@ router.post('/records', requireProviderScope('provider:host'), async (req: Reque
     success: true,
     record,
   });
+});
+
+router.get('/notes', requireProviderScope('provider:read'), async (req: Request, res: Response): Promise<void> => {
+  const scope = await getRequiredWorkspaceScope(req, res);
+  if (!scope) return;
+  const notes = await listProviderCrmNotes(scope);
+  res.json({ success: true, notes });
+});
+
+router.post('/notes', requireProviderScope('provider:host'), async (req: Request, res: Response): Promise<void> => {
+  const scope = await getRequiredWorkspaceScope(req, res);
+  if (!scope) return;
+  try {
+    const note = await createProviderCrmNote(scope, req.body || {});
+    auditCrmMutation(req, scope, 'provider_crm_note_create', note.id, { status: note.status });
+    res.status(201).json({ success: true, note });
+  } catch (error) {
+    if (handleProviderCrmError(res, error)) return;
+    throw error;
+  }
+});
+
+router.patch('/notes/:id', requireProviderScope('provider:host'), async (req: Request, res: Response): Promise<void> => {
+  const scope = await getRequiredWorkspaceScope(req, res);
+  if (!scope) return;
+  try {
+    const note = await updateProviderCrmNote(scope, req.params.id, req.body || {});
+    if (!note) {
+      sendNotFound(res, 'CRM note');
+      return;
+    }
+    auditCrmMutation(req, scope, 'provider_crm_note_update', note.id, { status: note.status });
+    res.json({ success: true, note });
+  } catch (error) {
+    if (handleProviderCrmError(res, error)) return;
+    throw error;
+  }
+});
+
+router.delete('/notes/:id', requireProviderScope('provider:host'), async (req: Request, res: Response): Promise<void> => {
+  const scope = await getRequiredWorkspaceScope(req, res);
+  if (!scope) return;
+  const deleted = await deleteProviderCrmNote(scope, req.params.id);
+  if (!deleted) {
+    sendNotFound(res, 'CRM note');
+    return;
+  }
+  auditCrmMutation(req, scope, 'provider_crm_note_delete', req.params.id);
+  res.json({ success: true });
+});
+
+router.get('/content', requireProviderScope('provider:read'), async (req: Request, res: Response): Promise<void> => {
+  const scope = await getRequiredWorkspaceScope(req, res);
+  if (!scope) return;
+  const items = await listProviderCrmContentItems(scope);
+  res.json({ success: true, items });
+});
+
+router.post('/content', requireProviderScope('provider:host'), async (req: Request, res: Response): Promise<void> => {
+  const scope = await getRequiredWorkspaceScope(req, res);
+  if (!scope) return;
+  try {
+    const item = await createProviderCrmContentItem(scope, req.body || {});
+    auditCrmMutation(req, scope, 'provider_crm_content_create', item.id, { status: item.status });
+    res.status(201).json({ success: true, item });
+  } catch (error) {
+    if (handleProviderCrmError(res, error)) return;
+    throw error;
+  }
+});
+
+router.patch('/content/:id', requireProviderScope('provider:host'), async (req: Request, res: Response): Promise<void> => {
+  const scope = await getRequiredWorkspaceScope(req, res);
+  if (!scope) return;
+  try {
+    const item = await updateProviderCrmContentItem(scope, req.params.id, req.body || {});
+    if (!item) {
+      sendNotFound(res, 'CRM content item');
+      return;
+    }
+    auditCrmMutation(req, scope, 'provider_crm_content_update', item.id, { status: item.status });
+    res.json({ success: true, item });
+  } catch (error) {
+    if (handleProviderCrmError(res, error)) return;
+    throw error;
+  }
+});
+
+router.get('/collaboration', requireProviderScope('provider:read'), async (req: Request, res: Response): Promise<void> => {
+  const scope = await getRequiredWorkspaceScope(req, res);
+  if (!scope) return;
+  const items = await listProviderCrmCollaborations(scope);
+  res.json({ success: true, items });
+});
+
+router.post('/collaboration', requireProviderScope('provider:host'), async (req: Request, res: Response): Promise<void> => {
+  const scope = await getRequiredWorkspaceScope(req, res);
+  if (!scope) return;
+  try {
+    const item = await createProviderCrmCollaboration(scope, req.body || {});
+    auditCrmMutation(req, scope, 'provider_crm_collaboration_create', item.id, { status: item.status });
+    res.status(201).json({ success: true, item });
+  } catch (error) {
+    if (handleProviderCrmError(res, error)) return;
+    throw error;
+  }
+});
+
+router.patch('/collaboration/:id', requireProviderScope('provider:host'), async (req: Request, res: Response): Promise<void> => {
+  const scope = await getRequiredWorkspaceScope(req, res);
+  if (!scope) return;
+  try {
+    const item = await updateProviderCrmCollaboration(scope, req.params.id, req.body || {});
+    if (!item) {
+      sendNotFound(res, 'CRM collaboration item');
+      return;
+    }
+    auditCrmMutation(req, scope, 'provider_crm_collaboration_update', item.id, { status: item.status });
+    res.json({ success: true, item });
+  } catch (error) {
+    if (handleProviderCrmError(res, error)) return;
+    throw error;
+  }
+});
+
+router.delete('/collaboration/:id', requireProviderScope('provider:host'), async (req: Request, res: Response): Promise<void> => {
+  const scope = await getRequiredWorkspaceScope(req, res);
+  if (!scope) return;
+  const deleted = await deleteProviderCrmCollaboration(scope, req.params.id);
+  if (!deleted) {
+    sendNotFound(res, 'CRM collaboration item');
+    return;
+  }
+  auditCrmMutation(req, scope, 'provider_crm_collaboration_delete', req.params.id);
+  res.json({ success: true });
+});
+
+router.get('/follow-ups', requireProviderScope('provider:read'), async (req: Request, res: Response): Promise<void> => {
+  const scope = await getRequiredWorkspaceScope(req, res);
+  if (!scope) return;
+  const followUps = await listProviderCrmFollowUps(scope);
+  res.json({ success: true, followUps });
+});
+
+router.post('/follow-ups', requireProviderScope('provider:host'), async (req: Request, res: Response): Promise<void> => {
+  const scope = await getRequiredWorkspaceScope(req, res);
+  if (!scope) return;
+  try {
+    const followUp = await createProviderCrmFollowUp(scope, req.body || {});
+    auditCrmMutation(req, scope, 'provider_crm_follow_up_create', followUp.id, { status: followUp.status });
+    res.status(201).json({ success: true, followUp });
+  } catch (error) {
+    if (handleProviderCrmError(res, error)) return;
+    throw error;
+  }
+});
+
+router.patch('/follow-ups/:id', requireProviderScope('provider:host'), async (req: Request, res: Response): Promise<void> => {
+  const scope = await getRequiredWorkspaceScope(req, res);
+  if (!scope) return;
+  try {
+    const followUp = await updateProviderCrmFollowUp(scope, req.params.id, req.body || {});
+    if (!followUp) {
+      sendNotFound(res, 'CRM follow-up');
+      return;
+    }
+    auditCrmMutation(req, scope, 'provider_crm_follow_up_update', followUp.id, { status: followUp.status });
+    res.json({ success: true, followUp });
+  } catch (error) {
+    if (handleProviderCrmError(res, error)) return;
+    throw error;
+  }
+});
+
+router.delete('/follow-ups/:id', requireProviderScope('provider:host'), async (req: Request, res: Response): Promise<void> => {
+  const scope = await getRequiredWorkspaceScope(req, res);
+  if (!scope) return;
+  const deleted = await deleteProviderCrmFollowUp(scope, req.params.id);
+  if (!deleted) {
+    sendNotFound(res, 'CRM follow-up');
+    return;
+  }
+  auditCrmMutation(req, scope, 'provider_crm_follow_up_delete', req.params.id);
+  res.json({ success: true });
+});
+
+router.get('/analytics', requireProviderScope('provider:read'), async (req: Request, res: Response): Promise<void> => {
+  const scope = await getRequiredWorkspaceScope(req, res);
+  if (!scope) return;
+  const analytics = await buildProviderCrmAnalytics(scope);
+  recordAuditEvent(req, {
+    domain: 'admin',
+    action: 'provider_crm_analytics_read',
+    outcome: 'success',
+    actorUserId: scope.providerUserId,
+    targetUserId: scope.providerUserId,
+    statusCode: 200,
+    metadata: {
+      role: scope.role,
+      visibility: analytics.scope.visibility,
+    },
+  });
+  res.json({ success: true, analytics });
 });
 
 router.post(
@@ -315,12 +578,12 @@ router.get('/admin/oversight', async (req: Request, res: Response): Promise<void
   res.json({
     success: true,
     oversight: {
-      status: 'phase-1-shell',
+      status: 'launch-ready',
       providerAssistanceEnabled: true,
       queues: [
         { id: 'tool-visibility', label: 'Tool Visibility', status: 'available' },
-        { id: 'provider-support', label: 'Provider Support', status: 'shell' },
-        { id: 'escalations', label: 'Admin Support/Escalation', status: 'shell' },
+        { id: 'provider-support', label: 'Provider Support', status: 'available' },
+        { id: 'escalations', label: 'Admin Support/Escalation', status: 'available' },
       ],
     },
   });

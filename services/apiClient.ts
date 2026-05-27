@@ -1,6 +1,16 @@
 import { getAuthToken } from './sessionService';
 
-export const BASE_URL = import.meta.env.VITE_BACKEND_URL || '';
+const configuredBaseUrl = String(import.meta.env.VITE_BACKEND_URL || '').trim();
+const allowRemoteBackendInDev =
+  String(import.meta.env.VITE_ALLOW_REMOTE_BACKEND_IN_DEV || '').trim().toLowerCase() === 'true';
+const isRemoteHttpUrl = /^https?:\/\//i.test(configuredBaseUrl);
+const isLocalBackendUrl = /^https?:\/\/(?:localhost|127\.0\.0\.1|\[::1\])(?::\d+)?(?:\/|$)/i.test(
+  configuredBaseUrl
+);
+const shouldIgnoreRemoteDevBackend =
+  import.meta.env.DEV && isRemoteHttpUrl && !isLocalBackendUrl && !allowRemoteBackendInDev;
+
+export const BASE_URL = shouldIgnoreRemoteDevBackend ? '' : configuredBaseUrl;
 
 const normalizedBaseUrl = String(BASE_URL).replace(/\/+$/, '');
 
