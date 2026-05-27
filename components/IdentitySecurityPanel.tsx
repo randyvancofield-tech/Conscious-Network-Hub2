@@ -2,6 +2,11 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { X, ShieldCheck, Copy, AlertTriangle, Lock } from 'lucide-react';
 import { ethers } from 'ethers';
 import { api } from '../services/apiClient';
+import {
+  detectWalletProviderEnvironment,
+  walletErrorMessage,
+  type WalletProviderEnvironment,
+} from '../services/walletProvider';
 import { UserProfile } from '../types';
 
 interface IdentitySecurityPanelProps {
@@ -75,6 +80,9 @@ const IdentitySecurityPanel: React.FC<IdentitySecurityPanelProps> = ({ isOpen, o
   const [verifiedAt, setVerifiedAt] = useState<string>(persisted?.verifiedAt || '');
   const [busyAction, setBusyAction] = useState<IdentityAction>(null);
   const [toast, setToast] = useState<string>('');
+  const [walletEnvironment, setWalletEnvironment] = useState<WalletProviderEnvironment>(() =>
+    detectWalletProviderEnvironment()
+  );
 
   const fallbackDid = useMemo(() => {
     if (!user) return 'did:hcn:node_guest';
@@ -97,7 +105,10 @@ const IdentitySecurityPanel: React.FC<IdentitySecurityPanelProps> = ({ isOpen, o
   }, [toast]);
 
   useEffect(() => {
-    if (!window.ethereum) return;
+    const nextWalletEnvironment = detectWalletProviderEnvironment();
+    setWalletEnvironment(nextWalletEnvironment);
+    if (!nextWalletEnvironment.provider) return;
+    const ethereum = nextWalletEnvironment.provider;
 
     const handleAccountsChanged = (accounts: string[]) => {
       const normalized = normalizeAddress(accounts?.[0]);
@@ -123,12 +134,12 @@ const IdentitySecurityPanel: React.FC<IdentitySecurityPanelProps> = ({ isOpen, o
       }
     };
 
-    window.ethereum.on?.('accountsChanged', handleAccountsChanged);
-    window.ethereum.on?.('chainChanged', handleChainChanged);
+    ethereum.on?.('accountsChanged', handleAccountsChanged);
+    ethereum.on?.('chainChanged', handleChainChanged);
 
     return () => {
-      window.ethereum.removeListener?.('accountsChanged', handleAccountsChanged);
-      window.ethereum.removeListener?.('chainChanged', handleChainChanged);
+      ethereum.removeListener?.('accountsChanged', handleAccountsChanged);
+      ethereum.removeListener?.('chainChanged', handleChainChanged);
     };
   }, [connectedAddress, chainId]);
 
@@ -167,8 +178,10 @@ const IdentitySecurityPanel: React.FC<IdentitySecurityPanelProps> = ({ isOpen, o
   };
 
   const requireEthereum = (): boolean => {
-    if (!window.ethereum) {
-      setToast('No compatible signer extension detected');
+    const nextWalletEnvironment = detectWalletProviderEnvironment();
+    setWalletEnvironment(nextWalletEnvironment);
+    if (!nextWalletEnvironment.provider?.request) {
+      setToast(nextWalletEnvironment.guidance);
       return false;
     }
     return true;
@@ -180,11 +193,13 @@ const IdentitySecurityPanel: React.FC<IdentitySecurityPanelProps> = ({ isOpen, o
     setToast('');
 
     try {
-      const accounts: string[] = await window.ethereum.request({ method: 'eth_requestAccounts' });
+      const ethereum = detectWalletProviderEnvironment().provider;
+      if (!ethereum?.request) throw new Error('Wallet provider is no longer available');
+      const accounts: string[] = await ethereum.request({ method: 'eth_requestAccounts' });
       const address = normalizeAddress(accounts?.[0]);
       if (!address) throw new Error('No address returned by signer');
 
-      const chainHex = String(await window.ethereum.request({ method: 'eth_chainId' }));
+      const chainHex = String(await ethereum.request({ method: 'eth_chainId' }));
       const nextChainId = parseInt(chainHex, 16) || DEFAULT_CHAIN_ID;
 
       setConnectedAddress(address);
@@ -199,7 +214,7 @@ const IdentitySecurityPanel: React.FC<IdentitySecurityPanelProps> = ({ isOpen, o
       }
     } catch (error: any) {
       setVerifyStatus('error');
-      setToast(error?.message || 'Address connection failed');
+      setToast(walletErrorMessage(error, 'Address connection failed'));
     } finally {
       setBusyAction(null);
     }
@@ -249,7 +264,9 @@ const IdentitySecurityPanel: React.FC<IdentitySecurityPanelProps> = ({ isOpen, o
         throw new Error('Challenge payload missing signable message');
       }
 
-      const signature: string = await window.ethereum.request({
+      const ethereum = detectWalletProviderEnvironment().provider;
+      if (!ethereum?.request) throw new Error('Wallet provider is no longer available');
+      const signature: string = await ethereum.request({
         method: 'personal_sign',
         params: [message, connectedAddress],
       });
@@ -273,10 +290,20 @@ const IdentitySecurityPanel: React.FC<IdentitySecurityPanelProps> = ({ isOpen, o
       setToast('Identity verification complete');
     } catch (error: any) {
       setVerifyStatus('error');
-      setToast(error?.message || 'Verification failed');
+      setToast(walletErrorMessage(error, 'Verification failed'));
     } finally {
       setBusyAction(null);
     }
+  };
+
+  const openMetaMaskMobileBrowser = (): void => {
+    const nextWalletEnvironment = detectWalletProviderEnvironment();
+    setWalletEnvironment(nextWalletEnvironment);
+    if (nextWalletEnvironment.deepLinkUrl) {
+      window.location.assign(nextWalletEnvironment.deepLinkUrl);
+      return;
+    }
+    setToast(nextWalletEnvironment.guidance);
   };
 
   const statusLabel = useMemo(() => {
@@ -339,6 +366,21 @@ const IdentitySecurityPanel: React.FC<IdentitySecurityPanelProps> = ({ isOpen, o
               continuity.
             </p>
           </div>
+        </div>
+
+        <div className="mb-8 rounded-2xl border border-white/10 bg-white/[0.03] p-4">
+          <p className="text-[10px] font-bold uppercase tracking-widest text-slate-300">
+            {walletEnvironment.guidance}
+          </p>
+          {walletEnvironment.actionLabel && walletEnvironment.deepLinkUrl ? (
+            <button
+              type="button"
+              onClick={openMetaMaskMobileBrowser}
+              className="mt-3 w-full rounded-xl border border-blue-300/20 bg-blue-500/10 px-4 py-3 text-[10px] font-black uppercase tracking-widest text-blue-100 transition hover:bg-blue-500/20"
+            >
+              {walletEnvironment.actionLabel}
+            </button>
+          ) : null}
         </div>
 
         <section className="space-y-4 mb-8">
@@ -413,7 +455,7 @@ const IdentitySecurityPanel: React.FC<IdentitySecurityPanelProps> = ({ isOpen, o
             <div className="mt-4 grid grid-cols-3 gap-2">
               <button
                 onClick={() => void connectIdentityAddress()}
-                disabled={busyAction !== null}
+                disabled={busyAction !== null || !walletEnvironment.hasProvider}
                 className="w-full py-3 bg-white/5 hover:bg-white/10 border border-white/10 rounded-2xl font-bold text-[11px] transition-all uppercase tracking-widest disabled:opacity-60"
               >
                 {busyAction === 'connect' ? 'Connecting...' : 'Connect'}

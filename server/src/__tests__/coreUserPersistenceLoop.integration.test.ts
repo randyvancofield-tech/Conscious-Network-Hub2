@@ -526,9 +526,23 @@ const mockChatWithOpenAI = jest.fn(async () => 'Ethical AI test response');
 const mockGetVertexAIService = jest.fn(() => {
   throw new Error('Vertex not configured');
 });
+const mockPrismaDb = {
+  course: {
+    findMany: jest.fn(async () => []),
+  },
+  user: {
+    findMany: jest.fn(async () => []),
+    findUnique: jest.fn(async () => null),
+  },
+};
 
 jest.mock('../services/persistenceStore', () => ({
   localStore: mockLocalStore,
+}));
+
+jest.mock('../services/prismaClient', () => ({
+  getPrisma: jest.fn(() => mockPrismaDb),
+  disconnectPrisma: jest.fn(async () => undefined),
 }));
 
 jest.mock('../services/socialStore', () => ({
@@ -777,6 +791,17 @@ describe('Core user persistence loop', () => {
       `${baseUrl}/uploads/object/${encodeURIComponent(uploadObjectKey)}`
     );
     expect(publicReflectionResponse.status).toBe(404);
+
+    const unauthenticatedReflectionResponse = await fetch(
+      `${baseUrl}/api/upload/object/${encodeURIComponent(uploadObjectKey)}`
+    );
+    expect(unauthenticatedReflectionResponse.status).toBe(401);
+
+    const otherUserReflectionResponse = await fetch(
+      `${baseUrl}/api/upload/object/${encodeURIComponent(uploadObjectKey)}`,
+      { headers: { Authorization: `Bearer ${betaToken}` } }
+    );
+    expect(otherUserReflectionResponse.status).toBe(404);
 
     const privateReflectionResponse = await fetch(
       `${baseUrl}/api/upload/object/${encodeURIComponent(uploadObjectKey)}`,

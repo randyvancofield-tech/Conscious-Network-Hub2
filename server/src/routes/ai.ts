@@ -1,6 +1,7 @@
 import { Router, Request, Response } from 'express';
 import {
   enforceAuthenticatedUserMatch,
+  getAuthenticatedRole,
   getAuthenticatedUserId,
   validateChatInput,
   requireCanonicalIdentity,
@@ -15,6 +16,7 @@ import {
 } from '../services/aiContextIndex';
 import {
   AI_SECURITY_SYSTEM_PROMPT,
+  AI_USER_SAFETY_NOTICE,
   buildRuntimeGuardrailContext,
   sanitizeAiInput,
 } from '../services/aiSafetyPolicy';
@@ -290,6 +292,14 @@ const enforceCanonicalBodyUser = (req: Request, res: Response): boolean => {
   return true;
 };
 
+const requireAdminAiOperations = (req: Request, res: Response): boolean => {
+  if (getAuthenticatedRole(req) !== 'admin') {
+    res.status(403).json({ error: 'Administrative access is required' });
+    return false;
+  }
+  return true;
+};
+
 interface MeetingActionItem {
   owner: string;
   task: string;
@@ -389,6 +399,7 @@ router.post('/chat', validateChatInput, async (req: Request, res: Response): Pro
 
     res.json({
       provider: response.provider,
+      safetyNotice: AI_USER_SAFETY_NOTICE,
       reply: response.reply,
       citations: response.citations,
       confidenceScore: response.confidenceScore,
@@ -432,6 +443,7 @@ router.post('/wisdom', async (req: Request, res: Response): Promise<void> => {
 
     res.json({
       provider: response.provider,
+      safetyNotice: AI_USER_SAFETY_NOTICE,
       wisdom: response.reply,
       reply: response.reply,
       citations: response.citations,
@@ -498,6 +510,7 @@ router.post('/summarize-meeting', async (req: Request, res: Response): Promise<v
 
     res.json({
       provider: response.provider,
+      safetyNotice: AI_USER_SAFETY_NOTICE,
       ...parsed,
       reply: response.reply,
       citations: response.citations,
@@ -668,6 +681,7 @@ router.get('/trending', async (_req: Request, res: Response): Promise<void> => {
 
     res.json({
       provider: response.provider,
+      safetyNotice: AI_USER_SAFETY_NOTICE,
       topics: topics.length > 0 ? topics : [],
       insights: reply,
       reply,
@@ -691,6 +705,9 @@ router.get('/trending', async (_req: Request, res: Response): Promise<void> => {
  * Operational diagnostics for AI provider and crawler health.
  */
 router.get('/status', async (req: Request, res: Response): Promise<void> => {
+  if (!requireAdminAiOperations(req, res)) {
+    return;
+  }
   res.json({
     success: true,
     userId: getAuthenticatedUserId(req),
@@ -707,7 +724,10 @@ router.get('/status', async (req: Request, res: Response): Promise<void> => {
  * POST /api/ai/reindex
  * Refresh the public-only AI context index.
  */
-router.post('/reindex', async (_req: Request, res: Response): Promise<void> => {
+router.post('/reindex', async (req: Request, res: Response): Promise<void> => {
+  if (!requireAdminAiOperations(req, res)) {
+    return;
+  }
   const status = await triggerAiContextCrawl('api');
   res.json({
     success: true,

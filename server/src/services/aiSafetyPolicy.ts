@@ -12,6 +12,9 @@ const CONTROL_CHARS = /[\u0000-\u0008\u000B\u000C\u000E-\u001F\u007F]/g;
 
 export type AiRiskLevel = 'standard' | 'sensitive' | 'crisis';
 
+export const AI_USER_SAFETY_NOTICE =
+  'AI responses are reflective support only. Use qualified professionals or emergency services for medical, mental health, legal, financial, or safety-critical issues.';
+
 export const AI_SECURITY_SYSTEM_PROMPT = `
 You are Conscious Network Hub's privacy-first assistant.
 

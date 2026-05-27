@@ -453,6 +453,10 @@ const EthicalAIInsight: React.FC<EthicalAIInsightProps> = ({ userEmail, userId =
         ))}
       </div>
 
+      <div className="rounded-xl border border-amber-400/20 bg-amber-400/10 px-4 py-3 text-[10px] leading-relaxed text-amber-100">
+        AI responses are reflective support only. Use qualified professionals or emergency services for medical, mental health, legal, financial, or safety-critical issues.
+      </div>
+
       {viewMode === 'insight' && insightError && (
         <div className="bg-amber-500/10 border border-amber-500/30 text-amber-100 px-4 py-3 rounded-xl text-[10px] leading-relaxed">
           {insightError}

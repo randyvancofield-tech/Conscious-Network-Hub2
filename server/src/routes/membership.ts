@@ -363,6 +363,37 @@ const resolveTierFromInvoice = (invoice: Stripe.Invoice): TierValue | null => {
   return resolveTierFromPriceId(resolvePriceIdFromInvoice(invoice));
 };
 
+const resolvePriceIdFromCheckoutSession = (
+  session: Stripe.Checkout.Session
+): string | null => {
+  const firstLineItem = session.line_items?.data?.[0] as any;
+  const price = firstLineItem?.price;
+  if (typeof price === 'string') return price;
+  if (price && typeof price === 'object' && typeof price.id === 'string') {
+    return price.id;
+  }
+  return null;
+};
+
+const resolveVerifiedTierFromCheckoutSession = (
+  session: Stripe.Checkout.Session
+): { tier: TierValue | null; error: string | null } => {
+  const metadataTier = parseRequestedTier(session.metadata?.tier);
+  const priceTier = resolveTierFromPriceId(resolvePriceIdFromCheckoutSession(session));
+
+  if (metadataTier && priceTier && metadataTier !== priceTier) {
+    return {
+      tier: null,
+      error: 'Checkout session tier does not match its Stripe price',
+    };
+  }
+
+  return {
+    tier: metadataTier || priceTier,
+    error: null,
+  };
+};
+
 const upsertMembershipState = async (input: {
   userId: string;
   tier: TierValue;
@@ -654,17 +685,14 @@ const confirmStripeCheckoutSession = async (
       });
     }
 
-    let tier = parseRequestedTier(session.metadata?.tier);
-    if (!tier) {
-      const firstLineItem = session.line_items?.data?.[0];
-      const price = firstLineItem?.price;
-      const priceId =
-        typeof price === 'string'
-          ? price
-          : price && typeof price === 'object'
-          ? price.id
-          : null;
-      tier = resolveTierFromPriceId(priceId);
+    const tierResolution = resolveVerifiedTierFromCheckoutSession(session);
+    const tier = tierResolution.tier;
+
+    if (tierResolution.error) {
+      console.warn('[STRIPE][CHECKOUT] Tier/price mismatch during confirm-session', {
+        sessionId: session.id,
+      });
+      return res.status(422).json({ error: tierResolution.error });
     }
 
     if (!tier) {
@@ -718,7 +746,14 @@ const handleCheckoutSessionWebhookEvent = async (
   }
 
   const userId = String(session.client_reference_id || session.metadata?.userId || '').trim();
-  const tier = parseRequestedTier(session.metadata?.tier);
+  const tierResolution = resolveVerifiedTierFromCheckoutSession(session);
+  const tier = tierResolution.tier;
+  if (tierResolution.error) {
+    console.warn('[STRIPE][WEBHOOK] Checkout session tier/price mismatch', {
+      sessionId: session.id,
+    });
+    return null;
+  }
   if (!userId || !tier) {
     console.warn('[STRIPE][WEBHOOK] Missing user or tier metadata for checkout session', {
       sessionId: session.id,

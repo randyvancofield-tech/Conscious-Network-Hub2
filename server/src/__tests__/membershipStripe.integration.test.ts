@@ -304,6 +304,34 @@ describe('Stripe membership persistence', () => {
     }
   );
 
+  it('rejects checkout confirmation when Stripe price and metadata tier disagree', async () => {
+    const user = createMockUser('mismatch-user', 'mismatch@example.com');
+    users.set(user.id, user);
+    const token = createSessionToken(user.id).token;
+    const session = makeSession({
+      id: 'cs_mismatch',
+      userId: user.id,
+      tier: 'Accelerated Tier',
+      paymentStatus: 'paid',
+      amountTotal: 4400,
+    }) as any;
+    session.line_items.data[0].price.id = 'price_guided';
+    mockCheckoutSessionRetrieve.mockResolvedValue(session);
+
+    const response = await requestJson({
+      baseUrl,
+      method: 'POST',
+      path: '/api/membership/stripe/confirm-session',
+      token,
+      body: { sessionId: session.id },
+    });
+
+    expect(response.status).toBe(422);
+    expect(response.body?.error).toBe('Checkout session tier does not match its Stripe price');
+    expect(memberships.has(user.id)).toBe(false);
+    expect(payments.filter((payment) => payment.userId === user.id)).toHaveLength(0);
+  });
+
   it('webhook checkout.session.completed persists active membership and ignores duplicate events', async () => {
     const user = createMockUser('webhook-user', 'webhook@example.com');
     users.set(user.id, user);
@@ -342,5 +370,35 @@ describe('Stripe membership persistence', () => {
     expect(users.get(user.id)?.subscriptionStatus).toBe('active');
     expect(memberships.get(user.id)?.status).toBe('active');
     expect(payments.filter((payment) => payment.userId === user.id)).toHaveLength(2);
+  });
+
+  it('webhook checkout.session.completed ignores mismatched tier and price metadata', async () => {
+    const user = createMockUser('webhook-mismatch-user', 'webhook-mismatch@example.com');
+    users.set(user.id, user);
+    const session = makeSession({
+      id: 'cs_webhook_mismatch',
+      userId: user.id,
+      tier: 'Accelerated Tier',
+      paymentStatus: 'paid',
+      amountTotal: 4400,
+    }) as any;
+    session.line_items.data[0].price.id = 'price_guided';
+    mockConstructWebhookEvent.mockReturnValue({
+      id: 'evt_checkout_mismatch',
+      type: 'checkout.session.completed',
+      data: { object: session },
+    });
+
+    const response = await requestJson({
+      baseUrl,
+      method: 'POST',
+      path: '/api/membership/stripe/webhook',
+      body: { id: 'evt_checkout_mismatch' },
+      headers: { 'stripe-signature': 'test-signature' },
+    });
+
+    expect(response.status).toBe(200);
+    expect(memberships.has(user.id)).toBe(false);
+    expect(payments.filter((payment) => payment.userId === user.id)).toHaveLength(0);
   });
 });

@@ -210,8 +210,12 @@ jest.mock('../services/userSessionStore', () => ({
 
 const providerAuthRoutes = require('../routes/providerAuth').default;
 const providerSessionRoutes = require('../routes/providerSession').default;
-const { PROVIDER_CRM_SOLE_ADMIN_EMAIL } = require('../services/providerCrm') as {
+const {
+  PROVIDER_CRM_SOLE_ADMIN_EMAIL,
+  isProviderCrmAdminPasswordFallbackEnabled,
+} = require('../services/providerCrm') as {
   PROVIDER_CRM_SOLE_ADMIN_EMAIL: string;
+  isProviderCrmAdminPasswordFallbackEnabled: () => boolean;
 };
 
 let server: http.Server | null = null;
@@ -507,6 +511,36 @@ describe('Provider wallet authentication', () => {
     expect(response.status).toBe(200);
     expect(response.body?.success).toBe(true);
     expect(response.body?.session?.scopes).toEqual(['provider:*']);
+  });
+
+  it('blocks admin provider session minting when wallet verification is required', async () => {
+    process.env.ENABLE_ADMIN_PASSWORD_FALLBACK = 'false';
+    users.set('admin-1', createMockUser('admin-1', 'admin', null));
+
+    const response = await requestJson({
+      method: 'POST',
+      path: '/api/provider/auth/session',
+      token: userToken('admin-1'),
+      body: {},
+    });
+
+    expect(response.status).toBe(403);
+    expect(response.body?.code).toBe('ADMIN_WALLET_VERIFICATION_REQUIRED');
+    expect(sessions.size).toBe(0);
+  });
+
+  it('keeps admin password fallback disabled in production even if explicitly enabled', async () => {
+    const previousNodeEnv = process.env.NODE_ENV;
+    const previousFallback = process.env.ENABLE_ADMIN_PASSWORD_FALLBACK;
+    try {
+      process.env.NODE_ENV = 'production';
+      process.env.ENABLE_ADMIN_PASSWORD_FALLBACK = 'true';
+
+      expect(isProviderCrmAdminPasswordFallbackEnabled()).toBe(false);
+    } finally {
+      process.env.NODE_ENV = previousNodeEnv;
+      process.env.ENABLE_ADMIN_PASSWORD_FALLBACK = previousFallback;
+    }
   });
 
   it('reports Administrative Access wallet readiness without exposing the full wallet address', async () => {

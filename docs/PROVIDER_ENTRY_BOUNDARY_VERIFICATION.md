@@ -2,7 +2,7 @@
 
 This is a Phase 1 design note only. It does not change production member sign-in,
 approved provider email/password sign-in, applicant sign-in, Stripe, Neon,
-Cloudflare, Base44, pricing, or provider portal routing.
+Cloudflare, pricing, or provider portal routing.
 
 ## Goal
 

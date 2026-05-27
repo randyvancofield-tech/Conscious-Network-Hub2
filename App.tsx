@@ -50,6 +50,12 @@ import {
 import { canTierAccessNavItem, canTierAccessView } from './services/tierAccess';
 import { ApiError, api, apiHealth, backendAssetUrl, getBackendBaseUrl } from './services/apiClient';
 import { createNativeProviderControlSession } from './services/backendApiService';
+import {
+  detectWalletProviderEnvironment,
+  readWalletChainId,
+  walletErrorMessage,
+  type WalletProviderEnvironment,
+} from './services/walletProvider';
 
 type RouteState = {
   view: AppView;
@@ -487,6 +493,9 @@ const App: React.FC = () => {
     adminAccountReady: boolean;
     passwordFallbackEnabled: boolean;
   } | null>(null);
+  const [walletEnvironment, setWalletEnvironment] = useState<WalletProviderEnvironment>(() =>
+    detectWalletProviderEnvironment()
+  );
   const [isAdminAccessStatusLoading, setAdminAccessStatusLoading] = useState(false);
   const [isPasswordResetRequestOpen, setPasswordResetRequestOpen] = useState(false);
   const [passwordResetEmailInput, setPasswordResetEmailInput] = useState('');
@@ -544,6 +553,31 @@ const App: React.FC = () => {
     }
   };
 
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const refreshWalletEnvironment = () => {
+      setWalletEnvironment(detectWalletProviderEnvironment());
+    };
+
+    refreshWalletEnvironment();
+    window.addEventListener('focus', refreshWalletEnvironment);
+    window.addEventListener('ethereum#initialized', refreshWalletEnvironment as EventListener);
+    const ethereum = (window as any).ethereum;
+    ethereum?.on?.('connect', refreshWalletEnvironment);
+    ethereum?.on?.('disconnect', refreshWalletEnvironment);
+    ethereum?.on?.('accountsChanged', refreshWalletEnvironment);
+    ethereum?.on?.('chainChanged', refreshWalletEnvironment);
+
+    return () => {
+      window.removeEventListener('focus', refreshWalletEnvironment);
+      window.removeEventListener('ethereum#initialized', refreshWalletEnvironment as EventListener);
+      ethereum?.removeListener?.('connect', refreshWalletEnvironment);
+      ethereum?.removeListener?.('disconnect', refreshWalletEnvironment);
+      ethereum?.removeListener?.('accountsChanged', refreshWalletEnvironment);
+      ethereum?.removeListener?.('chainChanged', refreshWalletEnvironment);
+    };
+  }, [currentView, isProviderWalletVerificationRequired]);
+
   const TIERS = [
     {
       name: FREE_TIER_NAME,
@@ -581,6 +615,27 @@ const App: React.FC = () => {
     setProviderWalletVerifying(false);
     setProviderWalletStatus('');
   };
+
+  const refreshWalletEnvironment = (): WalletProviderEnvironment => {
+    const next = detectWalletProviderEnvironment();
+    setWalletEnvironment(next);
+    return next;
+  };
+
+  const openMetaMaskMobileBrowser = () => {
+    const next = refreshWalletEnvironment();
+    if (next.deepLinkUrl) {
+      window.location.assign(next.deepLinkUrl);
+      return;
+    }
+    setError(next.guidance);
+  };
+
+  const walletNetworkMismatchMessage = (
+    actualChainId: number,
+    expectedChainId: number
+  ): string =>
+    `Switch your wallet to network ${expectedChainId} before signing. Current network: ${actualChainId}.`;
 
   const normalizeCourse = (rawCourse: any): Course => ({
     id: String(rawCourse?.id || ''),
@@ -1482,9 +1537,11 @@ const App: React.FC = () => {
   const handleAdministrativeWalletVerification = async () => {
     setError('');
     setAdminWalletStatus('');
-    const ethereum = (window as any).ethereum;
+    const walletEnv = refreshWalletEnvironment();
+    const ethereum = walletEnv.provider;
     if (!ethereum?.request) {
-      setError('MetaMask is required for Administrative Access wallet verification.');
+      setAdminWalletStatus(walletEnv.guidance);
+      setError(walletEnv.guidance);
       return;
     }
 
@@ -1505,6 +1562,13 @@ const App: React.FC = () => {
         auth: false,
         body: { walletAddress },
       });
+      const walletChainId = await readWalletChainId(ethereum).catch(() => null);
+      if (walletChainId && challenge.chainId && walletChainId !== challenge.chainId) {
+        const message = walletNetworkMismatchMessage(walletChainId, challenge.chainId);
+        setError(message);
+        setAdminWalletStatus(message);
+        return;
+      }
 
       const message = buildProviderSiweMessage(challenge);
       setAdminWalletStatus('Confirm the gasless administrative signature in MetaMask.');
@@ -1551,11 +1615,7 @@ const App: React.FC = () => {
         setError(error.message || 'Administrative wallet verification failed.');
         return;
       }
-      if (error instanceof Error) {
-        setError(error.message || 'Administrative wallet verification failed.');
-        return;
-      }
-      setError('Administrative wallet verification failed.');
+      setError(walletErrorMessage(error, 'Administrative wallet verification failed.'));
     } finally {
       setAdminWalletVerifying(false);
     }
@@ -1611,9 +1671,11 @@ const App: React.FC = () => {
       return;
     }
 
-    const ethereum = (window as any).ethereum;
+    const walletEnv = refreshWalletEnvironment();
+    const ethereum = walletEnv.provider;
     if (!ethereum?.request) {
-      setError('MetaMask is required for provider wallet verification.');
+      setProviderWalletStatus(walletEnv.guidance);
+      setError(walletEnv.guidance);
       return;
     }
 
@@ -1634,6 +1696,13 @@ const App: React.FC = () => {
         method: 'POST',
         body: { walletAddress },
       });
+      const walletChainId = await readWalletChainId(ethereum).catch(() => null);
+      if (walletChainId && challenge.chainId && walletChainId !== challenge.chainId) {
+        const message = walletNetworkMismatchMessage(walletChainId, challenge.chainId);
+        setError(message);
+        setProviderWalletStatus(message);
+        return;
+      }
       const message = buildProviderSiweMessage(challenge);
 
       setProviderWalletStatus('Confirm the gasless signature in MetaMask.');
@@ -1667,10 +1736,8 @@ const App: React.FC = () => {
     } catch (error) {
       if (error instanceof ApiError) {
         setError(error.message || 'Provider wallet verification failed.');
-      } else if (error instanceof Error) {
-        setError(error.message || 'Provider wallet verification failed.');
       } else {
-        setError('Provider wallet verification failed.');
+        setError(walletErrorMessage(error, 'Provider wallet verification failed.'));
       }
       setProviderWalletStatus('');
     } finally {
@@ -2471,12 +2538,27 @@ const App: React.FC = () => {
                       {adminWalletStatus}
                     </p>
                   )}
+                  <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-4">
+                    <p className="text-[10px] font-black uppercase tracking-widest text-amber-100/80">
+                      {walletEnvironment.guidance}
+                    </p>
+                    {walletEnvironment.actionLabel && walletEnvironment.deepLinkUrl && (
+                      <button
+                        type="button"
+                        onClick={openMetaMaskMobileBrowser}
+                        className="mt-3 w-full rounded-xl border border-amber-200/20 bg-amber-500/10 px-4 py-3 text-[10px] font-black uppercase tracking-widest text-amber-100 transition hover:bg-amber-500/20"
+                      >
+                        {walletEnvironment.actionLabel}
+                      </button>
+                    )}
+                  </div>
                   <button
                     type="button"
                     onClick={() => void handleAdministrativeWalletVerification()}
                     disabled={
                       isAdminWalletVerifying ||
                       isAdminAccessStatusLoading ||
+                      !walletEnvironment.hasProvider ||
                       adminAccessStatus?.walletConfigured === false ||
                       adminAccessStatus?.adminAccountReady === false
                     }
@@ -2488,6 +2570,8 @@ const App: React.FC = () => {
                         ? 'Wallet Not Configured'
                         : adminAccessStatus?.adminAccountReady === false
                           ? 'Admin Account Not Ready'
+                          : !walletEnvironment.hasProvider
+                            ? 'Wallet Browser Required'
                         : 'Verify Wallet & Enter Portal'}
                   </button>
                 </div>
@@ -2643,13 +2727,31 @@ const App: React.FC = () => {
                         {providerWalletStatus}
                       </p>
                     )}
+                    <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-4">
+                      <p className="text-[10px] font-black uppercase tracking-widest text-blue-100/80">
+                        {walletEnvironment.guidance}
+                      </p>
+                      {walletEnvironment.actionLabel && walletEnvironment.deepLinkUrl && (
+                        <button
+                          type="button"
+                          onClick={openMetaMaskMobileBrowser}
+                          className="mt-3 w-full rounded-xl border border-blue-300/20 bg-blue-500/10 px-4 py-3 text-[10px] font-black uppercase tracking-widest text-blue-100 transition hover:bg-blue-500/20"
+                        >
+                          {walletEnvironment.actionLabel}
+                        </button>
+                      )}
+                    </div>
                     <button
                       type="button"
                       onClick={() => void handleProviderWalletVerification()}
-                      disabled={isProviderWalletVerifying}
+                      disabled={isProviderWalletVerifying || !walletEnvironment.hasProvider}
                       className="w-full rounded-2xl bg-blue-600 px-5 py-4 text-xs font-black uppercase tracking-widest text-white shadow-xl shadow-blue-950/40 transition hover:bg-blue-500 disabled:opacity-60"
                     >
-                      {isProviderWalletVerifying ? 'Verifying Wallet...' : 'Verify Wallet & Open Tools'}
+                      {isProviderWalletVerifying
+                        ? 'Verifying Wallet...'
+                        : !walletEnvironment.hasProvider
+                          ? 'Wallet Browser Required'
+                          : 'Verify Wallet & Open Tools'}
                     </button>
                   </div>
                 ) : (

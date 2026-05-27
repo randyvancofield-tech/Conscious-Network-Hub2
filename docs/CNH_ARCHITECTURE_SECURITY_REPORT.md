@@ -152,7 +152,7 @@ Cloud Run scripts remain as legacy helpers only. They were not deleted because t
 
 Code/config cleanup:
 
-- Removed `base44/functions/providerLaunch/function.jsonc`, an incomplete and unreferenced Base44 provider-launch stub.
+- Removed an incomplete and unreferenced external provider-launch stub.
 - Removed `higherconscious.network` from default backend CORS origins in `server/src/index.ts`.
 - Scoped default localhost CORS origins to non-production runtime only.
 - Updated `src/knowledge/hcn_scope.json` official URL to `https://conscious-network.org`.
@@ -179,7 +179,7 @@ Files changed:
 
 Files deleted:
 
-- `base44/functions/providerLaunch/function.jsonc`
+- No deprecated external provider-launch files remain in the active checkout.
 
 Legacy systems preserved:
 
