@@ -40,6 +40,13 @@ const REQUIRED_COLUMNS = {
     'submittedAt',
     'updatedAt',
   ],
+  ProviderCrmToolVisibility: [
+    'toolId',
+    'enabled',
+    'updatedByUserId',
+    'createdAt',
+    'updatedAt',
+  ],
 };
 
 function buildClient() {
@@ -112,6 +119,9 @@ async function main() {
     checks.ProviderApplicant.prismaCount = await prisma.providerApplicant.count();
     checks.ConsciousCareerGrantApplication.prismaCount =
       await prisma.consciousCareerGrantApplication.count();
+    checks.ProviderCrmToolVisibility.rowCount = await client
+      .query('SELECT COUNT(*)::int AS count FROM "ProviderCrmToolVisibility"')
+      .then((result) => Number(result.rows[0]?.count || 0));
 
     const failures = Object.entries(checks).flatMap(([tableName, check]) => {
       const missing = [];

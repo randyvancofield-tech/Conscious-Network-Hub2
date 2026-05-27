@@ -1,24 +1,33 @@
 import { Router, Request, Response } from 'express';
 import { getAuthenticatedUserId, requireCanonicalIdentity } from '../middleware';
 import { getPrisma } from '../services/prismaClient';
+import { normalizeCourseSyllabusMetadata } from '../services/courseMetadata';
 
 const router = Router();
 router.use(requireCanonicalIdentity);
 
-const toUserCourseResponse = (entry: any) => ({
-  id: entry.course.id,
-  title: entry.course.title,
-  provider: entry.course.provider,
-  description: entry.course.description,
-  image: entry.course.image,
-  tier: entry.course.tier,
-  enrolled: entry.course.enrolledCount,
-  progress: Number(entry.progressScore || 0),
-  progressScore: Number(entry.progressScore || 0),
-  status: entry.status,
-  enrolledAt: entry.enrolledAt,
-  updatedAt: entry.updatedAt,
-});
+const toUserCourseResponse = (entry: any) => {
+  const metadata = normalizeCourseSyllabusMetadata(entry.course.syllabus);
+  return {
+    id: entry.course.id,
+    title: entry.course.title,
+    provider: entry.course.provider,
+    description: entry.course.description,
+    fullDescription: metadata.fullDescription,
+    category: metadata.category,
+    estimatedDuration: metadata.estimatedDuration,
+    learningObjectives: metadata.learningObjectives,
+    contentSections: metadata.contentSections,
+    image: entry.course.image,
+    tier: entry.course.tier,
+    enrolled: entry.course.enrolledCount,
+    progress: Number(entry.progressScore || 0),
+    progressScore: Number(entry.progressScore || 0),
+    status: entry.status,
+    enrolledAt: entry.enrolledAt,
+    updatedAt: entry.updatedAt,
+  };
+};
 
 router.get('/courses', async (req: Request, res: Response): Promise<void> => {
   const userId = getAuthenticatedUserId(req);

@@ -1,6 +1,12 @@
 import crypto from 'crypto';
 import { Prisma, PrismaClient } from '@prisma/client';
 import { getPrisma } from './prismaClient';
+import {
+  CourseContentSection,
+  buildCourseSyllabusMetadata,
+  hasCourseSyllabusInput,
+  normalizeCourseSyllabusMetadata,
+} from './courseMetadata';
 
 export type ProviderCrmWorkspaceRole = 'provider' | 'admin';
 export type ProviderCrmRecordKind =
@@ -130,6 +136,11 @@ export interface ProviderCrmFollowUp {
 export interface ProviderCrmContentInput {
   title?: unknown;
   description?: unknown;
+  fullDescription?: unknown;
+  category?: unknown;
+  estimatedDuration?: unknown;
+  learningObjectives?: unknown;
+  contentSections?: unknown;
   tier?: unknown;
   status?: unknown;
 }
@@ -141,6 +152,11 @@ export interface ProviderCrmContentItem {
   provider: string;
   title: string;
   description: string;
+  fullDescription: string | null;
+  category: string | null;
+  estimatedDuration: string | null;
+  learningObjectives: string[];
+  contentSections: CourseContentSection[];
   tier: string;
   status: ProviderCrmContentStatus;
   image: string | null;
@@ -1028,20 +1044,28 @@ export const deleteProviderCrmFollowUp = async (
   db: PrismaClient = getPrisma()
 ): Promise<boolean> => deleteProviderCrmRecord(scope, id, 'follow_up', db);
 
-const toContentItem = (course: any): ProviderCrmContentItem => ({
-  id: String(course.id),
-  ownerId: course.ownerId || null,
-  ownerType: String(course.ownerType || ''),
-  provider: String(course.provider || ''),
-  title: String(course.title || ''),
-  description: String(course.description || ''),
-  tier: String(course.tier || 'Professional'),
-  status: normalizeContentStatus(course.status, 'draft'),
-  image: course.image || null,
-  enrolledCount: Number(course.enrolledCount || 0),
-  createdAt: toIsoString(course.createdAt) || new Date().toISOString(),
-  updatedAt: toIsoString(course.updatedAt) || new Date().toISOString(),
-});
+const toContentItem = (course: any): ProviderCrmContentItem => {
+  const metadata = normalizeCourseSyllabusMetadata(course.syllabus);
+  return {
+    id: String(course.id),
+    ownerId: course.ownerId || null,
+    ownerType: String(course.ownerType || ''),
+    provider: String(course.provider || ''),
+    title: String(course.title || ''),
+    description: String(course.description || ''),
+    fullDescription: metadata.fullDescription,
+    category: metadata.category,
+    estimatedDuration: metadata.estimatedDuration,
+    learningObjectives: metadata.learningObjectives,
+    contentSections: metadata.contentSections,
+    tier: String(course.tier || 'Professional'),
+    status: normalizeContentStatus(course.status, 'draft'),
+    image: course.image || null,
+    enrolledCount: Number(course.enrolledCount || 0),
+    createdAt: toIsoString(course.createdAt) || new Date().toISOString(),
+    updatedAt: toIsoString(course.updatedAt) || new Date().toISOString(),
+  };
+};
 
 export const listProviderCrmContentItems = async (
   scope: ProviderCrmWorkspaceScope,
@@ -1065,6 +1089,7 @@ export const createProviderCrmContentItem = async (
   const title = requireText(input.title, 'title', 180);
   const description = requireText(input.description, 'description', 2000);
   const status = normalizeContentStatus(input.status, 'draft');
+  const syllabus = buildCourseSyllabusMetadata(null, input);
   const course = await dbAny.course.create({
     data: {
       id: `provider_course_${crypto.randomUUID()}`,
@@ -1077,7 +1102,7 @@ export const createProviderCrmContentItem = async (
       status,
       enrolledCount: 0,
       image: null,
-      syllabus: [],
+      syllabus,
     },
   });
   return toContentItem(course);
@@ -1102,6 +1127,7 @@ export const updateProviderCrmContentItem = async (
   if (input.description !== undefined) data.description = requireText(input.description, 'description', 2000);
   if (input.tier !== undefined) data.tier = normalizeTier(input.tier, existing.tier);
   if (input.status !== undefined) data.status = normalizeContentStatus(input.status, normalizeContentStatus(existing.status));
+  if (hasCourseSyllabusInput(input)) data.syllabus = buildCourseSyllabusMetadata(existing.syllabus, input);
 
   const course = await dbAny.course.update({
     where: { id: existing.id },

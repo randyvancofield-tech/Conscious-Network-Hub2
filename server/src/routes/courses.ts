@@ -2,6 +2,7 @@ import { Router, Request, Response } from 'express';
 import { getAuthenticatedUserId, requireCanonicalIdentity } from '../middleware';
 import { getPrisma } from '../services/prismaClient';
 import { defaultCourses } from '../data/defaultCourses';
+import { normalizeCourseSyllabusMetadata } from '../services/courseMetadata';
 
 const publicRouter = Router();
 const protectedRouter = Router();
@@ -20,20 +21,28 @@ const ensureDefaultCourses = async (): Promise<void> => {
   });
 };
 
-const toCourseResponse = (course: any, enrollment?: any) => ({
-  id: course.id,
-  ownerId: course.ownerId,
-  ownerType: course.ownerType,
-  title: course.title,
-  provider: course.provider,
-  description: course.description,
-  image: course.image,
-  tier: course.tier,
-  enrolled: course.enrolledCount,
-  status: course.status,
-  progressScore: enrollment ? Number(enrollment.progressScore || 0) : null,
-  enrollmentStatus: enrollment?.status || null,
-});
+const toCourseResponse = (course: any, enrollment?: any) => {
+  const metadata = normalizeCourseSyllabusMetadata(course.syllabus);
+  return {
+    id: course.id,
+    ownerId: course.ownerId,
+    ownerType: course.ownerType,
+    title: course.title,
+    provider: course.provider,
+    description: course.description,
+    fullDescription: metadata.fullDescription,
+    category: metadata.category,
+    estimatedDuration: metadata.estimatedDuration,
+    learningObjectives: metadata.learningObjectives,
+    contentSections: metadata.contentSections,
+    image: course.image,
+    tier: course.tier,
+    enrolled: course.enrolledCount,
+    status: course.status,
+    progressScore: enrollment ? Number(enrollment.progressScore || 0) : null,
+    enrollmentStatus: enrollment?.status || null,
+  };
+};
 
 publicRouter.get('/', async (_req: Request, res: Response): Promise<void> => {
   try {

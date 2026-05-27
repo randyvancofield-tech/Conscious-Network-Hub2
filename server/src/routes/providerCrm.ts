@@ -1,4 +1,4 @@
-import { Request, Response, Router } from 'express';
+import { NextFunction, Request, Response, Router } from 'express';
 import {
   ProviderAuthenticatedRequest,
   requireProviderScope,
@@ -7,10 +7,14 @@ import {
 import {
   PROVIDER_CRM_SOLE_ADMIN_EMAIL,
   getProviderCrmTool,
+  isProviderCrmToolEnabled,
   isProviderCrmSoleAdmin,
   listProviderCrmToolsForRole,
-  setProviderCrmToolVisibility,
 } from '../services/providerCrm';
+import {
+  listProviderCrmToolVisibilityOverrides,
+  setProviderCrmToolVisibilitySetting,
+} from '../services/providerCrmToolSettingsStore';
 import {
   ProviderCrmWorkspaceScope,
   buildProviderCrmWorkspace,
@@ -107,6 +111,28 @@ const getRequiredWorkspaceScope = async (req: Request, res: Response): Promise<P
   return scope;
 };
 
+const listToolsForRole = async (role: 'provider' | 'admin') =>
+  listProviderCrmToolsForRole(role, await listProviderCrmToolVisibilityOverrides());
+
+const requireCrmToolEnabled =
+  (toolId: string) =>
+  async (_req: Request, res: Response, next: NextFunction): Promise<void> => {
+    const tool = getProviderCrmTool(toolId);
+    if (!tool) {
+      res.status(404).json({ error: 'Provider CRM tool not found' });
+      return;
+    }
+    const overrides = await listProviderCrmToolVisibilityOverrides();
+    if (!isProviderCrmToolEnabled(tool, overrides)) {
+      res.status(403).json({
+        error: 'Provider CRM tool is disabled by workspace configuration',
+        toolId: tool.id,
+      });
+      return;
+    }
+    next();
+  };
+
 const handleProviderCrmError = (res: Response, error: unknown): boolean => {
   if (error instanceof Error && error.message.startsWith('VALIDATION:')) {
     const field = error.message.slice('VALIDATION:'.length) || 'field';
@@ -142,10 +168,10 @@ const auditCrmMutation = (
   });
 };
 
-router.get('/tools', requireProviderScope('provider:read'), (req: Request, res: Response): void => {
+router.get('/tools', requireProviderScope('provider:read'), async (req: Request, res: Response): Promise<void> => {
   const providerReq = getProviderRequestContext(req);
   const role = providerReq.providerRole === 'admin' ? 'admin' : 'provider';
-  const tools = listProviderCrmToolsForRole(role);
+  const tools = await listToolsForRole(role);
 
   recordAuditEvent(req, {
     domain: 'admin',
@@ -168,10 +194,10 @@ router.get('/tools', requireProviderScope('provider:read'), (req: Request, res: 
   });
 });
 
-router.get('/summary', requireProviderScope('provider:read'), (req: Request, res: Response): void => {
+router.get('/summary', requireProviderScope('provider:read'), async (req: Request, res: Response): Promise<void> => {
   const providerReq = getProviderRequestContext(req);
   const role = providerReq.providerRole === 'admin' ? 'admin' : 'provider';
-  const tools = listProviderCrmToolsForRole(role);
+  const tools = await listToolsForRole(role);
 
   res.json({
     success: true,
@@ -249,14 +275,14 @@ router.post('/records', requireProviderScope('provider:host'), async (req: Reque
   });
 });
 
-router.get('/notes', requireProviderScope('provider:read'), async (req: Request, res: Response): Promise<void> => {
+router.get('/notes', requireProviderScope('provider:read'), requireCrmToolEnabled('notes'), async (req: Request, res: Response): Promise<void> => {
   const scope = await getRequiredWorkspaceScope(req, res);
   if (!scope) return;
   const notes = await listProviderCrmNotes(scope);
   res.json({ success: true, notes });
 });
 
-router.post('/notes', requireProviderScope('provider:host'), async (req: Request, res: Response): Promise<void> => {
+router.post('/notes', requireProviderScope('provider:host'), requireCrmToolEnabled('notes'), async (req: Request, res: Response): Promise<void> => {
   const scope = await getRequiredWorkspaceScope(req, res);
   if (!scope) return;
   try {
@@ -269,7 +295,7 @@ router.post('/notes', requireProviderScope('provider:host'), async (req: Request
   }
 });
 
-router.patch('/notes/:id', requireProviderScope('provider:host'), async (req: Request, res: Response): Promise<void> => {
+router.patch('/notes/:id', requireProviderScope('provider:host'), requireCrmToolEnabled('notes'), async (req: Request, res: Response): Promise<void> => {
   const scope = await getRequiredWorkspaceScope(req, res);
   if (!scope) return;
   try {
@@ -286,7 +312,7 @@ router.patch('/notes/:id', requireProviderScope('provider:host'), async (req: Re
   }
 });
 
-router.delete('/notes/:id', requireProviderScope('provider:host'), async (req: Request, res: Response): Promise<void> => {
+router.delete('/notes/:id', requireProviderScope('provider:host'), requireCrmToolEnabled('notes'), async (req: Request, res: Response): Promise<void> => {
   const scope = await getRequiredWorkspaceScope(req, res);
   if (!scope) return;
   const deleted = await deleteProviderCrmNote(scope, req.params.id);
@@ -298,14 +324,14 @@ router.delete('/notes/:id', requireProviderScope('provider:host'), async (req: R
   res.json({ success: true });
 });
 
-router.get('/content', requireProviderScope('provider:read'), async (req: Request, res: Response): Promise<void> => {
+router.get('/content', requireProviderScope('provider:read'), requireCrmToolEnabled('content-courses'), async (req: Request, res: Response): Promise<void> => {
   const scope = await getRequiredWorkspaceScope(req, res);
   if (!scope) return;
   const items = await listProviderCrmContentItems(scope);
   res.json({ success: true, items });
 });
 
-router.post('/content', requireProviderScope('provider:host'), async (req: Request, res: Response): Promise<void> => {
+router.post('/content', requireProviderScope('provider:host'), requireCrmToolEnabled('content-courses'), async (req: Request, res: Response): Promise<void> => {
   const scope = await getRequiredWorkspaceScope(req, res);
   if (!scope) return;
   try {
@@ -318,7 +344,7 @@ router.post('/content', requireProviderScope('provider:host'), async (req: Reque
   }
 });
 
-router.patch('/content/:id', requireProviderScope('provider:host'), async (req: Request, res: Response): Promise<void> => {
+router.patch('/content/:id', requireProviderScope('provider:host'), requireCrmToolEnabled('content-courses'), async (req: Request, res: Response): Promise<void> => {
   const scope = await getRequiredWorkspaceScope(req, res);
   if (!scope) return;
   try {
@@ -335,14 +361,14 @@ router.patch('/content/:id', requireProviderScope('provider:host'), async (req: 
   }
 });
 
-router.get('/collaboration', requireProviderScope('provider:read'), async (req: Request, res: Response): Promise<void> => {
+router.get('/collaboration', requireProviderScope('provider:read'), requireCrmToolEnabled('collaboration'), async (req: Request, res: Response): Promise<void> => {
   const scope = await getRequiredWorkspaceScope(req, res);
   if (!scope) return;
   const items = await listProviderCrmCollaborations(scope);
   res.json({ success: true, items });
 });
 
-router.post('/collaboration', requireProviderScope('provider:host'), async (req: Request, res: Response): Promise<void> => {
+router.post('/collaboration', requireProviderScope('provider:host'), requireCrmToolEnabled('collaboration'), async (req: Request, res: Response): Promise<void> => {
   const scope = await getRequiredWorkspaceScope(req, res);
   if (!scope) return;
   try {
@@ -355,7 +381,7 @@ router.post('/collaboration', requireProviderScope('provider:host'), async (req:
   }
 });
 
-router.patch('/collaboration/:id', requireProviderScope('provider:host'), async (req: Request, res: Response): Promise<void> => {
+router.patch('/collaboration/:id', requireProviderScope('provider:host'), requireCrmToolEnabled('collaboration'), async (req: Request, res: Response): Promise<void> => {
   const scope = await getRequiredWorkspaceScope(req, res);
   if (!scope) return;
   try {
@@ -372,7 +398,7 @@ router.patch('/collaboration/:id', requireProviderScope('provider:host'), async 
   }
 });
 
-router.delete('/collaboration/:id', requireProviderScope('provider:host'), async (req: Request, res: Response): Promise<void> => {
+router.delete('/collaboration/:id', requireProviderScope('provider:host'), requireCrmToolEnabled('collaboration'), async (req: Request, res: Response): Promise<void> => {
   const scope = await getRequiredWorkspaceScope(req, res);
   if (!scope) return;
   const deleted = await deleteProviderCrmCollaboration(scope, req.params.id);
@@ -384,14 +410,14 @@ router.delete('/collaboration/:id', requireProviderScope('provider:host'), async
   res.json({ success: true });
 });
 
-router.get('/follow-ups', requireProviderScope('provider:read'), async (req: Request, res: Response): Promise<void> => {
+router.get('/follow-ups', requireProviderScope('provider:read'), requireCrmToolEnabled('follow-ups'), async (req: Request, res: Response): Promise<void> => {
   const scope = await getRequiredWorkspaceScope(req, res);
   if (!scope) return;
   const followUps = await listProviderCrmFollowUps(scope);
   res.json({ success: true, followUps });
 });
 
-router.post('/follow-ups', requireProviderScope('provider:host'), async (req: Request, res: Response): Promise<void> => {
+router.post('/follow-ups', requireProviderScope('provider:host'), requireCrmToolEnabled('follow-ups'), async (req: Request, res: Response): Promise<void> => {
   const scope = await getRequiredWorkspaceScope(req, res);
   if (!scope) return;
   try {
@@ -404,7 +430,7 @@ router.post('/follow-ups', requireProviderScope('provider:host'), async (req: Re
   }
 });
 
-router.patch('/follow-ups/:id', requireProviderScope('provider:host'), async (req: Request, res: Response): Promise<void> => {
+router.patch('/follow-ups/:id', requireProviderScope('provider:host'), requireCrmToolEnabled('follow-ups'), async (req: Request, res: Response): Promise<void> => {
   const scope = await getRequiredWorkspaceScope(req, res);
   if (!scope) return;
   try {
@@ -421,7 +447,7 @@ router.patch('/follow-ups/:id', requireProviderScope('provider:host'), async (re
   }
 });
 
-router.delete('/follow-ups/:id', requireProviderScope('provider:host'), async (req: Request, res: Response): Promise<void> => {
+router.delete('/follow-ups/:id', requireProviderScope('provider:host'), requireCrmToolEnabled('follow-ups'), async (req: Request, res: Response): Promise<void> => {
   const scope = await getRequiredWorkspaceScope(req, res);
   if (!scope) return;
   const deleted = await deleteProviderCrmFollowUp(scope, req.params.id);
@@ -433,7 +459,7 @@ router.delete('/follow-ups/:id', requireProviderScope('provider:host'), async (r
   res.json({ success: true });
 });
 
-router.get('/analytics', requireProviderScope('provider:read'), async (req: Request, res: Response): Promise<void> => {
+router.get('/analytics', requireProviderScope('provider:read'), requireCrmToolEnabled('analytics'), async (req: Request, res: Response): Promise<void> => {
   const scope = await getRequiredWorkspaceScope(req, res);
   if (!scope) return;
   const analytics = await buildProviderCrmAnalytics(scope);
@@ -518,13 +544,13 @@ router.get('/admin/foundation', async (req: Request, res: Response): Promise<voi
 router.get('/admin/tools', async (req: Request, res: Response): Promise<void> => {
   if (!(await requireSoleProviderCrmAdmin(req, res))) return;
 
-  const tools = listProviderCrmToolsForRole('admin');
+  const tools = await listToolsForRole('admin');
   res.json({
     success: true,
     soleAdminEmail: PROVIDER_CRM_SOLE_ADMIN_EMAIL,
     visibilityControl: {
-      source: 'server-registry-runtime-overrides',
-      persistentStorage: false,
+      source: 'shared-db-provider-crm-tool-visibility',
+      persistentStorage: true,
       envOverrides: ['PROVIDER_CRM_ENABLED_TOOLS', 'PROVIDER_CRM_DISABLED_TOOLS'],
     },
     tools,
@@ -546,8 +572,11 @@ router.patch('/admin/tools/:toolId', async (req: Request, res: Response): Promis
     return;
   }
 
-  const updated = setProviderCrmToolVisibility(tool.id, enabled);
   const providerReq = getProviderRequestContext(req);
+  await setProviderCrmToolVisibilitySetting(tool.id, enabled, providerReq.providerUserId || null);
+  const updated = listProviderCrmToolsForRole('admin', await listProviderCrmToolVisibilityOverrides()).find(
+    (entry) => entry.id === tool.id
+  );
   recordAuditEvent(req, {
     domain: 'admin',
     action: 'tool_visibility_update',
@@ -558,7 +587,7 @@ router.patch('/admin/tools/:toolId', async (req: Request, res: Response): Promis
     metadata: {
       toolId: tool.id,
       enabled,
-      persistence: 'runtime_only',
+      persistence: 'shared_db',
     },
   });
 
@@ -566,8 +595,8 @@ router.patch('/admin/tools/:toolId', async (req: Request, res: Response): Promis
     success: true,
     tool: updated,
     visibilityControl: {
-      source: 'runtime_override',
-      persistentStorage: false,
+      source: 'shared-db-provider-crm-tool-visibility',
+      persistentStorage: true,
     },
   });
 });

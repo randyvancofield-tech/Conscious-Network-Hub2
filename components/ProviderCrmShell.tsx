@@ -81,6 +81,11 @@ type NoteForm = {
 type ContentForm = {
   title: string;
   description: string;
+  fullDescription: string;
+  category: string;
+  estimatedDuration: string;
+  learningObjectivesText: string;
+  contentSectionsText: string;
   tier: string;
   status: ProviderCrmContentStatus;
 };
@@ -109,6 +114,11 @@ const emptyNoteForm: NoteForm = {
 const emptyContentForm: ContentForm = {
   title: '',
   description: '',
+  fullDescription: '',
+  category: '',
+  estimatedDuration: '',
+  learningObjectivesText: '',
+  contentSectionsText: '',
   tier: 'Professional',
   status: 'draft',
 };
@@ -218,6 +228,59 @@ function isReservationForSlot(
 
 function isRelationshipKind(kind: ProviderCrmRecordKind): boolean {
   return kind === 'client' || kind === 'organization' || kind === 'institution';
+}
+
+function linesFromText(value: string): string[] {
+  return value
+    .split('\n')
+    .map((entry) => entry.trim())
+    .filter(Boolean);
+}
+
+function sectionsFromText(value: string): Array<{ title: string; body: string }> {
+  return linesFromText(value).map((line, index) => {
+    const separatorIndex = line.indexOf(':');
+    if (separatorIndex > 0) {
+      return {
+        title: line.slice(0, separatorIndex).trim() || `Section ${index + 1}`,
+        body: line.slice(separatorIndex + 1).trim(),
+      };
+    }
+    return {
+      title: `Section ${index + 1}`,
+      body: line,
+    };
+  }).filter((section) => section.body);
+}
+
+function contentItemToForm(item: ProviderCrmContentItem): ContentForm {
+  return {
+    title: item.title,
+    description: item.description,
+    fullDescription: item.fullDescription || '',
+    category: item.category || '',
+    estimatedDuration: item.estimatedDuration || '',
+    learningObjectivesText: (item.learningObjectives || []).join('\n'),
+    contentSectionsText: (item.contentSections || [])
+      .map((section) => `${section.title}: ${section.body}`)
+      .join('\n'),
+    tier: item.tier,
+    status: item.status,
+  };
+}
+
+function buildContentPayload(form: ContentForm) {
+  return {
+    title: form.title,
+    description: form.description,
+    fullDescription: form.fullDescription,
+    category: form.category,
+    estimatedDuration: form.estimatedDuration,
+    learningObjectives: linesFromText(form.learningObjectivesText),
+    contentSections: sectionsFromText(form.contentSectionsText),
+    tier: form.tier,
+    status: form.status,
+  };
 }
 
 const controlClass =
@@ -421,7 +484,7 @@ const ProviderCrmShell: React.FC<ProviderCrmShellProps> = ({
       setAdminTools((current) => current.map((entry) => (entry.id === updated.id ? updated : entry)));
       const refreshed = await getProviderCrmTools(token);
       setTools(refreshed?.tools || []);
-      setStatus(`${updated.label} visibility updated for this runtime.`);
+      setStatus(`${updated.label} visibility saved.`);
     } finally {
       setLoading(false);
     }
@@ -501,8 +564,8 @@ const ProviderCrmShell: React.FC<ProviderCrmShellProps> = ({
     setLoading(true);
     try {
       const saved = contentEditId
-        ? await updateProviderCrmContent(token, contentEditId, contentForm)
-        : await createProviderCrmContent(token, contentForm);
+        ? await updateProviderCrmContent(token, contentEditId, buildContentPayload(contentForm))
+        : await createProviderCrmContent(token, buildContentPayload(contentForm));
       if (!saved) {
         setStatus('Content item could not be saved.');
         return;
@@ -842,7 +905,12 @@ const ProviderCrmShell: React.FC<ProviderCrmShellProps> = ({
             <option value="published">Published</option>
             <option value="archived">Archived</option>
           </select>
-          <textarea value={contentForm.description} onChange={(event) => setContentForm({ ...contentForm, description: event.target.value })} placeholder="Description" className={`md:col-span-6 min-h-[130px] ${controlClass}`} />
+          <input value={contentForm.category} onChange={(event) => setContentForm({ ...contentForm, category: event.target.value })} placeholder="Category / topic" className={`md:col-span-3 ${controlClass}`} />
+          <input value={contentForm.estimatedDuration} onChange={(event) => setContentForm({ ...contentForm, estimatedDuration: event.target.value })} placeholder="Estimated duration" className={`md:col-span-3 ${controlClass}`} />
+          <textarea value={contentForm.description} onChange={(event) => setContentForm({ ...contentForm, description: event.target.value })} placeholder="Short catalog description" className={`md:col-span-6 min-h-[100px] ${controlClass}`} />
+          <textarea value={contentForm.fullDescription} onChange={(event) => setContentForm({ ...contentForm, fullDescription: event.target.value })} placeholder="Full course description / body" className={`md:col-span-6 min-h-[150px] ${controlClass}`} />
+          <textarea value={contentForm.learningObjectivesText} onChange={(event) => setContentForm({ ...contentForm, learningObjectivesText: event.target.value })} placeholder="Learning objectives, one per line" className={`md:col-span-3 min-h-[130px] ${controlClass}`} />
+          <textarea value={contentForm.contentSectionsText} onChange={(event) => setContentForm({ ...contentForm, contentSectionsText: event.target.value })} placeholder="Content sections, one per line. Use Title: body" className={`md:col-span-3 min-h-[130px] ${controlClass}`} />
         </div>
         <div className="mt-4 flex flex-wrap gap-3">
           <button type="button" onClick={() => void handleSaveContent()} disabled={isLoading} className={actionClass}>
@@ -874,11 +942,39 @@ const ProviderCrmShell: React.FC<ProviderCrmShellProps> = ({
                     {item.status} | {item.tier} | enrolled {item.enrolledCount}
                   </p>
                 </div>
-                <button type="button" className={secondaryActionClass} onClick={() => { setContentEditId(item.id); setContentForm({ title: item.title, description: item.description, tier: item.tier, status: item.status }); }}>
+                <button type="button" className={secondaryActionClass} onClick={() => { setContentEditId(item.id); setContentForm(contentItemToForm(item)); }}>
                   Edit
                 </button>
               </div>
               <p className="mt-3 text-xs leading-6 text-slate-300">{item.description}</p>
+              {(item.category || item.estimatedDuration) && (
+                <p className="mt-2 text-[10px] font-black uppercase tracking-widest text-slate-500">
+                  {[item.category, item.estimatedDuration].filter(Boolean).join(' | ')}
+                </p>
+              )}
+              {item.fullDescription && (
+                <p className="mt-3 whitespace-pre-wrap text-xs leading-6 text-slate-400">{item.fullDescription}</p>
+              )}
+              {(item.learningObjectives || []).length > 0 && (
+                <div className="mt-3 rounded-xl border border-white/10 bg-white/[0.03] p-3">
+                  <p className="text-[10px] font-black uppercase tracking-widest text-slate-500">Learning Objectives</p>
+                  <ul className="mt-2 list-disc space-y-1 pl-4 text-xs leading-6 text-slate-300">
+                    {(item.learningObjectives || []).map((objective) => (
+                      <li key={objective}>{objective}</li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+              {(item.contentSections || []).length > 0 && (
+                <div className="mt-3 space-y-2">
+                  {(item.contentSections || []).map((section, index) => (
+                    <div key={`${section.title}-${index}`} className="rounded-xl border border-white/10 bg-white/[0.03] p-3">
+                      <p className="text-[10px] font-black uppercase tracking-widest text-blue-200">{section.title}</p>
+                      <p className="mt-1 whitespace-pre-wrap text-xs leading-6 text-slate-300">{section.body}</p>
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
           ))}
         </div>

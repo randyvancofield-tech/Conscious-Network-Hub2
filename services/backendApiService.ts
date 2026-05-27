@@ -128,6 +128,23 @@ export type ProviderCrmPriority = 'low' | 'normal' | 'high' | 'urgent';
 export type ProviderCrmFollowUpStatus = 'open' | 'in_progress' | 'completed' | 'canceled';
 export type ProviderCrmContentStatus = 'draft' | 'published' | 'archived';
 
+export interface ProviderCrmCourseContentSection {
+  title: string;
+  body: string;
+}
+
+export interface ProviderCrmContentInput {
+  title?: string;
+  description?: string;
+  fullDescription?: string;
+  category?: string;
+  estimatedDuration?: string;
+  learningObjectives?: string[];
+  contentSections?: ProviderCrmCourseContentSection[];
+  tier?: string;
+  status?: ProviderCrmContentStatus;
+}
+
 export interface ProviderCrmRecord {
   id: string;
   providerId: string;
@@ -168,6 +185,11 @@ export interface ProviderCrmContentItem {
   provider: string;
   title: string;
   description: string;
+  fullDescription: string | null;
+  category: string | null;
+  estimatedDuration: string | null;
+  learningObjectives: string[];
+  contentSections: ProviderCrmCourseContentSection[];
   tier: string;
   status: ProviderCrmContentStatus;
   image: string | null;
@@ -918,7 +940,7 @@ class BackendAPIService {
 
   async createProviderCrmContent(
     providerToken: string,
-    input: { title: string; description: string; tier?: string; status?: ProviderCrmContentStatus }
+    input: ProviderCrmContentInput & { title: string; description: string }
   ): Promise<ProviderCrmContentItem | null> {
     const token = String(providerToken || '').trim();
     if (!token) return null;
@@ -937,7 +959,7 @@ class BackendAPIService {
   async updateProviderCrmContent(
     providerToken: string,
     id: string,
-    input: { title?: string; description?: string; tier?: string; status?: ProviderCrmContentStatus }
+    input: ProviderCrmContentInput
   ): Promise<ProviderCrmContentItem | null> {
     const token = String(providerToken || '').trim();
     const itemId = String(id || '').trim();
@@ -1885,7 +1907,7 @@ export async function listProviderCrmContent(providerToken: string): Promise<Pro
 
 export async function createProviderCrmContent(
   providerToken: string,
-  input: { title: string; description: string; tier?: string; status?: ProviderCrmContentStatus }
+  input: ProviderCrmContentInput & { title: string; description: string }
 ): Promise<ProviderCrmContentItem | null> {
   return backendAPI.createProviderCrmContent(providerToken, input);
 }
@@ -1893,7 +1915,7 @@ export async function createProviderCrmContent(
 export async function updateProviderCrmContent(
   providerToken: string,
   id: string,
-  input: { title?: string; description?: string; tier?: string; status?: ProviderCrmContentStatus }
+  input: ProviderCrmContentInput
 ): Promise<ProviderCrmContentItem | null> {
   return backendAPI.updateProviderCrmContent(providerToken, id, input);
 }

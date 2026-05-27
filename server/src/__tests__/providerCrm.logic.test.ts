@@ -146,6 +146,34 @@ const mockResetCrmState = (): void => {
   mockCrmState.followUps = [];
   mockCrmCounter = 0;
 };
+const mockToolVisibility = new Map<string, boolean>();
+const mockResetToolVisibility = (): void => {
+  mockToolVisibility.clear();
+};
+
+jest.mock('../services/providerCrmToolSettingsStore', () => ({
+  listProviderCrmToolVisibilityOverrides: jest.fn(async () => new Map(mockToolVisibility)),
+  listProviderCrmToolVisibilitySettings: jest.fn(async () =>
+    Array.from(mockToolVisibility.entries()).map(([toolId, enabled]) => ({
+      toolId,
+      enabled,
+      updatedByUserId: 'sole-admin',
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    }))
+  ),
+  setProviderCrmToolVisibilitySetting: jest.fn(async (toolId: string, enabled: boolean, updatedByUserId: string | null) => {
+    mockToolVisibility.set(toolId, enabled);
+    return {
+      toolId,
+      enabled,
+      updatedByUserId,
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    };
+  }),
+  resetProviderCrmToolVisibilityTableForTests: jest.fn(() => undefined),
+}));
 
 jest.mock('../services/providerCrmWorkspaceStore', () => ({
   buildProviderCrmWorkspace: jest.fn(async (scope: any, timezone = 'UTC') => ({
@@ -254,6 +282,11 @@ jest.mock('../services/providerCrmWorkspaceStore', () => ({
       provider: scope.providerDisplayName,
       title: input.title,
       description: input.description,
+      fullDescription: input.fullDescription || null,
+      category: input.category || null,
+      estimatedDuration: input.estimatedDuration || null,
+      learningObjectives: Array.isArray(input.learningObjectives) ? input.learningObjectives : [],
+      contentSections: Array.isArray(input.contentSections) ? input.contentSections : [],
       tier: input.tier || 'Professional',
       status: input.status || 'draft',
       image: null,
@@ -452,6 +485,7 @@ describe('Provider CRM shell and admin foundation', () => {
     delete process.env.PROVIDER_CRM_DISABLED_TOOLS;
     clearProviderCrmRuntimeVisibilityForTests();
     mockResetCrmState();
+    mockResetToolVisibility();
   });
 
   it('recognizes the configured email as the sole Provider CRM admin', async () => {
@@ -512,7 +546,8 @@ describe('Provider CRM shell and admin foundation', () => {
     });
 
     expect(response.status).toBe(200);
-    expect(response.body?.visibilityControl?.source).toBe('server-registry-runtime-overrides');
+    expect(response.body?.visibilityControl?.source).toBe('shared-db-provider-crm-tool-visibility');
+    expect(response.body?.visibilityControl?.persistentStorage).toBe(true);
     expect(response.body?.tools?.some((tool: any) => tool.id === 'admin-support')).toBe(true);
   });
 
@@ -569,8 +604,16 @@ describe('Provider CRM shell and admin foundation', () => {
 
     expect(update.status).toBe(200);
     expect(update.body?.tool?.enabled).toBe(false);
+    expect(update.body?.visibilityControl?.persistentStorage).toBe(true);
     const toolIds = providerTools.body?.tools?.map((tool: any) => tool.id) || [];
     expect(toolIds).not.toContain('analytics');
+
+    const blockedAnalytics = await requestJson({
+      method: 'GET',
+      path: '/api/provider/crm/analytics',
+      token: provider.token,
+    });
+    expect(blockedAnalytics.status).toBe(403);
   });
 
   it('allows providers to create, list, update, and delete their private CRM notes', async () => {
@@ -640,7 +683,16 @@ describe('Provider CRM shell and admin foundation', () => {
       method: 'POST',
       path: '/api/provider/crm/content',
       token,
-      body: { title: 'Provider practice module', description: 'Launch-safe provider content.', status: 'draft' },
+      body: {
+        title: 'Provider practice module',
+        description: 'Launch-safe provider content.',
+        fullDescription: 'A complete provider-owned practice module body.',
+        category: 'Provider Practice',
+        estimatedDuration: '45 minutes',
+        learningObjectives: ['Hold a scoped intake', 'Document next steps'],
+        contentSections: [{ title: 'Intake', body: 'Use a consent-aware intake sequence.' }],
+        status: 'draft',
+      },
     });
     const updated = await requestJson({
       method: 'PATCH',
@@ -657,9 +709,51 @@ describe('Provider CRM shell and admin foundation', () => {
     expect(created.status).toBe(201);
     expect(created.body?.item?.ownerId).toBe('provider-1');
     expect(created.body?.item?.status).toBe('draft');
+    expect(created.body?.item?.fullDescription).toContain('complete provider-owned');
+    expect(created.body?.item?.learningObjectives).toContain('Hold a scoped intake');
+    expect(created.body?.item?.contentSections?.[0]?.title).toBe('Intake');
     expect(updated.status).toBe(200);
     expect(updated.body?.item?.status).toBe('published');
     expect(listed.body?.items).toHaveLength(1);
+  });
+
+  it('enforces provider-owned course edits while allowing the sole admin to manage content', async () => {
+    users.set(
+      'sole-admin',
+      createMockUser('sole-admin', 'admin', {
+        email: PROVIDER_CRM_SOLE_ADMIN_EMAIL,
+      })
+    );
+    users.set('provider-1', createMockUser('provider-1', 'provider'));
+    users.set('provider-2', createMockUser('provider-2', 'provider'));
+    const first = createMockProviderSession('provider-1');
+    const second = createMockProviderSession('provider-2');
+    const admin = createMockProviderSession('sole-admin', ['provider:*']);
+
+    const created = await requestJson({
+      method: 'POST',
+      path: '/api/provider/crm/content',
+      token: first.token,
+      body: { title: 'Provider owned course', description: 'Only owner or admin can update.' },
+    });
+    const blocked = await requestJson({
+      method: 'PATCH',
+      path: `/api/provider/crm/content/${created.body?.item?.id}`,
+      token: second.token,
+      body: { title: 'Cross-provider edit' },
+    });
+    const adminUpdate = await requestJson({
+      method: 'PATCH',
+      path: `/api/provider/crm/content/${created.body?.item?.id}`,
+      token: admin.token,
+      body: { status: 'archived', fullDescription: 'Archived by administrator.' },
+    });
+
+    expect(created.status).toBe(201);
+    expect(blocked.status).toBe(404);
+    expect(adminUpdate.status).toBe(200);
+    expect(adminUpdate.body?.item?.status).toBe('archived');
+    expect(adminUpdate.body?.item?.fullDescription).toBe('Archived by administrator.');
   });
 
   it('allows providers to manage collaboration records and follow-ups', async () => {

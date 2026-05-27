@@ -68,6 +68,8 @@ export interface ProviderCrmToolView extends ProviderCrmTool {
   enabled: boolean;
 }
 
+export type ProviderCrmToolVisibilityOverrides = Map<ProviderCrmToolId, boolean>;
+
 const TOOL_REGISTRY: ProviderCrmTool[] = [
   {
     id: 'home',
@@ -218,10 +220,16 @@ export const getProviderCrmTool = (toolId: string): ProviderCrmTool | null => {
   return TOOL_REGISTRY.find((tool) => tool.id === normalized) || null;
 };
 
-export const isProviderCrmToolEnabled = (tool: ProviderCrmTool): boolean => {
+export const isProviderCrmToolEnabled = (
+  tool: ProviderCrmTool,
+  persistedOverrides?: ProviderCrmToolVisibilityOverrides
+): boolean => {
   const disabled = parseToolList(process.env.PROVIDER_CRM_DISABLED_TOOLS);
   const enabled = parseToolList(process.env.PROVIDER_CRM_ENABLED_TOOLS);
 
+  if (persistedOverrides?.has(tool.id)) {
+    return persistedOverrides.get(tool.id) === true;
+  }
   if (runtimeVisibilityOverrides.has(tool.id)) {
     return runtimeVisibilityOverrides.get(tool.id) === true;
   }
@@ -231,11 +239,12 @@ export const isProviderCrmToolEnabled = (tool: ProviderCrmTool): boolean => {
 };
 
 export const listProviderCrmToolsForRole = (
-  role: 'provider' | 'admin'
+  role: 'provider' | 'admin',
+  persistedOverrides?: ProviderCrmToolVisibilityOverrides
 ): ProviderCrmToolView[] => {
   const tools = TOOL_REGISTRY.map((tool) => ({
     ...tool,
-    enabled: isProviderCrmToolEnabled(tool),
+    enabled: isProviderCrmToolEnabled(tool, persistedOverrides),
   }));
 
   if (role === 'admin') {

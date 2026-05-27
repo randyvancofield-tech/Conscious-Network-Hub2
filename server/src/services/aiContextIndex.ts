@@ -6,6 +6,7 @@ import {
   type KnowledgeSource,
 } from './knowledgeService';
 import { redactSensitiveText } from './aiSafetyPolicy';
+import { normalizeCourseSyllabusMetadata } from './courseMetadata';
 
 type IndexedSourceType = 'course' | 'social_post' | 'profile' | 'knowledge' | 'trusted';
 
@@ -110,6 +111,7 @@ const crawlCourses = async (docs: IndexedDocument[]): Promise<void> => {
   });
 
   for (const course of courses) {
+    const metadata = normalizeCourseSyllabusMetadata(course.syllabus);
     pushDoc(docs, {
       id: `course:${course.id}`,
       title: course.title || 'Course',
@@ -117,6 +119,15 @@ const crawlCourses = async (docs: IndexedDocument[]): Promise<void> => {
         course.title,
         course.provider ? `Provider: ${course.provider}` : '',
         course.description,
+        metadata.fullDescription,
+        metadata.category ? `Category: ${metadata.category}` : '',
+        metadata.estimatedDuration ? `Duration: ${metadata.estimatedDuration}` : '',
+        metadata.learningObjectives.length > 0
+          ? `Learning objectives: ${metadata.learningObjectives.join('; ')}`
+          : '',
+        metadata.contentSections
+          .map((section) => `${section.title}: ${section.body}`)
+          .join('\n'),
         course.tier ? `Tier: ${course.tier}` : '',
       ].filter(Boolean).join('\n'),
       sourceType: 'course',

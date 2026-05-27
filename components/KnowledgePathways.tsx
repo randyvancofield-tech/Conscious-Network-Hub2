@@ -22,6 +22,20 @@ const normalizeCourse = (rawCourse: any): Course => ({
   title: String(rawCourse?.title || 'Untitled pathway'),
   provider: String(rawCourse?.provider || 'Conscious Network'),
   description: rawCourse?.description ? String(rawCourse.description) : undefined,
+  fullDescription: rawCourse?.fullDescription ? String(rawCourse.fullDescription) : null,
+  category: rawCourse?.category ? String(rawCourse.category) : null,
+  estimatedDuration: rawCourse?.estimatedDuration ? String(rawCourse.estimatedDuration) : null,
+  learningObjectives: Array.isArray(rawCourse?.learningObjectives)
+    ? rawCourse.learningObjectives.map((entry: unknown) => String(entry || '').trim()).filter(Boolean)
+    : [],
+  contentSections: Array.isArray(rawCourse?.contentSections)
+    ? rawCourse.contentSections
+        .map((entry: any) => ({
+          title: String(entry?.title || '').trim(),
+          body: String(entry?.body || '').trim(),
+        }))
+        .filter((entry: { title: string; body: string }) => entry.title && entry.body)
+    : [],
   image: String(rawCourse?.image || ''),
   tier:
     rawCourse?.tier === 'Elite' || rawCourse?.tier === 'Professional' || rawCourse?.tier === 'Basic'
@@ -145,14 +159,16 @@ const KnowledgePathways: React.FC<KnowledgePathwaysProps> = ({
             <img src={routeCourse.image} alt={routeCourse.title} className="h-72 w-full object-cover" />
             <div className="space-y-5 p-6 sm:p-8">
               <h2 className="text-xl font-black uppercase text-white">Course Structure</h2>
-              <p className="text-sm leading-6 text-slate-400">
-                This route owns the full catalog detail experience: overview, enrollment entry, syllabus summary, provider attribution, and future module attachment points.
+              <p className="whitespace-pre-wrap text-sm leading-6 text-slate-400">
+                {routeCourse.fullDescription || routeCourse.description || 'This course currently has no long-form description.'}
               </p>
               <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
                 {[
                   ['Provider', routeCourse.provider],
                   ['Tier', routeCourse.tier],
-                  ['Enrollment', routeCourse.enrollmentStatus || 'Open structure'],
+                  ['Category', routeCourse.category || 'Uncategorized'],
+                  ['Duration', routeCourse.estimatedDuration || 'Not specified'],
+                  ['Enrollment', routeCourse.enrollmentStatus || 'Open'],
                 ].map(([label, value]) => (
                   <div key={label} className="rounded-xl border border-white/10 bg-white/5 p-4">
                     <p className="text-[10px] font-black uppercase tracking-widest text-slate-500">{label}</p>
@@ -164,12 +180,26 @@ const KnowledgePathways: React.FC<KnowledgePathwaysProps> = ({
           </SurfacePanel>
           <SurfacePanel className="space-y-5">
             <h2 className="text-lg font-black uppercase text-white">Syllabus</h2>
-            {['Foundations and context', 'Applied frameworks', 'Integration and completion criteria'].map((moduleTitle, index) => (
-              <div key={moduleTitle} className="rounded-xl border border-white/10 bg-white/5 p-4">
-                <p className="text-[10px] font-black uppercase tracking-widest text-blue-300">Module {index + 1}</p>
-                <p className="mt-1 text-sm font-bold text-white">{moduleTitle}</p>
-              </div>
-            ))}
+            {routeCourse.contentSections && routeCourse.contentSections.length > 0 ? (
+              routeCourse.contentSections.map((section, index) => (
+                <div key={`${section.title}-${index}`} className="rounded-xl border border-white/10 bg-white/5 p-4">
+                  <p className="text-[10px] font-black uppercase tracking-widest text-blue-300">Section {index + 1}</p>
+                  <p className="mt-1 text-sm font-bold text-white">{section.title}</p>
+                  <p className="mt-2 whitespace-pre-wrap text-xs leading-6 text-slate-400">{section.body}</p>
+                </div>
+              ))
+            ) : routeCourse.learningObjectives && routeCourse.learningObjectives.length > 0 ? (
+              routeCourse.learningObjectives.map((objective, index) => (
+                <div key={objective} className="rounded-xl border border-white/10 bg-white/5 p-4">
+                  <p className="text-[10px] font-black uppercase tracking-widest text-blue-300">Objective {index + 1}</p>
+                  <p className="mt-1 text-sm font-bold text-white">{objective}</p>
+                </div>
+              ))
+            ) : (
+              <p className="rounded-xl border border-white/10 bg-white/5 p-4 text-xs leading-6 text-slate-400">
+                No syllabus sections have been published for this course yet.
+              </p>
+            )}
           </SurfacePanel>
         </div>
       </PageShell>
@@ -328,14 +358,27 @@ const KnowledgePathways: React.FC<KnowledgePathwaysProps> = ({
             </div>
             <div className="p-6 sm:p-8 space-y-5">
               <h5 className="text-[11px] uppercase tracking-widest text-slate-400 font-black">Syllabus Preview</h5>
-              <ul className="space-y-3">
-                <li className="p-3 bg-white/5 border border-white/10 rounded-xl text-sm text-slate-200">Module 1: Foundations and Context</li>
-                <li className="p-3 bg-white/5 border border-white/10 rounded-xl text-sm text-slate-200">Module 2: Applied Frameworks and Case Labs</li>
-                <li className="p-3 bg-white/5 border border-white/10 rounded-xl text-sm text-slate-200">Module 3: Personal Integration and Governance Practice</li>
-              </ul>
-              <p className="text-xs text-slate-400 leading-relaxed">
-                Full syllabus expands after enrollment and includes assessments, guided prompts, and completion criteria.
-              </p>
+              {selectedSyllabus.contentSections && selectedSyllabus.contentSections.length > 0 ? (
+                <ul className="space-y-3">
+                  {selectedSyllabus.contentSections.map((section, index) => (
+                    <li key={`${section.title}-${index}`} className="p-3 bg-white/5 border border-white/10 rounded-xl text-sm text-slate-200">
+                      <span className="font-bold text-white">{section.title}:</span> {section.body}
+                    </li>
+                  ))}
+                </ul>
+              ) : selectedSyllabus.learningObjectives && selectedSyllabus.learningObjectives.length > 0 ? (
+                <ul className="space-y-3">
+                  {selectedSyllabus.learningObjectives.map((objective) => (
+                    <li key={objective} className="p-3 bg-white/5 border border-white/10 rounded-xl text-sm text-slate-200">
+                      {objective}
+                    </li>
+                  ))}
+                </ul>
+              ) : (
+                <p className="rounded-xl border border-white/10 bg-white/5 p-4 text-xs leading-6 text-slate-400">
+                  No syllabus preview has been published for this course yet.
+                </p>
+              )}
               <div className="flex flex-col sm:flex-row gap-3">
                 <button
                   onClick={() => {

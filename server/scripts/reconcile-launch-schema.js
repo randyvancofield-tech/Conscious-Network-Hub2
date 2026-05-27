@@ -111,6 +111,20 @@ BEGIN
 END $$;
 `;
 
+const providerCrmToolVisibilitySql = `
+CREATE TABLE IF NOT EXISTS "ProviderCrmToolVisibility" (
+  "toolId" TEXT NOT NULL,
+  "enabled" BOOLEAN NOT NULL,
+  "updatedByUserId" TEXT,
+  "createdAt" TIMESTAMPTZ NOT NULL DEFAULT now(),
+  "updatedAt" TIMESTAMPTZ NOT NULL DEFAULT now(),
+  CONSTRAINT "ProviderCrmToolVisibility_pkey" PRIMARY KEY ("toolId")
+);
+
+CREATE INDEX IF NOT EXISTS "ProviderCrmToolVisibility_updated_idx"
+  ON "ProviderCrmToolVisibility"("updatedAt");
+`;
+
 function buildClient() {
   const connectionString = process.env.DATABASE_URL;
   if (!connectionString) {
@@ -165,11 +179,13 @@ async function columnExists(client, tableName, columnName) {
 async function collectStatus(client) {
   const providerApplicant = await tableExists(client, 'ProviderApplicant');
   const careerGrant = await tableExists(client, 'ConsciousCareerGrantApplication');
+  const providerCrmToolVisibility = await tableExists(client, 'ProviderCrmToolVisibility');
   return {
     providerApplicant,
     providerApplicantConsentAudit:
       providerApplicant && (await columnExists(client, 'ProviderApplicant', 'consentAudit')),
     consciousCareerGrantApplication: careerGrant,
+    providerCrmToolVisibility,
   };
 }
 
@@ -182,6 +198,7 @@ async function main() {
       await client.query('BEGIN');
       await client.query(providerApplicantSql);
       await client.query(careerGrantSql);
+      await client.query(providerCrmToolVisibilitySql);
       await client.query('COMMIT');
     }
     const after = await collectStatus(client);

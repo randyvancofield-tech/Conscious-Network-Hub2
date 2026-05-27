@@ -78,6 +78,11 @@ export interface Course {
   title: string;
   provider: string;
   description?: string;
+  fullDescription?: string | null;
+  category?: string | null;
+  estimatedDuration?: string | null;
+  learningObjectives?: string[];
+  contentSections?: Array<{ title: string; body: string }>;
   tier: 'Basic' | 'Elite' | 'Professional';
   enrolled: number;
   image: string;
