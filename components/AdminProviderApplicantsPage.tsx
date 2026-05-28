@@ -250,13 +250,13 @@ const AdminProviderApplicantsPage: React.FC = () => {
                 }`}
               >
                 <div className="flex items-start justify-between gap-3">
-                  <div>
-                    <p className="font-bold text-white">
+                  <div className="min-w-0">
+                    <p className="cnh-person-name font-bold text-white">
                       {applicant.firstName} {applicant.lastName}
                     </p>
-                    <p className="mt-1 text-xs text-slate-500">{applicant.email}</p>
+                    <p className="mt-1 break-words text-xs text-slate-500">{applicant.email}</p>
                   </div>
-                  <span className="rounded-full border border-amber-200/15 bg-amber-400/10 px-3 py-1 text-[10px] font-black uppercase text-amber-100">
+                  <span className="cnh-status-badge shrink-0 rounded-full border border-amber-200/15 bg-amber-400/10 px-3 py-1 text-[10px] font-black uppercase text-amber-100">
                     {formatLabel(applicant.status)}
                   </span>
                 </div>
@@ -274,14 +274,14 @@ const AdminProviderApplicantsPage: React.FC = () => {
           {selected && (
             <div className="space-y-6">
               <div className="flex flex-col gap-4 border-b border-white/10 pb-5 lg:flex-row lg:items-start lg:justify-between">
-                <div>
+                <div className="min-w-0">
                   <p className="text-xs font-black uppercase tracking-widest text-slate-500">
                     {selected.providerCategory}
                   </p>
-                  <h2 className="mt-2 text-2xl font-black uppercase text-white">
+                  <h2 className="cnh-person-name mt-2 text-2xl font-black uppercase text-white">
                     {selected.firstName} {selected.lastName}
                   </h2>
-                  <p className="mt-2 text-sm text-slate-400">{selected.email}</p>
+                  <p className="mt-2 break-words text-sm text-slate-400">{selected.email}</p>
                 </div>
                 <div className="flex flex-col gap-2 sm:flex-row">
                   <select

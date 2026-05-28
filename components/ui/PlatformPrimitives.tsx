@@ -31,21 +31,21 @@ type ActionButtonProps = React.ButtonHTMLAttributes<HTMLButtonElement> & {
 };
 
 export const PageShell: React.FC<PageShellProps> = ({ children, className = '' }) => (
-  <div className={`mx-auto w-full max-w-7xl space-y-8 pb-24 ${className}`}>{children}</div>
+  <div className={`mx-auto w-full max-w-7xl space-y-6 pb-20 sm:space-y-8 sm:pb-24 ${className}`}>{children}</div>
 );
 
 export const PageHeader: React.FC<PageHeaderProps> = ({ eyebrow, title, description, actions }) => (
-  <header className="flex flex-col gap-5 lg:flex-row lg:items-end lg:justify-between">
-    <div className="max-w-3xl space-y-3">
+  <header className="flex min-w-0 flex-col gap-5 lg:flex-row lg:items-end lg:justify-between">
+    <div className="min-w-0 max-w-3xl space-y-3">
       {eyebrow && (
         <p className="text-[10px] font-black uppercase tracking-widest text-blue-300/70">{eyebrow}</p>
       )}
-      <h1 className="text-3xl font-black uppercase leading-tight text-white sm:text-4xl lg:text-5xl">
+      <h1 className="break-words text-3xl font-black uppercase leading-tight text-white sm:text-4xl 2xl:text-5xl">
         {title}
       </h1>
       {description && <p className="max-w-2xl text-sm leading-6 text-slate-400 sm:text-base">{description}</p>}
     </div>
-    {actions && <div className="flex flex-wrap items-center gap-3">{actions}</div>}
+    {actions && <div className="flex min-w-0 flex-wrap items-center gap-3">{actions}</div>}
   </header>
 );
 
@@ -90,10 +90,10 @@ export const ActionButton: React.FC<ActionButtonProps> = ({
     <button
       {...props}
       disabled={disabled}
-      className={`inline-flex min-h-11 items-center justify-center gap-2 rounded-xl border px-4 py-3 text-xs font-black uppercase tracking-widest transition-all active:scale-[0.98] ${variantClass} ${className}`}
+      className={`inline-flex min-h-11 min-w-0 items-center justify-center gap-2 rounded-xl border px-4 py-3 text-center text-xs font-black uppercase tracking-widest transition-all active:scale-[0.98] ${variantClass} ${className}`}
     >
       {icon}
-      <span>{children}</span>
+      <span className="cnh-action-label min-w-0">{children}</span>
     </button>
   );
 };

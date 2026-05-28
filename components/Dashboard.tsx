@@ -21,8 +21,8 @@ const Dashboard: React.FC<DashboardProps> = ({
   return (
     <div className="space-y-8 lg:space-y-10 animate-in fade-in duration-700 pb-12">
       {/* Welcome Hero - Ethical AI Insight */}
-      <section className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        <div className="lg:col-span-2" id="latest-wisdom" ref={insightRef}>
+      <section className="grid grid-cols-1 xl:grid-cols-3 gap-6">
+        <div className="xl:col-span-2" id="latest-wisdom" ref={insightRef}>
           {user ? (
             <EthicalAIInsight userEmail={user.email} userId={user.id} />
           ) : (
@@ -47,7 +47,7 @@ const Dashboard: React.FC<DashboardProps> = ({
                 { label: 'Sovereign Providers', value: '842' },
                 { label: 'Reputation Score', value: `${user?.reputationScore || 100} PTS` }
               ].map((stat, i) => (
-                <div key={i} className="flex justify-between items-center p-4 bg-white/5 rounded-xl border border-white/5 shadow-inner">
+                <div key={i} className="flex flex-col gap-2 p-4 bg-white/5 rounded-xl border border-white/5 shadow-inner xs:flex-row xs:items-center xs:justify-between">
                   <span className="text-slate-500 text-[9px] font-black uppercase tracking-[0.2em]">{stat.label}</span>
                   <span className="text-white font-mono text-base font-bold">{stat.value}</span>
                 </div>
@@ -67,30 +67,30 @@ const Dashboard: React.FC<DashboardProps> = ({
       <section className="space-y-8">
         <div className="flex items-center gap-4 border-b border-white/5 pb-5">
           <Target className="w-7 h-7 text-blue-400" />
-          <h2 className="text-xl font-black text-white tracking-widest uppercase">STRATEGIC PROTOCOL</h2>
+          <h2 className="text-lg sm:text-xl font-black text-white tracking-widest uppercase">STRATEGIC PROTOCOL</h2>
         </div>
         
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
           <div className="glass-panel p-6 lg:p-8 rounded-2xl border-l-4 border-blue-500 shadow-2xl">
             <h3 className="text-[9px] font-black text-blue-400 uppercase tracking-[0.4em] mb-6">MISSION STATEMENT</h3>
-            <p className="text-lg font-light text-slate-300 leading-relaxed italic opacity-80">
+            <p className="text-base lg:text-lg font-light text-slate-300 leading-relaxed italic opacity-80">
               "Higher Conscious Network exists to empower individuals, providers, and institutions with ethical technology that restores autonomy, protects identity, and creates equitable economic opportunity through a community-centered decentralized social learning infrastructure."
             </p>
           </div>
           <div className="glass-panel p-6 lg:p-8 rounded-2xl border-l-4 border-teal-500 shadow-2xl">
             <h3 className="text-[9px] font-black text-teal-400 uppercase tracking-[0.4em] mb-6">VISION STATEMENT</h3>
-            <p className="text-lg font-light text-slate-300 leading-relaxed italic opacity-80">
+            <p className="text-base lg:text-lg font-light text-slate-300 leading-relaxed italic opacity-80">
               "We envision a global, community-centered ecosystem where data ownership, economic mobility, and values-aligned human development are accessible to all—especially those historically excluded from the digital and economic landscape."
             </p>
           </div>
         </div>
 
         {/* Conscious Careers */}
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-          <div className="lg:col-span-2 glass-panel p-6 lg:p-8 rounded-2xl border-white/5 shadow-2xl space-y-6">
+        <div className="grid grid-cols-1 xl:grid-cols-3 gap-6">
+          <div className="xl:col-span-2 glass-panel p-6 lg:p-8 rounded-2xl border-white/5 shadow-2xl space-y-6">
             <div className="flex items-center gap-4">
               <Rocket className="w-7 h-7 text-orange-400" />
-              <h3 className="text-xl font-black text-white uppercase tracking-tighter">Conscious Careers: Entrepreneurship</h3>
+              <h3 className="text-lg sm:text-xl font-black text-white uppercase tracking-tighter">Conscious Careers: Entrepreneurship</h3>
             </div>
             <p className="text-slate-400 leading-relaxed text-base font-light">
               Designed to help individuals and providers pursue business ownership. Through partnerships like Entrepreneurs Resource, members gain access to franchising and business matching. A dedicated 5% revenue savings fund provides grants to engaged participants, supported by SBDCs to promote long-term success.
@@ -120,9 +120,9 @@ const Dashboard: React.FC<DashboardProps> = ({
                 "Grant distribution totals",
                 "Entrepreneurship placements"
               ].map((kpi, i) => (
-                <li key={i} className="flex items-center gap-4 p-4 bg-white/5 rounded-xl text-[10px] font-black uppercase tracking-[0.2em] text-slate-400 border border-white/5 group hover:bg-white/10 transition-colors">
-                  <div className="w-1.5 h-1.5 rounded-full bg-purple-500 group-hover:scale-150 transition-transform"></div>
-                  {kpi}
+                <li key={i} className="flex items-start gap-4 p-4 bg-white/5 rounded-xl text-[10px] font-black uppercase tracking-[0.2em] text-slate-400 border border-white/5 group hover:bg-white/10 transition-colors">
+                  <div className="mt-1.5 w-1.5 h-1.5 shrink-0 rounded-full bg-purple-500 group-hover:scale-150 transition-transform"></div>
+                  <span className="cnh-action-label text-left">{kpi}</span>
                 </li>
               ))}
             </ul>
@@ -135,7 +135,7 @@ const Dashboard: React.FC<DashboardProps> = ({
         <h2 className="text-xl font-black mb-8 flex items-center gap-3 uppercase tracking-widest">
           <Layers className="text-blue-400 w-7 h-7" /> Ecosystem Components
         </h2>
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
+        <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-6">
           {CORE_COMPONENTS.map((comp, idx) => (
             <div key={idx} className="glass-panel p-6 rounded-2xl border-t-2 border-blue-500/20 hover:bg-blue-900/10 transition-all cursor-pointer group shadow-2xl hover:-translate-y-1">
               <div className="bg-blue-500/10 w-14 h-14 rounded-2xl flex items-center justify-center mb-6 group-hover:scale-110 transition-transform shadow-inner">

@@ -28,7 +28,7 @@ const MembershipPage: React.FC<MembershipPageProps> = ({
       description="Select the membership level for your platform account. All tiers continue through Stripe Checkout, including the $0 community tier."
       actions={
         user ? (
-          <div className="rounded-xl border border-white/10 bg-white/5 px-4 py-3 text-xs font-black uppercase tracking-widest text-slate-300">
+          <div className="cnh-status-badge rounded-xl border border-white/10 bg-white/5 px-4 py-3 text-xs font-black uppercase tracking-widest text-slate-300">
             Active: {user.tier || 'Not selected'}
           </div>
         ) : (
@@ -48,7 +48,7 @@ const MembershipPage: React.FC<MembershipPageProps> = ({
       <SurfacePanel className="border-blue-400/20 bg-blue-500/5 text-sm text-blue-100">{notice}</SurfacePanel>
     )}
 
-    <section className="grid grid-cols-1 gap-5 lg:grid-cols-3">
+    <section className="grid grid-cols-1 gap-5 xl:grid-cols-3">
       {MEMBERSHIP_TIERS.map((tier) => {
         const isCurrent = user?.tier === tier.name;
         const isSelected = selectedTier === tier.name || isCurrent;
@@ -58,9 +58,9 @@ const MembershipPage: React.FC<MembershipPageProps> = ({
             className={`flex h-full flex-col gap-6 ${isSelected ? 'border-blue-400/50 bg-blue-500/10' : ''}`}
           >
             <div className="flex items-start justify-between gap-4">
-              <div className="space-y-2">
+              <div className="min-w-0 space-y-2">
                 <p className="text-[10px] font-black uppercase tracking-widest text-blue-300/70">{tier.cadence}</p>
-                <h2 className="text-2xl font-black uppercase text-white">{tier.name}</h2>
+                <h2 className="text-xl 2xl:text-2xl font-black uppercase text-white">{tier.name}</h2>
               </div>
               <div className="flex h-11 w-11 items-center justify-center rounded-xl border border-white/10 bg-white/5 text-blue-300">
                 {isSelected ? <CheckCircle2 className="h-5 w-5" /> : <Sparkles className="h-5 w-5" />}

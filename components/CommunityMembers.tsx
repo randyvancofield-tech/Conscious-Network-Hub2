@@ -304,8 +304,8 @@ const CommunityMembers: React.FC<CommunityMembersProps> = ({ onSignInPrompt }) =
         </div>
       )}
 
-      <div className="flex-1 flex flex-col lg:grid lg:grid-cols-3 gap-6 min-h-0 overflow-visible lg:overflow-hidden pb-8">
-        <div className={`lg:col-span-1 flex flex-col space-y-4 min-h-0 overflow-visible lg:overflow-hidden ${selectedMember ? 'hidden lg:flex' : 'flex'}`}>
+      <div className="flex-1 flex flex-col xl:grid xl:grid-cols-3 gap-6 min-h-0 overflow-visible xl:overflow-hidden pb-8">
+        <div className={`xl:col-span-1 flex flex-col space-y-4 min-h-0 overflow-visible xl:overflow-hidden ${selectedMember ? 'hidden xl:flex' : 'flex'}`}>
           <div className="flex items-center justify-between px-2">
             <h3 className="text-[10px] font-black text-slate-500 uppercase tracking-widest flex items-center gap-2">
               <Users className="w-3 h-3" /> MEMBERS ({filteredMembers.length})
@@ -375,14 +375,14 @@ const CommunityMembers: React.FC<CommunityMembersProps> = ({ onSignInPrompt }) =
                     onClick={() => setSelectedMember(member)}
                     className="flex items-center justify-center gap-1.5 py-2.5 bg-blue-600 hover:bg-blue-500 text-white rounded-xl font-black text-[9px] uppercase tracking-widest transition-all active:scale-95"
                   >
-                    <MessageSquare className="w-3.5 h-3.5" /> Open
+                    <MessageSquare className="w-3.5 h-3.5 shrink-0" /> <span className="cnh-action-label">Open</span>
                   </button>
                   <button
                     type="button"
                     onClick={() => void openProfileView(member.id)}
                     className="flex items-center justify-center gap-1.5 py-2.5 bg-white/5 hover:bg-white/10 border border-white/10 text-slate-200 rounded-xl font-black text-[9px] uppercase tracking-widest transition-all active:scale-95"
                   >
-                    <Eye className="w-3.5 h-3.5" /> View Profile
+                    <Eye className="w-3.5 h-3.5 shrink-0" /> <span className="cnh-action-label">View Profile</span>
                   </button>
                 </div>
               </div>
@@ -407,8 +407,8 @@ const CommunityMembers: React.FC<CommunityMembersProps> = ({ onSignInPrompt }) =
         </div>
 
         <div
-          className={`lg:col-span-2 glass-panel rounded-[2rem] md:rounded-[3rem] flex flex-col border-white/5 overflow-hidden shadow-2xl bg-black/40 backdrop-blur-3xl min-h-[450px] ${
-            selectedMember ? 'flex h-[100dvh] max-h-[100dvh] fixed inset-0 z-[100] lg:relative lg:inset-auto lg:z-0 lg:h-full lg:max-h-none' : 'hidden lg:flex'
+          className={`xl:col-span-2 glass-panel rounded-[2rem] md:rounded-[3rem] flex flex-col border-white/5 overflow-hidden shadow-2xl bg-black/40 backdrop-blur-3xl min-h-[450px] ${
+            selectedMember ? 'flex h-[100dvh] max-h-[100dvh] fixed inset-0 z-[100] xl:relative xl:inset-auto xl:z-0 xl:h-full xl:max-h-none' : 'hidden xl:flex'
           }`}
         >
           {selectedMember ? (
@@ -429,7 +429,7 @@ const CommunityMembers: React.FC<CommunityMembersProps> = ({ onSignInPrompt }) =
                     </div>
                   </div>
                   <div className="min-w-0">
-                    <h4 className="text-sm md:text-lg font-black text-white uppercase tracking-tighter leading-none truncate">
+                    <h4 className="cnh-person-name text-sm md:text-lg font-black text-white uppercase tracking-tighter leading-tight">
                       {selectedMember.name}
                     </h4>
                     <p className="text-[8px] md:text-[9px] text-teal-400 font-bold uppercase tracking-widest mt-1.5 flex items-center gap-1.5">
@@ -493,7 +493,7 @@ const CommunityMembers: React.FC<CommunityMembersProps> = ({ onSignInPrompt }) =
               <form onSubmit={handleSendMessage} className="p-4 md:p-8 border-t border-white/5 bg-black/40">
                 {selectedAttachment && (
                   <div className="mb-3 p-2.5 bg-blue-600/10 border border-blue-500/20 rounded-xl text-[10px] text-blue-300 font-black uppercase tracking-widest flex items-center justify-between gap-2">
-                    <span className="truncate">Attached: {selectedAttachment.name}</span>
+                    <span className="min-w-0 break-words">Attached: {selectedAttachment.name}</span>
                     <button type="button" onClick={() => setSelectedAttachment(null)} className="p-1 hover:bg-blue-500/20 rounded-md">
                       <X className="w-3.5 h-3.5" />
                     </button>
@@ -523,7 +523,7 @@ const CommunityMembers: React.FC<CommunityMembersProps> = ({ onSignInPrompt }) =
                     onChange={(e) => setInput(e.target.value)}
                     placeholder="Messaging requires the Phase 4 backend service"
                     disabled
-                    className="flex-1 bg-white/5 border border-white/10 rounded-2xl px-5 py-3 md:py-4 text-xs text-white focus:outline-none focus:ring-2 focus:ring-blue-500/30 transition-all font-medium"
+                    className="min-w-0 flex-1 bg-white/5 border border-white/10 rounded-2xl px-5 py-3 md:py-4 text-xs text-white focus:outline-none focus:ring-2 focus:ring-blue-500/30 transition-all font-medium"
                   />
                   <button
                     type="submit"
@@ -539,7 +539,7 @@ const CommunityMembers: React.FC<CommunityMembersProps> = ({ onSignInPrompt }) =
             <div className="flex-1 flex flex-col items-center justify-center p-8 md:p-16 text-center space-y-8 opacity-40">
               <div className="relative">
                 <div className="absolute inset-0 bg-blue-600/20 blur-[60px] rounded-full animate-pulse" />
-                <div className="p-10 bg-white/5 rounded-[3rem] border border-white/10 relative">
+                <div className="p-8 md:p-10 bg-white/5 rounded-[2rem] md:rounded-[3rem] border border-white/10 relative">
                   <Smartphone className="w-12 h-12 md:w-16 md:h-16 text-blue-400" />
                 </div>
               </div>
@@ -561,8 +561,8 @@ const CommunityMembers: React.FC<CommunityMembersProps> = ({ onSignInPrompt }) =
               <div className="flex items-center gap-4 min-w-0">
                 {renderAvatarMedia(selectedMember.imageMedia, selectedMember.name, 'w-14 h-14 rounded-2xl object-cover')}
                 <div className="min-w-0">
-                  <h4 className="text-xl font-black text-white tracking-tight truncate">{selectedMember.name}</h4>
-                  <p className="text-[10px] uppercase tracking-widest text-blue-300 font-black truncate">{selectedMember.role}</p>
+                  <h4 className="cnh-person-name text-xl font-black leading-tight tracking-tight text-white">{selectedMember.name}</h4>
+                  <p className="break-words text-[10px] uppercase tracking-widest text-blue-300 font-black">{selectedMember.role}</p>
                 </div>
               </div>
               <button onClick={() => setMemberInfoOpen(false)} className="p-2 rounded-xl hover:bg-white/5 text-slate-500">

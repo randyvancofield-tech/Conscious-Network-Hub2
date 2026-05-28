@@ -2443,7 +2443,7 @@ const ConsciousMeetings: React.FC<ConsciousMeetingsProps> = ({ user }) => {
       {/* Page Header */}
       <header className="flex flex-col sm:flex-row sm:items-end justify-between gap-3 sm:gap-4 md:gap-6 relative z-10">
         <div className="space-y-2">
-          <h2 className="text-2xl xs:text-3xl sm:text-4xl md:text-5xl lg:text-6xl font-black text-white uppercase tracking-tighter leading-none flex items-center gap-2 sm:gap-3 md:gap-4">
+          <h2 className="text-2xl xs:text-3xl sm:text-4xl md:text-5xl 2xl:text-6xl font-black text-white uppercase tracking-tighter leading-tight flex items-center gap-2 sm:gap-3 md:gap-4">
             <Video className="w-6 h-6 sm:w-7 sm:h-7 md:w-8 md:h-8 lg:w-10 lg:h-10 text-blue-400" />
             Conscious Meetings
           </h2>
@@ -2530,7 +2530,7 @@ const ConsciousMeetings: React.FC<ConsciousMeetingsProps> = ({ user }) => {
             )}
 
             {/* Providers Grid */}
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6 md:gap-8 pb-10 sm:pb-16 md:pb-20">
+            <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4 sm:gap-6 md:gap-8 pb-10 sm:pb-16 md:pb-20">
               {filteredProviders.map(provider => {
                 return (
                   <div
@@ -2592,7 +2592,7 @@ const ConsciousMeetings: React.FC<ConsciousMeetingsProps> = ({ user }) => {
           <div className="max-w-4xl mx-auto space-y-8 sm:space-y-10 md:space-y-12 animate-in fade-in py-4 sm:py-6 md:py-10">
             {!isSoloSessionActive ? (
               <>
-                <div className="glass-panel p-6 sm:p-8 md:p-10 rounded-2xl sm:rounded-[2.25rem] md:rounded-[2.5rem] lg:rounded-[3rem] border-white/5 shadow-2xl relative overflow-hidden group">
+                <div className="glass-panel p-6 sm:p-8 md:p-10 rounded-2xl sm:rounded-[2.25rem] md:rounded-[2.5rem] xl:rounded-[3rem] border-white/5 shadow-2xl relative overflow-hidden group">
                   <div className="absolute top-0 right-0 p-8 sm:p-10 md:p-12 lg:p-16 opacity-5 group-hover:opacity-10 transition-opacity">
                     <Video className="w-32 h-32 sm:w-40 sm:h-40 md:w-48 md:h-48 text-blue-400" />
                   </div>
@@ -2672,7 +2672,7 @@ const ConsciousMeetings: React.FC<ConsciousMeetingsProps> = ({ user }) => {
                               joinableMeetingSessions[0];
                             await joinInvitedSession(liveSession.id);
                           }}
-                          className="flex-1 py-4 sm:py-5 md:py-6 bg-blue-600 hover:bg-blue-500 disabled:bg-slate-800 disabled:text-slate-600 text-white rounded-xl sm:rounded-2xl md:rounded-3xl font-black text-sm sm:text-base md:text-lg lg:text-xl uppercase tracking-widest shadow-2xl transition-all hover:-translate-y-1 active:scale-95 flex items-center justify-center gap-3 sm:gap-4"
+                          className="cnh-action-label flex-1 py-4 sm:py-5 md:py-6 bg-blue-600 hover:bg-blue-500 disabled:bg-slate-800 disabled:text-slate-600 text-white rounded-xl sm:rounded-2xl md:rounded-3xl font-black text-sm sm:text-base md:text-lg 2xl:text-xl uppercase tracking-widest shadow-2xl transition-all hover:-translate-y-1 active:scale-95 flex items-center justify-center gap-3 sm:gap-4"
                         >
                           {isJoining ? <Loader2 className="w-5 h-5 sm:w-6 sm:h-6 animate-spin" /> : <Video className="w-5 h-5 sm:w-6 sm:h-6" />}
                           Join Virtual Session
@@ -2681,7 +2681,7 @@ const ConsciousMeetings: React.FC<ConsciousMeetingsProps> = ({ user }) => {
                         <button
                           onClick={startSoloSession}
                           disabled={!providerSessionToken.trim()}
-                          className="flex-1 py-4 sm:py-5 md:py-6 bg-teal-600 hover:bg-teal-500 disabled:bg-slate-800 disabled:text-slate-600 text-white rounded-xl sm:rounded-2xl md:rounded-3xl font-black text-sm sm:text-base md:text-lg lg:text-xl uppercase tracking-widest shadow-2xl transition-all hover:-translate-y-1 active:scale-95 flex items-center justify-center gap-3 sm:gap-4"
+                          className="cnh-action-label flex-1 py-4 sm:py-5 md:py-6 bg-teal-600 hover:bg-teal-500 disabled:bg-slate-800 disabled:text-slate-600 text-white rounded-xl sm:rounded-2xl md:rounded-3xl font-black text-sm sm:text-base md:text-lg 2xl:text-xl uppercase tracking-widest shadow-2xl transition-all hover:-translate-y-1 active:scale-95 flex items-center justify-center gap-3 sm:gap-4"
                         >
                           <Play className="w-5 h-5 sm:w-6 sm:h-6" />
                           Start Solo Session

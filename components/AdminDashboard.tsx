@@ -162,7 +162,7 @@ const AdminDashboard: React.FC = () => {
 
       {error && <EmptyState title="Admin action failed" description={error} />}
 
-      <div className="grid grid-cols-1 gap-4 md:grid-cols-5">
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-5">
         {[
           ['Users', dashboard.summary.usersTotal],
           ['Members', dashboard.summary.roleCounts.user],
@@ -198,14 +198,14 @@ const AdminDashboard: React.FC = () => {
               {dashboard.recentUsers.map((user) => (
                 <tr key={user.id}>
                   <td className="py-4 pr-4">
-                    <p className="font-bold text-white">{user.name || user.email}</p>
-                    <p className="text-xs text-slate-500">{user.email}</p>
+                    <p className="cnh-person-name font-bold text-white">{user.name || user.email}</p>
+                    <p className="break-words text-xs text-slate-500">{user.email}</p>
                   </td>
                   <td className="py-4 pr-4 text-slate-200">{user.role}</td>
                   <td className="py-4 pr-4 text-slate-400">{user.tier || 'None'}</td>
                   <td className="py-4 pr-4">
                     <span
-                      className={`inline-flex rounded-full border px-3 py-1 text-[10px] font-black uppercase tracking-widest ${
+                      className={`cnh-status-badge inline-flex rounded-full border px-3 py-1 text-[10px] font-black uppercase tracking-widest ${
                         user.providerApproved
                           ? 'border-emerald-300/30 bg-emerald-300/10 text-emerald-100'
                           : 'border-white/10 bg-white/5 text-slate-400'

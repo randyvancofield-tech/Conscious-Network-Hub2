@@ -478,6 +478,172 @@ const isCareersPublicView = (view: AppView): boolean =>
     AppView.ENTREPRENEURSHIP_SUPPORT,
   ].includes(view);
 
+type VerticalScrollIntent = 'up' | 'down' | 'start' | 'end';
+
+const KEYBOARD_SCROLL_KEYS = new Set([
+  'ArrowDown',
+  'ArrowUp',
+  'PageDown',
+  'PageUp',
+  'Home',
+  'End',
+  ' ',
+  'Spacebar',
+]);
+
+const SCROLLABLE_SELECTOR = '.app-main-scroll, .scrollable, .custom-scrollbar, [data-page-scroll-root="true"]';
+const EDITABLE_SELECTOR = 'input, textarea, select, [contenteditable=""], [contenteditable="true"]';
+const SPACE_ACTIVATION_SELECTOR =
+  'button, a[href], summary, [role="button"], [role="menuitem"], [role="tab"], [role="checkbox"], [role="switch"]';
+
+const getKeyboardScrollIntent = (event: KeyboardEvent): VerticalScrollIntent | null => {
+  switch (event.key) {
+    case 'ArrowDown':
+    case 'PageDown':
+      return 'down';
+    case 'ArrowUp':
+    case 'PageUp':
+      return 'up';
+    case 'Home':
+      return 'start';
+    case 'End':
+      return 'end';
+    case ' ':
+    case 'Spacebar':
+      return event.shiftKey ? 'up' : 'down';
+    default:
+      return null;
+  }
+};
+
+const getEventElement = (target: EventTarget | null): Element | null =>
+  target instanceof Element ? target : null;
+
+const isEditableKeyboardTarget = (target: EventTarget | null): boolean => {
+  const element = getEventElement(target);
+  return Boolean(element?.closest(EDITABLE_SELECTOR));
+};
+
+const isSpaceActivationTarget = (target: EventTarget | null): boolean => {
+  const element = getEventElement(target);
+  return Boolean(element?.closest(SPACE_ACTIVATION_SELECTOR));
+};
+
+const isVisibleElement = (element: HTMLElement): boolean => {
+  const rect = element.getBoundingClientRect();
+  if (rect.width <= 0 || rect.height <= 0) return false;
+  const style = window.getComputedStyle(element);
+  return style.display !== 'none' && style.visibility !== 'hidden';
+};
+
+const allowsVerticalScroll = (element: HTMLElement): boolean => {
+  const overflowY = window.getComputedStyle(element).overflowY;
+  return /(auto|scroll|overlay)/.test(overflowY) && element.scrollHeight - element.clientHeight > 1;
+};
+
+const canMoveScrollTarget = (element: HTMLElement, intent: VerticalScrollIntent): boolean => {
+  if (!allowsVerticalScroll(element)) return false;
+  if (intent === 'start') return element.scrollTop > 1;
+  if (intent === 'end') return element.scrollTop + element.clientHeight < element.scrollHeight - 1;
+  if (intent === 'up') return element.scrollTop > 1;
+  return element.scrollTop + element.clientHeight < element.scrollHeight - 1;
+};
+
+const findScrollableAncestor = (
+  target: EventTarget | null,
+  intent: VerticalScrollIntent
+): HTMLElement | null => {
+  const element = getEventElement(target);
+  let current = element instanceof HTMLElement ? element : element?.parentElement || null;
+
+  while (current) {
+    if (canMoveScrollTarget(current, intent)) return current;
+    current = current.parentElement;
+  }
+
+  return null;
+};
+
+const getScrollableCandidates = (root: HTMLElement): HTMLElement[] => {
+  const candidates = [
+    root,
+    ...Array.from(root.querySelectorAll<HTMLElement>(SCROLLABLE_SELECTOR)),
+  ];
+
+  return candidates.filter(isVisibleElement);
+};
+
+const findLayerScrollTarget = (intent: VerticalScrollIntent): HTMLElement | null => {
+  const layers = Array.from(
+    document.querySelectorAll<HTMLElement>('[role="dialog"], [aria-modal="true"], .fixed')
+  ).filter((layer) => {
+    if (!isVisibleElement(layer)) return false;
+    const rect = layer.getBoundingClientRect();
+    return rect.width >= window.innerWidth * 0.72 && rect.height >= window.innerHeight * 0.72;
+  });
+
+  for (let index = layers.length - 1; index >= 0; index -= 1) {
+    const target = getScrollableCandidates(layers[index])
+      .reverse()
+      .find((candidate) => canMoveScrollTarget(candidate, intent));
+    if (target) return target;
+  }
+
+  return null;
+};
+
+const findFallbackScrollTarget = (intent: VerticalScrollIntent): HTMLElement | null => {
+  const candidates = Array.from(document.querySelectorAll<HTMLElement>(SCROLLABLE_SELECTOR))
+    .filter(isVisibleElement)
+    .reverse();
+  return candidates.find((candidate) => canMoveScrollTarget(candidate, intent)) || null;
+};
+
+const getDocumentScrollTarget = (intent: VerticalScrollIntent): HTMLElement | null => {
+  const scroller = document.scrollingElement as HTMLElement | null;
+  return scroller && canMoveScrollTarget(scroller, intent) ? scroller : null;
+};
+
+const selectKeyboardScrollTarget = (
+  event: KeyboardEvent,
+  primaryScrollRoot: HTMLElement | null
+): HTMLElement | null => {
+  const intent = getKeyboardScrollIntent(event);
+  if (!intent) return null;
+
+  return (
+    findScrollableAncestor(event.target, intent) ||
+    findLayerScrollTarget(intent) ||
+    (primaryScrollRoot && canMoveScrollTarget(primaryScrollRoot, intent) ? primaryScrollRoot : null) ||
+    getDocumentScrollTarget(intent) ||
+    findFallbackScrollTarget(intent)
+  );
+};
+
+const scrollTargetByIntent = (
+  target: HTMLElement,
+  intent: VerticalScrollIntent,
+  event: KeyboardEvent
+): void => {
+  const prefersReducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  const behavior: ScrollBehavior = event.repeat || prefersReducedMotion ? 'auto' : 'smooth';
+
+  if (intent === 'start' || intent === 'end') {
+    target.scrollTo({
+      top: intent === 'start' ? 0 : target.scrollHeight,
+      behavior,
+    });
+    return;
+  }
+
+  const isLineScroll = event.key === 'ArrowDown' || event.key === 'ArrowUp';
+  const distance = isLineScroll ? 72 : Math.max(160, Math.floor(target.clientHeight * 0.82));
+  target.scrollBy({
+    top: intent === 'down' ? distance : -distance,
+    behavior,
+  });
+};
+
 const App: React.FC = () => {
   const initialRoute = useMemo(getInitialRoute, []);
   const [currentView, setCurrentViewState] = useState<AppView>(initialRoute.view);
@@ -561,6 +727,7 @@ const App: React.FC = () => {
   const [isIdentityGuestPromptOpen, setIdentityGuestPromptOpen] = useState(false);
 
   const insightRef = useRef<HTMLDivElement>(null);
+  const primaryScrollRef = useRef<HTMLElement | null>(null);
   const [pendingScrollWisdom, setPendingScrollWisdom] = useState(false);
   const [healthStatus, setHealthStatus] = useState<'checking' | 'online' | 'offline'>('checking');
 
@@ -613,6 +780,31 @@ const App: React.FC = () => {
       ethereum?.removeListener?.('chainChanged', refreshWalletEnvironment);
     };
   }, [currentView, isProviderWalletVerificationRequired]);
+
+  useEffect(() => {
+    const handleKeyboardScroll = (event: KeyboardEvent) => {
+      if (
+        event.defaultPrevented ||
+        event.altKey ||
+        event.ctrlKey ||
+        event.metaKey ||
+        !KEYBOARD_SCROLL_KEYS.has(event.key) ||
+        isEditableKeyboardTarget(event.target) ||
+        ((event.key === ' ' || event.key === 'Spacebar') && isSpaceActivationTarget(event.target))
+      ) {
+        return;
+      }
+
+      const target = selectKeyboardScrollTarget(event, primaryScrollRef.current);
+      if (!target) return;
+
+      event.preventDefault();
+      scrollTargetByIntent(target, getKeyboardScrollIntent(event) as VerticalScrollIntent, event);
+    };
+
+    window.addEventListener('keydown', handleKeyboardScroll);
+    return () => window.removeEventListener('keydown', handleKeyboardScroll);
+  }, []);
 
   const TIERS = [
     {
@@ -1086,6 +1278,15 @@ const App: React.FC = () => {
       window.clearTimeout(timeoutId);
     };
   }, []);
+
+  useEffect(() => {
+    const frameId = window.requestAnimationFrame(() => {
+      primaryScrollRef.current?.scrollTo({ top: 0, left: 0 });
+      document.scrollingElement?.scrollTo({ top: 0, left: 0 });
+    });
+
+    return () => window.cancelAnimationFrame(frameId);
+  }, [currentView]);
 
   useEffect(() => {
     if (pendingScrollWisdom && currentView === AppView.DASHBOARD) {
@@ -3381,7 +3582,7 @@ const App: React.FC = () => {
               </div>
               
               <div className="space-y-4 sm:space-y-5 md:space-y-6">
-                <h1 className="portal-entry-title break-words text-3xl xs:text-4xl sm:text-5xl md:text-6xl lg:text-7xl font-black text-white tracking-tight leading-[0.9] drop-shadow-2xl">
+                <h1 className="portal-entry-title break-words text-3xl xs:text-4xl sm:text-5xl md:text-6xl xl:text-7xl font-black text-white tracking-tight leading-[0.9] drop-shadow-2xl">
                   CONSCIOUS <br /> 
                   <span className="text-transparent bg-clip-text bg-gradient-to-r from-blue-400 via-blue-500 to-teal-400 uppercase tracking-tighter drop-shadow-sm">
                     Network Hub
@@ -3655,7 +3856,7 @@ const App: React.FC = () => {
                 <p className="hidden text-[9px] font-black uppercase tracking-[0.6em] text-blue-300/70 lg:block">
                   Start Here
                 </p>
-                <h2 className="text-2xl xs:text-3xl sm:text-4xl md:text-5xl lg:text-6xl font-black text-white tracking-tighter">Membership Access</h2>
+                <h2 className="text-2xl xs:text-3xl sm:text-4xl md:text-5xl 2xl:text-6xl font-black text-white tracking-tighter leading-tight">Membership Access</h2>
                 <p className="text-slate-400 text-sm sm:text-base md:text-lg font-light px-2 sm:px-0">Sign in or choose a membership tier to enter Conscious Network Hub.</p>
                 <div className="flex flex-wrap items-center justify-center gap-3 sm:gap-4 pt-3">
                   <div
@@ -3718,7 +3919,7 @@ const App: React.FC = () => {
                 </div>
               )}
 
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5 sm:gap-7 md:gap-8">
+              <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-5 sm:gap-7 md:gap-8">
                 {TIERS.map((tier, tierIndex) => {
                   const tierClasses =
                     MEMBERSHIP_TIER_COLOR_CLASSES[tier.color as keyof typeof MEMBERSHIP_TIER_COLOR_CLASSES] ||
@@ -3737,7 +3938,7 @@ const App: React.FC = () => {
                       onMouseLeave={() => setHoveredMembershipPath(null)}
                       onFocus={() => setHoveredMembershipPath(tier.name)}
                       onBlur={() => setHoveredMembershipPath(null)}
-                      className={`glass-panel group relative flex min-h-[25rem] flex-col justify-between overflow-hidden rounded-[1.75rem] border-white/5 border-t-4 p-5 shadow-2xl transition-all duration-300 sm:min-h-[27rem] sm:rounded-[2.5rem] sm:p-8 md:p-10 ${
+                      className={`glass-panel group relative flex min-h-[22rem] flex-col justify-between overflow-hidden rounded-[1.75rem] border-white/5 border-t-4 p-5 shadow-2xl transition-all duration-300 sm:min-h-[24rem] sm:rounded-[2.5rem] sm:p-8 lg:min-h-[25rem] lg:p-7 xl:p-10 ${
                         tierClasses.cardBorder
                       } ${
                         isFocused ? `scale-[1.02] ring-2 ${tierClasses.glow}` : ''
@@ -3758,8 +3959,8 @@ const App: React.FC = () => {
                       </div>
                       <div>
                         <div className="flex justify-between items-start gap-3 mb-2">
-                          <h3 className="text-xl sm:text-2xl font-black text-white leading-tight uppercase tracking-tighter">{tier.name}</h3>
-                          <span className={`px-3 sm:px-4 py-1 sm:py-1.5 rounded-full text-[9px] sm:text-[10px] font-black whitespace-nowrap tracking-widest ${tierClasses.price}`}>{tier.price}</span>
+                          <h3 className="min-w-0 text-xl xl:text-2xl font-black text-white leading-tight uppercase tracking-tighter">{tier.name}</h3>
+                          <span className={`cnh-status-badge shrink-0 px-3 sm:px-4 py-1 sm:py-1.5 rounded-full text-[9px] sm:text-[10px] font-black tracking-widest ${tierClasses.price}`}>{tier.price}</span>
                         </div>
                         <p className="text-blue-400/60 text-[8px] sm:text-[9px] font-black uppercase tracking-[0.3em] mb-6 sm:mb-8">Membership Option</p>
                         
@@ -3791,7 +3992,7 @@ const App: React.FC = () => {
                             setSignupModalOpen(true);
                           }
                         }}
-                        className={`mt-7 sm:mt-10 w-full py-4 sm:py-5 bg-white/5 text-white rounded-xl sm:rounded-2xl font-black text-[10px] sm:text-xs uppercase tracking-[0.18em] sm:tracking-[0.2em] transition-all shadow-xl border border-white/5 ${tierClasses.button} ${
+                        className={`mt-7 sm:mt-10 w-full py-4 sm:py-5 bg-white/5 text-white rounded-xl sm:rounded-2xl font-black text-[10px] sm:text-xs uppercase tracking-[0.18em] sm:tracking-[0.2em] leading-tight transition-all shadow-xl border border-white/5 ${tierClasses.button} ${
                           isFocused ? `animate-pulse bg-white/10 ring-2 ${tierClasses.glow}` : ''
                         }`}
                         disabled={isMembershipCheckoutPending || Boolean(pendingCheckoutSessionId)}
@@ -3833,15 +4034,15 @@ const App: React.FC = () => {
             )}
 
             <aside
-              className={`fixed inset-y-0 left-0 z-[110] w-80 glass-panel border-r border-white/5 transition-all duration-500 ease-in-out overflow-hidden lg:w-72 xl:w-80 ${
+              className={`fixed inset-y-0 left-0 z-[110] w-80 glass-panel border-r border-white/5 transition-all duration-500 ease-in-out overflow-hidden lg:w-64 xl:w-72 2xl:w-80 ${
                 isSidebarOpen ? 'translate-x-0' : '-translate-x-full'
               } ${
                 isSidebarOpen
-                  ? 'lg:static lg:translate-x-0 lg:w-72 lg:opacity-100 xl:w-80'
+                  ? 'lg:static lg:translate-x-0 lg:w-64 lg:opacity-100 xl:w-72 2xl:w-80'
                   : 'lg:static lg:translate-x-0 lg:w-0 lg:opacity-0 lg:border-r-0 lg:pointer-events-none'
               }`}
             >
-              <div className="h-full flex flex-col p-6 sm:p-8 lg:p-6 xl:p-8 overflow-y-auto custom-scrollbar scrollable">
+              <div className="h-full flex flex-col p-6 sm:p-8 lg:p-5 xl:p-6 2xl:p-8 overflow-y-auto custom-scrollbar scrollable">
                 <button 
                   onClick={() => setSidebarOpen(false)} 
                   className="absolute top-8 right-8 p-3 hover:bg-white/5 rounded-2xl text-slate-500"
@@ -4064,14 +4265,14 @@ const App: React.FC = () => {
             </aside>
 
             <div className="flex-1 flex flex-col min-h-0 overflow-hidden relative">
-              <header className="min-h-16 sm:min-h-20 flex items-center justify-between gap-3 px-4 sm:px-6 md:px-8 lg:px-8 xl:px-10 border-b border-white/5 z-20 backdrop-blur-3xl bg-black/20">
-                <div className="flex items-center gap-6">
+              <header className="min-h-16 sm:min-h-20 flex items-center justify-between gap-2 sm:gap-3 px-3 sm:px-5 md:px-6 lg:px-5 xl:px-8 2xl:px-10 border-b border-white/5 z-20 backdrop-blur-3xl bg-black/20 overflow-x-hidden">
+                <div className="flex min-w-0 flex-1 items-center gap-2 sm:gap-3 lg:gap-4">
                   {!isSidebarOpen && (
-                    <button onClick={toggleSidebar} className="p-3 bg-white/5 hover:bg-white/10 rounded-xl text-slate-400 border border-white/10 shadow-lg">
+                    <button onClick={toggleSidebar} className="shrink-0 p-3 bg-white/5 hover:bg-white/10 rounded-xl text-slate-400 border border-white/10 shadow-lg">
                       <Menu className="w-5 h-5" />
                     </button>
                   )}
-                  <form onSubmit={handleGlobalSearchSubmit} className="relative group hidden md:block">
+                  <form onSubmit={handleGlobalSearchSubmit} className="relative group hidden min-w-0 flex-1 lg:block lg:max-w-[18rem] xl:max-w-sm 2xl:max-w-md">
                     <Search className="absolute left-4 sm:left-5 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-600 group-focus-within:text-blue-400 transition-colors" />
                     <input
                       type="search"
@@ -4083,7 +4284,7 @@ const App: React.FC = () => {
                       onFocus={() => setGlobalSearchOpen(true)}
                       onBlur={() => window.setTimeout(() => setGlobalSearchOpen(false), 140)}
                       placeholder="Search platform..."
-                      className="pl-12 sm:pl-14 pr-6 sm:pr-8 py-3 sm:py-3.5 bg-white/5 border border-white/10 rounded-lg sm:rounded-xl text-xs outline-none focus:ring-2 focus:ring-blue-500/30 w-56 sm:w-72 md:w-80 transition-all font-medium placeholder:tracking-wider uppercase"
+                      className="w-full pl-12 sm:pl-14 pr-4 sm:pr-6 py-3 sm:py-3.5 bg-white/5 border border-white/10 rounded-lg sm:rounded-xl text-xs outline-none focus:ring-2 focus:ring-blue-500/30 transition-all font-medium placeholder:tracking-wider uppercase"
                     />
                     {isGlobalSearchOpen && globalSearchQuery.trim().length >= 2 && (
                       <div className="absolute left-0 right-0 top-[calc(100%+0.5rem)] z-50 overflow-hidden rounded-2xl border border-white/10 bg-slate-950/95 shadow-2xl backdrop-blur-2xl">
@@ -4117,20 +4318,23 @@ const App: React.FC = () => {
                         insightRef.current?.scrollIntoView({ behavior: 'smooth' });
                       }
                     }}
-                    className="hidden md:inline-flex items-center gap-2 px-3 py-2 bg-blue-600/15 hover:bg-blue-600/25 rounded-xl text-[10px] font-black uppercase tracking-[0.2em] border border-blue-500/30 transition-all"
+                    className="hidden xl:inline-flex shrink-0 items-center gap-2 px-3 py-2 bg-blue-600/15 hover:bg-blue-600/25 rounded-xl text-[10px] font-black uppercase tracking-[0.2em] border border-blue-500/30 transition-all"
                   >
-                    <Sparkles className="w-4 h-4 text-blue-300" /> Latest Wisdom
+                    <Sparkles className="w-4 h-4 shrink-0 text-blue-300" /> <span className="cnh-action-label">Latest Wisdom</span>
                   </button>
                 </div>
                 
-                <div className="flex items-center gap-3 sm:gap-4 md:gap-6">
-                  <div className={`flex items-center gap-2 px-3 py-2 rounded-xl text-[10px] font-black uppercase tracking-[0.2em] border ${
+                <div className="flex shrink-0 items-center gap-1.5 sm:gap-2 md:gap-3 xl:gap-4">
+                  <div
+                    aria-label={`AI status: ${healthStatus === 'online' ? 'live' : healthStatus}`}
+                    className={`flex items-center gap-2 px-2 py-2 xl:px-3 rounded-xl text-[10px] font-black uppercase tracking-[0.2em] border ${
                     healthStatus === 'online'
                       ? 'border-emerald-500/40 text-emerald-300 bg-emerald-500/10'
                       : healthStatus === 'checking'
                       ? 'border-slate-600 text-slate-400 bg-white/5'
                       : 'border-red-500/40 text-red-300 bg-red-500/10'
-                  }`}>
+                  }`}
+                  >
                     <div className={`w-2 h-2 rounded-full ${
                       healthStatus === 'online'
                         ? 'bg-emerald-400'
@@ -4138,18 +4342,22 @@ const App: React.FC = () => {
                         ? 'bg-slate-400 animate-pulse'
                         : 'bg-red-400'
                     }`} />
-                    <span>{healthStatus === 'online' ? 'AI Live' : healthStatus === 'checking' ? 'Checking' : 'Offline'}</span>
+                    <span className="hidden sm:inline">{healthStatus === 'online' ? 'AI Live' : healthStatus === 'checking' ? 'Checking' : 'Offline'}</span>
                   </div>
                   <button
                     onClick={() => setCurrentView(AppView.NOTIFICATIONS)}
-                    className="p-3 hover:bg-white/5 rounded-xl text-slate-500 relative transition-colors"
+                    className="shrink-0 p-2.5 sm:p-3 hover:bg-white/5 rounded-xl text-slate-500 relative transition-colors"
                   >
                     <Bell className="w-5 h-5" />
                     <div className="absolute top-3 right-3 w-2 h-2 bg-blue-500 rounded-full ring-2 ring-black"></div>
                   </button>
-                  <div className="h-8 w-px bg-white/10 mx-2 hidden md:block"></div>
-                  <button onClick={() => { setCurrentView(AppView.MY_CONSCIOUS_IDENTITY); closeSidebarOnMobile(); }} className="flex items-center gap-4 pl-3 pr-6 py-2 hover:bg-white/5 rounded-2xl transition-all border border-transparent hover:border-white/5">
-                    <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-blue-600 to-teal-400 flex items-center justify-center font-black text-sm text-white shadow-xl overflow-hidden">
+                  <div className="h-8 w-px bg-white/10 mx-1 hidden xl:block"></div>
+                  <button
+                    onClick={() => { setCurrentView(AppView.MY_CONSCIOUS_IDENTITY); closeSidebarOnMobile(); }}
+                    className="flex min-w-0 max-w-[11rem] items-center gap-2 xl:gap-3 px-2 xl:pl-3 xl:pr-4 py-2 hover:bg-white/5 rounded-2xl transition-all border border-transparent hover:border-white/5"
+                    title={user?.name || 'Guest Node'}
+                  >
+                    <div className="w-9 h-9 shrink-0 rounded-xl bg-gradient-to-br from-blue-600 to-teal-400 flex items-center justify-center font-black text-sm text-white shadow-xl overflow-hidden">
                       {user?.avatarUrl ? (
                         (() => {
                           const avatarMimeType = decodeUploadObjectKeyMimeType(
@@ -4182,15 +4390,21 @@ const App: React.FC = () => {
                         user ? user.name.charAt(0).toUpperCase() : 'G'
                       )}
                     </div>
-                    <div className="text-left hidden md:block">
-                      <p className="text-xs font-black text-white leading-none uppercase tracking-tighter">{user?.name || 'Guest Node'}</p>
-                      <p className="text-[8px] text-slate-500 uppercase tracking-[0.3em] mt-1">{user?.tier || 'Explore'} Access</p>
+                    <div className="min-w-0 text-left hidden xl:block">
+                      <p className="cnh-person-name truncate text-xs font-black text-white leading-none uppercase tracking-tighter">{user?.name || 'Guest Node'}</p>
+                      <p className="truncate text-[8px] text-slate-500 uppercase tracking-[0.3em] mt-1">{user?.tier || 'Explore'} Access</p>
                     </div>
                   </button>
                 </div>
               </header>
 
-              <main className="flex-1 min-h-0 overflow-y-auto custom-scrollbar scrollable p-4 sm:p-5 md:p-6 lg:p-8 xl:p-10 relative z-10" tabIndex={-1}>
+              <main
+                ref={primaryScrollRef}
+                className="app-main-scroll flex-1 min-h-0 overflow-y-auto custom-scrollbar scrollable p-4 sm:p-5 md:p-6 lg:p-6 xl:p-8 2xl:p-10 relative z-10"
+                data-page-scroll-root="true"
+                tabIndex={0}
+                aria-label="Scrollable page content"
+              >
                 {renderActiveView()}
               </main>
               <footer className="shrink-0 overflow-hidden p-3 sm:p-4 bg-black/20 backdrop-blur-sm border-t border-white/5">

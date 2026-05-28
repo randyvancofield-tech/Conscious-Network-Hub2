@@ -123,7 +123,7 @@ const KnowledgePathways: React.FC<KnowledgePathwaysProps> = ({
   if (courseId && isLoading) {
     return (
       <PageShell>
-        <div className="glass-panel p-10 rounded-[2rem] border-white/10 text-center text-slate-300">
+        <div className="glass-panel p-6 sm:p-8 rounded-[2rem] border-white/10 text-center text-slate-300">
           Loading published course...
         </div>
       </PageShell>
@@ -180,7 +180,7 @@ const KnowledgePathways: React.FC<KnowledgePathwaysProps> = ({
             </ActionButton>
           }
         />
-        <div className="grid grid-cols-1 gap-6 lg:grid-cols-[1.2fr_0.8fr]">
+        <div className="grid grid-cols-1 gap-6 xl:grid-cols-[1.2fr_0.8fr]">
           <SurfacePanel className="overflow-hidden p-0">
             <img src={routeCourse.image} alt={routeCourse.title} className="h-72 w-full object-cover" />
             <div className="space-y-5 p-6 sm:p-8">
@@ -245,7 +245,7 @@ const KnowledgePathways: React.FC<KnowledgePathwaysProps> = ({
 
         <div className="flex flex-col md:flex-row md:items-end justify-between gap-6">
           <div className="space-y-2">
-            <h2 className="text-4xl font-black text-white uppercase tracking-tighter leading-none">Knowledge Pathways</h2>
+            <h2 className="text-3xl sm:text-4xl font-black text-white uppercase tracking-tighter leading-tight">Knowledge Pathways</h2>
           <p className="text-blue-400/60 text-[10px] font-black uppercase tracking-[0.4em]">Discovering Autonomy & Ethical Growth</p>
           </div>
           <div className="flex items-center gap-4 p-4 glass-panel rounded-2xl border-white/5 shadow-2xl">
@@ -261,7 +261,7 @@ const KnowledgePathways: React.FC<KnowledgePathwaysProps> = ({
       </header>
 
       {isLoading && (
-        <div className="glass-panel p-10 rounded-[2rem] border-white/10 text-center text-slate-300">
+        <div className="glass-panel p-6 sm:p-8 rounded-[2rem] border-white/10 text-center text-slate-300">
           Loading live course pathways...
         </div>
       )}
@@ -276,14 +276,14 @@ const KnowledgePathways: React.FC<KnowledgePathwaysProps> = ({
       )}
 
       {!isLoading && courseRecords.length === 0 && (
-        <div className="glass-panel p-10 rounded-[2rem] border-white/10 text-center">
+        <div className="glass-panel p-6 sm:p-8 rounded-[2rem] border-white/10 text-center">
           <h3 className="text-lg font-black text-white uppercase tracking-tight">No courses published yet</h3>
           <p className="text-sm text-slate-400 mt-2">Published provider and admin courses will appear here.</p>
         </div>
       )}
 
       {!isLoading && courseRecords.length > 0 && (
-        <section className="grid grid-cols-1 lg:grid-cols-2 gap-10">
+        <section className="grid grid-cols-1 xl:grid-cols-2 gap-6 xl:gap-10">
           {courseRecords.map((pathway) => (
             <div
               key={pathway.id}
@@ -301,14 +301,14 @@ const KnowledgePathways: React.FC<KnowledgePathwaysProps> = ({
                     {getCourseIcon(pathway.id)}
                   </div>
                 </div>
-                <div className="absolute top-6 right-6">
-                  <div className="px-4 py-2 bg-blue-600/80 backdrop-blur-md rounded-full border border-white/10 flex items-center gap-2">
+                <div className="absolute left-6 right-6 top-6 flex justify-end">
+                  <div className="cnh-status-badge max-w-full px-4 py-2 bg-blue-600/80 backdrop-blur-md rounded-full border border-white/10 flex items-center gap-2">
                     <span className="text-[9px] font-black text-white uppercase tracking-widest">{pathway.tier} PATHWAY</span>
                   </div>
                 </div>
               </div>
 
-              <div className="p-10 space-y-6 flex-1 flex flex-col">
+              <div className="p-6 sm:p-8 xl:p-10 space-y-6 flex-1 flex flex-col">
                 <div className="space-y-2">
                   <span className="text-teal-400 text-[9px] font-black uppercase tracking-[0.4em]">{pathway.provider}</span>
                   <h3 className="text-2xl font-black text-white tracking-tighter uppercase leading-tight group-hover:text-blue-400 transition-colors">
@@ -322,21 +322,21 @@ const KnowledgePathways: React.FC<KnowledgePathwaysProps> = ({
 
                 <div className="pt-6 border-t border-white/5 space-y-6">
                   <div className="flex justify-between items-center">
-                    <div className="flex items-center gap-2">
-                      <Users className="w-4 h-4 text-slate-600" />
-                      <span className="text-[10px] font-mono font-bold text-slate-500">{pathway.enrolled.toLocaleString()} Nodes Enrolled</span>
+                    <div className="flex min-w-0 items-center gap-2">
+                      <Users className="w-4 h-4 shrink-0 text-slate-600" />
+                      <span className="break-words text-[10px] font-mono font-bold text-slate-500">{pathway.enrolled.toLocaleString()} Nodes Enrolled</span>
                     </div>
                     <div className="flex gap-1">
                       {[...Array(5)].map((_, i) => <Star key={i} className={`w-3 h-3 ${i < 4 ? 'text-yellow-500 fill-yellow-500' : 'text-slate-700'}`} />)}
                     </div>
                   </div>
 
-                  <div className="grid grid-cols-2 gap-4">
+                  <div className="grid grid-cols-1 gap-3 xs:grid-cols-2 xs:gap-4">
                     <button
                       onClick={() => onEnroll({ ...pathway, progress: 0 })}
                       className="flex items-center justify-center gap-3 py-4 bg-blue-600 hover:bg-blue-500 text-white rounded-2xl font-black text-[10px] uppercase tracking-widest transition-all shadow-xl hover:-translate-y-1 active:scale-95"
                     >
-                      <Play className="w-4 h-4 fill-white" /> Enroll Node
+                      <Play className="w-4 h-4 shrink-0 fill-white" /> <span className="cnh-action-label">Enroll Node</span>
                     </button>
                     <button
                       onClick={() => {
@@ -348,7 +348,7 @@ const KnowledgePathways: React.FC<KnowledgePathwaysProps> = ({
                       }}
                       className="flex items-center justify-center gap-3 py-4 bg-white/5 hover:bg-white/10 border border-white/10 text-slate-300 rounded-2xl font-black text-[10px] uppercase tracking-widest transition-all active:scale-95"
                     >
-                      <BookOpen className="w-4 h-4" /> Syllabus
+                      <BookOpen className="w-4 h-4 shrink-0" /> <span className="cnh-action-label">Syllabus</span>
                     </button>
                   </div>
                 </div>
@@ -358,7 +358,7 @@ const KnowledgePathways: React.FC<KnowledgePathwaysProps> = ({
         </section>
       )}
 
-      <div className="glass-panel p-10 rounded-[2.5rem] bg-gradient-to-r from-teal-900/10 to-blue-900/10 border border-white/10 text-center space-y-4">
+      <div className="glass-panel p-6 sm:p-8 xl:p-10 rounded-[2rem] xl:rounded-[2.5rem] bg-gradient-to-r from-teal-900/10 to-blue-900/10 border border-white/10 text-center space-y-4">
         <h4 className="text-xl font-black text-white uppercase tracking-tighter">Sovereign Certification Layer</h4>
         <p className="text-slate-400 text-sm max-w-2xl mx-auto font-light">
           Each completed pathway generates a unique verifiable credential anchored to your Conscious Identity node. These achievement records represent deep work in personal and professional autonomy.
@@ -379,7 +379,7 @@ const KnowledgePathways: React.FC<KnowledgePathwaysProps> = ({
               </button>
               <div className="absolute bottom-4 left-4 right-4">
                 <p className="text-[10px] uppercase tracking-widest text-blue-300 font-black">{selectedSyllabus.provider}</p>
-                <h4 className="text-2xl sm:text-3xl font-black text-white tracking-tight mt-1">{selectedSyllabus.title}</h4>
+                <h4 className="cnh-person-name text-2xl sm:text-3xl font-black text-white tracking-tight mt-1 leading-tight">{selectedSyllabus.title}</h4>
               </div>
             </div>
             <div className="p-6 sm:p-8 space-y-5">
@@ -413,7 +413,7 @@ const KnowledgePathways: React.FC<KnowledgePathwaysProps> = ({
                   }}
                   className="flex-1 py-3 bg-blue-600 hover:bg-blue-500 text-white rounded-xl font-black text-[11px] uppercase tracking-widest transition-colors"
                 >
-                  Enroll Pathway
+                  <span className="cnh-action-label">Enroll Pathway</span>
                 </button>
                 <button
                   onClick={() => setSelectedSyllabusId(null)}

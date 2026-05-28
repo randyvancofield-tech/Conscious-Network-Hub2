@@ -43,7 +43,7 @@ const MyCourses: React.FC<MyCoursesProps> = ({ enrolledCourses, onNavigateToUniv
           </button>
         </div>
       ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+        <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
           {enrolledCourses.map((course) => (
             <div key={course.id} className="glass-panel rounded-3xl overflow-hidden flex flex-col sm:flex-row group border-blue-500/10 hover:border-blue-500/30 transition-all">
               <div className="w-full sm:w-48 h-48 sm:h-auto relative overflow-hidden">
@@ -59,7 +59,7 @@ const MyCourses: React.FC<MyCoursesProps> = ({ enrolledCourses, onNavigateToUniv
               </div>
               <div className="flex-1 p-6 flex flex-col justify-between space-y-4">
                 <div>
-                  <div className="flex items-center justify-between mb-2">
+                  <div className="flex flex-col gap-2 xs:flex-row xs:items-center xs:justify-between mb-2">
                     <span className="text-[10px] font-bold text-teal-400 uppercase tracking-widest">{course.provider}</span>
                     <span className="text-[10px] text-slate-500 flex items-center gap-1">
                       <Clock className="w-3 h-3" /> 2h left
@@ -84,7 +84,7 @@ const MyCourses: React.FC<MyCoursesProps> = ({ enrolledCourses, onNavigateToUniv
                 <div className="flex items-center gap-3">
                   <button
                     onClick={() => setActiveCourse({ course, mode: 'resume' })}
-                    className="flex-1 py-3 bg-blue-600 hover:bg-blue-500 rounded-xl font-bold text-sm text-white flex items-center justify-center gap-2 transition-all"
+                    className="cnh-action-label flex-1 py-3 bg-blue-600 hover:bg-blue-500 rounded-xl font-bold text-sm text-white flex items-center justify-center gap-2 transition-all"
                   >
                     <PlayCircle className="w-4 h-4" /> Resume Module
                   </button>

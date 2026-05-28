@@ -106,9 +106,9 @@ const ProfileIntegrityVerificationPanel: React.FC<ProfileIntegrityVerificationPa
   };
 
   return (
-    <div className="glass-panel p-8 rounded-[2.5rem] border border-teal-500/20 space-y-5">
+    <div className="glass-panel p-5 sm:p-8 rounded-[2rem] sm:rounded-[2.5rem] border border-teal-500/20 space-y-5">
       <div className="flex items-start justify-between gap-4">
-        <div>
+        <div className="min-w-0">
           <h4 className="text-sm font-bold text-white uppercase tracking-[0.18em] flex items-center gap-2">
             <FileCheck2 className="w-4 h-4 text-teal-400" />
             Profile Integrity Verification
@@ -133,7 +133,7 @@ const ProfileIntegrityVerificationPanel: React.FC<ProfileIntegrityVerificationPa
       <button
         onClick={() => void verifyIntegrity()}
         disabled={busy}
-        className="w-full py-4 bg-gradient-to-r from-teal-600 to-blue-600 hover:from-teal-500 hover:to-blue-500 disabled:opacity-60 text-white rounded-2xl text-sm font-bold uppercase tracking-widest transition-all"
+        className="cnh-action-label w-full py-4 bg-gradient-to-r from-teal-600 to-blue-600 hover:from-teal-500 hover:to-blue-500 disabled:opacity-60 text-white rounded-2xl text-sm font-bold uppercase tracking-widest transition-all"
       >
         {busy ? 'Verifying Integrity...' : 'Verify Profile Integrity'}
       </button>

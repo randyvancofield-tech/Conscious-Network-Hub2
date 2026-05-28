@@ -415,9 +415,9 @@ const GrantApplicationPage: React.FC<GrantApplicationPageProps> = ({
                   {completedStepCount} of {grantSteps.length} pages complete
                 </p>
               </div>
-              <div className="flex min-w-0 items-center gap-3 text-emerald-100">
+              <div className="flex min-w-0 items-start gap-3 text-emerald-100">
                 <ShieldCheck className="h-5 w-5 shrink-0" />
-                <span className="text-[10px] font-black uppercase tracking-widest">
+                <span className="cnh-action-label text-[10px] font-black uppercase tracking-widest">
                   Connected CNH account: {user?.email || 'Signed in'}
                 </span>
               </div>
@@ -425,13 +425,13 @@ const GrantApplicationPage: React.FC<GrantApplicationPageProps> = ({
             <div className="mt-4 h-2 overflow-hidden rounded-full bg-white/10">
               <div className="h-full rounded-full bg-emerald-300 transition-all" style={{ width: `${completionProgress}%` }} />
             </div>
-            <div className="mt-4 grid grid-cols-2 gap-2 sm:grid-cols-4">
+            <div className="mt-4 grid grid-cols-1 gap-2 xs:grid-cols-2 md:grid-cols-4">
               {grantSteps.map((name, index) => (
                 <button
                   key={name}
                   type="button"
                   onClick={() => setStep(index)}
-                  className={`flex min-h-10 items-center justify-center gap-1.5 rounded-xl px-2 py-2 text-[10px] font-black uppercase transition ${
+                  className={`flex min-h-10 items-center justify-center gap-1.5 rounded-xl px-2 py-2 text-center text-[10px] font-black uppercase leading-tight transition ${
                     index === step
                       ? 'bg-emerald-300 text-slate-950'
                       : completedSteps[index]
@@ -440,7 +440,7 @@ const GrantApplicationPage: React.FC<GrantApplicationPageProps> = ({
                   }`}
                 >
                   {completedSteps[index] && <CheckCircle2 className="h-3 w-3 shrink-0" />}
-                  <span className="truncate">{name}</span>
+                  <span className="cnh-action-label">{name}</span>
                 </button>
               ))}
             </div>

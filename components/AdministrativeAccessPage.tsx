@@ -105,7 +105,7 @@ const AdministrativeAccessPage: React.FC<AdministrativeAccessPageProps> = ({
           <p className="hidden text-[9px] font-black uppercase tracking-[0.6em] text-amber-200/70 lg:block">
             Founder Operations
           </p>
-          <h2 className="text-2xl font-black tracking-tighter text-white xs:text-3xl sm:text-4xl md:text-5xl lg:text-6xl">
+          <h2 className="text-2xl font-black tracking-tighter leading-tight text-white xs:text-3xl sm:text-4xl md:text-5xl 2xl:text-6xl">
             Administrative Access
           </h2>
           <p className="mx-auto max-w-3xl px-2 text-sm font-light leading-7 text-slate-400 sm:px-0 sm:text-base md:text-lg">
@@ -151,17 +151,17 @@ const AdministrativeAccessPage: React.FC<AdministrativeAccessPageProps> = ({
             onMouseLeave={() => setHoveredPath(null)}
             onFocus={() => setHoveredPath(ADMIN_ACCESS_PATH_ID)}
             onBlur={() => setHoveredPath(null)}
-            className="glass-panel group relative flex min-h-[25rem] flex-col justify-between overflow-hidden rounded-[1.75rem] border-white/5 border-t-4 border-t-amber-400/30 p-5 text-left shadow-2xl transition-all duration-300 hover:scale-[1.02] hover:border-amber-300/30 hover:ring-2 hover:ring-amber-200/30 sm:min-h-[27rem] sm:rounded-[2.5rem] sm:p-8 md:p-10"
+            className="glass-panel group relative flex min-h-[22rem] flex-col justify-between overflow-hidden rounded-[1.75rem] border-white/5 border-t-4 border-t-amber-400/30 p-5 text-left shadow-2xl transition-all duration-300 hover:scale-[1.02] hover:border-amber-300/30 hover:ring-2 hover:ring-amber-200/30 sm:min-h-[24rem] sm:rounded-[2.5rem] sm:p-8 lg:p-9"
           >
             <div className="absolute right-0 top-0 p-4 text-amber-300 opacity-5 transition-opacity group-hover:opacity-10 sm:p-8">
               <ShieldCheck className="h-16 w-16 sm:h-24 sm:w-24" />
             </div>
             <div>
               <div className="mb-2 flex items-start justify-between gap-3">
-                <h3 className="text-xl font-black uppercase leading-tight tracking-tighter text-white sm:text-2xl">
+                <h3 className="min-w-0 text-xl font-black uppercase leading-tight tracking-tighter text-white xl:text-2xl">
                   Administrator Portal
                 </h3>
-                <span className="rounded-full bg-amber-400/20 px-3 py-1 text-[9px] font-black tracking-widest text-amber-100 sm:px-4 sm:py-1.5 sm:text-[10px]">
+                <span className="cnh-status-badge shrink-0 rounded-full bg-amber-400/20 px-3 py-1 text-[9px] font-black tracking-widest text-amber-100 sm:px-4 sm:py-1.5 sm:text-[10px]">
                   Admin
                 </span>
               </div>
@@ -186,7 +186,7 @@ const AdministrativeAccessPage: React.FC<AdministrativeAccessPageProps> = ({
                 </div>
               </div>
             </div>
-            <span className="mt-7 flex w-full items-center justify-center gap-2 rounded-xl border border-white/5 bg-white/5 py-4 text-[10px] font-black uppercase tracking-[0.18em] text-white shadow-xl transition-all group-hover:border-amber-300/40 group-hover:bg-amber-500/20 sm:mt-10 sm:rounded-2xl sm:py-5 sm:text-xs">
+            <span className="cnh-action-label mt-7 flex w-full items-center justify-center gap-2 rounded-xl border border-white/5 bg-white/5 py-4 text-center text-[10px] font-black uppercase tracking-[0.18em] text-white shadow-xl transition-all group-hover:border-amber-300/40 group-hover:bg-amber-500/20 sm:mt-10 sm:rounded-2xl sm:py-5 sm:text-xs">
               Continue To Admin Sign In <ChevronRight className="h-4 w-4" />
             </span>
           </button>

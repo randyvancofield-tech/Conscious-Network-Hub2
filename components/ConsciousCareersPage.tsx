@@ -126,7 +126,7 @@ const ConsciousCareersPage: React.FC<ConsciousCareersPageProps> = ({
           <p className="hidden text-[9px] font-black uppercase tracking-[0.6em] text-blue-300/70 lg:block">
             Start Here
           </p>
-          <h2 className="text-2xl xs:text-3xl sm:text-4xl md:text-5xl lg:text-6xl font-black text-white tracking-tighter">Conscious Careers</h2>
+          <h2 className="text-2xl xs:text-3xl sm:text-4xl md:text-5xl 2xl:text-6xl font-black text-white tracking-tighter leading-tight">Conscious Careers</h2>
           <p className="mx-auto max-w-3xl px-2 text-sm font-light leading-7 text-slate-400 sm:px-0 sm:text-base md:text-lg">
             Higher Conscious Network dba Conscious Careers supports faith-driven entrepreneurs building economic, mental, spiritual, and educational development.
           </p>
@@ -171,15 +171,15 @@ const ConsciousCareersPage: React.FC<ConsciousCareersPageProps> = ({
             onMouseLeave={() => setHoveredPath(null)}
             onFocus={() => setHoveredPath('Grant Application')}
             onBlur={() => setHoveredPath(null)}
-            className="glass-panel group relative flex min-h-[25rem] flex-col justify-between overflow-hidden rounded-[1.75rem] border-white/5 border-t-4 border-t-blue-500/20 p-5 text-left shadow-2xl transition-all duration-300 hover:border-blue-500/30 hover:scale-[1.02] hover:ring-2 hover:ring-blue-300/30 sm:min-h-[27rem] sm:rounded-[2.5rem] sm:p-8 md:p-10"
+            className="glass-panel group relative flex min-h-[22rem] flex-col justify-between overflow-hidden rounded-[1.75rem] border-white/5 border-t-4 border-t-blue-500/20 p-5 text-left shadow-2xl transition-all duration-300 hover:border-blue-500/30 hover:scale-[1.02] hover:ring-2 hover:ring-blue-300/30 sm:min-h-[24rem] sm:rounded-[2.5rem] sm:p-8 lg:p-9 xl:p-10"
           >
             <div className="absolute top-0 right-0 p-4 text-blue-400 opacity-5 transition-opacity group-hover:opacity-10 sm:p-8">
               <Shield className="w-16 h-16 sm:w-24 sm:h-24" />
             </div>
             <div>
               <div className="mb-2 flex items-start justify-between gap-3">
-                <h3 className="text-xl sm:text-2xl font-black text-white leading-tight uppercase tracking-tighter">Grant Application</h3>
-                <span className="rounded-full bg-blue-500/20 px-3 py-1 text-[9px] font-black tracking-widest text-blue-300 sm:px-4 sm:py-1.5 sm:text-[10px]">
+                <h3 className="min-w-0 text-xl xl:text-2xl font-black text-white leading-tight uppercase tracking-tighter">Grant Application</h3>
+                <span className="cnh-status-badge shrink-0 rounded-full bg-blue-500/20 px-3 py-1 text-[9px] font-black tracking-widest text-blue-300 sm:px-4 sm:py-1.5 sm:text-[10px]">
                   Up to $12K
                 </span>
               </div>
@@ -191,7 +191,7 @@ const ConsciousCareersPage: React.FC<ConsciousCareersPageProps> = ({
                 </p>
               </div>
             </div>
-            <span className="mt-7 flex w-full items-center justify-center gap-2 rounded-xl border border-white/5 bg-white/5 py-4 text-[10px] font-black uppercase tracking-[0.18em] text-white shadow-xl transition-all group-hover:bg-blue-600 group-hover:border-blue-500/50 sm:mt-10 sm:rounded-2xl sm:py-5 sm:text-xs">
+            <span className="cnh-action-label mt-7 flex w-full items-center justify-center gap-2 rounded-xl border border-white/5 bg-white/5 py-4 text-center text-[10px] font-black uppercase tracking-[0.18em] text-white shadow-xl transition-all group-hover:bg-blue-600 group-hover:border-blue-500/50 sm:mt-10 sm:rounded-2xl sm:py-5 sm:text-xs">
               Start Application <ChevronRight className="h-4 w-4" />
             </span>
           </button>
@@ -203,15 +203,15 @@ const ConsciousCareersPage: React.FC<ConsciousCareersPageProps> = ({
             onMouseLeave={() => setHoveredPath(null)}
             onFocus={() => setHoveredPath('Entrepreneurship Support')}
             onBlur={() => setHoveredPath(null)}
-            className="glass-panel group relative flex min-h-[25rem] flex-col justify-between overflow-hidden rounded-[1.75rem] border-white/5 border-t-4 border-t-teal-500/20 p-5 text-left opacity-90 shadow-2xl transition-all duration-300 hover:border-teal-500/30 hover:scale-[1.02] hover:ring-2 hover:ring-teal-300/30 sm:min-h-[27rem] sm:rounded-[2.5rem] sm:p-8 md:p-10"
+            className="glass-panel group relative flex min-h-[22rem] flex-col justify-between overflow-hidden rounded-[1.75rem] border-white/5 border-t-4 border-t-teal-500/20 p-5 text-left opacity-90 shadow-2xl transition-all duration-300 hover:border-teal-500/30 hover:scale-[1.02] hover:ring-2 hover:ring-teal-300/30 sm:min-h-[24rem] sm:rounded-[2.5rem] sm:p-8 lg:p-9 xl:p-10"
           >
             <div className="absolute top-0 right-0 p-4 text-teal-400 opacity-5 sm:p-8">
               <Shield className="w-16 h-16 sm:w-24 sm:h-24" />
             </div>
             <div>
               <div className="mb-2 flex items-start justify-between gap-3">
-                <h3 className="text-xl sm:text-2xl font-black text-white leading-tight uppercase tracking-tighter">Entrepreneurship Support</h3>
-                <span className="rounded-full bg-teal-500/20 px-3 py-1 text-[9px] font-black tracking-widest text-teal-300 sm:px-4 sm:py-1.5 sm:text-[10px]">
+                <h3 className="min-w-0 text-xl xl:text-2xl font-black text-white leading-tight uppercase tracking-tighter">Entrepreneurship Support</h3>
+                <span className="cnh-status-badge shrink-0 rounded-full bg-teal-500/20 px-3 py-1 text-[9px] font-black tracking-widest text-teal-300 sm:px-4 sm:py-1.5 sm:text-[10px]">
                   Soon
                 </span>
               </div>
@@ -223,7 +223,7 @@ const ConsciousCareersPage: React.FC<ConsciousCareersPageProps> = ({
                 </p>
               </div>
             </div>
-            <span className="mt-7 flex w-full items-center justify-center rounded-xl border border-white/5 bg-white/5 py-4 text-[10px] font-black uppercase tracking-[0.18em] text-slate-300 shadow-xl transition-all group-hover:border-teal-500/40 group-hover:bg-teal-600/20 group-hover:text-white sm:mt-10 sm:rounded-2xl sm:py-5 sm:text-xs">
+            <span className="cnh-action-label mt-7 flex w-full items-center justify-center rounded-xl border border-white/5 bg-white/5 py-4 text-center text-[10px] font-black uppercase tracking-[0.18em] text-slate-300 shadow-xl transition-all group-hover:border-teal-500/40 group-hover:bg-teal-600/20 group-hover:text-white sm:mt-10 sm:rounded-2xl sm:py-5 sm:text-xs">
               Coming Soon
             </span>
           </button>

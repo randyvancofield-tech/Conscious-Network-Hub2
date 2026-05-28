@@ -428,19 +428,19 @@ export const ConsciousIdentity: React.FC<ConsciousIdentityProps> = ({
                         },
                       }))
                     }
-                    className={`flex items-center justify-between p-5 rounded-2xl border transition-all ${formData.privacySettings.profileVisibility === 'private' ? 'bg-amber-600/10 border-amber-500/50 text-white' : 'bg-blue-600/10 border-blue-500/50 text-white'}`}
+                    className={`flex flex-col gap-3 p-5 rounded-2xl border transition-all xs:flex-row xs:items-center xs:justify-between ${formData.privacySettings.profileVisibility === 'private' ? 'bg-amber-600/10 border-amber-500/50 text-white' : 'bg-blue-600/10 border-blue-500/50 text-white'}`}
                   >
                     <div className="flex items-center gap-3 text-sm font-bold uppercase tracking-wider">
                       <Shield className={`w-4 h-4 ${formData.privacySettings.profileVisibility === 'private' ? 'text-amber-400' : 'text-blue-400'}`} />
                       Profile Visibility
                     </div>
-                    <div className={`px-2 py-1 rounded-full text-[9px] font-black uppercase tracking-widest ${formData.privacySettings.profileVisibility === 'private' ? 'bg-amber-500/30 text-amber-300' : 'bg-blue-500/30 text-blue-300'}`}>
+                    <div className={`cnh-status-badge px-2 py-1 rounded-full text-[9px] font-black uppercase tracking-widest ${formData.privacySettings.profileVisibility === 'private' ? 'bg-amber-500/30 text-amber-300' : 'bg-blue-500/30 text-blue-300'}`}>
                       {formData.privacySettings.profileVisibility}
                     </div>
                   </button>
                   <button 
                     onClick={() => setFormData(prev => ({ ...prev, privacySettings: { ...prev.privacySettings, showEmail: !prev.privacySettings.showEmail }}))}
-                    className={`flex items-center justify-between p-5 rounded-2xl border transition-all ${formData.privacySettings.showEmail ? 'bg-blue-600/10 border-blue-500/50 text-white' : 'bg-white/5 border-white/10 text-slate-400'}`}
+                    className={`flex flex-col gap-3 p-5 rounded-2xl border transition-all xs:flex-row xs:items-center xs:justify-between ${formData.privacySettings.showEmail ? 'bg-blue-600/10 border-blue-500/50 text-white' : 'bg-white/5 border-white/10 text-slate-400'}`}
                   >
                     <div className="flex items-center gap-3 text-sm font-bold uppercase tracking-wider">
                       {formData.privacySettings.showEmail ? <Eye className="w-4 h-4 text-blue-400" /> : <EyeOff className="w-4 h-4" />}
@@ -453,7 +453,7 @@ export const ConsciousIdentity: React.FC<ConsciousIdentityProps> = ({
 
                   <button 
                     onClick={() => setFormData(prev => ({ ...prev, privacySettings: { ...prev.privacySettings, allowMessages: !prev.privacySettings.allowMessages }}))}
-                    className={`flex items-center justify-between p-5 rounded-2xl border transition-all ${formData.privacySettings.allowMessages ? 'bg-teal-600/10 border-teal-500/50 text-white' : 'bg-white/5 border-white/10 text-slate-400'}`}
+                    className={`flex flex-col gap-3 p-5 rounded-2xl border transition-all xs:flex-row xs:items-center xs:justify-between ${formData.privacySettings.allowMessages ? 'bg-teal-600/10 border-teal-500/50 text-white' : 'bg-white/5 border-white/10 text-slate-400'}`}
                   >
                     <div className="flex items-center gap-3 text-sm font-bold uppercase tracking-wider">
                       <MessageSquare className={`w-4 h-4 ${formData.privacySettings.allowMessages ? 'text-teal-400' : ''}`} />
@@ -506,7 +506,7 @@ export const ConsciousIdentity: React.FC<ConsciousIdentityProps> = ({
     >
       <div className="relative group/header">
         <div className="glass-panel rounded-[2rem] sm:rounded-[4rem] overflow-hidden border-white/5 shadow-[0_50px_100px_-20px_rgba(0,0,0,0.5)] relative">
-          <div className="h-[260px] sm:h-[360px] lg:h-[450px] relative overflow-hidden">
+          <div className="h-[220px] sm:h-[300px] xl:h-[400px] 2xl:h-[450px] relative overflow-hidden">
             {bannerIsVideo ? (
               <video
                 src={formData.bannerUrl}
@@ -534,11 +534,11 @@ export const ConsciousIdentity: React.FC<ConsciousIdentityProps> = ({
             </div>
           </div>
 
-          <div className="px-4 sm:px-8 lg:px-16 pb-10 sm:pb-16 relative">
-            <div className="flex flex-col sm:flex-row items-center sm:items-end justify-between gap-6 sm:gap-10 -mt-16 sm:-mt-28 lg:-mt-36">
-              <div className="flex flex-col sm:flex-row items-center sm:items-end gap-5 sm:gap-8 text-center sm:text-left min-w-0">
+          <div className="px-4 sm:px-8 lg:px-10 xl:px-16 pb-10 sm:pb-16 relative">
+            <div className="flex flex-col sm:flex-row items-center sm:items-end justify-between gap-6 sm:gap-8 xl:gap-10 -mt-14 sm:-mt-24 xl:-mt-32">
+              <div className="flex flex-col sm:flex-row items-center sm:items-end gap-5 sm:gap-6 xl:gap-8 text-center sm:text-left min-w-0">
                 <div className="relative group">
-                  <div className="w-36 h-36 sm:w-48 sm:h-48 lg:w-64 lg:h-64 rounded-[3rem] sm:rounded-[4.5rem] p-2 bg-gradient-to-br from-blue-600 to-teal-400 shadow-[0_30px_60px_rgba(0,0,0,0.6)] ring-[6px] sm:ring-[10px] ring-[#05070a] transition-transform group-hover:scale-105 duration-700">
+                  <div className="w-36 h-36 sm:w-44 sm:h-44 lg:w-52 lg:h-52 2xl:w-64 2xl:h-64 rounded-[3rem] sm:rounded-[4rem] 2xl:rounded-[4.5rem] p-2 bg-gradient-to-br from-blue-600 to-teal-400 shadow-[0_30px_60px_rgba(0,0,0,0.6)] ring-[6px] sm:ring-[8px] 2xl:ring-[10px] ring-[#05070a] transition-transform group-hover:scale-105 duration-700">
                     {avatarIsVideo ? (
                       <video
                         src={formData.avatarUrl}
@@ -559,28 +559,28 @@ export const ConsciousIdentity: React.FC<ConsciousIdentityProps> = ({
                   )}
                 </div>
                 <div className="pb-4 sm:pb-10 min-w-0 max-w-full">
-                  <h1 className="text-3xl sm:text-5xl xl:text-7xl font-bold text-white tracking-tight sm:tracking-tighter leading-none mb-4 group flex items-center justify-center sm:justify-start break-words">
-                    {user.name}
-                    <span className="inline-block ml-4 opacity-0 group-hover:opacity-100 transition-all translate-x-4 group-hover:translate-x-0">
+                  <h1 className="cnh-person-name max-w-full text-3xl sm:text-4xl lg:text-5xl 2xl:text-6xl font-bold text-white tracking-tight leading-tight mb-4 group flex items-center justify-center sm:justify-start">
+                    <span className="min-w-0">{user.name}</span>
+                    <span className="hidden shrink-0 sm:inline-block ml-4 opacity-0 group-hover:opacity-100 transition-all translate-x-4 group-hover:translate-x-0">
                       <Sparkles className="w-7 h-7 sm:w-10 sm:h-10 text-teal-400" />
                     </span>
                   </h1>
                   <div className="flex flex-wrap items-center justify-center sm:justify-start gap-3 sm:gap-6 min-w-0">
-                    <span className="text-blue-400 font-bold uppercase tracking-[0.18em] sm:tracking-[0.3em] text-[11px] sm:text-sm flex items-center gap-2 min-w-0 max-w-full break-all">
+                    <span className="text-blue-400 font-bold uppercase tracking-[0.18em] sm:tracking-[0.3em] text-[11px] sm:text-sm flex items-center gap-2 min-w-0 max-w-full break-words">
                       <UserCircle className="w-4 h-4" /> @{formData.handle}
                     </span>
                     <div className="h-6 w-px bg-white/10 hidden sm:block" />
                     <div className="flex items-center gap-3 px-5 py-2 bg-teal-400/10 rounded-full border border-teal-400/20 shadow-inner max-w-full">
                       <Award className="w-5 h-5 text-teal-400" />
-                      <span className="text-[11px] text-teal-400 rounded-lg font-bold uppercase tracking-widest break-words">{user.tier} Access</span>
+                      <span className="cnh-status-badge text-[11px] text-teal-400 rounded-lg font-bold uppercase tracking-widest">{user.tier} Access</span>
                     </div>
                   </div>
                 </div>
               </div>
             </div>
             
-            <div className="mt-12 sm:mt-16 lg:mt-20 grid grid-cols-1 lg:grid-cols-3 gap-8 lg:gap-16">
-              <div className="lg:col-span-2 space-y-10 sm:space-y-16">
+            <div className="mt-12 sm:mt-16 xl:mt-20 grid grid-cols-1 xl:grid-cols-3 gap-8 xl:gap-16">
+              <div className="xl:col-span-2 space-y-10 sm:space-y-16">
                 <div className="space-y-6">
                   <h3 className="text-[10px] font-bold text-slate-500 uppercase tracking-[0.4em] flex items-center gap-3">
                     <UserCircle className="w-6 h-6 text-blue-500" /> Identity Mission Statement
@@ -640,14 +640,14 @@ export const ConsciousIdentity: React.FC<ConsciousIdentityProps> = ({
                   </div>
                   <div className="p-6 sm:p-10 bg-white/5 border border-white/5 rounded-[2rem] sm:rounded-[3rem] hover:bg-white/10 transition-all flex flex-col justify-between shadow-xl group">
                     <h4 className="text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-6">Integrity Node</h4>
-                    <div className="flex justify-between items-end">
+                    <div className="flex flex-col gap-5 sm:flex-row sm:items-end sm:justify-between">
                       <div className="flex items-center gap-4">
                         <div className="w-12 h-12 bg-yellow-400/10 rounded-2xl flex items-center justify-center">
                           <Zap className="w-7 h-7 text-yellow-400" />
                         </div>
-                        <span className="text-xl text-slate-300 font-medium">Security Posture</span>
+                        <span className="text-base sm:text-lg text-slate-300 font-medium">Security Posture</span>
                       </div>
-                      <span className="text-5xl font-mono font-bold text-white group-hover:scale-110 transition-transform">{user.reputationScore}</span>
+                      <span className="self-start sm:self-auto text-4xl sm:text-5xl font-mono font-bold text-white group-hover:scale-105 transition-transform">{user.reputationScore}</span>
                     </div>
                   </div>
                 </div>
@@ -660,30 +660,30 @@ export const ConsciousIdentity: React.FC<ConsciousIdentityProps> = ({
                   </div>
                   <h4 className="text-[10px] font-bold text-slate-500 uppercase tracking-[0.4em] mb-6">Sovereign Privacy</h4>
                   <div className="space-y-6 relative z-10">
-                    <div className="flex items-center justify-between">
+                    <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                       <div className="flex items-center gap-3">
                         <Shield className={`w-5 h-5 ${formData.privacySettings.profileVisibility === 'private' ? 'text-amber-400' : 'text-blue-400'}`} />
                         <span className="text-sm font-medium text-slate-300">Profile Visibility</span>
                       </div>
-                      <div className={`px-3 py-1 rounded-full text-[9px] font-bold uppercase tracking-widest ${formData.privacySettings.profileVisibility === 'private' ? 'bg-amber-500/20 text-amber-300' : 'bg-blue-500/20 text-blue-300'}`}>
+                      <div className={`cnh-status-badge px-3 py-1 rounded-full text-[9px] font-bold uppercase tracking-widest ${formData.privacySettings.profileVisibility === 'private' ? 'bg-amber-500/20 text-amber-300' : 'bg-blue-500/20 text-blue-300'}`}>
                         {formData.privacySettings.profileVisibility}
                       </div>
                     </div>
-                    <div className="flex items-center justify-between">
+                    <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                       <div className="flex items-center gap-3">
                         <Mail className={`w-5 h-5 ${formData.privacySettings.showEmail ? 'text-blue-400' : 'text-slate-600'}`} />
                         <span className="text-sm font-medium text-slate-300">Public Email</span>
                       </div>
-                      <div className={`px-3 py-1 rounded-full text-[9px] font-bold uppercase tracking-widest ${formData.privacySettings.showEmail ? 'bg-blue-500/20 text-blue-400' : 'bg-white/5 text-slate-600'}`}>
+                      <div className={`cnh-status-badge px-3 py-1 rounded-full text-[9px] font-bold uppercase tracking-widest ${formData.privacySettings.showEmail ? 'bg-blue-500/20 text-blue-400' : 'bg-white/5 text-slate-600'}`}>
                         {formData.privacySettings.showEmail ? 'Broadcasting' : 'Cloaked'}
                       </div>
                     </div>
-                    <div className="flex items-center justify-between">
+                    <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                       <div className="flex items-center gap-3">
                         <MessageSquare className={`w-5 h-5 ${formData.privacySettings.allowMessages ? 'text-teal-400' : 'text-slate-600'}`} />
                         <span className="text-sm font-medium text-slate-300">Direct Comms</span>
                       </div>
-                      <div className={`px-3 py-1 rounded-full text-[9px] font-bold uppercase tracking-widest ${formData.privacySettings.allowMessages ? 'bg-teal-500/20 text-teal-400' : 'bg-white/5 text-slate-600'}`}>
+                      <div className={`cnh-status-badge px-3 py-1 rounded-full text-[9px] font-bold uppercase tracking-widest ${formData.privacySettings.allowMessages ? 'bg-teal-500/20 text-teal-400' : 'bg-white/5 text-slate-600'}`}>
                         {formData.privacySettings.allowMessages ? 'Enabled' : 'Restricted'}
                       </div>
                     </div>
@@ -720,8 +720,8 @@ export const ConsciousIdentity: React.FC<ConsciousIdentityProps> = ({
         </div>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 lg:gap-16">
-        <div className="glass-panel p-6 sm:p-10 lg:p-12 rounded-[2rem] sm:rounded-[4rem] border-white/5 shadow-2xl space-y-8 sm:space-y-10">
+      <div className="grid grid-cols-1 xl:grid-cols-2 gap-8 xl:gap-16">
+        <div className="glass-panel p-6 sm:p-8 2xl:p-12 rounded-[2rem] sm:rounded-[3rem] 2xl:rounded-[4rem] border-white/5 shadow-2xl space-y-8 sm:space-y-10">
           <div className="flex justify-between items-center gap-3">
             <h3 className="text-2xl sm:text-3xl font-bold text-white flex items-center gap-3 sm:gap-4">
               <PenTool className="w-6 h-6 sm:w-8 sm:h-8 text-blue-400" /> Sovereign Reflections
@@ -774,7 +774,7 @@ export const ConsciousIdentity: React.FC<ConsciousIdentityProps> = ({
           </div>
         </div>
 
-        <div className="glass-panel p-6 sm:p-10 lg:p-12 rounded-[2rem] sm:rounded-[4rem] border-white/5 shadow-2xl space-y-8 sm:space-y-10">
+        <div className="glass-panel p-6 sm:p-8 2xl:p-12 rounded-[2rem] sm:rounded-[3rem] 2xl:rounded-[4rem] border-white/5 shadow-2xl space-y-8 sm:space-y-10">
            <div className="flex justify-between items-center gap-3">
              <h3 className="text-2xl sm:text-3xl font-bold text-white flex items-center gap-3 sm:gap-4">
                <GraduationCap className="w-7 h-7 sm:w-9 sm:h-9 text-teal-400" /> Knowledge Vault
@@ -792,7 +792,7 @@ export const ConsciousIdentity: React.FC<ConsciousIdentityProps> = ({
                  </div>
                  <div className="flex-1 min-w-0">
                    <div className="flex items-center justify-between mb-3">
-                    <h5 className="text-xl font-bold text-white truncate group-hover/course:text-teal-400 transition-colors">{course.title}</h5>
+                    <h5 className="min-w-0 break-words text-xl font-bold leading-tight text-white group-hover/course:text-teal-400 transition-colors">{course.title}</h5>
                     <span className="text-[10px] px-3 py-1 bg-white/10 text-slate-400 rounded-lg uppercase font-bold tracking-widest">{course.tier}</span>
                    </div>
                    <p className="text-xs text-slate-500 uppercase tracking-widest mb-5 font-bold">{course.provider}</p>

@@ -116,7 +116,7 @@ export const MeetingList: React.FC<{
       <section className="space-y-4">
         <h2 className="text-sm font-black uppercase tracking-widest text-slate-400">Upcoming Sessions</h2>
         {upcoming.length > 0 ? (
-          <div className="grid grid-cols-1 gap-5 lg:grid-cols-2">
+          <div className="grid grid-cols-1 gap-5 xl:grid-cols-2">
             {upcoming.map((meeting) => (
               <MeetingCard key={meeting.id} meeting={meeting} onOpen={onOpenMeeting} />
             ))}
@@ -132,7 +132,7 @@ export const MeetingList: React.FC<{
 
       <section className="space-y-4">
         <h2 className="text-sm font-black uppercase tracking-widest text-slate-400">Past And Replay Sessions</h2>
-        <div className="grid grid-cols-1 gap-5 lg:grid-cols-2">
+        <div className="grid grid-cols-1 gap-5 xl:grid-cols-2">
           {past.map((meeting) => (
             <MeetingCard key={meeting.id} meeting={meeting} onOpen={onOpenMeeting} />
           ))}
@@ -158,7 +158,7 @@ export const MeetingDetail: React.FC<{
       actions={<JoinMeetingButton meeting={meeting} />}
     />
 
-    <div className="grid grid-cols-1 gap-6 lg:grid-cols-[1.4fr_0.8fr]">
+    <div className="grid grid-cols-1 gap-6 xl:grid-cols-[1.4fr_0.8fr]">
       <SurfacePanel className="space-y-6">
         <div className="aspect-video rounded-2xl border border-white/10 bg-gradient-to-br from-blue-950/60 via-slate-950 to-teal-950/50 p-6">
           <div className="flex h-full flex-col items-center justify-center text-center">
@@ -189,7 +189,7 @@ export const MeetingDetail: React.FC<{
         <div className="rounded-xl border border-white/10 bg-white/5 p-4">
           <p className="text-[10px] font-black uppercase tracking-widest text-slate-500">Provider</p>
           <p className="mt-1 text-base font-bold text-white">{meeting.providerName}</p>
-          <p className="mt-2 text-xs text-slate-400">Provider ID: {meeting.providerId}</p>
+          <p className="mt-2 break-words text-xs text-slate-400">Provider ID: {meeting.providerId}</p>
         </div>
         <div className="rounded-xl border border-white/10 bg-white/5 p-4">
           <div className="mb-3 flex items-center justify-between">

@@ -186,7 +186,7 @@ const SocialProfileViewer: React.FC<SocialProfileViewerProps> = ({
             <div className="flex items-center justify-between gap-4">
               <div className="min-w-0">
                 <p className="text-[10px] font-black uppercase tracking-widest text-blue-300">Public Identity</p>
-                <h4 className="mt-1 truncate text-xl font-black tracking-tight text-white sm:text-2xl">{title}</h4>
+                <h4 className="cnh-person-name mt-1 text-xl font-black leading-tight tracking-tight text-white sm:text-2xl">{title}</h4>
               </div>
               <button
                 onClick={onClose}
@@ -239,7 +239,7 @@ const SocialProfileViewer: React.FC<SocialProfileViewerProps> = ({
                     )}
                   </div>
                   <div className="min-w-0 flex-1">
-                    <h5 className="break-words text-2xl font-black tracking-tight text-white sm:text-3xl">
+                    <h5 className="cnh-person-name text-2xl font-black tracking-tight text-white sm:text-3xl">
                       {profileName}
                     </h5>
                     <p className="mt-1 break-all text-[11px] font-black uppercase tracking-widest text-blue-300">

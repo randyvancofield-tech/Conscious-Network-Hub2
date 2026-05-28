@@ -273,7 +273,7 @@ const ProviderAccessPage: React.FC<ProviderAccessPageProps> = ({
           <p className="hidden text-[9px] font-black uppercase tracking-[0.6em] text-blue-300/70 lg:block">
             Start Here
           </p>
-          <h2 className="text-2xl xs:text-3xl sm:text-4xl md:text-5xl lg:text-6xl font-black text-white tracking-tighter">Provider Access</h2>
+          <h2 className="text-2xl xs:text-3xl sm:text-4xl md:text-5xl 2xl:text-6xl font-black text-white tracking-tighter leading-tight">Provider Access</h2>
           <p className="text-slate-400 text-sm sm:text-base md:text-lg font-light px-2 sm:px-0">
             Sign in or choose a provider pathway to enter Conscious Network Hub Business Command Center.
           </p>
@@ -333,7 +333,7 @@ const ProviderAccessPage: React.FC<ProviderAccessPageProps> = ({
           </div>
         )}
 
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5 sm:gap-7 md:gap-8">
+        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-5 sm:gap-7 md:gap-8">
           {providerPathways.map((pathway, pathwayIndex) => {
             const pathwayClasses = providerPathColorClasses[pathway.color];
             const Icon = pathway.icon;
@@ -350,7 +350,7 @@ const ProviderAccessPage: React.FC<ProviderAccessPageProps> = ({
                 onMouseLeave={() => setHoveredProviderPath(null)}
                 onFocus={() => setHoveredProviderPath(pathway.name)}
                 onBlur={() => setHoveredProviderPath(null)}
-                className={`glass-panel group relative flex min-h-[25rem] flex-col justify-between overflow-hidden rounded-[1.75rem] border-white/5 border-t-4 p-5 shadow-2xl transition-all duration-300 sm:min-h-[27rem] sm:rounded-[2.5rem] sm:p-8 md:p-10 ${
+                className={`glass-panel group relative flex min-h-[22rem] flex-col justify-between overflow-hidden rounded-[1.75rem] border-white/5 border-t-4 p-5 shadow-2xl transition-all duration-300 sm:min-h-[24rem] sm:rounded-[2.5rem] sm:p-8 lg:min-h-[25rem] lg:p-7 xl:p-10 ${
                   pathwayClasses.cardBorder
                 } ${
                   isFocused ? `scale-[1.02] ring-2 ${pathwayClasses.glow}` : ''
@@ -371,8 +371,8 @@ const ProviderAccessPage: React.FC<ProviderAccessPageProps> = ({
                 </div>
                 <div>
                   <div className="flex justify-between items-start gap-3 mb-2">
-                    <h3 className="text-xl sm:text-2xl font-black text-white leading-tight uppercase tracking-tighter">{pathway.name}</h3>
-                    <span className={`px-3 sm:px-4 py-1 sm:py-1.5 rounded-full text-[9px] sm:text-[10px] font-black whitespace-nowrap tracking-widest ${pathwayClasses.price}`}>{pathway.label}</span>
+                    <h3 className="min-w-0 text-xl xl:text-2xl font-black text-white leading-tight uppercase tracking-tighter">{pathway.name}</h3>
+                    <span className={`cnh-status-badge shrink-0 px-3 sm:px-4 py-1 sm:py-1.5 rounded-full text-[9px] sm:text-[10px] font-black tracking-widest ${pathwayClasses.price}`}>{pathway.label}</span>
                   </div>
                   <p className="text-blue-400/60 text-[8px] sm:text-[9px] font-black uppercase tracking-[0.3em] mb-6 sm:mb-8">Provider Option</p>
 
@@ -400,7 +400,7 @@ const ProviderAccessPage: React.FC<ProviderAccessPageProps> = ({
                 <button
                   type="button"
                   onClick={handlers[pathway.onClickKey]}
-                  className={`mt-7 sm:mt-10 w-full py-4 sm:py-5 bg-white/5 text-white rounded-xl sm:rounded-2xl font-black text-[10px] sm:text-xs uppercase tracking-[0.18em] sm:tracking-[0.2em] transition-all shadow-xl border border-white/5 ${pathwayClasses.button} ${
+                  className={`mt-7 sm:mt-10 w-full py-4 sm:py-5 bg-white/5 text-white rounded-xl sm:rounded-2xl font-black text-[10px] sm:text-xs uppercase tracking-[0.18em] sm:tracking-[0.2em] leading-tight transition-all shadow-xl border border-white/5 ${pathwayClasses.button} ${
                     isFocused ? `animate-pulse bg-white/10 ring-2 ${pathwayClasses.glow}` : ''
                   }`}
                 >

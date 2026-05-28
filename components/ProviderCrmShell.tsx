@@ -681,7 +681,7 @@ const ProviderCrmShell: React.FC<ProviderCrmShellProps> = ({
           {icon}
         </div>
         <p className="text-2xl font-black text-white">{value}</p>
-        <p className="mt-1 text-[9px] font-black uppercase tracking-widest text-slate-400">{label}</p>
+        <p className="mt-1 text-[9px] font-black uppercase tracking-widest text-slate-400 leading-4">{label}</p>
       </div>
     );
   };
@@ -698,7 +698,7 @@ const ProviderCrmShell: React.FC<ProviderCrmShellProps> = ({
               Treatment + Business Growth Command Center
             </h3>
           </div>
-          <span className="rounded-full border border-white/10 bg-black/20 px-3 py-2 text-[9px] font-black uppercase tracking-widest text-slate-300">
+          <span className="cnh-status-badge rounded-full border border-white/10 bg-black/20 px-3 py-2 text-[9px] font-black uppercase tracking-widest text-slate-300">
             {localTimezone}
           </span>
         </div>
@@ -716,7 +716,7 @@ const ProviderCrmShell: React.FC<ProviderCrmShellProps> = ({
 
       <section className="rounded-2xl border border-white/10 bg-white/[0.03] p-5 sm:p-6">
         <h3 className="text-sm font-black uppercase tracking-widest text-white">Actionable Guidance</h3>
-        <div className="mt-4 grid gap-3 lg:grid-cols-3">
+        <div className="mt-4 grid gap-3 xl:grid-cols-3">
           {(workspace?.guidanceAlerts || []).map((alert) => (
             <div key={alert.id} className="rounded-xl border border-white/10 bg-black/20 p-4">
               <p className="text-[9px] font-black uppercase tracking-widest text-blue-200">{alert.severity}</p>
@@ -749,31 +749,31 @@ const ProviderCrmShell: React.FC<ProviderCrmShellProps> = ({
             </p>
           </div>
         </div>
-        <div className="mt-5 grid gap-3 md:grid-cols-6">
-          <select value={recordKindInput} onChange={(event) => setRecordKindInput(event.target.value as ProviderCrmRecordKind)} className={`md:col-span-2 ${controlClass}`}>
+        <div className="mt-5 grid gap-3 lg:grid-cols-6">
+          <select value={recordKindInput} onChange={(event) => setRecordKindInput(event.target.value as ProviderCrmRecordKind)} className={`lg:col-span-2 ${controlClass}`}>
             <option value="client">User / Client</option>
             <option value="organization">Organization</option>
             <option value="institution">Institution</option>
           </select>
-          <input value={recordTitleInput} onChange={(event) => setRecordTitleInput(event.target.value)} placeholder="Record title" className={`md:col-span-4 ${controlClass}`} />
-          <input value={recordClientInput} onChange={(event) => setRecordClientInput(event.target.value)} placeholder="User/client name or handle" className={`md:col-span-3 ${controlClass}`} />
-          <input value={recordOrganizationInput} onChange={(event) => setRecordOrganizationInput(event.target.value)} placeholder="Organization / institution" className={`md:col-span-3 ${controlClass}`} />
-          <textarea value={recordTreatmentInput} onChange={(event) => setRecordTreatmentInput(event.target.value)} placeholder="Treatment focus / service delivery notes" className={`md:col-span-3 min-h-[110px] ${controlClass}`} />
-          <textarea value={recordBusinessInput} onChange={(event) => setRecordBusinessInput(event.target.value)} placeholder="Business growth / contract opportunity notes" className={`md:col-span-3 min-h-[110px] ${controlClass}`} />
-          <select value={recordStatusInput} onChange={(event) => setRecordStatusInput(event.target.value as ProviderCrmRecordStatus)} className={`md:col-span-2 ${controlClass}`}>
+          <input value={recordTitleInput} onChange={(event) => setRecordTitleInput(event.target.value)} placeholder="Record title" className={`lg:col-span-4 ${controlClass}`} />
+          <input value={recordClientInput} onChange={(event) => setRecordClientInput(event.target.value)} placeholder="User/client name or handle" className={`lg:col-span-3 ${controlClass}`} />
+          <input value={recordOrganizationInput} onChange={(event) => setRecordOrganizationInput(event.target.value)} placeholder="Organization / institution" className={`lg:col-span-3 ${controlClass}`} />
+          <textarea value={recordTreatmentInput} onChange={(event) => setRecordTreatmentInput(event.target.value)} placeholder="Treatment focus / service delivery notes" className={`lg:col-span-3 min-h-[110px] ${controlClass}`} />
+          <textarea value={recordBusinessInput} onChange={(event) => setRecordBusinessInput(event.target.value)} placeholder="Business growth / contract opportunity notes" className={`lg:col-span-3 min-h-[110px] ${controlClass}`} />
+          <select value={recordStatusInput} onChange={(event) => setRecordStatusInput(event.target.value as ProviderCrmRecordStatus)} className={`lg:col-span-2 ${controlClass}`}>
             <option value="active">Active</option>
             <option value="watching">Watching</option>
             <option value="contracting">Contracting</option>
             <option value="completed">Completed</option>
             <option value="archived">Archived</option>
           </select>
-          <select value={recordPriorityInput} onChange={(event) => setRecordPriorityInput(event.target.value as ProviderCrmPriority)} className={`md:col-span-2 ${controlClass}`}>
+          <select value={recordPriorityInput} onChange={(event) => setRecordPriorityInput(event.target.value as ProviderCrmPriority)} className={`lg:col-span-2 ${controlClass}`}>
             <option value="low">Low</option>
             <option value="normal">Normal</option>
             <option value="high">High</option>
             <option value="urgent">Urgent</option>
           </select>
-          <button type="button" onClick={() => void handleCreateRecord()} disabled={isLoading} className={`md:col-span-2 ${actionClass}`}>
+          <button type="button" onClick={() => void handleCreateRecord()} disabled={isLoading} className={`lg:col-span-2 ${actionClass}`}>
             <Save className="h-3.5 w-3.5" />
             Save Record
           </button>
@@ -830,14 +830,14 @@ const ProviderCrmShell: React.FC<ProviderCrmShellProps> = ({
         <h3 className="text-sm font-black uppercase tracking-widest text-white">
           {noteEditId ? 'Edit Private Note' : 'Create Private Note'}
         </h3>
-        <div className="mt-5 grid gap-3 md:grid-cols-6">
-          <input value={noteForm.title} onChange={(event) => setNoteForm({ ...noteForm, title: event.target.value })} placeholder="Note title" className={`md:col-span-3 ${controlClass}`} />
-          <input value={noteForm.category} onChange={(event) => setNoteForm({ ...noteForm, category: event.target.value })} placeholder="Category" className={`md:col-span-2 ${controlClass}`} />
-          <select value={noteForm.status} onChange={(event) => setNoteForm({ ...noteForm, status: event.target.value as ProviderCrmNote['status'] })} className={`md:col-span-1 ${controlClass}`}>
+        <div className="mt-5 grid gap-3 lg:grid-cols-6">
+          <input value={noteForm.title} onChange={(event) => setNoteForm({ ...noteForm, title: event.target.value })} placeholder="Note title" className={`lg:col-span-3 ${controlClass}`} />
+          <input value={noteForm.category} onChange={(event) => setNoteForm({ ...noteForm, category: event.target.value })} placeholder="Category" className={`lg:col-span-2 ${controlClass}`} />
+          <select value={noteForm.status} onChange={(event) => setNoteForm({ ...noteForm, status: event.target.value as ProviderCrmNote['status'] })} className={`lg:col-span-1 ${controlClass}`}>
             <option value="active">Active</option>
             <option value="archived">Archived</option>
           </select>
-          <textarea value={noteForm.body} onChange={(event) => setNoteForm({ ...noteForm, body: event.target.value })} placeholder="Private note body" className={`md:col-span-6 min-h-[140px] ${controlClass}`} />
+          <textarea value={noteForm.body} onChange={(event) => setNoteForm({ ...noteForm, body: event.target.value })} placeholder="Private note body" className={`lg:col-span-6 min-h-[140px] ${controlClass}`} />
         </div>
         <div className="mt-4 flex flex-wrap gap-3">
           <button type="button" onClick={() => void handleSaveNote()} disabled={isLoading} className={actionClass}>
@@ -893,24 +893,24 @@ const ProviderCrmShell: React.FC<ProviderCrmShellProps> = ({
         <h3 className="text-sm font-black uppercase tracking-widest text-white">
           {contentEditId ? 'Edit Course / Content Item' : 'Create Draft Course / Content Item'}
         </h3>
-        <div className="mt-5 grid gap-3 md:grid-cols-6">
-          <input value={contentForm.title} onChange={(event) => setContentForm({ ...contentForm, title: event.target.value })} placeholder="Title" className={`md:col-span-3 ${controlClass}`} />
-          <select value={contentForm.tier} onChange={(event) => setContentForm({ ...contentForm, tier: event.target.value })} className={`md:col-span-1 ${controlClass}`}>
+        <div className="mt-5 grid gap-3 lg:grid-cols-6">
+          <input value={contentForm.title} onChange={(event) => setContentForm({ ...contentForm, title: event.target.value })} placeholder="Title" className={`lg:col-span-3 ${controlClass}`} />
+          <select value={contentForm.tier} onChange={(event) => setContentForm({ ...contentForm, tier: event.target.value })} className={`lg:col-span-1 ${controlClass}`}>
             <option value="Basic">Basic</option>
             <option value="Professional">Professional</option>
             <option value="Elite">Elite</option>
           </select>
-          <select value={contentForm.status} onChange={(event) => setContentForm({ ...contentForm, status: event.target.value as ProviderCrmContentStatus })} className={`md:col-span-2 ${controlClass}`}>
+          <select value={contentForm.status} onChange={(event) => setContentForm({ ...contentForm, status: event.target.value as ProviderCrmContentStatus })} className={`lg:col-span-2 ${controlClass}`}>
             <option value="draft">Draft</option>
             <option value="published">Published</option>
             <option value="archived">Archived</option>
           </select>
-          <input value={contentForm.category} onChange={(event) => setContentForm({ ...contentForm, category: event.target.value })} placeholder="Category / topic" className={`md:col-span-3 ${controlClass}`} />
-          <input value={contentForm.estimatedDuration} onChange={(event) => setContentForm({ ...contentForm, estimatedDuration: event.target.value })} placeholder="Estimated duration" className={`md:col-span-3 ${controlClass}`} />
-          <textarea value={contentForm.description} onChange={(event) => setContentForm({ ...contentForm, description: event.target.value })} placeholder="Short catalog description" className={`md:col-span-6 min-h-[100px] ${controlClass}`} />
-          <textarea value={contentForm.fullDescription} onChange={(event) => setContentForm({ ...contentForm, fullDescription: event.target.value })} placeholder="Full course description / body" className={`md:col-span-6 min-h-[150px] ${controlClass}`} />
-          <textarea value={contentForm.learningObjectivesText} onChange={(event) => setContentForm({ ...contentForm, learningObjectivesText: event.target.value })} placeholder="Learning objectives, one per line" className={`md:col-span-3 min-h-[130px] ${controlClass}`} />
-          <textarea value={contentForm.contentSectionsText} onChange={(event) => setContentForm({ ...contentForm, contentSectionsText: event.target.value })} placeholder="Content sections, one per line. Use Title: body" className={`md:col-span-3 min-h-[130px] ${controlClass}`} />
+          <input value={contentForm.category} onChange={(event) => setContentForm({ ...contentForm, category: event.target.value })} placeholder="Category / topic" className={`lg:col-span-3 ${controlClass}`} />
+          <input value={contentForm.estimatedDuration} onChange={(event) => setContentForm({ ...contentForm, estimatedDuration: event.target.value })} placeholder="Estimated duration" className={`lg:col-span-3 ${controlClass}`} />
+          <textarea value={contentForm.description} onChange={(event) => setContentForm({ ...contentForm, description: event.target.value })} placeholder="Short catalog description" className={`lg:col-span-6 min-h-[100px] ${controlClass}`} />
+          <textarea value={contentForm.fullDescription} onChange={(event) => setContentForm({ ...contentForm, fullDescription: event.target.value })} placeholder="Full course description / body" className={`lg:col-span-6 min-h-[150px] ${controlClass}`} />
+          <textarea value={contentForm.learningObjectivesText} onChange={(event) => setContentForm({ ...contentForm, learningObjectivesText: event.target.value })} placeholder="Learning objectives, one per line" className={`lg:col-span-3 min-h-[130px] ${controlClass}`} />
+          <textarea value={contentForm.contentSectionsText} onChange={(event) => setContentForm({ ...contentForm, contentSectionsText: event.target.value })} placeholder="Content sections, one per line. Use Title: body" className={`lg:col-span-3 min-h-[130px] ${controlClass}`} />
         </div>
         <div className="mt-4 flex flex-wrap gap-3">
           <button type="button" onClick={() => void handleSaveContent()} disabled={isLoading} className={actionClass}>
@@ -988,15 +988,15 @@ const ProviderCrmShell: React.FC<ProviderCrmShellProps> = ({
         <h3 className="text-sm font-black uppercase tracking-widest text-white">
           {collaborationEditId ? 'Edit Collaboration Record' : 'Create Collaboration Record'}
         </h3>
-        <div className="mt-5 grid gap-3 md:grid-cols-6">
-          <input value={collaborationForm.title} onChange={(event) => setCollaborationForm({ ...collaborationForm, title: event.target.value })} placeholder="Topic / title" className={`md:col-span-4 ${controlClass}`} />
-          <select value={collaborationForm.status} onChange={(event) => setCollaborationForm({ ...collaborationForm, status: event.target.value as ProviderCrmCollaboration['status'] })} className={`md:col-span-2 ${controlClass}`}>
+        <div className="mt-5 grid gap-3 lg:grid-cols-6">
+          <input value={collaborationForm.title} onChange={(event) => setCollaborationForm({ ...collaborationForm, title: event.target.value })} placeholder="Topic / title" className={`lg:col-span-4 ${controlClass}`} />
+          <select value={collaborationForm.status} onChange={(event) => setCollaborationForm({ ...collaborationForm, status: event.target.value as ProviderCrmCollaboration['status'] })} className={`lg:col-span-2 ${controlClass}`}>
             <option value="open">Open</option>
             <option value="in_progress">In Progress</option>
             <option value="completed">Completed</option>
             <option value="archived">Archived</option>
           </select>
-          <textarea value={collaborationForm.description} onChange={(event) => setCollaborationForm({ ...collaborationForm, description: event.target.value })} placeholder="Coordination message or handoff description" className={`md:col-span-6 min-h-[130px] ${controlClass}`} />
+          <textarea value={collaborationForm.description} onChange={(event) => setCollaborationForm({ ...collaborationForm, description: event.target.value })} placeholder="Coordination message or handoff description" className={`lg:col-span-6 min-h-[130px] ${controlClass}`} />
         </div>
         <div className="mt-4 flex flex-wrap gap-3">
           <button type="button" onClick={() => void handleSaveCollaboration()} disabled={isLoading} className={actionClass}>
@@ -1052,22 +1052,22 @@ const ProviderCrmShell: React.FC<ProviderCrmShellProps> = ({
         <h3 className="text-sm font-black uppercase tracking-widest text-white">
           {followUpEditId ? 'Edit Follow-Up' : 'Create Follow-Up'}
         </h3>
-        <div className="mt-5 grid gap-3 md:grid-cols-6">
-          <input value={followUpForm.title} onChange={(event) => setFollowUpForm({ ...followUpForm, title: event.target.value })} placeholder="Follow-up title" className={`md:col-span-3 ${controlClass}`} />
-          <input type="datetime-local" value={followUpForm.dueAt} onChange={(event) => setFollowUpForm({ ...followUpForm, dueAt: event.target.value })} className={`md:col-span-1 ${controlClass}`} />
-          <select value={followUpForm.status} onChange={(event) => setFollowUpForm({ ...followUpForm, status: event.target.value as ProviderCrmFollowUpStatus })} className={`md:col-span-1 ${controlClass}`}>
+        <div className="mt-5 grid gap-3 lg:grid-cols-6">
+          <input value={followUpForm.title} onChange={(event) => setFollowUpForm({ ...followUpForm, title: event.target.value })} placeholder="Follow-up title" className={`lg:col-span-3 ${controlClass}`} />
+          <input type="datetime-local" value={followUpForm.dueAt} onChange={(event) => setFollowUpForm({ ...followUpForm, dueAt: event.target.value })} className={`lg:col-span-1 ${controlClass}`} />
+          <select value={followUpForm.status} onChange={(event) => setFollowUpForm({ ...followUpForm, status: event.target.value as ProviderCrmFollowUpStatus })} className={`lg:col-span-1 ${controlClass}`}>
             <option value="open">Open</option>
             <option value="in_progress">In Progress</option>
             <option value="completed">Completed</option>
             <option value="canceled">Canceled</option>
           </select>
-          <select value={followUpForm.priority} onChange={(event) => setFollowUpForm({ ...followUpForm, priority: event.target.value as ProviderCrmPriority })} className={`md:col-span-1 ${controlClass}`}>
+          <select value={followUpForm.priority} onChange={(event) => setFollowUpForm({ ...followUpForm, priority: event.target.value as ProviderCrmPriority })} className={`lg:col-span-1 ${controlClass}`}>
             <option value="low">Low</option>
             <option value="normal">Normal</option>
             <option value="high">High</option>
             <option value="urgent">Urgent</option>
           </select>
-          <textarea value={followUpForm.details} onChange={(event) => setFollowUpForm({ ...followUpForm, details: event.target.value })} placeholder="Follow-up details" className={`md:col-span-6 min-h-[120px] ${controlClass}`} />
+          <textarea value={followUpForm.details} onChange={(event) => setFollowUpForm({ ...followUpForm, details: event.target.value })} placeholder="Follow-up details" className={`lg:col-span-6 min-h-[120px] ${controlClass}`} />
         </div>
         <div className="mt-4 flex flex-wrap gap-3">
           <button type="button" onClick={() => void handleSaveFollowUp()} disabled={isLoading} className={actionClass}>
@@ -1129,7 +1129,7 @@ const ProviderCrmShell: React.FC<ProviderCrmShellProps> = ({
                 These metrics are aggregate counts from CRM, course, meeting, membership, applicant, and AI tables where the current role can access them.
               </p>
             </div>
-            <span className="rounded-full border border-white/10 bg-black/20 px-3 py-2 text-[9px] font-black uppercase tracking-widest text-slate-300">
+            <span className="cnh-status-badge rounded-full border border-white/10 bg-black/20 px-3 py-2 text-[9px] font-black uppercase tracking-widest text-slate-300">
               {analytics?.scope.visibility || 'scoped'}
             </span>
           </div>
@@ -1198,17 +1198,17 @@ const ProviderCrmShell: React.FC<ProviderCrmShellProps> = ({
               {localTimezone}
             </span>
           </div>
-          <div className="mt-5 grid gap-3 md:grid-cols-6">
-            <input value={roundtableTitleInput} onChange={(event) => setRoundtableTitleInput(event.target.value)} placeholder="Roundtable title" className={`md:col-span-2 ${controlClass}`} />
-            <input type="date" value={roundtableDateInput} onChange={(event) => setRoundtableDateInput(event.target.value)} className={`md:col-span-1 ${controlClass}`} />
-            <select value={roundtableHourInput} onChange={(event) => setRoundtableHourInput(Number(event.target.value))} className={`md:col-span-1 ${controlClass}`}>
+          <div className="mt-5 grid gap-3 lg:grid-cols-6">
+            <input value={roundtableTitleInput} onChange={(event) => setRoundtableTitleInput(event.target.value)} placeholder="Roundtable title" className={`lg:col-span-2 ${controlClass}`} />
+            <input type="date" value={roundtableDateInput} onChange={(event) => setRoundtableDateInput(event.target.value)} className={`lg:col-span-1 ${controlClass}`} />
+            <select value={roundtableHourInput} onChange={(event) => setRoundtableHourInput(Number(event.target.value))} className={`lg:col-span-1 ${controlClass}`}>
               {hours.map((hour) => (
                 <option key={hour} value={hour}>
                   {`${hour}`.padStart(2, '0')}:00
                 </option>
               ))}
             </select>
-            <select value={roundtableRoomInput} onChange={(event) => setRoundtableRoomInput(Number(event.target.value))} className={`md:col-span-1 ${controlClass}`}>
+            <select value={roundtableRoomInput} onChange={(event) => setRoundtableRoomInput(Number(event.target.value))} className={`lg:col-span-1 ${controlClass}`}>
               {rooms.map((room) => (
                 <option key={room} value={room} disabled={reservedRoomsForSelectedHour.has(room)}>
                   Room {room}{reservedRoomsForSelectedHour.has(room) ? ' reserved' : ''}
@@ -1221,7 +1221,7 @@ const ProviderCrmShell: React.FC<ProviderCrmShellProps> = ({
           </div>
         </section>
 
-        <section className="grid gap-4 lg:grid-cols-[1.2fr_0.8fr]">
+        <section className="grid gap-4 xl:grid-cols-[1.2fr_0.8fr]">
           <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-5 sm:p-6">
             <h3 className="text-sm font-black uppercase tracking-widest text-white">12-Room Hour Grid</h3>
             <div className="mt-4 grid grid-cols-3 gap-2 sm:grid-cols-4 lg:grid-cols-6">
@@ -1324,7 +1324,7 @@ const ProviderCrmShell: React.FC<ProviderCrmShellProps> = ({
           </p>
         </div>
       </div>
-      <div className="mt-5 grid gap-4 lg:grid-cols-3">
+      <div className="mt-5 grid gap-4 xl:grid-cols-3">
         {(workspace?.resources || []).map((resource) => (
           <div key={resource.id} className="rounded-xl border border-white/10 bg-black/20 p-4">
             <p className="text-[9px] font-black uppercase tracking-widest text-blue-200">{resource.category}</p>
@@ -1425,15 +1425,15 @@ const ProviderCrmShell: React.FC<ProviderCrmShellProps> = ({
               : 'Approved-provider workspace for relationships, notes, content, collaboration, follow-ups, sessions, resources, and impact metrics.'}
           </p>
         </div>
-        <div className="rounded-2xl border border-white/10 bg-white/[0.03] px-4 py-3">
+        <div className="max-w-full rounded-2xl border border-white/10 bg-white/[0.03] px-4 py-3">
           <p className="text-[10px] font-black uppercase tracking-widest text-slate-500">
             {isLoading ? 'Syncing' : summaryText || status}
           </p>
         </div>
       </div>
 
-      <div className="grid gap-6 lg:grid-cols-[280px_1fr]">
-        <aside className="space-y-3">
+      <div className="grid gap-6 xl:grid-cols-[260px_1fr] 2xl:grid-cols-[280px_1fr]">
+        <aside className="grid gap-3 sm:grid-cols-2 xl:block xl:space-y-3">
           {tools.map((tool) => {
             const active = activeTool?.id === tool.id;
             return (
@@ -1450,7 +1450,7 @@ const ProviderCrmShell: React.FC<ProviderCrmShellProps> = ({
                 <span className={active ? 'text-blue-200' : 'text-slate-500'}>
                   {TOOL_ICONS[tool.id] || <PanelLeft className="h-4 w-4" />}
                 </span>
-                <span className="min-w-0 flex-1 text-[10px] font-black uppercase tracking-widest">
+                <span className="min-w-0 flex-1 text-[10px] font-black uppercase tracking-widest leading-4">
                   {tool.label}
                 </span>
               </button>
@@ -1476,7 +1476,7 @@ const ProviderCrmShell: React.FC<ProviderCrmShellProps> = ({
                     Tool visibility controls for the sole Provider CRM administrator.
                   </p>
                 </div>
-                <span className="rounded-full border border-teal-300/20 bg-teal-400/10 px-3 py-2 text-[9px] font-black uppercase tracking-widest text-teal-100">
+                <span className="cnh-status-badge max-w-full rounded-full border border-teal-300/20 bg-teal-400/10 px-3 py-2 text-[9px] font-black uppercase tracking-widest text-teal-100">
                   {soleAdminEmail || 'Administrative Access'}
                 </span>
               </div>

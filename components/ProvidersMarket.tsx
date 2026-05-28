@@ -193,7 +193,7 @@ const ProvidersMarket: React.FC<ProvidersMarketProps> = ({
   if (providerId && isLoading) {
     return (
       <PageShell>
-        <div className="glass-panel p-10 rounded-[2rem] border-white/10 text-center text-slate-300">
+        <div className="glass-panel p-6 sm:p-8 rounded-[2rem] border-white/10 text-center text-slate-300">
           Loading verified provider...
         </div>
       </PageShell>
@@ -257,7 +257,7 @@ const ProvidersMarket: React.FC<ProvidersMarketProps> = ({
           }
         />
 
-        <div className="grid grid-cols-1 gap-6 lg:grid-cols-[1.1fr_0.9fr]">
+        <div className="grid grid-cols-1 gap-6 xl:grid-cols-[1.1fr_0.9fr]">
           <SurfacePanel className="overflow-hidden p-0">
             {renderProviderMedia(routeProvider.heroMedia, routeProvider.name, 'h-72 w-full object-cover', true)}
             <div className="space-y-5 p-6 sm:p-8">
@@ -351,7 +351,7 @@ const ProvidersMarket: React.FC<ProvidersMarketProps> = ({
       <header className="space-y-6">
         <div className="flex flex-col md:flex-row md:items-end justify-between gap-6">
           <div className="space-y-2">
-            <h2 className="text-4xl font-black text-white uppercase tracking-tighter leading-none">Providers Market</h2>
+                  <h2 className="text-3xl sm:text-4xl font-black text-white uppercase tracking-tighter leading-tight">Providers Market</h2>
             <p className="text-blue-400/60 text-[10px] font-black uppercase tracking-[0.4em]">Sovereign Talent Exchange</p>
           </div>
           <div className="relative group max-w-md w-full">
@@ -371,7 +371,7 @@ const ProvidersMarket: React.FC<ProvidersMarketProps> = ({
             <button
               key={cat}
               onClick={() => setFilter(cat)}
-              className={`px-6 py-2.5 rounded-xl text-[9px] font-black uppercase tracking-widest transition-all border whitespace-nowrap ${
+              className={`cnh-status-badge px-4 py-2.5 sm:px-6 rounded-xl text-[9px] font-black uppercase tracking-widest transition-all border ${
                 filter === cat
                 ? 'bg-blue-600 border-blue-500 text-white shadow-[0_0_20px_rgba(37,99,235,0.3)]'
                 : 'bg-white/5 border-white/10 text-slate-500 hover:text-white hover:bg-white/10'
@@ -384,7 +384,7 @@ const ProvidersMarket: React.FC<ProvidersMarketProps> = ({
       </header>
 
       {isLoading && (
-        <div className="glass-panel p-10 rounded-[2rem] border-white/10 text-center text-slate-300">
+        <div className="glass-panel p-6 sm:p-8 rounded-[2rem] border-white/10 text-center text-slate-300">
           Loading verified providers...
         </div>
       )}
@@ -399,16 +399,16 @@ const ProvidersMarket: React.FC<ProvidersMarketProps> = ({
       )}
 
       {!isLoading && filteredProviders.length === 0 && (
-        <div className="glass-panel p-10 rounded-[2rem] border-white/10 text-center">
+        <div className="glass-panel p-6 sm:p-8 rounded-[2rem] border-white/10 text-center">
           <h3 className="text-lg font-black text-white uppercase tracking-tight">No verified providers available</h3>
           <p className="text-sm text-slate-400 mt-2">CNH-approved provider accounts will appear here once their user role is set to provider.</p>
         </div>
       )}
 
       {!isLoading && filteredProviders.length > 0 && (
-        <section className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-8">
+        <section className="grid grid-cols-1 xl:grid-cols-2 2xl:grid-cols-3 gap-6 2xl:gap-8">
           {filteredProviders.map((provider) => (
-            <div key={provider.id} className="glass-panel group rounded-[2.5rem] overflow-hidden flex flex-col border-white/5 hover:border-blue-500/30 transition-all duration-500 hover:-translate-y-2 shadow-2xl">
+            <div key={provider.id} className="glass-panel group rounded-[2rem] 2xl:rounded-[2.5rem] overflow-hidden flex flex-col border-white/5 hover:border-blue-500/30 transition-all duration-500 hover:-translate-y-1 shadow-2xl">
               <div className="h-48 relative overflow-hidden">
                 {renderProviderMedia(
                   provider.imageMedia,
@@ -429,16 +429,16 @@ const ProvidersMarket: React.FC<ProvidersMarketProps> = ({
                 </div>
               </div>
 
-              <div className="p-8 space-y-6 flex-1 flex flex-col">
+              <div className="p-6 sm:p-8 space-y-6 flex-1 flex flex-col">
                 <div className="space-y-1">
                   <p className="text-blue-400 text-[9px] font-black uppercase tracking-[0.3em]">{provider.category}</p>
-                  <h3 className="text-2xl font-black text-white tracking-tighter uppercase">{provider.name}</h3>
+                  <h3 className="cnh-person-name text-2xl font-black text-white tracking-tighter uppercase leading-tight">{provider.name}</h3>
                 </div>
 
                 <div className="space-y-2">
-                  <div className="flex items-center gap-2 text-slate-500">
-                    <Brain className="w-4 h-4 text-blue-500" />
-                    <span className="text-[10px] font-bold uppercase tracking-widest">{provider.specialty}</span>
+                  <div className="flex items-start gap-2 text-slate-500">
+                    <Brain className="w-4 h-4 shrink-0 text-blue-500" />
+                    <span className="cnh-action-label text-[10px] font-bold uppercase tracking-widest">{provider.specialty}</span>
                   </div>
                   <p className="text-sm text-slate-400 leading-relaxed font-light line-clamp-3">
                     {provider.bio}
@@ -446,21 +446,21 @@ const ProvidersMarket: React.FC<ProvidersMarketProps> = ({
                 </div>
 
                 <div className="pt-4 border-t border-white/5 mt-auto space-y-6">
-                  <div className="flex justify-between items-center">
-                    <div className="space-y-1">
+                  <div className="flex flex-col gap-4 xs:flex-row xs:items-start xs:justify-between">
+                    <div className="min-w-0 space-y-1">
                       <p className="text-[8px] text-slate-500 font-black uppercase tracking-widest">Status</p>
-                      <p className="text-xs font-mono font-bold text-white">{provider.experience}</p>
+                      <p className="break-words text-xs font-mono font-bold text-white">{provider.experience}</p>
                     </div>
-                    <div className="space-y-1 text-right">
+                    <div className="min-w-0 space-y-1 xs:text-right">
                       <p className="text-[8px] text-slate-500 font-black uppercase tracking-widest">Verification</p>
-                      <div className="flex items-center gap-1 justify-end">
-                        <ShieldCheck className="w-3 h-3 text-teal-400" />
-                        <span className="text-[8px] font-black text-teal-400 uppercase">CNH Validated</span>
+                      <div className="flex items-center gap-1 xs:justify-end">
+                        <ShieldCheck className="w-3 h-3 shrink-0 text-teal-400" />
+                        <span className="cnh-status-badge text-[8px] font-black text-teal-400 uppercase">CNH Validated</span>
                       </div>
                     </div>
                   </div>
 
-                  <div className="grid grid-cols-2 gap-3">
+                  <div className="grid grid-cols-1 gap-3 xs:grid-cols-2">
                     <button
                       onClick={() => {
                         setConnectionTarget(provider);
@@ -469,7 +469,7 @@ const ProvidersMarket: React.FC<ProvidersMarketProps> = ({
                       }}
                       className="flex items-center justify-center gap-2 py-3 bg-blue-600 hover:bg-blue-500 text-white rounded-xl font-black text-[9px] uppercase tracking-widest transition-all shadow-lg active:scale-95"
                     >
-                      <UserPlus className="w-3.5 h-3.5" /> Anchor Link
+                      <UserPlus className="w-3.5 h-3.5 shrink-0" /> <span className="cnh-action-label">Anchor Link</span>
                     </button>
                     <button
                       onClick={() => {
@@ -481,7 +481,7 @@ const ProvidersMarket: React.FC<ProvidersMarketProps> = ({
                       }}
                       className="flex items-center justify-center gap-2 py-3 bg-white/5 hover:bg-white/10 border border-white/10 text-slate-300 rounded-xl font-black text-[9px] uppercase tracking-widest transition-all active:scale-95"
                     >
-                      <Info className="w-3.5 h-3.5" /> Deep Profile
+                      <Info className="w-3.5 h-3.5 shrink-0" /> <span className="cnh-action-label">Deep Profile</span>
                     </button>
                   </div>
                 </div>
@@ -507,9 +507,9 @@ const ProvidersMarket: React.FC<ProvidersMarketProps> = ({
             }
             window.location.assign('/provider-access');
           }}
-          className="px-6 py-4 bg-gradient-to-r from-blue-600 to-teal-600 text-white rounded-2xl font-black text-xs uppercase tracking-widest shadow-xl hover:shadow-blue-500/20 transition-all flex items-center gap-2 group whitespace-nowrap"
+          className="w-full justify-center px-6 py-4 bg-gradient-to-r from-blue-600 to-teal-600 text-white rounded-2xl font-black text-xs uppercase tracking-widest shadow-xl hover:shadow-blue-500/20 transition-all flex items-center gap-2 group sm:w-auto"
         >
-          Apply To Become A Provider <ChevronRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" />
+          <span className="cnh-action-label">Apply To Become A Provider</span> <ChevronRight className="w-4 h-4 shrink-0 group-hover:translate-x-1 transition-transform" />
         </button>
       </footer>
 
@@ -527,7 +527,7 @@ const ProvidersMarket: React.FC<ProvidersMarketProps> = ({
               </button>
               <div className="absolute bottom-4 left-4 right-4">
                 <p className="text-[10px] uppercase tracking-widest text-blue-300 font-black">{selectedProvider.category}</p>
-                <h4 className="text-3xl font-black text-white tracking-tight mt-1">{selectedProvider.name}</h4>
+                <h4 className="cnh-person-name text-2xl sm:text-3xl font-black text-white tracking-tight mt-1 leading-tight">{selectedProvider.name}</h4>
               </div>
             </div>
             <div className="p-6 sm:p-8 space-y-6">

@@ -328,14 +328,14 @@ const IdentitySecurityPanel: React.FC<IdentitySecurityPanelProps> = ({ isOpen, o
         isOpen ? 'translate-x-0' : 'translate-x-full'
       }`}
     >
-      <div className="h-full flex flex-col p-8 overflow-y-auto custom-scrollbar scrollable">
-        <div className="flex justify-between items-center mb-10">
-          <div className="flex items-center gap-3">
-            <div className="p-3 bg-blue-600 rounded-2xl shadow-lg shadow-blue-900/40">
+      <div className="h-full flex flex-col p-5 sm:p-8 overflow-y-auto custom-scrollbar scrollable">
+        <div className="flex justify-between items-start gap-4 mb-8 sm:mb-10">
+          <div className="flex min-w-0 items-center gap-3">
+            <div className="shrink-0 p-3 bg-blue-600 rounded-2xl shadow-lg shadow-blue-900/40">
               <ShieldCheck className="w-6 h-6 text-white" />
             </div>
-            <div>
-              <h2 className="text-2xl font-bold text-white leading-none">Identity Security Panel</h2>
+            <div className="min-w-0">
+              <h2 className="text-xl sm:text-2xl font-bold text-white leading-tight">Identity Security Panel</h2>
               <p className="text-[10px] text-teal-400 mt-1 uppercase tracking-widest font-bold">
                 Session Integrity
               </p>
@@ -389,17 +389,17 @@ const IdentitySecurityPanel: React.FC<IdentitySecurityPanelProps> = ({ isOpen, o
               <ShieldCheck className="w-24 h-24 text-blue-400" />
             </div>
 
-            <div className="flex items-center justify-between">
+            <div className="flex flex-col gap-2 xs:flex-row xs:items-center xs:justify-between">
               <label className="text-[10px] font-bold text-blue-400 uppercase tracking-widest mb-2 block">
                 Identity Status
               </label>
-              <span className={`text-[10px] font-bold uppercase tracking-widest ${statusColor}`}>
+              <span className={`cnh-status-badge text-[10px] font-bold uppercase tracking-widest ${statusColor}`}>
                 {statusLabel}
               </span>
             </div>
 
             <div className="flex items-center justify-between bg-black/40 p-3 rounded-xl border border-white/5">
-              <span className="font-mono text-xs text-slate-300 truncate mr-2">{identityDid}</span>
+              <span className="min-w-0 font-mono text-xs text-slate-300 truncate mr-2">{identityDid}</span>
               <button
                 className="text-slate-500 hover:text-blue-400 transition-colors"
                 onClick={() => copyText(identityDid)}
@@ -408,7 +408,7 @@ const IdentitySecurityPanel: React.FC<IdentitySecurityPanelProps> = ({ isOpen, o
               </button>
             </div>
 
-            <div className="mt-3 flex items-center justify-between bg-black/20 p-3 rounded-xl border border-white/5">
+            <div className="mt-3 flex items-start justify-between gap-3 bg-black/20 p-3 rounded-xl border border-white/5">
               <div className="min-w-0">
                 <div className="text-[10px] text-slate-500 uppercase tracking-widest font-bold">
                   Address Binding
@@ -416,12 +416,12 @@ const IdentitySecurityPanel: React.FC<IdentitySecurityPanelProps> = ({ isOpen, o
                 <div className="font-mono text-xs text-slate-300 truncate">
                   {connectedAddress || 'Not connected'}
                 </div>
-                <div className="text-[10px] text-slate-500 mt-1">
+                <div className="text-[10px] text-slate-500 mt-1 leading-5">
                   Chain ID:{' '}
                   <span className="text-slate-300 font-mono">{chainId || '-'}</span>
                   {verifiedAt ? (
-                    <span className="ml-2">
-                      - Verified: <span className="text-slate-300">{verifiedAt}</span>
+                    <span className="block sm:inline sm:ml-2">
+                      Verified: <span className="text-slate-300">{verifiedAt}</span>
                     </span>
                   ) : null}
                 </div>
@@ -435,8 +435,8 @@ const IdentitySecurityPanel: React.FC<IdentitySecurityPanelProps> = ({ isOpen, o
               </button>
             </div>
 
-            <div className="mt-4 flex items-center gap-2">
-              <Lock className="w-3 h-3 text-teal-400" />
+            <div className="mt-4 flex items-start gap-2">
+              <Lock className="mt-0.5 w-3 h-3 shrink-0 text-teal-400" />
               <span className="text-[10px] font-bold text-teal-400 uppercase tracking-widest">
                 Secure Session Cookie Enabled
               </span>
@@ -452,7 +452,7 @@ const IdentitySecurityPanel: React.FC<IdentitySecurityPanelProps> = ({ isOpen, o
               </div>
             </div>
 
-            <div className="mt-4 grid grid-cols-3 gap-2">
+            <div className="mt-4 grid grid-cols-1 gap-2 xs:grid-cols-3">
               <button
                 onClick={() => void connectIdentityAddress()}
                 disabled={busyAction !== null || !walletEnvironment.hasProvider}

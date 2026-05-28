@@ -73,7 +73,7 @@ const FileLink: React.FC<{ label: string; file?: ApplicantFileRef }> = ({ label,
     >
       <span className="flex min-w-0 items-center gap-3">
         <FileText className="h-5 w-5 shrink-0 text-amber-100" />
-        <span className="truncate">{name}</span>
+        <span className="min-w-0 break-words">{name}</span>
       </span>
       <ChevronRight className="h-4 w-4 shrink-0 text-slate-500" />
     </button>
@@ -181,7 +181,7 @@ const ProviderApplicationStatusPage: React.FC<ProviderApplicationStatusPageProps
         )}
 
         {applicant && (
-          <div className="grid gap-6 lg:grid-cols-[0.8fr_1.2fr]">
+          <div className="grid gap-6 xl:grid-cols-[0.8fr_1.2fr]">
             <section className="space-y-5">
               <div className="rounded-3xl border border-white/10 bg-white/[0.04] p-6">
                 <p className="text-[10px] font-black uppercase tracking-[0.3em] text-slate-500">
@@ -201,7 +201,7 @@ const ProviderApplicationStatusPage: React.FC<ProviderApplicationStatusPageProps
                   className="flex items-center justify-center gap-2 rounded-2xl bg-amber-400 px-5 py-4 text-xs font-black uppercase tracking-widest text-slate-950 transition hover:bg-amber-300"
                 >
                   <CalendarCheck className="h-4 w-4" />
-                  Schedule Discovery Interview
+                  <span className="cnh-action-label">Schedule Discovery Interview</span>
                 </a>
               )}
 
@@ -226,11 +226,11 @@ const ProviderApplicationStatusPage: React.FC<ProviderApplicationStatusPageProps
                 <div className="mt-5 grid gap-4 text-sm md:grid-cols-2">
                   <div>
                     <p className="text-xs uppercase text-slate-500">Name</p>
-                    <p className="mt-1 text-slate-200">{applicant.firstName} {applicant.lastName}</p>
+                    <p className="cnh-person-name mt-1 text-slate-200">{applicant.firstName} {applicant.lastName}</p>
                   </div>
                   <div>
                     <p className="text-xs uppercase text-slate-500">Email</p>
-                    <p className="mt-1 text-slate-200">{applicant.email}</p>
+                    <p className="mt-1 break-words text-slate-200">{applicant.email}</p>
                   </div>
                   <div>
                     <p className="text-xs uppercase text-slate-500">Submitted</p>
@@ -258,7 +258,7 @@ const ProviderApplicationStatusPage: React.FC<ProviderApplicationStatusPageProps
                 <p className="mt-3 text-sm leading-6 text-slate-300">{applicant.targetAudience || 'Target audience not provided.'}</p>
                 <div className="mt-4 flex flex-wrap gap-2">
                   {toList(applicant.servicesOffered).map((service) => (
-                    <span key={service} className="rounded-full border border-amber-200/15 bg-amber-400/10 px-3 py-1 text-xs text-amber-100">
+                    <span key={service} className="cnh-status-badge rounded-full border border-amber-200/15 bg-amber-400/10 px-3 py-1 text-xs text-amber-100">
                       {service}
                     </span>
                   ))}

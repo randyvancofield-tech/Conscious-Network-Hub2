@@ -356,27 +356,27 @@ const EthicalAIInsight: React.FC<EthicalAIInsightProps> = ({ userEmail, userId =
     return (
       <button
         onClick={() => setIsCollapsed(false)}
-        className="fixed bottom-6 right-6 z-40 w-14 h-14 bg-gradient-to-br from-blue-600 to-teal-600 rounded-2xl shadow-2xl flex items-center justify-center hover:scale-110 transition-transform animate-bounce"
+        className="fixed bottom-4 right-4 z-40 flex h-12 w-12 items-center justify-center rounded-2xl bg-gradient-to-br from-blue-600 to-teal-600 shadow-2xl transition-transform hover:scale-105 sm:bottom-6 sm:right-6 sm:h-14 sm:w-14"
       >
-        <Sparkles className="w-7 h-7 text-white" />
+        <Sparkles className="h-6 w-6 text-white sm:h-7 sm:w-7" />
       </button>
     );
   }
 
   return (
-    <div className="glass-panel p-5 sm:p-6 md:p-8 rounded-[1.75rem] sm:rounded-[2rem] border-blue-500/10 shadow-2xl space-y-6 animate-in fade-in duration-500 overflow-visible flex flex-col">
+    <div className="glass-panel min-w-0 p-5 sm:p-6 md:p-8 rounded-[1.75rem] sm:rounded-[2rem] border-blue-500/10 shadow-2xl space-y-6 animate-in fade-in duration-500 overflow-visible flex flex-col">
       {/* Header */}
-      <div className="flex items-center justify-between sticky top-0 bg-black/20 -mx-6 -mt-6 px-6 md:px-8 pt-6 pb-4 z-10">
-        <div className="flex items-center gap-3">
-          <div className="w-2.5 h-2.5 rounded-full bg-gradient-to-r from-teal-400 to-blue-500 animate-pulse shadow-lg"></div>
-          <div>
-            <h2 className="text-sm font-black uppercase tracking-[0.4em] text-transparent bg-gradient-to-r from-blue-400 to-teal-400 bg-clip-text">
+      <div className="sticky top-0 z-10 -mx-5 -mt-5 flex items-start justify-between gap-3 bg-black/20 px-5 pt-5 pb-4 sm:-mx-6 sm:-mt-6 sm:px-6 sm:pt-6 md:-mx-8 md:px-8">
+        <div className="flex min-w-0 items-start gap-3">
+          <div className="mt-1 w-2.5 h-2.5 shrink-0 rounded-full bg-gradient-to-r from-teal-400 to-blue-500 animate-pulse shadow-lg"></div>
+          <div className="min-w-0">
+            <h2 className="break-words text-xs font-black uppercase tracking-[0.24em] text-transparent bg-gradient-to-r from-blue-400 to-teal-400 bg-clip-text sm:text-sm">
               Ethical AI Insight
             </h2>
             <p className="text-[7px] text-slate-500 uppercase tracking-widest">Enhanced Hub v2.0</p>
           </div>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex shrink-0 items-center gap-1 sm:gap-2">
           <button
             onClick={() => setShowSettings(!showSettings)}
             className="p-2 hover:bg-white/5 rounded-lg transition-colors text-slate-400 hover:text-white"
@@ -399,19 +399,19 @@ const EthicalAIInsight: React.FC<EthicalAIInsightProps> = ({ userEmail, userId =
             onClick={() => { loadAnalytics(); setViewMode('analytics'); setShowSettings(false); }}
             className="w-full px-3 py-2 bg-blue-600/10 hover:bg-blue-600/20 text-blue-400 rounded-lg text-[10px] font-bold uppercase tracking-widest transition-all flex items-center gap-2"
           >
-            <BarChart3 className="w-4 h-4" /> Analytics
+            <BarChart3 className="w-4 h-4 shrink-0" /> <span className="cnh-action-label">Analytics</span>
           </button>
           <button
             onClick={() => exportConversation('markdown')}
             className="w-full px-3 py-2 bg-teal-600/10 hover:bg-teal-600/20 text-teal-400 rounded-lg text-[10px] font-bold uppercase tracking-widest transition-all flex items-center gap-2"
           >
-            <Download className="w-4 h-4" /> Export MD
+            <Download className="w-4 h-4 shrink-0" /> <span className="cnh-action-label">Export MD</span>
           </button>
           <button
             onClick={() => exportConversation('json')}
             className="w-full px-3 py-2 bg-purple-600/10 hover:bg-purple-600/20 text-purple-400 rounded-lg text-[10px] font-bold uppercase tracking-widest transition-all flex items-center gap-2"
           >
-            <Download className="w-4 h-4" /> Export JSON
+            <Download className="w-4 h-4 shrink-0" /> <span className="cnh-action-label">Export JSON</span>
           </button>
           <button
             onClick={() => {
@@ -422,7 +422,7 @@ const EthicalAIInsight: React.FC<EthicalAIInsightProps> = ({ userEmail, userId =
             }}
             className="w-full px-3 py-2 bg-red-600/10 hover:bg-red-600/20 text-red-300 rounded-lg text-[10px] font-bold uppercase tracking-widest transition-all flex items-center gap-2"
           >
-            <X className="w-4 h-4" /> Clear History
+            <X className="w-4 h-4 shrink-0" /> <span className="cnh-action-label">Clear History</span>
           </button>
         </div>
       )}
@@ -442,13 +442,13 @@ const EthicalAIInsight: React.FC<EthicalAIInsightProps> = ({ userEmail, userId =
               if (btn.mode !== 'report') setReportError('');
               analyticsService.trackViewChange(btn.mode);
             }}
-            className={`px-3 md:px-4 py-2 rounded-lg font-bold text-[9px] md:text-[10px] uppercase tracking-widest transition-all ${
+            className={`min-w-0 px-3 md:px-4 py-2 rounded-lg font-bold text-[9px] md:text-[10px] uppercase tracking-widest leading-tight transition-all ${
               viewMode === btn.mode
                 ? 'bg-gradient-to-r from-blue-600 to-blue-700 text-white shadow-lg'
                 : 'bg-white/5 text-slate-400 hover:bg-white/10'
             }`}
           >
-            {btn.icon} {btn.label}
+            <span aria-hidden="true">{btn.icon}</span> <span className="cnh-action-label">{btn.label}</span>
           </button>
         ))}
       </div>
@@ -483,7 +483,7 @@ const EthicalAIInsight: React.FC<EthicalAIInsightProps> = ({ userEmail, userId =
 
             {dailyWisdom && !wisdomLoading && (
               <div className="mt-4 space-y-3">
-                <div className="flex items-center justify-between text-[8px]">
+                <div className="flex flex-col gap-1 text-[8px] xs:flex-row xs:items-center xs:justify-between">
                   <span className="text-slate-400 uppercase tracking-widest font-bold">Confidence: {dailyWisdom.confidenceScore}%</span>
                   <span className="text-slate-500">⏱️ {dailyWisdom.processingTimeMs}ms</span>
                 </div>
@@ -501,7 +501,7 @@ const EthicalAIInsight: React.FC<EthicalAIInsightProps> = ({ userEmail, userId =
                           href={s.web.uri}
                           target="_blank"
                           rel="noopener noreferrer"
-                          className="text-[7px] text-blue-300 hover:text-blue-200 bg-blue-500/10 px-2 py-1 rounded transition-all border border-blue-500/20 hover:border-blue-400/50 font-bold uppercase tracking-widest flex items-center gap-1"
+                          className="flex min-w-0 items-center gap-1 rounded border border-blue-500/20 bg-blue-500/10 px-2 py-1 text-[7px] font-bold uppercase tracking-widest text-blue-300 transition-all hover:border-blue-400/50 hover:text-blue-200"
                         >
                           {s.web.title.substring(0, 25)}... <ArrowRight className="w-2 h-2" />
                         </a>
@@ -547,7 +547,7 @@ const EthicalAIInsight: React.FC<EthicalAIInsightProps> = ({ userEmail, userId =
       {/* Q&A VIEW */}
       {viewMode === 'qa' && (
         <div className="space-y-4 flex-1 flex flex-col">
-          <div className="flex gap-2">
+          <div className="flex flex-wrap gap-2">
             {[
               { val: 'platform' as const, label: 'Platform', icon: '🏢' },
               { val: 'wellness' as const, label: 'Wellness', icon: '💚' },
@@ -556,7 +556,7 @@ const EthicalAIInsight: React.FC<EthicalAIInsightProps> = ({ userEmail, userId =
               <button
                 key={cat.val}
                 onClick={() => setSelectedQACategory(cat.val)}
-                className={`px-2.5 py-1.5 rounded-lg text-[8px] font-bold uppercase transition-all ${
+                className={`px-2.5 py-1.5 rounded-lg text-[8px] font-bold uppercase leading-tight transition-all ${
                   selectedQACategory === cat.val
                     ? 'bg-teal-600 text-white shadow-lg'
                     : 'bg-white/5 text-slate-400 hover:bg-white/10'
@@ -582,13 +582,13 @@ const EthicalAIInsight: React.FC<EthicalAIInsightProps> = ({ userEmail, userId =
                   onMouseLeave={() => setSelectedMessage(null)}
                 >
                   <div
-                    className={`max-w-xs md:max-w-md p-3 md:p-4 rounded-2xl transition-all ${
+                    className={`max-w-[min(100%,32rem)] p-3 md:p-4 rounded-2xl transition-all ${
                       msg.role === 'user'
                         ? 'bg-blue-600 text-white'
                         : 'bg-white/5 text-slate-200 border border-white/10'
                     }`}
                   >
-                    <p className="text-[9px] md:text-[10px] leading-relaxed">{msg.content}</p>
+                    <p className="break-words text-[9px] md:text-[10px] leading-relaxed">{msg.content}</p>
 
                     {msg.role === 'ai' && msg.sources && msg.sources.length > 0 && (
                       <div className="mt-2 text-[7px] text-slate-400 italic border-t border-white/10 pt-2">
@@ -659,7 +659,7 @@ const EthicalAIInsight: React.FC<EthicalAIInsightProps> = ({ userEmail, userId =
                   <button
                     key={q}
                     onClick={() => setQaInput(q)}
-                    className="px-3 py-1.5 bg-blue-500/10 hover:bg-blue-500/20 border border-blue-500/30 text-[8px] text-blue-400 rounded-lg transition-all truncate"
+                    className="max-w-full px-3 py-1.5 bg-blue-500/10 hover:bg-blue-500/20 border border-blue-500/30 text-[8px] text-blue-400 rounded-lg transition-all"
                   >
                     💡 {q.substring(0, 40)}...
                   </button>
@@ -668,13 +668,13 @@ const EthicalAIInsight: React.FC<EthicalAIInsightProps> = ({ userEmail, userId =
             </div>
           )}
 
-          <form onSubmit={handleQASubmit} className="flex gap-2">
+          <form onSubmit={handleQASubmit} className="flex min-w-0 gap-2">
             <input
               type="text"
               value={qaInput}
               onChange={(e) => setQaInput(e.target.value)}
               placeholder="Ask..."
-              className="flex-1 px-3 md:px-4 py-2.5 md:py-3 bg-white/5 border border-white/10 rounded-xl text-[9px] md:text-[10px] text-white focus:outline-none focus:ring-2 focus:ring-blue-500/30 transition-all placeholder:text-slate-600"
+              className="min-w-0 flex-1 px-3 md:px-4 py-2.5 md:py-3 bg-white/5 border border-white/10 rounded-xl text-[9px] md:text-[10px] text-white focus:outline-none focus:ring-2 focus:ring-blue-500/30 transition-all placeholder:text-slate-600"
               disabled={qaLoading}
             />
             {voiceSupported && (

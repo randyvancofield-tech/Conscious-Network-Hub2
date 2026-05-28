@@ -30,6 +30,10 @@
             box-sizing: border-box;
             -webkit-tap-highlight-color: transparent;
         }
+
+        :where(#root, #root *) {
+            min-width: 0;
+        }
         
         html {
             font-size: 16px;
@@ -37,6 +41,7 @@
             -webkit-font-smoothing: antialiased;
             -moz-osx-font-smoothing: grayscale;
             min-height: 100%;
+            overflow-y: auto;
         }
         
         body {
@@ -51,14 +56,15 @@
             min-height: 100vh;
             min-height: 100dvh;
             position: relative;
-            overscroll-behavior-y: none;
-            touch-action: manipulation;
+            overscroll-behavior-y: auto;
+            touch-action: pan-x pan-y pinch-zoom;
         }
 
         #root {
             min-height: 100dvh;
             max-width: 100vw;
             overflow-x: hidden;
+            overflow-y: visible;
         }
 
         .app-scroll-root {
@@ -66,10 +72,27 @@
             width: 100%;
         }
 
+        .app-main-scroll {
+            overflow-y: auto;
+            -webkit-overflow-scrolling: touch;
+            overscroll-behavior-y: auto;
+            scrollbar-gutter: stable;
+            touch-action: pan-y;
+        }
+
+        .app-main-scroll:focus {
+            outline: none;
+        }
+
+        .app-main-scroll:focus-visible {
+            outline: 2px solid rgba(94, 234, 212, 0.85);
+            outline-offset: -2px;
+        }
+
         .scrollable,
         .custom-scrollbar {
             -webkit-overflow-scrolling: touch;
-            overscroll-behavior: contain;
+            overscroll-behavior-y: auto;
             scrollbar-gutter: auto;
             touch-action: pan-y;
         }
@@ -91,7 +114,28 @@
         }
 
         button, a {
-            overflow-wrap: anywhere;
+            overflow-wrap: break-word;
+        }
+
+        .cnh-person-name {
+            word-break: normal;
+            overflow-wrap: normal;
+            hyphens: none;
+            text-wrap: balance;
+        }
+
+        .cnh-status-badge {
+            max-width: 100%;
+            white-space: normal;
+            overflow-wrap: break-word;
+            line-height: 1.2;
+            text-align: center;
+        }
+
+        .cnh-action-label {
+            white-space: normal;
+            overflow-wrap: break-word;
+            line-height: 1.2;
         }
         
         h1, h2, h3, h4, .font-heading {

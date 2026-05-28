@@ -482,8 +482,8 @@ const SocialLearningHub: React.FC<SocialLearningHubProps> = ({ user }) => {
       <header className="relative perspective-1000 transform-style-3d py-4 sm:py-8">
         <div className="flex flex-col md:flex-row md:items-end justify-between gap-6 relative z-10">
           <div className="space-y-2 transform transition-transform lg:hover:translate-z-10 duration-500">
-            <h2 className="text-4xl sm:text-6xl font-black text-white uppercase tracking-tighter leading-none flex items-center gap-4">
-              <Cpu className="w-8 h-8 sm:w-10 sm:h-10 text-blue-400 animate-spin-slow" />
+            <h2 className="text-3xl sm:text-4xl 2xl:text-5xl font-black text-white uppercase tracking-tighter leading-tight flex items-center gap-3 sm:gap-4">
+              <Cpu className="w-7 h-7 sm:w-9 sm:h-9 text-blue-400 animate-spin-slow" />
               Social Hub
             </h2>
             <p className="text-blue-400/60 text-[10px] sm:text-[12px] font-black uppercase tracking-[0.5em]">The Algorithm Forge & Collective Intellect</p>
@@ -557,10 +557,10 @@ const SocialLearningHub: React.FC<SocialLearningHubProps> = ({ user }) => {
         </div>
       )}
 
-      <div className="grid grid-cols-1 lg:grid-cols-4 gap-8">
+      <div className="grid grid-cols-1 xl:grid-cols-4 gap-6 xl:gap-8">
         
         {/* Sidebar: Creation Tools & Sentinel Row */}
-        <div className="lg:col-span-1 space-y-8 flex flex-col">
+        <div className="xl:col-span-1 space-y-6 xl:space-y-8 flex flex-col">
           
           {/* Node Injection Panel */}
           <div 
@@ -641,13 +641,13 @@ const SocialLearningHub: React.FC<SocialLearningHubProps> = ({ user }) => {
                         <Play className="absolute w-8 h-8 text-white fill-white opacity-80" />
                       </div>
                     ) : (
-                      <div className="text-[10px] text-blue-300 truncate font-mono">{detectedUrl}</div>
+                      <div className="break-words text-[10px] text-blue-300 font-mono">{detectedUrl}</div>
                     )}
                   </div>
                 )}
               </div>
 
-              <div className="grid grid-cols-3 gap-2">
+              <div className="grid grid-cols-1 gap-2 xs:grid-cols-3">
                 <button 
                   type="button"
                   onClick={() => triggerUpload('image')}
@@ -655,7 +655,7 @@ const SocialLearningHub: React.FC<SocialLearningHubProps> = ({ user }) => {
                   className="flex flex-col items-center gap-2 p-3 bg-white/[0.02] hover:bg-blue-600/10 border border-white/10 rounded-xl text-slate-500 hover:text-blue-400 transition-all group/btn"
                 >
                   <ImageIcon className="w-5 h-5 transition-transform" />
-                  <span className="text-[7px] font-black uppercase tracking-[0.2em]">Image</span>
+                  <span className="cnh-action-label text-[7px] font-black uppercase tracking-[0.2em]">Image</span>
                 </button>
                 <button 
                   type="button"
@@ -664,7 +664,7 @@ const SocialLearningHub: React.FC<SocialLearningHubProps> = ({ user }) => {
                   className="flex flex-col items-center gap-2 p-3 bg-white/[0.02] hover:bg-teal-600/10 border border-white/10 rounded-xl text-slate-500 hover:text-teal-400 transition-all group/btn"
                 >
                   <FileVideo className="w-5 h-5 transition-transform" />
-                  <span className="text-[7px] font-black uppercase tracking-[0.2em]">Video</span>
+                  <span className="cnh-action-label text-[7px] font-black uppercase tracking-[0.2em]">Video</span>
                 </button>
                 <button 
                   type="button"
@@ -673,7 +673,7 @@ const SocialLearningHub: React.FC<SocialLearningHubProps> = ({ user }) => {
                   className="flex flex-col items-center gap-2 p-3 bg-white/[0.02] hover:bg-white/5 border border-white/10 rounded-xl text-slate-500 hover:text-white transition-all group/btn"
                 >
                   <FileText className="w-5 h-5 transition-transform" />
-                  <span className="text-[7px] font-black uppercase tracking-[0.2em]">Data</span>
+                  <span className="cnh-action-label text-[7px] font-black uppercase tracking-[0.2em]">Data</span>
                 </button>
               </div>
 
@@ -740,8 +740,8 @@ const SocialLearningHub: React.FC<SocialLearningHubProps> = ({ user }) => {
         </div>
 
         {/* Main Content: The Collective Scroll */}
-        <div className="lg:col-span-3 flex flex-col min-h-0 pb-20">
-          <div className="flex items-center justify-between px-4 mb-6">
+        <div className="xl:col-span-3 flex flex-col min-h-0 pb-20">
+          <div className="flex flex-col gap-3 px-1 sm:px-4 mb-6 xs:flex-row xs:items-center xs:justify-between">
             <h3 className="text-[10px] font-black text-slate-500 uppercase tracking-[0.6em] flex items-center gap-3">
               <Layers className="w-4 h-4 text-blue-400" /> Algorithmic Stream
             </h3>
@@ -768,7 +768,7 @@ const SocialLearningHub: React.FC<SocialLearningHubProps> = ({ user }) => {
               </div>
             )}
             {visibleNodes.length === 0 && (
-              <div className="xl:col-span-2 glass-panel p-10 rounded-[2rem] border-white/10 text-center">
+              <div className="xl:col-span-2 glass-panel p-6 sm:p-8 rounded-[2rem] border-white/10 text-center">
                 <h4 className="text-lg font-black text-white uppercase tracking-tight">No social posts yet</h4>
                 <p className="text-sm text-slate-400 mt-2">
                   Real posts created by signed-in members will appear here.
@@ -783,28 +783,28 @@ const SocialLearningHub: React.FC<SocialLearningHubProps> = ({ user }) => {
               return (
                 <div 
                   key={node.id} 
-                  className="glass-panel rounded-[2.5rem] sm:rounded-[3.5rem] overflow-hidden border-white/5 lg:hover:border-blue-500/20 transition-all duration-700 lg:hover:-translate-y-2 shadow-[0_40px_80px_-20px_rgba(0,0,0,0.6)] group relative bg-black/40 backdrop-blur-3xl"
+                  className="glass-panel rounded-[2rem] sm:rounded-[2.5rem] 2xl:rounded-[3.5rem] overflow-hidden border-white/5 lg:hover:border-blue-500/20 transition-all duration-700 lg:hover:-translate-y-2 shadow-[0_40px_80px_-20px_rgba(0,0,0,0.6)] group relative bg-black/40 backdrop-blur-3xl"
                   style={{ animationDelay: `${i * 100}ms` }}
                 >
-                  <div className="p-6 sm:p-12 flex flex-col gap-8 sm:gap-10">
+                  <div className="p-6 md:p-8 2xl:p-10 flex flex-col gap-8 sm:gap-10">
                     <div className="flex-1 space-y-6 sm:space-y-8">
                       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
                         <button
                           type="button"
                           onClick={() => void openProfileView(node.authorId)}
-                          className="flex items-center gap-4 sm:gap-5 text-left group/author"
+                          className="flex min-w-0 items-center gap-4 sm:gap-5 text-left group/author"
                         >
                           {renderAvatarMedia(
                             node.avatarMedia || normalizeMediaAsset({ url: node.avatar }),
                             node.author,
                             'w-12 h-12 sm:w-14 sm:h-14 rounded-2xl object-cover ring-4 ring-white/5 shadow-2xl'
                           )}
-                          <div>
-                            <h4 className="text-base sm:text-lg font-black text-white uppercase tracking-tighter leading-none group-hover/author:text-blue-300 transition-colors">{node.author}</h4>
+                          <div className="min-w-0">
+                            <h4 className="cnh-person-name text-base sm:text-lg font-black text-white uppercase tracking-tighter leading-tight group-hover/author:text-blue-300 transition-colors">{node.author}</h4>
                             <p className="text-[9px] sm:text-[10px] text-blue-400/60 font-black uppercase tracking-widest mt-1.5">{node.timestamp}</p>
                           </div>
                         </button>
-                        <div className="flex items-center gap-2 px-3 py-1.5 sm:px-4 bg-teal-400/5 border border-teal-400/20 rounded-full w-fit">
+                        <div className="cnh-status-badge flex items-center gap-2 px-3 py-1.5 sm:px-4 bg-teal-400/5 border border-teal-400/20 rounded-full w-fit">
                           <ShieldCheck className="w-3.5 h-3.5 text-teal-400" />
                           <span className="text-[8px] sm:text-[9px] font-black text-teal-400 uppercase tracking-widest">NODE VERIFIED</span>
                         </div>
@@ -865,7 +865,7 @@ const SocialLearningHub: React.FC<SocialLearningHubProps> = ({ user }) => {
                                       </div>
                                       <div className="min-w-0 flex-1">
                                         <p className="text-[8px] sm:text-[10px] font-black text-blue-400 uppercase tracking-widest mb-1">External Resource</p>
-                                        <p className="text-[10px] sm:text-xs text-white truncate">{nodeUrl}</p>
+                                        <p className="break-words text-[10px] sm:text-xs text-white">{nodeUrl}</p>
                                       </div>
                                     </div>
                                     <ExternalLink className="w-4 h-4 sm:w-5 sm:h-5 text-slate-600 shrink-0 lg:group-hover/link:text-blue-400 transition-all" />
