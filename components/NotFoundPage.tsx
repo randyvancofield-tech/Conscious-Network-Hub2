@@ -13,7 +13,7 @@ const NotFoundPage: React.FC<NotFoundPageProps> = ({ path, onGoHome, onGoDashboa
     <EmptyState
       icon={<Compass className="h-8 w-8" />}
       title="Route not found"
-      description={`No frontend route is registered for "${path || '/'}". Unknown routes are intentionally not redirected to the homepage.`}
+      description={`No CNH page matches "${path || '/'}". Use the options below to return to a known area.`}
       action={
         <div className="flex flex-col gap-3 sm:flex-row">
           <ActionButton type="button" onClick={onGoHome} icon={<Home className="h-4 w-4" />}>

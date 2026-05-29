@@ -253,7 +253,7 @@ const CommunityMembersContent: React.FC<CommunityMembersProps> = ({ onSignInProm
 
   const handleSendMessage = (e: React.FormEvent) => {
     e.preventDefault();
-    setDirectoryError('Member messaging is locked until the native Render API route and Neon persistence tables are enabled.');
+    setDirectoryError('Member messaging is being prepared and is not yet available.');
   };
 
   useEffect(() => {
@@ -485,7 +485,7 @@ const CommunityMembersContent: React.FC<CommunityMembersProps> = ({ onSignInProm
                     <div className="p-8 bg-blue-600/5 rounded-[3rem] border border-blue-500/10">
                       <MessageSquare className="w-10 h-10 text-blue-400" />
                     </div>
-                    <p className="text-[9px] font-bold uppercase tracking-[0.3em] text-blue-400">Secure messaging unlocks after native API persistence is enabled</p>
+                    <p className="text-[9px] font-bold uppercase tracking-[0.3em] text-blue-400">Secure messaging is being prepared</p>
                   </div>
                 )}
                 <div ref={chatEndRef} />
@@ -522,7 +522,7 @@ const CommunityMembersContent: React.FC<CommunityMembersProps> = ({ onSignInProm
                     type="text"
                     value={input}
                     onChange={(e) => setInput(e.target.value)}
-                    placeholder="Messaging unlocks after native API persistence is enabled"
+                    placeholder="Messaging is being prepared"
                     disabled
                     className="min-w-0 flex-1 bg-white/5 border border-white/10 rounded-2xl px-5 py-3 md:py-4 text-xs text-white focus:outline-none focus:ring-2 focus:ring-blue-500/30 transition-all font-medium"
                   />

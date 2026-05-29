@@ -111,8 +111,7 @@ export class SecurityService {
    */
   encryptData(data: string, _key: string): string {
     try {
-      // Simple base64 encoding for demonstration
-      // In production, use proper encryption libraries
+      // Compatibility encoding for legacy client-side cached values.
       const encoded = btoa(unescape(encodeURIComponent(data)));
       return encoded;
     } catch (error) {

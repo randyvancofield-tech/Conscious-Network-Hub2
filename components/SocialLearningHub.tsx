@@ -341,7 +341,7 @@ const SocialLearningHubContent: React.FC<SocialLearningHubProps> = ({ user }) =>
   const handleAddComment = (nodeId: string) => {
     const text = commentInput[nodeId];
     if (!text?.trim()) return;
-    setPostActionError('Comments and linkages are locked until the native comments API and Neon persistence tables are enabled.');
+    setPostActionError('Comments and linkages are being prepared and are not yet available.');
   };
 
   const openProfileView = async (authorId: string) => {
@@ -708,7 +708,7 @@ const SocialLearningHubContent: React.FC<SocialLearningHubProps> = ({ user }) =>
 
             <div className="mt-6 pt-6 border-t border-white/5 flex items-center justify-between">
               <span className="text-[8px] font-black text-slate-600 uppercase tracking-widest flex items-center gap-1">
-                <ShieldCheck className="w-3 h-3" /> Backend Auth Required
+                <ShieldCheck className="w-3 h-3" /> Account Required
               </span>
               <div className="flex gap-1">
                 <div className="w-1 h-1 bg-blue-500 rounded-full animate-bounce" style={{ animationDelay: '0s' }} />
@@ -977,7 +977,7 @@ const SocialLearningHubContent: React.FC<SocialLearningHubProps> = ({ user }) =>
                               type="text" 
                               value={commentInput[node.id] || ''}
                               onChange={(e) => setCommentInput(prev => ({ ...prev, [node.id]: e.target.value }))}
-                              placeholder="Comments unlock after native API persistence is enabled"
+                              placeholder="Comments are being prepared"
                               disabled
                               className="flex-1 bg-white/5 border border-white/10 rounded-xl sm:rounded-2xl px-4 sm:px-5 py-2.5 sm:py-3 text-[10px] sm:text-xs text-white focus:outline-none focus:ring-2 focus:ring-blue-500/30 transition-all"
                               onKeyDown={(e) => e.key === 'Enter' && handleAddComment(node.id)}

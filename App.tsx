@@ -45,7 +45,7 @@ import {
   setUserAuthSession,
 } from './services/sessionService';
 import { canTierAccessNavItem, canTierAccessView } from './services/tierAccess';
-import { ApiError, api, apiHealth, backendAssetUrl, getBackendBaseUrl } from './services/apiClient';
+import { ApiError, api, apiHealth, backendAssetUrl } from './services/apiClient';
 import { createNativeProviderControlSession } from './services/backendApiService';
 import {
   detectWalletProviderEnvironment,
@@ -835,8 +835,7 @@ const App: React.FC = () => {
   ];
 
   const backendConnectionErrorMessage = (actionLabel: string): string => {
-    const target = getBackendBaseUrl() || 'the configured API route';
-    return `Unable to ${actionLabel}. Cannot reach backend at ${target}.`;
+    return `Unable to ${actionLabel}. The service is temporarily unavailable. Please try again shortly.`;
   };
 
   const resetSignInChallengeInputs = () => {
@@ -2029,7 +2028,7 @@ const App: React.FC = () => {
       });
 
       if (!data?.persistenceVerified) {
-        setError('Profile persistence verification failed.');
+        setError('We could not confirm your profile was saved. Please try again.');
         return;
       }
 
@@ -2357,7 +2356,7 @@ const App: React.FC = () => {
         updateActiveUser({ ...canonical, hasProfile: true });
       } catch (persistError) {
         console.error('Identity persistence error:', persistError);
-        setError('Profile changes were not fully saved to backend. Please retry.');
+        setError('Profile changes were not fully saved. Please try again.');
       }
     })();
   };
@@ -2864,7 +2863,7 @@ const App: React.FC = () => {
                       : adminAccessStatus
                         ? adminAccessStatus.walletConfigured
                           ? `Founder wallet ready${adminAccessStatus.walletAddressMasked ? `: ${adminAccessStatus.walletAddressMasked}` : ''}`
-                          : 'Founder wallet is not configured on the backend'
+                          : 'Founder wallet is not configured'
                         : 'Unable to confirm Administrative Access readiness'}
                   </p>
                   {adminAccessStatus && !adminAccessStatus.adminAccountReady && (
@@ -3573,17 +3572,17 @@ const App: React.FC = () => {
           <div className="fixed inset-0 z-[1000] flex items-start sm:items-center justify-center overflow-y-auto custom-scrollbar bg-black/90 backdrop-blur-3xl p-4 sm:p-6">
             <div className="glass-panel max-w-md w-full p-6 sm:p-10 rounded-[2rem] sm:rounded-[3rem] text-center border-blue-500/20 shadow-2xl my-4 sm:my-8">
               <Key className="w-16 h-16 text-blue-400 mx-auto mb-6" />
-              <h2 className="text-3xl font-black text-white uppercase tracking-tighter mb-4">API Node Required</h2>
+              <h2 className="text-3xl font-black text-white uppercase tracking-tighter mb-4">Advanced Intelligence Access</h2>
               <p className="text-slate-400 text-sm leading-relaxed mb-8">
-                To access advanced intelligence and image synthesis, you must connect a paid Google Cloud Project API Key. 
+                Advanced intelligence and image synthesis require an authorized access key before they can be used.
                 <br /><br />
-                <a href="https://ai.google.dev/gemini-api/docs/billing" target="_blank" rel="noopener noreferrer" className="text-blue-400 hover:underline">View Billing Documentation</a>
+                <a href="https://ai.google.dev/gemini-api/docs/billing" target="_blank" rel="noopener noreferrer" className="text-blue-400 hover:underline">View access requirements</a>
               </p>
               <button 
                 onClick={handleOpenSelectKey}
                 className="w-full py-5 bg-blue-600 hover:bg-blue-500 text-white rounded-2xl font-black text-sm uppercase tracking-widest transition-all shadow-xl"
               >
-                Select API Key
+                Select Access Key
               </button>
             </div>
           </div>

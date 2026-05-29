@@ -37,7 +37,7 @@ export const JoinMeetingButton: React.FC<{ meeting: MeetingSurfaceRecord }> = ({
       type="button"
       disabled
       icon={meeting.status === 'replay' ? <Video className="h-4 w-4" /> : <Radio className="h-4 w-4" />}
-      title="Backend meeting connection will enable this action."
+      title="This meeting action is being prepared."
     >
       {label}
     </ActionButton>
@@ -125,7 +125,7 @@ export const MeetingList: React.FC<{
           <EmptyState
             icon={<CalendarClock className="h-7 w-7" />}
             title="No upcoming sessions"
-            description="Scheduled provider sessions will appear here as soon as the backend meeting service is connected."
+            description="Scheduled provider sessions will appear here when they are available."
           />
         )}
       </section>
@@ -165,7 +165,7 @@ export const MeetingDetail: React.FC<{
             <Video className="mb-4 h-12 w-12 text-blue-300" />
             <h2 className="text-xl font-black uppercase text-white">Session Room UI Ready</h2>
             <p className="mt-2 max-w-md text-sm leading-6 text-slate-400">
-              Live video, replay playback, and provider room controls connect here when the meeting backend is available.
+              Live video, replay playback, and provider room controls are being prepared.
             </p>
           </div>
         </div>
@@ -200,7 +200,7 @@ export const MeetingDetail: React.FC<{
             {meeting.participantCount}/{meeting.capacity}
           </p>
           <p className="mt-2 text-xs leading-5 text-slate-400">
-            This indicator is UI-ready and will bind to backend attendance once sessions are active.
+            Attendance will update here when session participation is available.
           </p>
         </div>
       </SurfacePanel>
@@ -220,7 +220,7 @@ const MeetingsPage: React.FC<MeetingsPageProps> = ({ meetingId, onOpenMeeting, o
         <EmptyState
           icon={<Video className="h-7 w-7" />}
           title="Meeting not found"
-          description="This meeting route is valid, but no frontend or backend session record matches the requested identifier."
+          description="No active or archived meeting matches the requested link."
           action={
             <ActionButton type="button" onClick={onBackToList} icon={<ArrowLeft className="h-4 w-4" />}>
               Back to Meetings
@@ -240,7 +240,7 @@ const MeetingsPage: React.FC<MeetingsPageProps> = ({ meetingId, onOpenMeeting, o
       <PageHeader
         eyebrow="Provider-hosted sessions"
         title="Meetings"
-        description="A complete frontend layer for live, scheduled, and replay provider sessions. Backend room joining is intentionally disabled until the meeting service is connected."
+        description="Provider-hosted live sessions, scheduled gatherings, and replays will appear here as they become available."
       />
       <MeetingList meetings={MEETING_SURFACE_RECORDS} onOpenMeeting={onOpenMeeting} />
     </PageShell>

@@ -734,7 +734,7 @@ export const ConsciousIdentity: React.FC<ConsciousIdentityProps> = ({
               <textarea 
                 value={newReflection}
                 onChange={e => setNewReflection(e.target.value)}
-                placeholder="Private reflections require the Phase 7 backend reflection service"
+                placeholder="Private reflection writing is being prepared"
                 disabled
                 className="w-full bg-white/5 border border-white/10 rounded-[1.5rem] sm:rounded-[2.5rem] p-5 sm:p-8 text-base sm:text-lg text-white focus:outline-none focus:ring-2 focus:ring-blue-500/30 transition-all min-h-[160px] resize-none shadow-inner placeholder:text-slate-600"
               />
@@ -750,7 +750,7 @@ export const ConsciousIdentity: React.FC<ConsciousIdentityProps> = ({
             <div className="space-y-4 sm:space-y-6 max-h-[500px] overflow-y-auto pr-2 sm:pr-6 custom-scrollbar">
               {reflections.length === 0 && (
                 <div className="rounded-[1.5rem] border border-amber-300/20 bg-amber-300/[0.04] p-5 text-sm leading-6 text-slate-300">
-                  Local sample reflections have been removed. Reflection writing will persist through protected backend storage in Phase 7.
+                  Private reflection writing is being prepared. Your saved reflections will appear here when this feature is available.
                 </div>
               )}
               {reflections.map(r => (

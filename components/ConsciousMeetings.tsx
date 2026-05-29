@@ -348,7 +348,7 @@ const ConsciousMeetings: React.FC<ConsciousMeetingsProps> = ({ user }) => {
   const immersiveDeviceProfileRef = useRef<string>('unknown');
   const immersiveTelemetryOpenRef = useRef(false);
 
-  const mockTranscript = [
+  const synthesisTranscript = [
     "Jordan: Welcome to our session. How are you feeling about your digital boundaries?",
     "User: I'm feeling overwhelmed with information. I need to restrict my neural input.",
     "Jordan: Understood. Let's set a goal to implement a 2-hour digital fast daily.",
@@ -535,7 +535,7 @@ const ConsciousMeetings: React.FC<ConsciousMeetingsProps> = ({ user }) => {
   ): MeetingNotes => {
     if (agentMode === 'action-agent') {
       return {
-        transcript: [...mockTranscript],
+        transcript: [...synthesisTranscript],
         summary: `Action Agent Brief: ${summary.summary}`,
         decisions: [...summary.decisions, 'Execution priorities confirmed with accountable owners.'],
         actionItems: summary.actionItems.length
@@ -552,7 +552,7 @@ const ConsciousMeetings: React.FC<ConsciousMeetingsProps> = ({ user }) => {
 
     if (agentMode === 'security-agent') {
       return {
-        transcript: [...mockTranscript],
+        transcript: [...synthesisTranscript],
         summary: `Security Agent Brief: ${summary.summary} Notes are ephemeral and will be purged when the session ends.`,
         decisions: [
           ...summary.decisions,
@@ -570,7 +570,7 @@ const ConsciousMeetings: React.FC<ConsciousMeetingsProps> = ({ user }) => {
     }
 
     return {
-      transcript: [...mockTranscript],
+      transcript: [...synthesisTranscript],
       summary: `Meeting Bot Brief: ${summary.summary}`,
       decisions: summary.decisions,
       actionItems: summary.actionItems,
@@ -586,7 +586,7 @@ const ConsciousMeetings: React.FC<ConsciousMeetingsProps> = ({ user }) => {
 
     setIsSynthesizingNotes(true);
     try {
-      const result = await summarizeMeeting(mockTranscript);
+      const result = await summarizeMeeting(synthesisTranscript);
       const summaryPayload = result || buildFallbackMeetingSummary();
       const notesPayload = mapSummaryForAgent(summaryPayload, agentMode);
 
@@ -740,7 +740,7 @@ const ConsciousMeetings: React.FC<ConsciousMeetingsProps> = ({ user }) => {
       ]);
       setSelectedHostedSessionId(created.id);
       setMeetingOpsStatus(
-        `${CNH_NATIVE_ROOM_LABEL} created. Internal room link is ready to copy: ${created.title}`
+        `${CNH_NATIVE_ROOM_LABEL} created. CNH room link is ready to copy: ${created.title}`
       );
     } finally {
       setIsMeetingOpsBusy(false);
@@ -897,7 +897,7 @@ const ConsciousMeetings: React.FC<ConsciousMeetingsProps> = ({ user }) => {
       ]);
       setSelectedHostedSessionId(updated.id);
       await refreshJoinableSessions();
-      setMeetingOpsStatus('Platform invites sent. Internal room link remains ready to copy.');
+      setMeetingOpsStatus('Platform invites sent. CNH room link remains ready to copy.');
     } finally {
       setIsMeetingOpsBusy(false);
     }
@@ -3176,7 +3176,7 @@ const ConsciousMeetings: React.FC<ConsciousMeetingsProps> = ({ user }) => {
                       />
                       <span>
                         <span className="block text-[9px] font-black uppercase tracking-widest text-amber-100">
-                          Local-Only Participant Recording
+                          Participant-Side Recording
                         </span>
                         Allows each participant to record only inside their own browser after they opt in. CNH server recording stays off.
                       </span>
@@ -3252,9 +3252,9 @@ const ConsciousMeetings: React.FC<ConsciousMeetingsProps> = ({ user }) => {
                           if (!selectedInternalRoomLink) return;
                           try {
                             await navigator.clipboard.writeText(selectedInternalRoomLink);
-                            setMeetingOpsStatus('Internal CNH room link copied.');
+                            setMeetingOpsStatus('CNH room link copied.');
                           } catch {
-                            setMeetingOpsStatus('Copy failed. You can manually share the internal room link.');
+                            setMeetingOpsStatus('Copy failed. You can manually share the CNH room link.');
                           }
                         }}
                         disabled={!selectedInternalRoomLink}

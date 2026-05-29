@@ -98,7 +98,7 @@ const KnowledgePathways: React.FC<KnowledgePathwaysProps> = ({
           setPathways([]);
           setLoadError(
             error instanceof DOMException && error.name === 'AbortError'
-              ? 'Course backend connection pending'
+              ? 'Course service is temporarily unavailable'
               : error instanceof Error
                 ? error.message
                 : 'Unable to load courses'
@@ -136,7 +136,7 @@ const KnowledgePathways: React.FC<KnowledgePathwaysProps> = ({
         <EmptyState
           icon={<BookOpen className="w-7 h-7" />}
           title="Course records unavailable"
-          description={`${loadError}. Course detail routes are hidden until live published course records are reachable.`}
+          description={`${loadError}. Published course details will appear when the catalog is available.`}
           action={
             <ActionButton type="button" onClick={onBackToCatalog || onGoBack} icon={<ArrowLeft className="w-4 h-4" />}>
               Courses
@@ -153,7 +153,7 @@ const KnowledgePathways: React.FC<KnowledgePathwaysProps> = ({
         <EmptyState
           icon={<BookOpen className="w-7 h-7" />}
           title="Course not found"
-          description="This course route is valid, but no frontend or backend course record matches the requested identifier."
+          description="No published course matches the requested link."
           action={
             <ActionButton type="button" onClick={onBackToCatalog || onGoBack} icon={<ArrowLeft className="w-4 h-4" />}>
               Courses

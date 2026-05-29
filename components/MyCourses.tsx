@@ -108,7 +108,7 @@ const MyCourses: React.FC<MyCoursesProps> = ({ enrolledCourses, onNavigateToUniv
             <Trophy className="text-teal-400 w-5 h-5" /> Suggested Next Steps
           </h3>
           <div className="glass-panel rounded-3xl border-amber-300/20 bg-amber-300/[0.04] p-5 text-sm leading-6 text-slate-300">
-            Static recommendations have been removed. Backend-backed learning recommendations will be completed with the course continuity work in Phase 6.
+            Personalized learning recommendations are being prepared. Published courses remain available in the catalog.
           </div>
         </section>
       )}
@@ -147,8 +147,8 @@ const MyCourses: React.FC<MyCoursesProps> = ({ enrolledCourses, onNavigateToUniv
               </div>
               <div className="p-4 bg-blue-600/5 rounded-xl border border-blue-500/20 text-sm text-slate-300">
                 {activeCourse.mode === 'resume'
-                  ? 'Course player resume is locked until the Phase 6 backend progress and module flow is complete.'
-                  : 'Detailed course continuity is locked until Phase 6. Published course catalog details remain available in Courses.'}
+                  ? 'Course resume is being prepared. Published course details remain available in the catalog.'
+                  : 'Detailed course continuity is being prepared. Published course catalog details remain available in Courses.'}
               </div>
               <div className="flex flex-col sm:flex-row gap-3">
                 <button

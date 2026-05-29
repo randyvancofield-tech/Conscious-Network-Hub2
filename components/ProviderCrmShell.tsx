@@ -432,7 +432,7 @@ const ProviderCrmShellContent: React.FC<ProviderCrmShellProps> = ({
         );
         setStatus(nextTools.length > 0 ? 'Provider CRM workspace active.' : 'No CRM tools are currently enabled.');
       } catch {
-        if (!cancelled) setStatus('Provider CRM could not be loaded. Verify provider session and backend connectivity.');
+        if (!cancelled) setStatus('Provider CRM could not be loaded. Verify your provider session and try again.');
       } finally {
         if (!cancelled) setLoading(false);
       }
@@ -1127,7 +1127,7 @@ const ProviderCrmShellContent: React.FC<ProviderCrmShellProps> = ({
             <div>
               <h3 className="text-sm font-black uppercase tracking-widest text-white">Operational Analytics</h3>
               <p className="mt-2 text-xs leading-6 text-slate-400">
-                These metrics are aggregate counts from CRM, course, meeting, membership, applicant, and AI tables where the current role can access them.
+                These metrics are aggregate counts from the provider workspace areas available to the current role.
               </p>
             </div>
             <span className="cnh-status-badge rounded-full border border-white/10 bg-black/20 px-3 py-2 text-[9px] font-black uppercase tracking-widest text-slate-300">

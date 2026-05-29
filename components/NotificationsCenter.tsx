@@ -30,9 +30,9 @@ const NotificationsCenter: React.FC<NotificationsCenterProps> = ({ onBack }) => 
           <div className="flex items-start gap-3">
             <ShieldCheck className="mt-1 h-5 w-5 text-amber-200" />
             <div>
-              <h3 className="text-sm font-black uppercase tracking-widest text-white">Notifications Locked For Backend Completion</h3>
+              <h3 className="text-sm font-black uppercase tracking-widest text-white">Notifications Being Prepared</h3>
               <p className="mt-2 text-sm leading-6 text-slate-300">
-                Static sample notifications have been removed. This center will show only authenticated, user-specific backend notifications after Phase 5.
+                This center is being prepared for account-specific security, social, and session updates. No notifications are available yet.
               </p>
             </div>
           </div>

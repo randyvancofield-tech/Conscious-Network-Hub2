@@ -222,7 +222,7 @@ const ConsciousMeetingRoomPage: React.FC<ConsciousMeetingRoomPageProps> = ({ ses
       setRecordingSeconds((current) => current + 1);
     }, 1000);
     setRecordingState('recording');
-    setJoinStatus('Local-only recording started. Nothing is uploaded to CNH storage.');
+    setJoinStatus('Private browser recording started. Nothing is uploaded to CNH storage.');
   };
 
   const stopLocalRecording = () => {
@@ -248,7 +248,7 @@ const ConsciousMeetingRoomPage: React.FC<ConsciousMeetingRoomPageProps> = ({ ses
       <PageShell>
         <SurfacePanel className="flex items-center justify-center gap-3 text-sm text-slate-300">
           <Loader2 className="h-4 w-4 animate-spin text-blue-300" />
-          Loading internal meeting room...
+          Loading meeting room...
         </SurfacePanel>
       </PageShell>
     );
@@ -283,7 +283,7 @@ const ConsciousMeetingRoomPage: React.FC<ConsciousMeetingRoomPageProps> = ({ ses
         <EmptyState
           icon={<Video className="h-7 w-7" />}
           title="Meeting room not found"
-          description="This internal endpoint is valid, but no active or archived Conscious Meeting matches it."
+          description="This meeting link is valid, but no active or archived Conscious Meeting matches it."
           action={
             <ActionButton type="button" variant="secondary" onClick={onBack} icon={<ArrowLeft className="h-4 w-4" />}>
               Upcoming Sessions
@@ -301,7 +301,7 @@ const ConsciousMeetingRoomPage: React.FC<ConsciousMeetingRoomPageProps> = ({ ses
       </ActionButton>
 
       <PageHeader
-        eyebrow={`${session.status} internal room`}
+        eyebrow={`${session.status} meeting room`}
         title={session.title}
         description={session.description || 'Native Conscious Network Hub meeting room.'}
         actions={
@@ -391,7 +391,7 @@ const ConsciousMeetingRoomPage: React.FC<ConsciousMeetingRoomPageProps> = ({ ses
 
           <div className="rounded-xl border border-white/10 bg-white/[0.03] p-4 text-xs leading-5 text-slate-400">
             {roomConfig?.recording.localParticipantRecordingAllowed
-              ? 'Provider enabled local-only participant recording. Each participant records only in their own browser after opting in.'
+              ? 'Provider enabled participant-side recording. Each participant records only in their own browser after opting in.'
               : 'Server recording is off. Participant-side local recording is disabled unless the provider enables it for this session.'}
           </div>
         </SurfacePanel>
@@ -415,7 +415,7 @@ const ConsciousMeetingRoomPage: React.FC<ConsciousMeetingRoomPageProps> = ({ ses
             <div className="space-y-3 text-xs text-slate-300">
               <p className="flex items-center gap-2">
                 <ShieldCheck className="h-4 w-4 text-emerald-300" />
-                Internal CNH route verified
+                CNH room link verified
               </p>
               <p className="flex items-center gap-2">
                 <Camera className={`h-4 w-4 ${mediaDevicesReady ? 'text-emerald-300' : 'text-slate-500'}`} />

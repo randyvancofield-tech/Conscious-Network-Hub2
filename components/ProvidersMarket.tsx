@@ -131,7 +131,7 @@ const ProvidersMarketContent: React.FC<ProvidersMarketProps> = ({
           setProviders([]);
           setLoadError(
             error instanceof DOMException && error.name === 'AbortError'
-              ? 'Provider backend connection pending'
+              ? 'Provider directory is temporarily unavailable'
               : error instanceof Error
                 ? error.message
                 : 'Unable to load providers'
@@ -206,7 +206,7 @@ const ProvidersMarketContent: React.FC<ProvidersMarketProps> = ({
       <PageShell>
         <EmptyState
           title="Provider records unavailable"
-          description={`${loadError}. Provider detail routes are hidden until live verified records are reachable.`}
+          description={`${loadError}. Verified provider details will appear when the directory is available.`}
           action={
             <ActionButton type="button" onClick={onBackToList} icon={<ArrowLeft className="w-4 h-4" />}>
               Providers
@@ -222,7 +222,7 @@ const ProvidersMarketContent: React.FC<ProvidersMarketProps> = ({
       <PageShell>
         <EmptyState
           title="Provider not found"
-          description="This provider route is valid, but no frontend or backend provider record matches the requested identifier."
+          description="No verified provider matches the requested link."
           action={
             <ActionButton type="button" onClick={onBackToList} icon={<ArrowLeft className="w-4 h-4" />}>
               Providers

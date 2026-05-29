@@ -241,9 +241,9 @@ const ConsciousMeetingPortalPageContent: React.FC<ConsciousMeetingPortalPageProp
 
       <section className="space-y-4">
         <div>
-          <h2 className="text-sm font-black uppercase tracking-widest text-white">Internal Live Stream Pipeline</h2>
+          <h2 className="text-sm font-black uppercase tracking-widest text-white">Live Stream Readiness</h2>
           <p className="mt-2 text-xs leading-5 text-slate-500">
-            Certified host operations are limited to backend-issued sessions. Demo or local-only meeting controls are disabled for launch integrity.
+            Certified host operations are available only for verified provider sessions. Advanced host controls are being prepared for launch.
           </p>
         </div>
         {operationsEnabled ? (
@@ -255,9 +255,9 @@ const ConsciousMeetingPortalPageContent: React.FC<ConsciousMeetingPortalPageProp
             <div className="flex items-start gap-3">
               <ShieldCheck className="mt-1 h-5 w-5 text-amber-200" />
               <div>
-                <h3 className="text-sm font-black uppercase tracking-widest text-white">Provider Host Console Locked</h3>
+                <h3 className="text-sm font-black uppercase tracking-widest text-white">Provider Host Console Unavailable</h3>
                 <p className="mt-2 text-sm leading-6 text-slate-300">
-                  The legacy meeting console is not launch-facing. Provider host controls will return after the Phase 9 backend-only meeting portal completion.
+                  Provider host controls are being prepared and are not yet available in this portal.
                 </p>
               </div>
             </div>
