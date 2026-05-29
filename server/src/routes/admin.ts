@@ -24,6 +24,10 @@ import {
   listProviderApplicants,
   updateProviderApplicantReview,
 } from '../services/providerApplicantStore';
+import {
+  markProviderAccessApproved,
+  revokeProviderAccessForUser,
+} from '../services/providerAccess';
 
 const router = Router();
 
@@ -276,13 +280,39 @@ router.patch('/provider-applicants/:id', async (req: Request, res: Response): Pr
     reviewedAt: new Date(),
   });
 
+  let providerAccessChange:
+    | { granted: true; revokedSessions?: never }
+    | { granted: false; revokedSessions: number }
+    | null = null;
+
   if (status === 'approved') {
     await localStore.updateUser(existing.userId, {
       role: 'provider',
       providerApproved: true,
       providerApprovalStatus: 'approved',
+      providerRevokedAt: null,
       providerAccessUpdatedAt: new Date(),
     });
+    await markProviderAccessApproved(existing.userId);
+    providerAccessChange = { granted: true };
+  } else if (status) {
+    const targetUser = await localStore.getUserById(existing.userId);
+    if (targetUser?.providerApproved || targetUser?.providerApprovalStatus === 'approved') {
+      const revoked = await revokeProviderAccessForUser(targetUser, {
+        approvalStatus: status,
+      });
+      providerAccessChange = {
+        granted: false,
+        revokedSessions: revoked.providerSessionsRevoked + revoked.userSessionsRevoked,
+      };
+    } else if (targetUser) {
+      await localStore.updateUser(existing.userId, {
+        providerApproved: false,
+        providerApprovalStatus: status,
+        providerRevokedAt: null,
+        providerAccessUpdatedAt: new Date(),
+      });
+    }
   }
 
   recordAuditEvent(req, {
@@ -297,7 +327,10 @@ router.patch('/provider-applicants/:id', async (req: Request, res: Response): Pr
       previousStatus: existing.status,
       nextStatus: updated.status,
       adminNotesUpdated: adminNotes !== undefined,
-      nativeProviderAccessGranted: status === 'approved',
+      nativeProviderAccessGranted: providerAccessChange?.granted === true,
+      nativeProviderAccessRevoked: providerAccessChange?.granted === false,
+      revokedSessions:
+        providerAccessChange?.granted === false ? providerAccessChange.revokedSessions : 0,
     },
   });
 
