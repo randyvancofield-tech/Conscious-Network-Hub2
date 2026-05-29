@@ -12,6 +12,9 @@ import {
   requireCanonicalIdentity,
 } from '../middleware';
 import { recordAuditEvent } from '../services/auditTelemetry';
+import emailService from '../services/emailService';
+import { buildProviderApplicantStatusEmail } from '../services/emailTemplates';
+import { createNotification } from '../services/notificationStore';
 import { localStore } from '../services/persistenceStore';
 import { validateJsonBody } from '../validation/jsonSchema';
 import {
@@ -30,6 +33,8 @@ import {
 } from '../services/providerAccess';
 
 const router = Router();
+const PROVIDER_APPLICANT_CALENDLY_URL =
+  'https://calendly.com/randycofield/buildingconnections';
 
 type AdminVisibleRole = 'user' | 'applicant' | 'provider' | 'admin';
 
@@ -61,6 +66,35 @@ const toAdminUserSummary = (user: any) => ({
   createdAt: user.createdAt,
   updatedAt: user.updatedAt,
 });
+
+const resolveFrontendBaseUrl = (req: Request): string => {
+  const configured = String(process.env.FRONTEND_BASE_URL || '').trim().replace(/\/+$/, '');
+  if (configured) return configured;
+  const forwardedProto = String(req.headers['x-forwarded-proto'] || '')
+    .split(',')[0]
+    .trim();
+  const proto = forwardedProto || req.protocol || 'https';
+  return `${proto}://${req.get('host')}`.replace(/\/+$/, '');
+};
+
+const buildFrontendUrl = (req: Request, path: string): string => {
+  const base = resolveFrontendBaseUrl(req);
+  const normalizedPath = path.startsWith('/') ? path : `/${path}`;
+  return `${base}${normalizedPath}`;
+};
+
+const formatApplicantStatus = (status: unknown): string => {
+  const normalized = String(status || '').trim().toLowerCase();
+  const labels: Record<string, string> = {
+    submitted: 'Submitted',
+    under_review: 'Under review',
+    discovery_scheduled: 'Discovery scheduled',
+    approved: 'Approved',
+    rejected: 'Not approved',
+    needs_more_info: 'More information requested',
+  };
+  return labels[normalized] || 'Updated';
+};
 
 router.use(requireCanonicalIdentity);
 router.use(requireAdminRole);
@@ -262,6 +296,11 @@ router.patch('/provider-applicants/:id', async (req: Request, res: Response): Pr
   const status = String(req.body?.status || '').trim().toLowerCase();
   const adminNotes =
     req.body?.adminNotes === undefined ? undefined : String(req.body?.adminNotes || '').trim();
+  const applicantMessage =
+    req.body?.applicantMessage === undefined
+      ? undefined
+      : String(req.body?.applicantMessage || '').trim().slice(0, 2000);
+  const sendEmail = req.body?.sendEmail === undefined ? true : req.body?.sendEmail === true;
 
   if (status && !PROVIDER_APPLICANT_STATUSES.includes(status as any)) {
     res.status(400).json({ error: 'Invalid provider applicant status' });
@@ -315,6 +354,59 @@ router.patch('/provider-applicants/:id', async (req: Request, res: Response): Pr
     }
   }
 
+  const nextStatus = status || updated.status;
+  const targetUser = await localStore.getUserById(existing.userId);
+  const shouldNotifyApplicant = Boolean(status) || Boolean(applicantMessage);
+  const shouldSendStatusEmail = sendEmail && shouldNotifyApplicant;
+  let applicantEmailResult: Awaited<ReturnType<typeof emailService.send>> | null = null;
+  if (shouldSendStatusEmail) {
+    const applicantEmail = buildProviderApplicantStatusEmail({
+      firstName: updated.firstName,
+      lastName: updated.lastName,
+      email: updated.email,
+      providerCategory: updated.providerCategory,
+      status: nextStatus,
+      frontendBaseUrl: resolveFrontendBaseUrl(req),
+      applicantPortalUrl: buildFrontendUrl(req, '/provider/applicant-sign-in'),
+      providerAccessUrl: buildFrontendUrl(req, '/provider-access'),
+      calendlyUrl: PROVIDER_APPLICANT_CALENDLY_URL,
+      applicantMessage,
+    });
+    applicantEmailResult = await emailService.send({
+      to: updated.email,
+      ...applicantEmail,
+    });
+  }
+
+  if (shouldNotifyApplicant) {
+    await createNotification({
+      userId: existing.userId,
+      type: nextStatus === 'approved' ? 'provider_application_approved' : 'provider_application_status',
+      title:
+        nextStatus === 'approved'
+          ? 'Provider application approved'
+          : 'Provider application status updated',
+      body:
+        nextStatus === 'approved'
+          ? 'Your provider account has been approved. Sign in through Provider Access and complete wallet verification to open provider tools.'
+          : applicantMessage ||
+            `Your provider application status is now ${formatApplicantStatus(nextStatus)}.`,
+      roleScope:
+        nextStatus === 'approved'
+          ? 'provider'
+          : targetUser?.role === 'provider'
+          ? 'provider'
+          : 'applicant',
+      metadata: {
+        applicantId: id,
+        previousStatus: existing.status,
+        nextStatus,
+        emailSkipped: Boolean(applicantEmailResult?.skipped),
+        emailSent: applicantEmailResult?.ok === true && !applicantEmailResult?.skipped,
+      },
+    });
+  }
+
   recordAuditEvent(req, {
     domain: 'admin',
     action: 'provider_applicant_update',
@@ -327,6 +419,9 @@ router.patch('/provider-applicants/:id', async (req: Request, res: Response): Pr
       previousStatus: existing.status,
       nextStatus: updated.status,
       adminNotesUpdated: adminNotes !== undefined,
+      applicantMessageSent: Boolean(applicantMessage),
+      statusEmailRequested: shouldSendStatusEmail,
+      statusEmailSkipped: Boolean(applicantEmailResult?.skipped),
       nativeProviderAccessGranted: providerAccessChange?.granted === true,
       nativeProviderAccessRevoked: providerAccessChange?.granted === false,
       revokedSessions:
@@ -334,7 +429,16 @@ router.patch('/provider-applicants/:id', async (req: Request, res: Response): Pr
     },
   });
 
-  res.json({ success: true, applicant: updated });
+  res.json({
+    success: true,
+    applicant: updated,
+    communication: {
+      emailConfigured: emailService.configured(),
+      emailAttempted: shouldSendStatusEmail,
+      emailSkipped: Boolean(applicantEmailResult?.skipped),
+      emailSent: applicantEmailResult?.ok === true && !applicantEmailResult?.skipped,
+    },
+  });
 });
 
 router.patch(

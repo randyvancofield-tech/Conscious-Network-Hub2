@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { CalendarCheck, ChevronRight, FileText, LockKeyhole, RefreshCw } from 'lucide-react';
+import { Bell, CalendarCheck, ChevronRight, FileText, LockKeyhole, RefreshCw } from 'lucide-react';
 import { api } from '../services/apiClient';
 import { openPrivateUpload } from '../services/privateUploadService';
 
@@ -45,6 +45,14 @@ interface ProviderApplicantRecord {
   calendlyShownAt?: string | null;
 }
 
+interface ApplicantNotificationRecord {
+  id: string;
+  type: string;
+  title: string;
+  body: string;
+  createdAt?: string;
+}
+
 const formatStatus = (status: string): string =>
   String(status || 'submitted')
     .split('_')
@@ -85,6 +93,7 @@ const ProviderApplicationStatusPage: React.FC<ProviderApplicationStatusPageProps
   onSignOut,
 }) => {
   const [applicant, setApplicant] = useState<ProviderApplicantRecord | null>(null);
+  const [notifications, setNotifications] = useState<ApplicantNotificationRecord[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
 
@@ -92,10 +101,15 @@ const ProviderApplicationStatusPage: React.FC<ProviderApplicationStatusPageProps
     setLoading(true);
     setError('');
     try {
-      const data = await api<{ applicant: ProviderApplicantRecord; calendlyUrl?: string }>('/provider-applicants/current', {
+      const data = await api<{
+        applicant: ProviderApplicantRecord;
+        notifications?: ApplicantNotificationRecord[];
+        calendlyUrl?: string;
+      }>('/provider-applicants/current', {
         cache: 'no-store',
       });
       setApplicant(data.applicant);
+      setNotifications(Array.isArray(data.notifications) ? data.notifications : []);
       if (['submitted', 'under_review'].includes(String(data.applicant?.status || '').toLowerCase())) {
         void api('/provider-applicants/current/calendly-shown', { method: 'POST', body: {} }).catch(() => undefined);
       }
@@ -215,6 +229,34 @@ const ProviderApplicationStatusPage: React.FC<ProviderApplicationStatusPageProps
                   CRM, client, collaboration, calendar, message, revenue, course, and provider
                   settings areas remain locked.
                 </p>
+              </div>
+
+              <div className="rounded-3xl border border-white/10 bg-white/[0.04] p-6">
+                <div className="mb-4 flex items-center gap-2 text-amber-100">
+                  <Bell className="h-4 w-4" />
+                  <span className="text-[10px] font-black uppercase tracking-widest">Status Timeline</span>
+                </div>
+                {notifications.length > 0 ? (
+                  <div className="space-y-3">
+                    {notifications.map((notification) => (
+                      <div key={notification.id} className="rounded-2xl border border-white/10 bg-black/20 p-4">
+                        <p className="text-xs font-black uppercase tracking-widest text-white">
+                          {notification.title}
+                        </p>
+                        <p className="mt-2 text-xs leading-5 text-slate-300">{notification.body}</p>
+                        {notification.createdAt && (
+                          <p className="mt-2 text-[10px] uppercase tracking-widest text-slate-500">
+                            {new Date(notification.createdAt).toLocaleString()}
+                          </p>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <p className="text-sm leading-6 text-slate-300">
+                    Status updates from CNH review will appear here.
+                  </p>
+                )}
               </div>
             </section>
 

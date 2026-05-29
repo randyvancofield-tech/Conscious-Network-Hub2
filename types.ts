@@ -118,6 +118,7 @@ export interface UserProfile {
   providerApproved?: boolean;
   providerApprovalStatus?: string | null;
   providerRevokedAt?: string | null;
+  providerWalletAddressBound?: boolean;
   reputationScore?: number;
   accessKeyIndex?: number;
   createdAt?: string;

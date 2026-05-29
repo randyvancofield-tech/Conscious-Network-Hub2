@@ -11,6 +11,7 @@ import {
 } from '../middleware';
 import { getProviderAccessDenyReason, isProviderAccessActive } from '../services/providerAccess';
 import { recordAuditEvent } from '../services/auditTelemetry';
+import { createNotification } from '../services/notificationStore';
 import { localStore, type LocalUserRecord } from '../services/persistenceStore';
 import {
   PROVIDER_CRM_ADMIN_WALLET_ENV_KEYS,
@@ -30,6 +31,8 @@ const SIWE_VERSION = '1';
 const DEFAULT_WALLET_CHALLENGE_TTL_SECONDS = 5 * 60;
 const PROVIDER_WALLET_STATEMENT =
   'Sign in to Conscious Network Hub Provider Access. This gasless signature verifies your approved provider wallet and does not authorize a blockchain transaction.';
+const PROVIDER_WALLET_BIND_STATEMENT =
+  'Bind this wallet to your approved Conscious Network Hub provider account. This gasless signature verifies wallet ownership and does not authorize a blockchain transaction.';
 const ADMIN_WALLET_STATEMENT =
   'Sign in to Conscious Network Hub Administrative Access. This gasless signature verifies the founder administrator wallet and does not authorize a blockchain transaction.';
 
@@ -54,6 +57,12 @@ const normalizeWalletAddress = (value: unknown): string | null => {
   } catch {
     return null;
   }
+};
+
+const maskWalletAddress = (value: unknown): string | null => {
+  const normalized = normalizeWalletAddress(value);
+  if (!normalized) return null;
+  return `${normalized.slice(0, 6)}...${normalized.slice(-4)}`;
 };
 
 const getWalletChallengeTtlMs = (): number => {
@@ -698,6 +707,321 @@ router.post('/admin/wallet/verify', async (req: Request, res: Response): Promise
 });
 
 /**
+ * POST /api/provider/auth/wallet/bind/nonce
+ * Issues a wallet ownership challenge for an approved provider that has not bound a wallet yet.
+ */
+router.post('/wallet/bind/nonce', requireCanonicalIdentity, async (req: Request, res: Response): Promise<void> => {
+  const actorUserId = getAuthenticatedUserId(req);
+  const role = getAuthenticatedRole(req);
+  if (!actorUserId || role !== 'provider') {
+    recordAuditEvent(req, {
+      domain: 'auth',
+      action: 'provider_wallet_bind_nonce',
+      outcome: 'deny',
+      actorUserId,
+      statusCode: 403,
+      metadata: { reason: 'provider_role_required', role },
+    });
+    res.status(403).json({ error: 'Approved provider access is required' });
+    return;
+  }
+
+  const walletAddress = normalizeWalletAddress(req.body?.walletAddress);
+  if (!walletAddress) {
+    recordAuditEvent(req, {
+      domain: 'auth',
+      action: 'provider_wallet_bind_nonce',
+      outcome: 'deny',
+      actorUserId,
+      statusCode: 400,
+      metadata: { reason: 'invalid_wallet_address' },
+    });
+    res.status(400).json({ error: 'Valid walletAddress is required' });
+    return;
+  }
+
+  try {
+    const provider = await localStore.getUserById(actorUserId);
+    if (!isProviderAccessActive(provider)) {
+      recordAuditEvent(req, {
+        domain: 'auth',
+        action: 'provider_wallet_bind_nonce',
+        outcome: 'deny',
+        actorUserId,
+        statusCode: 403,
+        metadata: { reason: getProviderAccessDenyReason(provider) || 'provider_not_active' },
+      });
+      res.status(403).json({ error: 'Provider access is not active' });
+      return;
+    }
+
+    const existingWallet = normalizeWalletAddress(provider?.walletAddress);
+    if (existingWallet && existingWallet !== walletAddress) {
+      recordAuditEvent(req, {
+        domain: 'auth',
+        action: 'provider_wallet_bind_nonce',
+        outcome: 'deny',
+        actorUserId,
+        statusCode: 409,
+        metadata: { reason: 'provider_wallet_already_bound' },
+      });
+      res.status(409).json({
+        error: 'A wallet is already bound to this provider account',
+        code: 'PROVIDER_WALLET_ALREADY_BOUND',
+        walletAddressMasked: maskWalletAddress(existingWallet),
+      });
+      return;
+    }
+
+    const existingOwner = await localStore.findUserByWalletAddress(walletAddress);
+    if (existingOwner && existingOwner.id !== actorUserId) {
+      recordAuditEvent(req, {
+        domain: 'auth',
+        action: 'provider_wallet_bind_nonce',
+        outcome: 'deny',
+        actorUserId,
+        targetUserId: existingOwner.id,
+        statusCode: 403,
+        metadata: { reason: 'wallet_bound_to_other_user' },
+      });
+      res.status(403).json({
+        error: 'This wallet is already bound to another CNH account',
+        code: 'PROVIDER_WALLET_BOUND_TO_OTHER_USER',
+      });
+      return;
+    }
+
+    const now = new Date();
+    const expiresAt = new Date(now.getTime() + getWalletChallengeTtlMs());
+    const uri = resolveProviderWalletUri(req);
+    const fields: ProviderSiweFields = {
+      domain: domainFromUri(uri),
+      address: walletAddress,
+      statement: PROVIDER_WALLET_BIND_STATEMENT,
+      uri,
+      version: SIWE_VERSION,
+      chainId: getProviderWalletChainId(),
+      nonce: crypto.randomBytes(16).toString('hex'),
+      issuedAt: now.toISOString(),
+      expirationTime: expiresAt.toISOString(),
+    };
+    const message = buildProviderSiweMessage(fields);
+    const challengeId = crypto.randomUUID();
+
+    await localStore.createProviderChallenge({
+      id: challengeId,
+      did: providerDidForUser(actorUserId),
+      nonce: fields.nonce,
+      statement: message,
+      expiresAt,
+      createdAt: now,
+    });
+
+    recordAuditEvent(req, {
+      domain: 'auth',
+      action: 'provider_wallet_bind_nonce',
+      outcome: 'success',
+      actorUserId,
+      targetUserId: actorUserId,
+      statusCode: 200,
+      metadata: { challengeId, chainId: fields.chainId },
+    });
+
+    res.json({
+      success: true,
+      challengeId,
+      walletBinding: true,
+      ...fields,
+    });
+  } catch (error) {
+    console.error('[ProviderAuth] provider wallet bind nonce failed', error);
+    recordAuditEvent(req, {
+      domain: 'auth',
+      action: 'provider_wallet_bind_nonce',
+      outcome: 'error',
+      actorUserId,
+      statusCode: 500,
+      metadata: { reason: 'unexpected_error' },
+    });
+    res.status(500).json({ error: 'Provider wallet binding challenge could not be created' });
+  }
+});
+
+/**
+ * POST /api/provider/auth/wallet/bind/verify
+ * Consumes a wallet ownership challenge and binds the wallet to the approved provider account.
+ */
+router.post('/wallet/bind/verify', requireCanonicalIdentity, async (req: Request, res: Response): Promise<void> => {
+  const actorUserId = getAuthenticatedUserId(req);
+  const role = getAuthenticatedRole(req);
+  if (!actorUserId || role !== 'provider') {
+    recordAuditEvent(req, {
+      domain: 'auth',
+      action: 'provider_wallet_bind_verify',
+      outcome: 'deny',
+      actorUserId,
+      statusCode: 403,
+      metadata: { reason: 'provider_role_required', role },
+    });
+    res.status(403).json({ error: 'Approved provider access is required' });
+    return;
+  }
+
+  const challengeId = String(req.body?.challengeId || '').trim();
+  const message = String(req.body?.message || '');
+  const signature = String(req.body?.signature || '').trim();
+  const submittedWalletAddress = normalizeWalletAddress(req.body?.walletAddress);
+  if (!challengeId || !message || !signature) {
+    res.status(400).json({ error: 'challengeId, message, and signature are required' });
+    return;
+  }
+
+  try {
+    const challenge = await localStore.getProviderChallengeById(challengeId);
+    if (!challenge) {
+      recordAuditEvent(req, {
+        domain: 'auth',
+        action: 'provider_wallet_bind_verify',
+        outcome: 'deny',
+        actorUserId,
+        statusCode: 401,
+        metadata: { reason: 'challenge_not_found' },
+      });
+      res.status(401).json({ error: 'Wallet binding challenge is invalid' });
+      return;
+    }
+
+    if (challenge.did !== providerDidForUser(actorUserId)) {
+      recordAuditEvent(req, {
+        domain: 'auth',
+        action: 'provider_wallet_bind_verify',
+        outcome: 'deny',
+        actorUserId,
+        statusCode: 403,
+        metadata: { reason: 'challenge_actor_mismatch', challengeId },
+      });
+      res.status(403).json({ error: 'Wallet binding challenge does not belong to this provider' });
+      return;
+    }
+
+    if (challenge.usedAt) {
+      res.status(409).json({ error: 'Wallet binding challenge has already been used' });
+      return;
+    }
+
+    if (challenge.expiresAt.getTime() <= Date.now()) {
+      res.status(401).json({ error: 'Wallet binding challenge expired' });
+      return;
+    }
+
+    if (message !== challenge.statement || !message.includes(PROVIDER_WALLET_BIND_STATEMENT)) {
+      res.status(400).json({ error: 'Wallet binding message does not match the challenge' });
+      return;
+    }
+
+    const parsed = parseProviderSiweMessage(message);
+    const messageWalletAddress = normalizeWalletAddress(parsed.address);
+    if (!messageWalletAddress || parsed.nonce !== challenge.nonce) {
+      res.status(400).json({ error: 'Wallet binding message is invalid' });
+      return;
+    }
+
+    if (submittedWalletAddress && submittedWalletAddress !== messageWalletAddress) {
+      res.status(400).json({ error: 'Submitted wallet does not match signed message' });
+      return;
+    }
+
+    let recoveredAddress: string | null = null;
+    try {
+      recoveredAddress = normalizeWalletAddress(ethers.verifyMessage(message, signature));
+    } catch {
+      recoveredAddress = null;
+    }
+    if (!recoveredAddress || recoveredAddress !== messageWalletAddress) {
+      res.status(401).json({ error: 'Wallet signature is invalid' });
+      return;
+    }
+
+    const provider = await localStore.getUserById(actorUserId);
+    if (!isProviderAccessActive(provider)) {
+      res.status(403).json({ error: 'Provider access is not active' });
+      return;
+    }
+
+    const existingWallet = normalizeWalletAddress(provider?.walletAddress);
+    if (existingWallet && existingWallet !== messageWalletAddress) {
+      res.status(409).json({
+        error: 'A wallet is already bound to this provider account',
+        code: 'PROVIDER_WALLET_ALREADY_BOUND',
+        walletAddressMasked: maskWalletAddress(existingWallet),
+      });
+      return;
+    }
+
+    const existingOwner = await localStore.findUserByWalletAddress(messageWalletAddress);
+    if (existingOwner && existingOwner.id !== actorUserId) {
+      res.status(403).json({
+        error: 'This wallet is already bound to another CNH account',
+        code: 'PROVIDER_WALLET_BOUND_TO_OTHER_USER',
+      });
+      return;
+    }
+
+    const consumed = await localStore.consumeProviderChallenge(challengeId);
+    if (!consumed) {
+      res.status(409).json({ error: 'Wallet binding challenge has already been used' });
+      return;
+    }
+
+    const updated = await localStore.updateUser(actorUserId, {
+      walletAddress: messageWalletAddress,
+      providerAccessUpdatedAt: new Date(),
+    });
+    if (!updated) {
+      res.status(404).json({ error: 'Provider account not found' });
+      return;
+    }
+
+    await createNotification({
+      userId: actorUserId,
+      type: 'provider_wallet_bound',
+      title: 'Provider wallet bound',
+      body:
+        'Your provider wallet was bound to this account. Complete wallet verification to open Provider CRM tools.',
+      roleScope: 'provider',
+      metadata: { walletAddressMasked: maskWalletAddress(messageWalletAddress) },
+    });
+    recordAuditEvent(req, {
+      domain: 'auth',
+      action: 'provider_wallet_bind_verify',
+      outcome: 'success',
+      actorUserId,
+      targetUserId: actorUserId,
+      statusCode: 200,
+      metadata: { challengeId },
+    });
+
+    res.json({
+      success: true,
+      walletBound: true,
+      providerWalletAddressBound: true,
+      walletAddressMasked: maskWalletAddress(messageWalletAddress),
+    });
+  } catch (error) {
+    console.error('[ProviderAuth] provider wallet bind verify failed', error);
+    recordAuditEvent(req, {
+      domain: 'auth',
+      action: 'provider_wallet_bind_verify',
+      outcome: 'error',
+      actorUserId,
+      statusCode: 500,
+      metadata: { reason: 'unexpected_error' },
+    });
+    res.status(500).json({ error: 'Provider wallet binding failed' });
+  }
+});
+
+/**
  * POST /api/provider/auth/wallet/nonce
  * Issues a short-lived SIWE-style provider wallet challenge after provider email/password sign-in.
  */
@@ -979,6 +1303,18 @@ router.post('/wallet/verify', requireCanonicalIdentity, async (req: Request, res
     }
 
     const providerSession = await createNativeProviderSessionPayload(req, actorUserId, role);
+    await createNotification({
+      userId: actorUserId,
+      type: 'provider_wallet_verified',
+      title: 'Provider wallet verified',
+      body:
+        'Wallet verification is complete for this provider session. Provider CRM tools are available while the session remains active.',
+      roleScope: 'provider,admin',
+      metadata: {
+        providerSessionId: providerSession.session.id,
+        scopesCount: providerSession.session.scopes.length,
+      },
+    });
     recordAuditEvent(req, {
       domain: 'auth',
       action: 'provider_wallet_verify',

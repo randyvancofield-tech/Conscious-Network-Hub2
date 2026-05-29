@@ -172,6 +172,17 @@ export const userPasswordResetConfirmSchema: JsonSchema = {
   },
 };
 
+export const userRecoveryCodeResetConfirmSchema: JsonSchema = {
+  type: 'object',
+  additionalProperties: false,
+  required: ['email', 'recoveryCode', 'password'],
+  properties: {
+    email: { type: 'string', minLength: 3, maxLength: 320 },
+    recoveryCode: { type: 'string', minLength: 8, maxLength: 64 },
+    password: { type: 'string', minLength: 1, maxLength: 512 },
+  },
+};
+
 export const userEmailVerificationConfirmSchema: JsonSchema = {
   type: 'object',
   additionalProperties: false,

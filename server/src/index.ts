@@ -29,6 +29,7 @@ import identitySecurityRoutes from './routes/identitySecurity';
 import integrityRoutes from './routes/integrity';
 import immersiveRoutes from './routes/immersive';
 import meetingRoutes from './routes/meeting';
+import notificationRoutes from './routes/notifications';
 import supportRoutes from './routes/support';
 import { coursesPublicRoutes, coursesProtectedRoutes } from './routes/courses';
 import userCoursesRoutes from './routes/userCourses';
@@ -261,6 +262,7 @@ app.use('/api/provider-applicants', providerApplicantProtectedRoutes);
 app.use('/api/conscious-careers', consciousCareersRoutes);
 app.use('/api/immersive', immersiveRoutes);
 app.use('/api/meeting', meetingRoutes);
+app.use('/api/notifications', notificationRoutes);
 app.use('/uploads', uploadPublicRoutes);
 
 // Catch-all 404 handler

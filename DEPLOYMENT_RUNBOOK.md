@@ -66,7 +66,9 @@ Optional for AI routes only:
 
 Production delivery integrations:
 
-- `EMAIL_USER` + `EMAIL_PASSWORD`, or `SMTP_HOST` + `SMTP_PORT`: optional; enables native password reset email delivery only. Normal sign-in does not require email delivery.
+- `EMAIL_USER` + `EMAIL_PASSWORD`, or `SMTP_HOST` + `SMTP_PORT`: required in production; enables native password reset, provider applicant lifecycle, and admin notification email delivery. Normal sign-in does not require email verification gates.
+- `EMAIL_FROM`: sender address for account and provider lifecycle emails.
+- `ADMIN_NOTIFICATION_EMAIL`: internal recipient for provider application/admin email notifications.
 - `TWILIO_ACCOUNT_SID`, `TWILIO_AUTH_TOKEN`, `TWILIO_FROM_NUMBER`: optional legacy SMS settings only. Member/provider sign-in does not require Twilio.
 - `ENABLE_PASSWORD_RESET=false`: deliberately disables native password reset email flow.
 - `ENABLE_USER_2FA=false`: leave disabled for launch; legacy 2FA fields are non-blocking.

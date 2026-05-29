@@ -6,6 +6,7 @@ type TwoFactorMethod = 'none' | 'phone' | 'wallet';
 interface MockUser {
   id: string;
   email: string;
+  role: 'user' | 'applicant' | 'provider' | 'admin';
   name: string | null;
   handle: string | null;
   bio: string | null;
@@ -91,6 +92,7 @@ const createMockUser = (
   const base: MockUser = {
     id,
     email,
+    role: 'user',
     name: 'Node',
     handle: null,
     bio: null,
@@ -307,6 +309,37 @@ jest.mock('../services/providerSessionStore', () => ({
   getProviderSessionById: jest.fn(async () => null),
 }));
 
+const mockRevokeUserSessionsByUserId = jest.fn(async () => 2);
+
+jest.mock('../services/userSessionStore', () => ({
+  createUserSession: jest.fn(async (userId: string) => {
+    const now = new Date();
+    return {
+      id: `mock-session-${userId}`,
+      userId,
+      issuedAt: now,
+      expiresAt: new Date(now.getTime() + 60 * 60 * 1000),
+      revokedAt: null,
+    };
+  }),
+  getUserSessionById: jest.fn(async () => null),
+  revokeUserSession: jest.fn(async () => undefined),
+  revokeUserSessionsByUserId: mockRevokeUserSessionsByUserId,
+}));
+
+const mockVerifyAndConsumeRecoveryCode = jest.fn(async (userId: string, code: string) =>
+  userId === 'viewer' && code === 'CNH-VALID-CODE1' ? { id: 'recovery-code-1' } : null
+);
+
+jest.mock('../services/recoveryCodeService', () => ({
+  createRecoveryCodesForUser: jest.fn(async () => ['CNH-AAAA-BBBB-CCCC']),
+  getRecoveryCodeStatusForUser: jest.fn(async () => ({
+    hasUnusedCodes: true,
+    unusedCount: 1,
+  })),
+  verifyAndConsumeRecoveryCode: mockVerifyAndConsumeRecoveryCode,
+}));
+
 const { createSessionToken } = require('../auth');
 const { userPublicRoutes, userProtectedRoutes } = require('../routes/user');
 const socialRoutes = require('../routes/social').default;
@@ -512,5 +545,38 @@ describe('Phase 4 integration boundaries', () => {
     expect(securityResponse.status).toBe(200);
     expect(securityResponse.body?.security?.walletDid).not.toBe(current.walletDid);
     expect(String(securityResponse.body?.security?.walletDid || '')).toContain('...');
+  });
+
+  it('recovers a non-admin account with a one-time recovery code without email', async () => {
+    const response = await requestJson({
+      method: 'POST',
+      path: '/api/user/password-reset/recovery-code/confirm',
+      body: {
+        email: 'viewer@example.com',
+        recoveryCode: 'CNH-VALID-CODE1',
+        password: 'FreshPassphrase123!',
+      },
+    });
+
+    expect(response.status).toBe(200);
+    expect(response.body?.success).toBe(true);
+    expect(mockVerifyAndConsumeRecoveryCode).toHaveBeenCalledWith('viewer', 'CNH-VALID-CODE1');
+    expect(mockRevokeUserSessionsByUserId).toHaveBeenCalledWith('viewer');
+    expect(users.get('viewer')?.password).not.toBe('scrypt$test$hash');
+  });
+
+  it('does not reveal account existence when recovery code reset fails', async () => {
+    const response = await requestJson({
+      method: 'POST',
+      path: '/api/user/password-reset/recovery-code/confirm',
+      body: {
+        email: 'missing@example.com',
+        recoveryCode: 'CNH-NOPE-NOPE-NOPE',
+        password: 'FreshPassphrase123!',
+      },
+    });
+
+    expect(response.status).toBe(400);
+    expect(response.body?.error).toContain('Recovery code could not be verified');
   });
 });

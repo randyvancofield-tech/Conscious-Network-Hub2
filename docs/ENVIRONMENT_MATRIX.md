@@ -38,7 +38,11 @@ Canonical environment values for the current backend architecture.
 | Render | `DATABASE_POOL_MODE` | `transaction` | Yes | Must match the Neon pooler mode for `DATABASE_URL`. |
 | Render | `HSTS_ALLOWED_HOSTS` | final production API/custom domain host | Yes for custom prod domains | Optional comma-separated override for hosts that should receive Strict-Transport-Security. Defaults to the host from `FRONTEND_BASE_URL`. |
 | Render | `HSTS_MAX_AGE_SECONDS` | `31536000` | No | HSTS max-age for production HTTPS requests on allowed hosts. |
-| Render | `EMAIL_USER` + `EMAIL_PASSWORD`, or `SMTP_HOST` + `SMTP_PORT` | none | No | Optional; enables native password reset email delivery only. Normal sign-in does not require email delivery. |
+| Render | `EMAIL_DELIVERY_ENABLED` | `false` | No | Explicit launch flag for outbound email. Keep `false` until CNH has a production email provider. |
+| Render | `REQUIRE_EMAIL_DELIVERY` | `false` | No | Set `true` only when startup should fail without Gmail/SMTP config. |
+| Render | `EMAIL_USER` + `EMAIL_PASSWORD`, or `SMTP_HOST` + `SMTP_PORT` | none | Only when email delivery is enabled/required | Optional outbound email provider for future password reset and provider lifecycle emails. When disabled, recovery codes, in-app notifications, and portals are primary. |
+| Render | `EMAIL_FROM` | `noreply@conscious-network.org` | No | Sender address used by account and provider lifecycle emails. |
+| Render | `ADMIN_NOTIFICATION_EMAIL` | `higherconscious.network1@gmail.com` | No | Recipient for internal provider application/admin notifications. |
 | Render | `ENABLE_PASSWORD_RESET` | `true` | No | Set to `false` only to deliberately disable native password reset. |
 | Render | `ENABLE_USER_2FA` | `false` | No | Optional legacy enrolled 2FA flag. Default member sign-in does not require SMS. |
 | Render | `TWILIO_ACCOUNT_SID`, `TWILIO_AUTH_TOKEN`, `TWILIO_FROM_NUMBER` | none | No | Optional legacy SMS settings only; not required for member sign-in, onboarding, or Render startup. |

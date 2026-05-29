@@ -14,6 +14,13 @@ import { recordAuditEvent } from '../services/auditTelemetry';
 import { localStore } from '../services/persistenceStore';
 import { createUserSession } from '../services/userSessionStore';
 import { persistUploadObject } from '../services/uploadBlobStore';
+import emailService from '../services/emailService';
+import {
+  buildProviderApplicationAdminEmail,
+  buildProviderApplicationSubmittedEmail,
+} from '../services/emailTemplates';
+import { createNotification, listNotificationsForUser } from '../services/notificationStore';
+import { createRecoveryCodesForUser } from '../services/recoveryCodeService';
 import {
   ProviderApplicantFileRef,
   createProviderApplicant,
@@ -59,6 +66,18 @@ const getPublicBaseUrl = (req: Request): string => {
     .trim();
   const proto = forwardedProto || req.protocol || 'https';
   return `${proto}://${req.get('host')}`;
+};
+
+const resolveFrontendBaseUrl = (req: Request): string => {
+  const configured = String(process.env.FRONTEND_BASE_URL || '').trim().replace(/\/+$/, '');
+  if (configured) return configured;
+  return getPublicBaseUrl(req);
+};
+
+const buildFrontendUrl = (req: Request, path: string): string => {
+  const base = resolveFrontendBaseUrl(req);
+  const normalizedPath = path.startsWith('/') ? path : `/${path}`;
+  return `${base}${normalizedPath}`;
 };
 
 const getForwardedProto = (req: Request): string =>
@@ -441,6 +460,48 @@ publicRouter.post(
         sessionId: persistedSession.id,
         expiresAt: persistedSession.expiresAt.getTime(),
       });
+      const recoveryCodes = await createRecoveryCodesForUser(user.id);
+      const applicantPortalUrl = buildFrontendUrl(req, '/provider/applicant-sign-in');
+      const providerAccessUrl = buildFrontendUrl(req, '/provider-access');
+      const applicantEmail = buildProviderApplicationSubmittedEmail({
+        firstName,
+        lastName,
+        email,
+        providerCategory,
+        status: applicant.status,
+        frontendBaseUrl: resolveFrontendBaseUrl(req),
+        applicantPortalUrl,
+        providerAccessUrl,
+        calendlyUrl: PROVIDER_APPLICANT_CALENDLY_URL,
+      });
+      const applicantEmailResult = await emailService.send({
+        to: email,
+        ...applicantEmail,
+      });
+      const adminEmailResult = await emailService.send(
+        buildProviderApplicationAdminEmail({
+          adminEmail: emailService.adminRecipient(),
+          applicantName: `${firstName} ${lastName}`.trim(),
+          applicantEmail: email,
+          providerCategory,
+          status: applicant.status,
+          submittedAt: applicant.submittedAt,
+        })
+      );
+      await createNotification({
+        userId: user.id,
+        type: 'provider_application_submitted',
+        title: 'Provider application submitted',
+        body:
+          'Your provider application was received. Use the applicant portal to view review status and next steps.',
+        roleScope: 'applicant',
+        metadata: {
+          applicantId: applicant.id,
+          status: applicant.status,
+          emailSkipped: Boolean(applicantEmailResult?.skipped),
+          emailSent: applicantEmailResult?.ok === true && !applicantEmailResult?.skipped,
+        },
+      });
 
       recordAuditEvent(req, {
         domain: 'profile',
@@ -465,6 +526,14 @@ publicRouter.post(
         user: buildPublicUser(user),
         applicant,
         calendlyUrl: PROVIDER_APPLICANT_CALENDLY_URL,
+        recoveryCodes,
+        recoveryCodesShownOnce: recoveryCodes.length > 0,
+        communication: {
+          applicantEmailConfigured: emailService.configured(),
+          applicantEmailSkipped: Boolean(applicantEmailResult?.skipped),
+          applicantEmailSent: applicantEmailResult?.ok === true && !applicantEmailResult?.skipped,
+          adminEmailSkipped: Boolean(adminEmailResult?.skipped),
+        },
       });
     } catch (error) {
       const duplicateCode = (error as Error & { code?: string })?.code;
@@ -500,9 +569,11 @@ protectedRouter.get('/current', async (req: Request, res: Response): Promise<voi
     res.status(404).json({ error: 'Provider application not found.' });
     return;
   }
+  const notifications = await listNotificationsForUser({ userId, role, limit: 25 });
   res.json({
     success: true,
     applicant,
+    notifications,
     calendlyUrl: PROVIDER_APPLICANT_CALENDLY_URL,
   });
 });

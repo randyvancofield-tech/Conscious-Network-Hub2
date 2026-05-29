@@ -47,6 +47,27 @@ const REQUIRED_COLUMNS = {
     'createdAt',
     'updatedAt',
   ],
+  Notification: [
+    'id',
+    'userId',
+    'type',
+    'title',
+    'body',
+    'roleScope',
+    'metadata',
+    'readAt',
+    'createdAt',
+    'updatedAt',
+  ],
+  AccountRecoveryCode: [
+    'id',
+    'userId',
+    'codeHash',
+    'usedAt',
+    'revokedAt',
+    'createdAt',
+    'updatedAt',
+  ],
 };
 
 function buildClient() {
@@ -121,6 +142,12 @@ async function main() {
       await prisma.consciousCareerGrantApplication.count();
     checks.ProviderCrmToolVisibility.rowCount = await client
       .query('SELECT COUNT(*)::int AS count FROM "ProviderCrmToolVisibility"')
+      .then((result) => Number(result.rows[0]?.count || 0));
+    checks.Notification.rowCount = await client
+      .query('SELECT COUNT(*)::int AS count FROM "Notification"')
+      .then((result) => Number(result.rows[0]?.count || 0));
+    checks.AccountRecoveryCode.rowCount = await client
+      .query('SELECT COUNT(*)::int AS count FROM "AccountRecoveryCode"')
       .then((result) => Number(result.rows[0]?.count || 0));
 
     const failures = Object.entries(checks).flatMap(([tableName, check]) => {

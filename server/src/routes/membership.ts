@@ -6,6 +6,7 @@ import {
   getAuthenticatedUserId,
   requireCanonicalIdentity,
 } from '../middleware';
+import { createNotification } from '../services/notificationStore';
 import { localStore } from '../services/persistenceStore';
 import { normalizeTier, TIER_VALUES, type TierValue } from '../tierPolicy';
 
@@ -479,6 +480,27 @@ const ensurePaymentRecordedForEvent = async (input: {
   });
 };
 
+const createMembershipNotification = async (input: {
+  userId: string;
+  type: string;
+  title: string;
+  body: string;
+  tier: TierValue;
+  status: string;
+}): Promise<void> => {
+  await createNotification({
+    userId: input.userId,
+    type: input.type,
+    title: input.title,
+    body: input.body,
+    roleScope: 'user,provider,admin',
+    metadata: {
+      tier: input.tier,
+      status: input.status,
+    },
+  });
+};
+
 const activateMembershipFromCheckout = async (input: {
   userId: string;
   tier: TierValue;
@@ -528,6 +550,17 @@ const activateMembershipFromCheckout = async (input: {
 
   if (!updatedUser) {
     throw new Error('User not found during membership activation');
+  }
+
+  if (!paymentAlreadyRecorded) {
+    await createMembershipNotification({
+      userId: input.userId,
+      type: 'membership_activated',
+      title: 'Membership activated',
+      body: `Your ${input.tier} membership is active.`,
+      tier: input.tier,
+      status: 'active',
+    });
   }
 
   return {
@@ -859,6 +892,15 @@ const handleSubscriptionUpdatedWebhookEvent = async (
     membershipStatus: membership.status,
   });
 
+  await createMembershipNotification({
+    userId: resolved.userId,
+    type: 'membership_subscription_updated',
+    title: 'Membership status updated',
+    body: `Your ${tier} membership status is ${membership.status}.`,
+    tier,
+    status: membership.status,
+  });
+
   return {
     userId: resolved.userId,
     membershipId: membership.id,
@@ -912,6 +954,15 @@ const handleSubscriptionDeletedWebhookEvent = async (
     tier: updatedUser.tier,
     subscriptionStatus: updatedUser.subscriptionStatus,
     membershipStatus: membership.status,
+  });
+
+  await createMembershipNotification({
+    userId: resolved.userId,
+    type: 'membership_cancelled',
+    title: 'Membership cancelled',
+    body: 'Your paid membership is marked cancelled. Your account remains available with the current free access rules.',
+    tier: TIER_VALUES.FREE,
+    status: membership.status,
   });
 
   return {
@@ -995,6 +1046,15 @@ const handleInvoicePaymentSucceededWebhookEvent = async (
     invoiceId: invoice.id,
   });
 
+  await createMembershipNotification({
+    userId: resolved.userId,
+    type: 'membership_payment_succeeded',
+    title: 'Membership payment received',
+    body: `A membership payment was recorded for ${tier}.`,
+    tier,
+    status: 'active',
+  });
+
   return {
     userId: resolved.userId,
     membershipId: membership.id,
@@ -1075,6 +1135,16 @@ const handleInvoicePaymentFailedWebhookEvent = async (
     invoiceId: invoice.id,
     subscriptionStatus: updatedUser.subscriptionStatus,
     action: 'grace_review_required',
+  });
+
+  await createMembershipNotification({
+    userId: resolved.userId,
+    type: 'membership_payment_failed',
+    title: 'Membership payment needs attention',
+    body:
+      'A membership payment could not be completed. Check your billing details in Stripe or contact support if this looks wrong.',
+    tier,
+    status: 'past_due',
   });
 
   return {

@@ -125,6 +125,18 @@ const mockLocalStore = {
     return null;
   },
 
+  async updateUser(id: string, updates: any): Promise<MockUser | null> {
+    const existing = users.get(id);
+    if (!existing) return null;
+    const next = {
+      ...existing,
+      ...updates,
+      updatedAt: new Date(),
+    };
+    users.set(id, next);
+    return cloneUser(next);
+  },
+
   async createProviderChallenge(input: any): Promise<MockProviderChallenge> {
     const challenge: MockProviderChallenge = {
       id: input.id,
@@ -268,6 +280,15 @@ const issueChallenge = async (providerId: string, walletAddress: string) => {
   });
 };
 
+const issueBindChallenge = async (providerId: string, walletAddress: string) => {
+  return requestJson({
+    method: 'POST',
+    path: '/api/provider/auth/wallet/bind/nonce',
+    token: userToken(providerId),
+    body: { walletAddress },
+  });
+};
+
 const verifyChallenge = async (
   providerId: string,
   challenge: any,
@@ -279,6 +300,27 @@ const verifyChallenge = async (
   return requestJson({
     method: 'POST',
     path: '/api/provider/auth/wallet/verify',
+    token: userToken(providerId),
+    body: {
+      challengeId: challenge.challengeId,
+      walletAddress,
+      message,
+      signature,
+    },
+  });
+};
+
+const verifyBindChallenge = async (
+  providerId: string,
+  challenge: any,
+  wallet: MessageSigner,
+  walletAddress = challenge.address
+) => {
+  const message = buildProviderSiweMessage(challenge);
+  const signature = await wallet.signMessage(message);
+  return requestJson({
+    method: 'POST',
+    path: '/api/provider/auth/wallet/bind/verify',
     token: userToken(providerId),
     body: {
       challengeId: challenge.challengeId,
@@ -377,6 +419,47 @@ describe('Provider wallet authentication', () => {
     expect(response.body?.nonce).toMatch(/^[0-9a-f]{32}$/);
     expect(String(response.body?.statement || '')).toContain('gasless signature');
     expect(challenges.size).toBe(1);
+  });
+
+  it('binds a wallet for an approved provider before verification', async () => {
+    const wallet = ethers.Wallet.createRandom();
+    users.set('provider-1', createMockUser('provider-1', 'provider', null));
+
+    const challenge = await issueBindChallenge('provider-1', wallet.address);
+    const binding = await verifyBindChallenge('provider-1', challenge.body, wallet);
+
+    expect(challenge.status).toBe(200);
+    expect(binding.status).toBe(200);
+    expect(binding.body?.walletBound).toBe(true);
+    expect(users.get('provider-1')?.walletAddress).toBe(wallet.address);
+  });
+
+  it('allows provider wallet verification after binding', async () => {
+    const wallet = ethers.Wallet.createRandom();
+    users.set('provider-1', createMockUser('provider-1', 'provider', null));
+
+    const bindChallenge = await issueBindChallenge('provider-1', wallet.address);
+    const binding = await verifyBindChallenge('provider-1', bindChallenge.body, wallet);
+    const verifyChallengeResponse = await issueChallenge('provider-1', wallet.address);
+    const verification = await verifyChallenge('provider-1', verifyChallengeResponse.body, wallet);
+
+    expect(binding.status).toBe(200);
+    expect(verifyChallengeResponse.status).toBe(200);
+    expect(verification.status).toBe(200);
+    expect(verification.body?.walletVerified).toBe(true);
+    expect(sessions.size).toBe(1);
+  });
+
+  it('blocks provider wallet binding to a wallet owned by another user', async () => {
+    const wallet = ethers.Wallet.createRandom();
+    users.set('provider-1', createMockUser('provider-1', 'provider', null));
+    users.set('provider-2', createMockUser('provider-2', 'provider', wallet.address));
+
+    const challenge = await issueBindChallenge('provider-1', wallet.address);
+
+    expect(challenge.status).toBe(403);
+    expect(challenge.body?.code).toBe('PROVIDER_WALLET_BOUND_TO_OTHER_USER');
+    expect(challenges.size).toBe(0);
   });
 
   it('accepts a valid signature and unlocks provider tools through the provider session', async () => {

@@ -1,16 +1,39 @@
 import { Router, Request, Response } from 'express';
-import { getAuthenticatedUserId, requireCanonicalIdentity } from '../middleware';
+import {
+  AuthenticatedRequest,
+  getAuthenticatedRole,
+  getAuthenticatedUserId,
+  requireCanonicalIdentity,
+} from '../middleware';
 import { getPrisma } from '../services/prismaClient';
 import { recordAuditEvent } from '../services/auditTelemetry';
 import { localStore } from '../services/persistenceStore';
 import { isProviderAccessActive } from '../services/providerAccess';
 import { normalizeProfileMedia } from '../services/profileNormalization';
+import { hasTierAccess, TIER_VALUES } from '../tierPolicy';
 
 const providersRouter = Router();
 const userRequestsRouter = Router();
 const providerRequestsRouter = Router();
 
 const validRequestStatuses = new Set(['pending', 'accepted', 'scheduled', 'closed']);
+
+const canAccessProviderMarketplace = (req: Request): boolean => {
+  const role = getAuthenticatedRole(req);
+  if (role === 'admin' || role === 'provider') return true;
+  const authTier = (req as AuthenticatedRequest).authTier || null;
+  return hasTierAccess(authTier, TIER_VALUES.ACCELERATED);
+};
+
+const enforceProviderMarketplaceAccess = (req: Request, res: Response): boolean => {
+  if (canAccessProviderMarketplace(req)) return true;
+  res.status(403).json({
+    error: 'Provider marketplace access requires the Accelerated Tier.',
+    code: 'TIER_ACCESS_REQUIRED',
+    requiredTier: TIER_VALUES.ACCELERATED,
+  });
+  return false;
+};
 
 const getPublicBaseUrl = (req: Request): string => {
   const configured = String(process.env.PUBLIC_BASE_URL || '').trim();
@@ -80,7 +103,9 @@ const toAnchorLinkRequestResponse = (req: Request, request: any) => ({
   provider: request.provider ? toProviderResponse(req, request.provider) : undefined,
 });
 
-providersRouter.get('/', async (req: Request, res: Response): Promise<void> => {
+providersRouter.get('/', requireCanonicalIdentity, async (req: Request, res: Response): Promise<void> => {
+  if (!enforceProviderMarketplaceAccess(req, res)) return;
+
   try {
     const db = getPrisma() as any;
     const providers = await db.user.findMany({
@@ -108,6 +133,8 @@ providersRouter.post('/:id/request', requireCanonicalIdentity, async (req: Reque
     res.status(401).json({ error: 'Authentication required' });
     return;
   }
+
+  if (!enforceProviderMarketplaceAccess(req, res)) return;
 
   if (!providerId) {
     res.status(400).json({ error: 'Provider id is required' });

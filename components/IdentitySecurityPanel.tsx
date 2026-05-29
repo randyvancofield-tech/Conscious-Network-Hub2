@@ -80,6 +80,8 @@ const IdentitySecurityPanel: React.FC<IdentitySecurityPanelProps> = ({ isOpen, o
   const [verifiedAt, setVerifiedAt] = useState<string>(persisted?.verifiedAt || '');
   const [busyAction, setBusyAction] = useState<IdentityAction>(null);
   const [toast, setToast] = useState<string>('');
+  const [recoveryCodes, setRecoveryCodes] = useState<string[]>([]);
+  const [recoveryBusy, setRecoveryBusy] = useState(false);
   const [walletEnvironment, setWalletEnvironment] = useState<WalletProviderEnvironment>(() =>
     detectWalletProviderEnvironment()
   );
@@ -174,6 +176,24 @@ const IdentitySecurityPanel: React.FC<IdentitySecurityPanelProps> = ({ isOpen, o
       setToast('Copied');
     } catch {
       setToast('Copy failed');
+    }
+  };
+
+  const regenerateRecoveryCodes = async (): Promise<void> => {
+    setRecoveryBusy(true);
+    setToast('');
+    try {
+      const data = await api<{ recoveryCodes?: string[] }>('/user/recovery-codes/regenerate', {
+        method: 'POST',
+        body: {},
+      });
+      const codes = Array.isArray(data.recoveryCodes) ? data.recoveryCodes : [];
+      setRecoveryCodes(codes);
+      setToast(codes.length ? 'Recovery codes generated' : 'Recovery codes unavailable');
+    } catch (error) {
+      setToast(error instanceof Error ? error.message : 'Unable to generate recovery codes');
+    } finally {
+      setRecoveryBusy(false);
     }
   };
 
@@ -363,9 +383,40 @@ const IdentitySecurityPanel: React.FC<IdentitySecurityPanelProps> = ({ isOpen, o
             </p>
             <p className="text-[10px] text-slate-400 leading-relaxed uppercase">
               Identity verification is used only for DID binding, integrity anchoring, and session
-              continuity.
+              continuity. Members do not need wallet verification for normal account access.
             </p>
           </div>
+        </div>
+
+        <div className="mb-8 rounded-2xl border border-white/10 bg-white/[0.03] p-4">
+          <p className="text-[10px] font-bold uppercase tracking-widest text-blue-200">
+            Account Recovery Codes
+          </p>
+          <p className="mt-2 text-[10px] uppercase tracking-wider leading-relaxed text-slate-400">
+            Recovery codes reset your password without email. Generating a new set revokes unused older codes.
+          </p>
+          {recoveryCodes.length > 0 ? (
+            <div className="mt-4 grid gap-2 rounded-xl border border-white/10 bg-black/30 p-3">
+              {recoveryCodes.map((code) => (
+                <button
+                  key={code}
+                  type="button"
+                  onClick={() => copyText(code)}
+                  className="rounded-lg bg-white/5 px-3 py-2 text-left font-mono text-xs text-blue-100 transition hover:bg-white/10"
+                >
+                  {code}
+                </button>
+              ))}
+            </div>
+          ) : null}
+          <button
+            type="button"
+            onClick={() => void regenerateRecoveryCodes()}
+            disabled={recoveryBusy || !user}
+            className="mt-4 w-full rounded-xl border border-blue-300/20 bg-blue-500/10 px-4 py-3 text-[10px] font-black uppercase tracking-widest text-blue-100 transition hover:bg-blue-500/20 disabled:opacity-60"
+          >
+            {recoveryBusy ? 'Generating...' : 'Generate New Codes'}
+          </button>
         </div>
 
         <div className="mb-8 rounded-2xl border border-white/10 bg-white/[0.03] p-4">

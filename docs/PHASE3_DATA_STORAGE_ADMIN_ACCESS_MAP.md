@@ -33,7 +33,7 @@ Generated for Phase 3 only: storage, persistence, route mapping, and admin/provi
 | Provider CRM tool visibility | Raw table `ProviderCrmToolVisibility` |
 | AI interactions | `AiInteraction` model exists, but current AI routes do not write to it |
 | Contact submissions | No DB table; current route sends email and emits audit event only |
-| Notifications | No DB table or backend route currently present |
+| Notifications | `Notification` |
 
 ## Route-To-Storage Map
 
@@ -43,10 +43,10 @@ Generated for Phase 3 only: storage, persistence, route mapping, and admin/provi
 | Sign in | `App.tsx`, applicant/provider sign-in pages | `POST /api/user/signin` | Reads `User`, creates persisted canonical session in `ProviderSession`, returns token and public user |
 | Profile update | `Profile.tsx`, `CommunityLayout.tsx`, `App.tsx` | `PUT /api/user/:id`, `POST /api/social/profile` | Updates authenticated user's `User` row only after canonical user match |
 | Profile/avatar/banner/background upload | `Profile.tsx`, `CommunityLayout.tsx` | `POST /api/upload/avatar`, `/cover`, `/profile-background` | Stores public upload large object and writes returned URL/object key to `User` on profile save |
-| Provider application | `ProviderApplicationPage.tsx` via `App.tsx` | `POST /api/provider-applicants/apply` | Creates applicant `User`, stores private resume/cover letter large objects, creates `ProviderApplicant`, returns token, applicant, calendly URL |
+| Provider application | `ProviderApplicationPage.tsx` via `App.tsx` | `POST /api/provider-applicants/apply` | Creates applicant `User`, stores private resume/cover letter large objects, creates `ProviderApplicant`, sends lifecycle emails when configured, creates notification, returns token, applicant, calendly URL |
 | Applicant status | `ProviderApplicationStatusPage.tsx` | `GET /api/provider-applicants/current`, `POST /current/calendly-shown` | Reads/updates applicant's own `ProviderApplicant` record |
-| Admin provider review | `AdminProviderApplicantsPage.tsx` | `GET/PATCH /api/admin/provider-applicants` | Lists, views, and updates `ProviderApplicant`; approval updates `User` provider state; non-approved review states revoke active provider access when needed |
-| Membership checkout | `MembershipPage.tsx` via `App.tsx` | `POST /api/membership/stripe/create-checkout-session`, `/confirm-session`, Stripe webhook | Upserts `Membership`, creates `PaymentHistory`, updates `User` membership/subscription fields |
+| Admin provider review | `AdminProviderApplicantsPage.tsx` | `GET/PATCH /api/admin/provider-applicants` | Lists, views, and updates `ProviderApplicant`; approval updates `User` provider state; status changes can send applicant lifecycle email and notification; non-approved review states revoke active provider access when needed |
+| Membership checkout | `MembershipPage.tsx` via `App.tsx` | `POST /api/membership/stripe/create-checkout-session`, `/confirm-session`, Stripe webhook | Upserts `Membership`, creates `PaymentHistory`, updates `User` membership/subscription fields, creates user-scoped notifications for membership/payment state changes |
 | Membership status | `App.tsx` | `GET /api/membership/status/:userId` | Reads requesting user's `User`, `Membership`, and `PaymentHistory` |
 | Course catalog | `KnowledgePathways.tsx` | `GET /api/courses` | Ensures defaults in `Course`, returns published courses |
 | Course enrollment | `App.tsx` | `POST /api/courses/:id/enroll` | Upserts `UserCourse` for authenticated user |
@@ -65,7 +65,7 @@ Generated for Phase 3 only: storage, persistence, route mapping, and admin/provi
 | Conscious Careers grant application | `GrantApplicationPage.tsx` via `App.tsx` | `POST /api/conscious-careers/grant-applications` | Creates `ConsciousCareerGrantApplication`; no admin review/list route currently present |
 | Contact/support form | `App.tsx` | `POST /api/support/contact` | Sends through `emailService`, emits audit event, returns ticket ID; no DB row currently |
 | AI chat/wisdom/report issue/trending | `EthicalAIInsight.tsx`, `backendApiService.ts` | `/api/ai/*` | Generates responses; current routes do not persist `AiInteraction`. Issue reports may send email and return confirmation |
-| Notifications center | `NotificationsCenter.tsx` | None | No backend route/model currently present |
+| Notifications center | `NotificationsCenter.tsx` | `GET/PATCH /api/notifications` | Reads and marks authenticated user's `Notification` rows only; role scope is enforced server-side |
 
 ## Admin Access Map
 
@@ -77,7 +77,7 @@ Generated for Phase 3 only: storage, persistence, route mapping, and admin/provi
 | Admin role change | `PATCH /api/admin/users/:id/role` | Admin role + elevation token | Updates `User.role`; self-role change denied and audited |
 | Provider applicant queue | `AdminProviderApplicantsPage.tsx`, `GET /api/admin/provider-applicants` | Admin role + elevation token | Lists decrypted provider applicant records and private document refs |
 | Provider applicant detail | `GET /api/admin/provider-applicants/:id` | Admin role + elevation token | Applicant detail, credentials, answers, document refs |
-| Provider applicant review | `PATCH /api/admin/provider-applicants/:id` | Admin role + elevation token | Updates status/admin notes; approving grants provider state; moving from approved to another review state revokes active provider access |
+| Provider applicant review | `PATCH /api/admin/provider-applicants/:id` | Admin role + elevation token | Updates status/admin notes; can send applicant lifecycle email and notification; approving grants provider state; moving from approved to another review state revokes active provider access |
 | Private applicant documents | `openPrivateUpload`, `GET /api/upload/object/:objectKey` | Canonical user token; owner or admin can read private objects | Admin can open private applicant docs when object key is present from admin applicant route |
 | Provider CRM admin tools | `ProviderCrmShell.tsx`, `/api/provider/crm/admin/*` | Provider session token for an admin user, active provider/admin access, configured sole admin email | Provider CRM foundation/tools/oversight and cross-provider aggregate CRM analytics |
 
@@ -99,4 +99,3 @@ Generated for Phase 3 only: storage, persistence, route mapping, and admin/provi
 - Provider request created/updated: after `AnchorLinkRequest` create/update in `providers.ts`.
 - Meeting invites/external links: after provider meeting invite/link creation in `meeting.ts`.
 - Support/contact: `support.ts` already calls `emailService`; Phase 4 should decide whether to also persist submissions.
-

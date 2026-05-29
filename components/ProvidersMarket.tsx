@@ -122,7 +122,7 @@ const ProvidersMarketContent: React.FC<ProvidersMarketProps> = ({
       setIsLoading(true);
       setLoadError('');
       try {
-        const data = await api<any>('/providers', { auth: false, signal: controller.signal });
+        const data = await api<any>('/providers', { signal: controller.signal });
         if (isMounted) {
           setProviders(Array.isArray(data.providers) ? data.providers.map(normalizeProvider) : []);
         }

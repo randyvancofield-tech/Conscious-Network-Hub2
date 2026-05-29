@@ -1,6 +1,7 @@
 import nodemailer, { Transporter } from 'nodemailer';
+import { isEmailDeliveryEnabled } from '../requiredEnv';
 
-interface EmailOptions {
+export interface EmailOptions {
   to: string;
   subject: string;
   html: string;
@@ -9,15 +10,21 @@ interface EmailOptions {
 
 class EmailService {
   private transporter: Transporter | null = null;
-  private fromEmail: string;
+  private fromEmail = 'noreply@conscious-network.org';
   private isConfigured = false;
+  private initialized = false;
 
-  constructor() {
-    this.fromEmail =
-      process.env.EMAIL_FROM || 'noreply@consciousnetworkhub.com';
+  private initializeTransport(): void {
+    if (this.initialized) return;
+    this.initialized = true;
+    this.fromEmail = process.env.EMAIL_FROM || 'noreply@conscious-network.org';
 
     try {
-      // Preferred: Gmail / service auth
+      if (!isEmailDeliveryEnabled()) {
+        console.warn('[EmailService] Email delivery disabled - in-app/recovery-code launch mode');
+        return;
+      }
+
       if (process.env.EMAIL_USER && process.env.EMAIL_PASSWORD) {
         this.transporter = nodemailer.createTransport({
           service: process.env.EMAIL_SERVICE || 'gmail',
@@ -31,7 +38,6 @@ class EmailService {
         return;
       }
 
-      // Secondary: SMTP
       if (process.env.SMTP_HOST && process.env.SMTP_PORT) {
         this.transporter = nodemailer.createTransport({
           host: process.env.SMTP_HOST,
@@ -50,8 +56,7 @@ class EmailService {
         return;
       }
 
-      // Dev fallback (NO sending, NO crashing)
-      console.log('[EmailService] No email config — safe dev mode');
+      console.log('[EmailService] No email config - safe dev mode');
     } catch (err) {
       console.error('[EmailService] Transport init failed:', err);
       this.transporter = null;
@@ -59,10 +64,8 @@ class EmailService {
     }
   }
 
-  /**
-   * Send email — ALWAYS resolves, NEVER throws, NEVER hangs
-   */
   async send(options: EmailOptions): Promise<{ ok: boolean; [key: string]: any }> {
+    this.initializeTransport();
     if (!this.isConfigured || !this.transporter) {
       console.log('[EmailService.send] Skipped (not configured)');
       return { ok: true, skipped: true };
@@ -86,12 +89,19 @@ class EmailService {
   }
 
   configured(): boolean {
+    this.initializeTransport();
     return this.isConfigured;
   }
 
-  /**
-   * Send Issue / Ticket
-   */
+  adminRecipient(): string {
+    return (
+      process.env.ADMIN_NOTIFICATION_EMAIL ||
+      process.env.SUPPORT_EMAIL_TO ||
+      process.env.EMAIL_ADMIN_TO ||
+      'higherconscious.network1@gmail.com'
+    );
+  }
+
   async sendIssueReport(options: {
     userEmail?: string;
     title: string;
@@ -114,7 +124,7 @@ class EmailService {
     `;
 
     return this.send({
-      to: 'higherconscious.network1@gmail.com',
+      to: this.adminRecipient(),
       subject: `[${options.category.toUpperCase()}] ${options.title}`,
       html,
       text: options.description,
@@ -136,4 +146,3 @@ class EmailService {
 }
 
 export default new EmailService();
-

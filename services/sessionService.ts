@@ -32,7 +32,8 @@ interface SessionTokenPayload {
   exp?: number;
 }
 
-const hasBrowserStorage = (): boolean => typeof window !== 'undefined' && !!window.localStorage;
+const hasBrowserStorage = (): boolean => typeof window !== 'undefined';
+const hasBrowserLocalStorage = (): boolean => typeof window !== 'undefined' && !!window.localStorage;
 const hasBrowserSessionStorage = (): boolean =>
   typeof window !== 'undefined' && !!window.sessionStorage;
 
@@ -79,9 +80,9 @@ const isExpiredToken = (token: string, skewMs = 5000): boolean => {
 };
 
 const getStoredTokenCandidates = (): string[] => {
-  if (!hasBrowserStorage()) return [];
+  if (!hasBrowserSessionStorage()) return [];
   return [AUTH_TOKEN_KEY]
-    .map((key) => localStorage.getItem(key))
+    .map((key) => window.sessionStorage.getItem(key))
     .filter((token): token is string => Boolean(token));
 };
 
@@ -99,15 +100,27 @@ export const getAuthToken = (): string | null => {
 };
 
 const writePlatformSession = (session: PlatformSessionState): void => {
-  if (!hasBrowserStorage()) return;
-  localStorage.setItem(PLATFORM_SESSION_KEY, JSON.stringify(session));
+  if (!hasBrowserSessionStorage()) return;
+  window.sessionStorage.setItem(PLATFORM_SESSION_KEY, JSON.stringify(session));
+  if (hasBrowserLocalStorage()) {
+    window.localStorage.removeItem(PLATFORM_SESSION_KEY);
+  }
 };
 
 export const setGuestSession = (): void => {
   if (!hasBrowserStorage()) return;
-  localStorage.removeItem(AUTH_TOKEN_KEY);
-  localStorage.removeItem(LEGACY_EXTERNAL_AUTH_TOKEN_KEY);
-  localStorage.removeItem(ACTIVE_USER_CACHE_KEY);
+  if (hasBrowserSessionStorage()) {
+    window.sessionStorage.removeItem(AUTH_TOKEN_KEY);
+    window.sessionStorage.removeItem(ACTIVE_USER_CACHE_KEY);
+    window.sessionStorage.removeItem(PLATFORM_SESSION_KEY);
+    window.sessionStorage.removeItem(ADMIN_ELEVATION_TOKEN_KEY);
+  }
+  if (hasBrowserLocalStorage()) {
+    window.localStorage.removeItem(AUTH_TOKEN_KEY);
+    window.localStorage.removeItem(LEGACY_EXTERNAL_AUTH_TOKEN_KEY);
+    window.localStorage.removeItem(ACTIVE_USER_CACHE_KEY);
+    window.localStorage.removeItem(PLATFORM_SESSION_KEY);
+  }
   setProviderControlSession('');
   writePlatformSession({
     isAuthenticated: false,
@@ -117,12 +130,19 @@ export const setGuestSession = (): void => {
 };
 
 export const setUserAuthSession = (token: string, user?: UserProfile | null): void => {
-  if (!hasBrowserStorage()) return;
+  if (!hasBrowserSessionStorage()) return;
   const platformUser = user ? { ...user, role: user.role || 'user' } : null;
-  localStorage.setItem(AUTH_TOKEN_KEY, token);
-  localStorage.removeItem(LEGACY_EXTERNAL_AUTH_TOKEN_KEY);
+  window.sessionStorage.setItem(AUTH_TOKEN_KEY, token);
   if (platformUser) {
-    localStorage.setItem(ACTIVE_USER_CACHE_KEY, JSON.stringify(platformUser));
+    window.sessionStorage.setItem(ACTIVE_USER_CACHE_KEY, JSON.stringify(platformUser));
+  } else {
+    window.sessionStorage.removeItem(ACTIVE_USER_CACHE_KEY);
+  }
+  if (hasBrowserLocalStorage()) {
+    window.localStorage.removeItem(AUTH_TOKEN_KEY);
+    window.localStorage.removeItem(LEGACY_EXTERNAL_AUTH_TOKEN_KEY);
+    window.localStorage.removeItem(ACTIVE_USER_CACHE_KEY);
+    window.localStorage.removeItem(PLATFORM_SESSION_KEY);
   }
   const role: PlatformSessionRole =
     platformUser?.role === 'admin'
@@ -170,12 +190,17 @@ export const getProviderControlSession = (): string | null => {
 
 export const clearAuthSession = (): void => {
   if (!hasBrowserStorage()) return;
-  localStorage.removeItem(AUTH_TOKEN_KEY);
-  localStorage.removeItem(LEGACY_EXTERNAL_AUTH_TOKEN_KEY);
-  localStorage.removeItem(ACTIVE_USER_CACHE_KEY);
-  localStorage.removeItem(PLATFORM_SESSION_KEY);
   if (hasBrowserSessionStorage()) {
+    window.sessionStorage.removeItem(AUTH_TOKEN_KEY);
+    window.sessionStorage.removeItem(ACTIVE_USER_CACHE_KEY);
+    window.sessionStorage.removeItem(PLATFORM_SESSION_KEY);
     window.sessionStorage.removeItem(ADMIN_ELEVATION_TOKEN_KEY);
+  }
+  if (hasBrowserLocalStorage()) {
+    window.localStorage.removeItem(AUTH_TOKEN_KEY);
+    window.localStorage.removeItem(LEGACY_EXTERNAL_AUTH_TOKEN_KEY);
+    window.localStorage.removeItem(ACTIVE_USER_CACHE_KEY);
+    window.localStorage.removeItem(PLATFORM_SESSION_KEY);
   }
   setProviderControlSession('');
 };
@@ -197,12 +222,12 @@ export const getAdminElevationToken = (): string | null => {
 };
 
 export const getCachedAuthUser = (): UserProfile | null => {
-  if (!hasBrowserStorage()) return null;
+  if (!hasBrowserSessionStorage()) return null;
   const token = getAuthToken();
   if (!token) return null;
 
   try {
-    const cached = JSON.parse(localStorage.getItem(ACTIVE_USER_CACHE_KEY) || 'null') as
+    const cached = JSON.parse(window.sessionStorage.getItem(ACTIVE_USER_CACHE_KEY) || 'null') as
       | UserProfile
       | null;
     return cached?.id ? cached : null;

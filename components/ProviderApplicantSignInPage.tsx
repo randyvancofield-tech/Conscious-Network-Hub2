@@ -44,7 +44,7 @@ const ProviderApplicantSignInPage: React.FC<ProviderApplicantSignInPageProps> = 
       const notice = await onPasswordReset(email);
       setResetNotice(notice);
     } catch (error) {
-      setResetNotice(error instanceof Error ? error.message : 'Unable to send reset link.');
+      setResetNotice(error instanceof Error ? error.message : 'Unable to start recovery.');
     } finally {
       setResetSubmitting(false);
     }
@@ -120,7 +120,7 @@ const ProviderApplicantSignInPage: React.FC<ProviderApplicantSignInPageProps> = 
                   disabled={isResetSubmitting}
                   className="w-full rounded-xl border border-white/10 bg-white/5 px-4 py-3 text-[10px] font-black uppercase tracking-widest text-white transition hover:bg-white/10 disabled:opacity-60"
                 >
-                  {isResetSubmitting ? 'Sending Reset Link' : 'Send Reset Link'}
+                  {isResetSubmitting ? 'Starting Recovery' : 'Start Recovery'}
                 </button>
                 {resetNotice && (
                   <p className="text-xs leading-5 text-stone-100/75">{resetNotice}</p>

@@ -21,6 +21,13 @@ import { mirrorUserToGoogleSheets } from '../services/googleSheetsMirror';
 import { maskPhoneNumber, maskWalletDid } from '../services/sensitiveDataPolicy';
 import { createUserSession, revokeUserSession, revokeUserSessionsByUserId } from '../services/userSessionStore';
 import emailService from '../services/emailService';
+import { buildPasswordResetEmail } from '../services/emailTemplates';
+import { createNotification } from '../services/notificationStore';
+import {
+  createRecoveryCodesForUser,
+  getRecoveryCodeStatusForUser,
+  verifyAndConsumeRecoveryCode,
+} from '../services/recoveryCodeService';
 import {
   normalizeDateOfBirth,
   normalizeOptionalString,
@@ -38,6 +45,7 @@ import {
   userCreateSchema,
   userPasswordResetConfirmSchema,
   userPasswordResetRequestSchema,
+  userRecoveryCodeResetConfirmSchema,
   userPrivacyUpdateSchema,
   userProfilePatchSchema,
   userSignInSchema,
@@ -51,6 +59,7 @@ const MIN_PASSWORD_LENGTH = 12;
 const MAX_FAILED_SIGN_IN_ATTEMPTS = 5;
 const LOCKOUT_WINDOW_MS = 15 * 60 * 1000;
 const PASSWORD_RESET_TTL_MS = 60 * 60 * 1000;
+const PASSWORD_RESET_TTL_MINUTES = Math.floor(PASSWORD_RESET_TTL_MS / 60_000);
 const AUTOMATED_PROFILE_PATTERN = /\b(bot|agent|assistant|seed|system)\b/i;
 const PROFILE_STORE_UNAVAILABLE_RESPONSE = {
   error: 'Profile service is currently unavailable. Please retry shortly.',
@@ -75,7 +84,7 @@ const normalizeRole = (value: unknown): 'user' | 'applicant' | 'provider' | 'adm
 };
 
 const canUseNativePasswordReset = (user: { role?: string | null }): boolean =>
-  ['user', 'applicant', 'provider', 'admin'].includes(normalizeRole(user.role));
+  ['user', 'applicant', 'provider'].includes(normalizeRole(user.role));
 
 const isInitialTwoFactorRequired = (_user: {
   role?: string | null;
@@ -420,6 +429,7 @@ const toPublicUser = (req: Request, user: any) => ({
   providerApproved: user.providerApproved === true,
   providerApprovalStatus: user.providerApprovalStatus || null,
   providerRevokedAt: user.providerRevokedAt || null,
+  providerWalletAddressBound: Boolean(user.walletAddress),
 });
 
 const buildPublicUser = async (req: Request, user: any) => {
@@ -701,6 +711,7 @@ publicRouter.post('/create', validateJsonBody(userCreateSchema), async (req: Req
       tier: persisted.tier || '',
       createdAt: persisted.createdAt.toISOString(),
     });
+    const recoveryCodes = await createRecoveryCodesForUser(persisted.id);
 
     let persistedSession;
     try {
@@ -727,6 +738,8 @@ publicRouter.post('/create', validateJsonBody(userCreateSchema), async (req: Req
       expiresAt: session.expiresAt,
       persistenceVerified: true,
       user: await buildPublicUser(req, persisted),
+      recoveryCodes,
+      recoveryCodesShownOnce: recoveryCodes.length > 0,
       security: {
         passwordPolicy: {
           minLength: MIN_PASSWORD_LENGTH,
@@ -806,8 +819,9 @@ publicRouter.post(
 
       const user = normalizedEmail ? await localStore.getUserByEmail(normalizedEmail) : null;
       let devResetUrl: string | undefined;
+      const emailDeliveryAvailable = emailService.configured();
 
-      if (user && canUseNativePasswordReset(user)) {
+      if (user && canUseNativePasswordReset(user) && emailDeliveryAvailable) {
         const token = crypto.randomBytes(32).toString('base64url');
         const tokenHash = hashPasswordResetToken(token);
         const expiresAt = new Date(Date.now() + PASSWORD_RESET_TTL_MS);
@@ -818,19 +832,25 @@ publicRouter.post(
           passwordResetExpiresAt: expiresAt,
         });
 
+        const passwordResetEmail = buildPasswordResetEmail({
+          resetUrl,
+          expiresMinutes: PASSWORD_RESET_TTL_MINUTES,
+        });
         const emailResult = await emailService.send({
           to: user.email,
-          subject: 'Reset your Conscious Network Hub password',
-          text: [
-            'We received a request to reset your Conscious Network Hub password.',
-            `Open this link within 60 minutes: ${resetUrl}`,
-            'If you did not request this, you can ignore this email.',
-          ].join('\n\n'),
-          html: `
-            <p>We received a request to reset your Conscious Network Hub password.</p>
-            <p><a href="${resetUrl}">Reset your password</a></p>
-            <p>This link expires in 60 minutes. If you did not request this, you can ignore this email.</p>
-          `,
+          ...passwordResetEmail,
+        });
+        await createNotification({
+          userId: user.id,
+          type: 'password_reset_requested',
+          title: 'Password reset requested',
+          body:
+            'A password reset was requested for your account. If this was not you, ignore the email and keep your current password.',
+          roleScope: normalizeRole(user.role),
+          metadata: {
+            emailSkipped: Boolean(emailResult?.skipped),
+            emailSent: emailResult?.ok === true && !emailResult?.skipped,
+          },
         });
 
         if (emailResult?.skipped && process.env.NODE_ENV !== 'production') {
@@ -846,6 +866,33 @@ publicRouter.post(
           targetUserId: user.id,
           metadata: { emailHash, emailSkipped: Boolean(emailResult?.skipped) },
         });
+      } else if (user && canUseNativePasswordReset(user)) {
+        const recoveryStatus = await getRecoveryCodeStatusForUser(user.id);
+        await createNotification({
+          userId: user.id,
+          type: 'account_recovery_requested',
+          title: 'Account recovery requested',
+          body:
+            'Account recovery was requested. Use one of your saved recovery codes to reset your password, or contact CNH support if you no longer have a code.',
+          roleScope: normalizeRole(user.role),
+          metadata: {
+            emailSkipped: true,
+            emailSent: false,
+            recoveryCodeAvailable: recoveryStatus.hasUnusedCodes,
+          },
+        });
+        recordAuditEvent(req, {
+          domain: 'auth',
+          action: 'password_reset_request',
+          outcome: 'success',
+          statusCode: 200,
+          targetUserId: user.id,
+          metadata: {
+            emailHash,
+            emailSkipped: true,
+            recoveryCodeAvailable: recoveryStatus.hasUnusedCodes,
+          },
+        });
       } else {
         recordAuditEvent(req, {
           domain: 'auth',
@@ -858,7 +905,10 @@ publicRouter.post(
 
       return res.json({
         success: true,
-        message: 'If an account exists for that email, a password reset link has been sent.',
+        delivery: emailDeliveryAvailable ? 'email' : 'recovery_code',
+        message: emailDeliveryAvailable
+          ? 'If an account exists for that email, a password reset link has been sent.'
+          : 'If an account exists for that email, use a saved recovery code below. If you do not have one, contact CNH support for manual recovery.',
         ...(devResetUrl ? { devResetUrl } : {}),
       });
     } catch (error) {
@@ -892,6 +942,9 @@ publicRouter.post(
       if (!user || !user.passwordResetExpiresAt || user.passwordResetExpiresAt.getTime() <= Date.now()) {
         return res.status(400).json({ error: 'Reset link is invalid or expired' });
       }
+      if (!canUseNativePasswordReset(user)) {
+        return res.status(400).json({ error: 'Reset link is invalid or expired' });
+      }
 
       const passwordValidation = validatePasswordPolicy(user.email, password);
       if (passwordValidation) {
@@ -910,6 +963,15 @@ publicRouter.post(
         lockoutUntil: null,
       });
       const sessionsRevoked = await revokeUserSessionsByUserId(user.id);
+      await createNotification({
+        userId: user.id,
+        type: 'password_reset_completed',
+        title: 'Password reset complete',
+        body:
+          'Your password was changed and active sessions were revoked. Sign in again with your new password.',
+        roleScope: normalizeRole(user.role),
+        metadata: { sessionsRevoked },
+      });
 
       recordAuditEvent(req, {
         domain: 'auth',
@@ -926,6 +988,98 @@ publicRouter.post(
       });
     } catch (error) {
       console.error('[AUTH][PASSWORD_RESET] confirm failed', error);
+      return res.status(500).json({ error: 'Unable to reset password. Please retry.' });
+    }
+  }
+);
+
+/**
+ * POST /api/user/password-reset/recovery-code/confirm
+ * Complete account recovery with a one-time internal recovery code.
+ */
+publicRouter.post(
+  '/password-reset/recovery-code/confirm',
+  validateJsonBody(userRecoveryCodeResetConfirmSchema),
+  async (req: Request, res: Response): Promise<any> => {
+    setAuthResponseNoStore(res);
+    const normalizedEmail = String(req.body?.email || '').trim().toLowerCase();
+    const recoveryCode = String(req.body?.recoveryCode || '').trim();
+    const password = String(req.body?.password || '');
+    const emailHash = normalizedEmail ? safeLogHash(normalizedEmail) : null;
+    const genericRecoveryFailure =
+      'Recovery code could not be verified. Check the code or contact CNH support for manual recovery.';
+
+    try {
+      const passwordValidation = validatePasswordPolicy(normalizedEmail, password);
+      if (passwordValidation) {
+        return res.status(400).json({ error: passwordValidation });
+      }
+
+      const user = normalizedEmail ? await localStore.getUserByEmail(normalizedEmail) : null;
+      if (!user || !canUseNativePasswordReset(user)) {
+        recordAuditEvent(req, {
+          domain: 'auth',
+          action: 'recovery_code_reset_confirm',
+          outcome: 'deny',
+          statusCode: 400,
+          metadata: {
+            emailHash,
+            reason: user ? 'unsupported_recovery_role' : 'user_not_found',
+          },
+        });
+        return res.status(400).json({ error: genericRecoveryFailure });
+      }
+
+      const consumed = await verifyAndConsumeRecoveryCode(user.id, recoveryCode);
+      if (!consumed) {
+        recordAuditEvent(req, {
+          domain: 'auth',
+          action: 'recovery_code_reset_confirm',
+          outcome: 'deny',
+          targetUserId: user.id,
+          statusCode: 400,
+          metadata: { emailHash, reason: 'invalid_or_used_recovery_code' },
+        });
+        return res.status(400).json({ error: genericRecoveryFailure });
+      }
+
+      await localStore.updateUser(user.id, {
+        password: hashPassword(password),
+        passwordFingerprint: computePasswordFingerprint(password),
+        passwordResetTokenHash: null,
+        passwordResetExpiresAt: null,
+        pendingPhoneOtpHash: null,
+        pendingPhoneOtpExpiresAt: null,
+        pendingPhoneOtpAttempts: 0,
+        failedSignInAttempts: 0,
+        lockoutUntil: null,
+      });
+      const sessionsRevoked = await revokeUserSessionsByUserId(user.id);
+      await createNotification({
+        userId: user.id,
+        type: 'recovery_code_used',
+        title: 'Recovery code used',
+        body:
+          'Your password was changed using a recovery code and active sessions were revoked. Generate a fresh set of recovery codes after signing in.',
+        roleScope: normalizeRole(user.role),
+        metadata: { sessionsRevoked, recoveryCodeId: consumed.id },
+      });
+
+      recordAuditEvent(req, {
+        domain: 'auth',
+        action: 'recovery_code_reset_confirm',
+        outcome: 'success',
+        targetUserId: user.id,
+        statusCode: 200,
+        metadata: { emailHash, sessionsRevoked },
+      });
+
+      return res.json({
+        success: true,
+        message: 'Password reset complete. Sign in with your new password and generate fresh recovery codes.',
+      });
+    } catch (error) {
+      console.error('[AUTH][RECOVERY_CODE] confirm failed', error);
       return res.status(500).json({ error: 'Unable to reset password. Please retry.' });
     }
   }
@@ -1004,6 +1158,91 @@ protectedRouter.get('/current', async (req: Request, res: Response): Promise<any
     });
     return res.status(500).json({ error: 'Failed to fetch current user' });
   }
+});
+
+protectedRouter.get('/recovery-codes/status', async (req: Request, res: Response): Promise<any> => {
+  setAuthResponseNoStore(res);
+  const authUserId = getAuthenticatedUserId(req);
+  if (!authUserId) {
+    return res.status(401).json({ error: 'Authentication required' });
+  }
+
+  const user = await localStore.getUserById(authUserId);
+  if (!user) {
+    return res.status(404).json({ error: 'User not found' });
+  }
+
+  if (!canUseNativePasswordReset(user)) {
+    return res.json({
+      success: true,
+      recoveryCodesAvailable: false,
+      unusedCount: 0,
+      manualRecoveryRequired: true,
+    });
+  }
+
+  const status = await getRecoveryCodeStatusForUser(authUserId);
+  return res.json({
+    success: true,
+    recoveryCodesAvailable: status.hasUnusedCodes,
+    unusedCount: status.unusedCount,
+    manualRecoveryRequired: false,
+  });
+});
+
+protectedRouter.post('/recovery-codes/regenerate', async (req: Request, res: Response): Promise<any> => {
+  setAuthResponseNoStore(res);
+  const authUserId = getAuthenticatedUserId(req);
+  if (!authUserId) {
+    return res.status(401).json({ error: 'Authentication required' });
+  }
+
+  const user = await localStore.getUserById(authUserId);
+  if (!user) {
+    return res.status(404).json({ error: 'User not found' });
+  }
+
+  if (!canUseNativePasswordReset(user)) {
+    recordAuditEvent(req, {
+      domain: 'auth',
+      action: 'recovery_codes_regenerate',
+      outcome: 'deny',
+      actorUserId: authUserId,
+      targetUserId: authUserId,
+      statusCode: 403,
+      metadata: { reason: 'manual_recovery_required', role: normalizeRole(user.role) },
+    });
+    return res.status(403).json({
+      error: 'Self-service recovery codes are not available for this account.',
+      manualRecoveryRequired: true,
+    });
+  }
+
+  const recoveryCodes = await createRecoveryCodesForUser(authUserId);
+  await createNotification({
+    userId: authUserId,
+    type: 'recovery_codes_regenerated',
+    title: 'Recovery codes regenerated',
+    body:
+      'A new recovery-code set was created for your account. Store the new codes somewhere private.',
+    roleScope: normalizeRole(user.role),
+    metadata: { codeCount: recoveryCodes.length },
+  });
+  recordAuditEvent(req, {
+    domain: 'auth',
+    action: 'recovery_codes_regenerate',
+    outcome: 'success',
+    actorUserId: authUserId,
+    targetUserId: authUserId,
+    statusCode: 200,
+    metadata: { codeCount: recoveryCodes.length },
+  });
+
+  return res.json({
+    success: true,
+    recoveryCodes,
+    recoveryCodesShownOnce: recoveryCodes.length > 0,
+  });
 });
 
 /**

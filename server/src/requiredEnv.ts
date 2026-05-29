@@ -88,10 +88,28 @@ export const REQUIRED_SECRETS = [
   'FRONTEND_BASE_URL',
 ] as const;
 
+const parseBooleanEnv = (name: string): boolean | null => {
+  const value = trimEnv(name);
+  if (!value) return null;
+  const normalized = value.toLowerCase();
+  if (['true', '1', 'yes', 'on'].includes(normalized)) return true;
+  if (['false', '0', 'no', 'off'].includes(normalized)) return false;
+  return null;
+};
+
 const hasSensitiveDataKey = (): boolean => hasNonEmptyEnv('SENSITIVE_DATA_KEY');
-const hasEmailDeliveryConfig = (): boolean =>
+export const hasEmailDeliveryConfig = (): boolean =>
   (hasNonEmptyEnv('EMAIL_USER') && hasNonEmptyEnv('EMAIL_PASSWORD')) ||
   (hasNonEmptyEnv('SMTP_HOST') && hasNonEmptyEnv('SMTP_PORT'));
+export const isEmailDeliveryRequired = (): boolean =>
+  parseBooleanEnv('REQUIRE_EMAIL_DELIVERY') === true ||
+  parseBooleanEnv('EMAIL_DELIVERY_ENABLED') === true;
+export const isEmailDeliveryEnabled = (): boolean => {
+  const deliveryFlag = parseBooleanEnv('EMAIL_DELIVERY_ENABLED');
+  if (deliveryFlag !== null) return deliveryFlag;
+  if (parseBooleanEnv('REQUIRE_EMAIL_DELIVERY') === true) return true;
+  return false;
+};
 const hasSmsDeliveryConfig = (): boolean =>
   hasNonEmptyEnv('TWILIO_ACCOUNT_SID') &&
   hasNonEmptyEnv('TWILIO_AUTH_TOKEN') &&
@@ -278,9 +296,15 @@ export const validateRequiredEnv = (): void => {
     }
   }
 
-  if (isProduction && !hasEmailDeliveryConfig()) {
+  if (isProduction && isEmailDeliveryRequired() && !hasEmailDeliveryConfig()) {
+    throw new Error(
+      '[STARTUP][FATAL] Email delivery is enabled/required but not configured. Set EMAIL_USER + EMAIL_PASSWORD or SMTP_HOST + SMTP_PORT, or disable EMAIL_DELIVERY_ENABLED/REQUIRE_EMAIL_DELIVERY.'
+    );
+  }
+
+  if (isProduction && !isEmailDeliveryRequired() && !hasEmailDeliveryConfig()) {
     console.warn(
-      '[STARTUP][WARN] Email delivery is not configured. Password reset email delivery is unavailable; normal sign-in is unaffected.'
+      '[STARTUP][WARN] Email delivery is disabled or unconfigured. Account recovery and provider communication will use in-app notifications/recovery codes only.'
     );
   }
 
@@ -320,6 +344,8 @@ export const logDeliveryEnvironmentLoaded = (): void => {
     '[STARTUP] Security delivery environment loaded:',
     JSON.stringify({
       email: hasEmailDeliveryConfig() ? 'present' : 'missing',
+      emailDeliveryEnabled: isEmailDeliveryEnabled(),
+      emailDeliveryRequired: isEmailDeliveryRequired(),
       legacySms: hasSmsDeliveryConfig() ? 'present' : 'optional_missing',
     })
   );

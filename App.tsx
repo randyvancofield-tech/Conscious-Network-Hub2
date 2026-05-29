@@ -434,6 +434,7 @@ const isNoTierSignedInAllowedView = (view: AppView): boolean =>
     AppView.PROVIDER_APPLICANT_SIGN_IN,
     AppView.PROVIDER_APPLICATION_STATUS,
     AppView.PROVIDER_CRM,
+    AppView.NOTIFICATIONS,
     AppView.CONSCIOUS_CAREERS,
     AppView.GRANT_APPLICATION,
     AppView.ENTREPRENEURSHIP_SUPPORT,
@@ -681,7 +682,9 @@ const App: React.FC = () => {
   const [confirmPasswordInput, setConfirmPasswordInput] = useState('');
   const [error, setError] = useState('');
   const [isProviderWalletVerificationRequired, setProviderWalletVerificationRequired] = useState(false);
+  const [isProviderWalletBindingRequired, setProviderWalletBindingRequired] = useState(false);
   const [isProviderWalletVerifying, setProviderWalletVerifying] = useState(false);
+  const [isProviderWalletBinding, setProviderWalletBinding] = useState(false);
   const [providerWalletStatus, setProviderWalletStatus] = useState('');
   const [isAdminWalletVerifying, setAdminWalletVerifying] = useState(false);
   const [adminWalletStatus, setAdminWalletStatus] = useState('');
@@ -699,8 +702,11 @@ const App: React.FC = () => {
   const [passwordResetEmailInput, setPasswordResetEmailInput] = useState('');
   const [passwordResetNotice, setPasswordResetNotice] = useState('');
   const [isPasswordResetPending, setPasswordResetPending] = useState(false);
+  const [recoveryCodeEmailInput, setRecoveryCodeEmailInput] = useState('');
+  const [recoveryCodeInput, setRecoveryCodeInput] = useState('');
   const [newPasswordInput, setNewPasswordInput] = useState('');
   const [confirmNewPasswordInput, setConfirmNewPasswordInput] = useState('');
+  const [oneTimeRecoveryCodes, setOneTimeRecoveryCodes] = useState<string[]>([]);
   const [isContactModalOpen, setContactModalOpen] = useState(false);
   const [contactName, setContactName] = useState('');
   const [contactEmail, setContactEmail] = useState('');
@@ -840,7 +846,9 @@ const App: React.FC = () => {
 
   const resetSignInChallengeInputs = () => {
     setProviderWalletVerificationRequired(false);
+    setProviderWalletBindingRequired(false);
     setProviderWalletVerifying(false);
+    setProviderWalletBinding(false);
     setProviderWalletStatus('');
   };
 
@@ -991,6 +999,7 @@ const App: React.FC = () => {
       providerApproved: rawUser.providerApproved === true,
       providerApprovalStatus: toNullableTrimmedString(rawUser.providerApprovalStatus),
       providerRevokedAt: toNullableTrimmedString(rawUser.providerRevokedAt),
+      providerWalletAddressBound: rawUser.providerWalletAddressBound === true,
       reputationScore: rawUser.reputationScore ?? 100,
       accessKeyIndex: rawUser.accessKeyIndex ?? 200,
       avatarUrl: toAbsoluteAssetUrl(rawUser.avatarUrl),
@@ -1036,6 +1045,9 @@ const App: React.FC = () => {
         String(profile.providerApprovalStatus || '').trim().toLowerCase() === 'approved' &&
         !profile.providerRevokedAt
     );
+
+  const hasBoundProviderWallet = (profile: UserProfile | null | undefined): boolean =>
+    Boolean(profile?.providerWalletAddressBound === true);
 
   const hasProviderOperationsAccess = (profile: UserProfile | null | undefined): boolean =>
     Boolean(profile?.role === 'admin' || hasApprovedProviderProfile(profile));
@@ -1436,6 +1448,21 @@ const App: React.FC = () => {
   };
 
   useEffect(() => {
+    if (currentView !== AppView.PROVIDER_SIGN_IN || !hasApprovedProviderProfile(user)) {
+      return;
+    }
+    if (hasBoundProviderWallet(user)) {
+      setProviderWalletBindingRequired(false);
+      setProviderWalletVerificationRequired(true);
+      setProviderWalletStatus((current) => current || 'Complete wallet verification to open provider tools.');
+      return;
+    }
+    setProviderWalletVerificationRequired(false);
+    setProviderWalletBindingRequired(true);
+    setProviderWalletStatus((current) => current || 'Bind your provider wallet before verification.');
+  }, [currentView, user?.id, user?.providerWalletAddressBound, user?.providerApproved, user?.providerApprovalStatus, user?.providerRevokedAt]);
+
+  useEffect(() => {
     if (currentView !== AppView.MEMBERSHIP_ACCESS) {
       setMembershipAuthGuardChecking(false);
       return;
@@ -1721,6 +1748,9 @@ const App: React.FC = () => {
     setMembershipNotice('');
     setPendingCheckoutSessionId(null);
     setSelectedTier(canonicalUser.tier || FREE_TIER_NAME);
+    if (Array.isArray(data.recoveryCodes) && data.recoveryCodes.length > 0) {
+      setOneTimeRecoveryCodes(data.recoveryCodes.map((code: unknown) => String(code)));
+    }
   };
 
   const handleGrantApplicationSubmit = async (payload: Record<string, unknown>): Promise<void> => {
@@ -1900,14 +1930,22 @@ const App: React.FC = () => {
 
       if (!hasApprovedProviderProfile(canonicalUser)) {
         setProviderWalletVerificationRequired(false);
+        setProviderWalletBindingRequired(false);
         setProviderWalletStatus('');
         setError('This account has a provider role but is not approved for provider tools. Provider access unlocks only after applicant approval.');
         setPasswordInput('');
         return;
       }
 
-      setProviderWalletVerificationRequired(true);
-      setProviderWalletStatus('Provider account confirmed. Complete wallet verification to open provider tools.');
+      if (!hasBoundProviderWallet(canonicalUser)) {
+        setProviderWalletBindingRequired(true);
+        setProviderWalletVerificationRequired(false);
+        setProviderWalletStatus('Provider account confirmed. Bind your provider wallet before verification.');
+      } else {
+        setProviderWalletBindingRequired(false);
+        setProviderWalletVerificationRequired(true);
+        setProviderWalletStatus('Provider account confirmed. Complete wallet verification to open provider tools.');
+      }
       setPasswordInput('');
     } catch (error) {
       if (error instanceof ApiError) {
@@ -1917,6 +1955,90 @@ const App: React.FC = () => {
       console.error('Provider sign-in request failed:', error);
       setHealthStatus('offline');
       setError(backendConnectionErrorMessage('sign in as a provider'));
+    }
+  };
+
+  const handleProviderWalletBinding = async () => {
+    if (!user || !hasApprovedProviderProfile(user)) {
+      setError('Sign in with an approved provider account before wallet binding.');
+      return;
+    }
+
+    const walletEnv = refreshWalletEnvironment();
+    const ethereum = walletEnv.provider;
+    if (!ethereum?.request) {
+      setProviderWalletStatus(walletEnv.guidance);
+      setError(walletEnv.guidance);
+      return;
+    }
+
+    setProviderWalletBinding(true);
+    setError('');
+    setProviderWalletStatus('Requesting the wallet you want to bind...');
+    try {
+      const accounts = await ethereum.request({ method: 'eth_requestAccounts' });
+      const walletAddress = Array.isArray(accounts) ? String(accounts[0] || '').trim() : '';
+      if (!walletAddress) {
+        setError('No wallet address was returned by MetaMask.');
+        setProviderWalletStatus('');
+        return;
+      }
+
+      setProviderWalletStatus('Preparing gasless wallet binding message...');
+      const challenge = await api<ProviderWalletChallenge>('/provider/auth/wallet/bind/nonce', {
+        method: 'POST',
+        body: { walletAddress },
+      });
+      const walletChainId = await readWalletChainId(ethereum).catch(() => null);
+      if (walletChainId && challenge.chainId && walletChainId !== challenge.chainId) {
+        const message = walletNetworkMismatchMessage(walletChainId, challenge.chainId);
+        setError(message);
+        setProviderWalletStatus(message);
+        return;
+      }
+
+      const message = buildProviderSiweMessage(challenge);
+      setProviderWalletStatus('Confirm the gasless wallet binding signature in MetaMask.');
+      const signature = await ethereum.request({
+        method: 'personal_sign',
+        params: [message, challenge.address],
+      });
+
+      setProviderWalletStatus('Binding wallet to your approved provider account...');
+      const result = await api<any>('/provider/auth/wallet/bind/verify', {
+        method: 'POST',
+        body: {
+          challengeId: challenge.challengeId,
+          walletAddress: challenge.address,
+          message,
+          signature,
+        },
+      });
+
+      if (!result?.walletBound) {
+        setError('Wallet binding could not be confirmed.');
+        setProviderWalletStatus('');
+        return;
+      }
+
+      const updatedUser = { ...user, providerWalletAddressBound: true };
+      const token = getAuthToken();
+      setUser(updatedUser);
+      if (token) {
+        setUserAuthSession(token, updatedUser);
+      }
+      setProviderWalletBindingRequired(false);
+      setProviderWalletVerificationRequired(true);
+      setProviderWalletStatus('Wallet bound. Complete wallet verification to open Provider CRM.');
+    } catch (error) {
+      if (error instanceof ApiError) {
+        setError(error.message || 'Provider wallet binding failed.');
+      } else {
+        setError(walletErrorMessage(error, 'Provider wallet binding failed.'));
+      }
+      setProviderWalletStatus('');
+    } finally {
+      setProviderWalletBinding(false);
     }
   };
 
@@ -1986,7 +2108,7 @@ const App: React.FC = () => {
       setProviderControlSession(providerSession.token);
       setProviderWalletVerificationRequired(false);
       setProviderWalletStatus('');
-      setCurrentView(AppView.CONSCIOUS_MEETINGS, {}, { replace: true });
+      setCurrentView(AppView.PROVIDER_CRM, {}, { replace: true });
       setSidebarOpen(window.innerWidth >= 1024);
     } catch (error) {
       if (error instanceof ApiError) {
@@ -2037,6 +2159,9 @@ const App: React.FC = () => {
       const preserveCareersView = shouldPreserveNoTierViewAfterAuth(currentView);
       setUserAuthSession(data.token, canonicalUser);
       setUser(canonicalUser);
+      if (Array.isArray(data.recoveryCodes) && data.recoveryCodes.length > 0) {
+        setOneTimeRecoveryCodes(data.recoveryCodes.map((code: unknown) => String(code)));
+      }
       void refreshUserCourses();
       setSelectedTier((currentTier) => currentTier || canonicalUser.tier || FREE_TIER_NAME);
       setMembershipCheckoutPending(false);
@@ -2093,7 +2218,7 @@ const App: React.FC = () => {
       auth: false,
       body: { email: email.trim().toLowerCase() },
     });
-    const message = data?.message || 'If an account exists for that email, a password reset link has been sent.';
+    const message = data?.message || 'If an account exists for that email, recovery instructions are available.';
     return data?.devResetUrl ? `${message} Dev reset URL: ${data.devResetUrl}` : message;
   };
 
@@ -2147,6 +2272,55 @@ const App: React.FC = () => {
         body: { token, password: newPasswordInput },
       });
       setPasswordResetNotice(data?.message || 'Password reset complete. You can sign in now.');
+      setNewPasswordInput('');
+      setConfirmNewPasswordInput('');
+      setSigninModalOpen(true);
+    } catch (error) {
+      setPasswordResetNotice(
+        error instanceof Error ? error.message : 'Unable to reset password. Please retry.'
+      );
+    } finally {
+      setPasswordResetPending(false);
+    }
+  };
+
+  const handleRecoveryCodeResetConfirm = async (e?: React.FormEvent) => {
+    e?.preventDefault();
+    setPasswordResetPending(true);
+    setPasswordResetNotice('');
+    setError('');
+
+    const recoveryEmail = recoveryCodeEmailInput.trim().toLowerCase();
+    if (!recoveryEmail || !recoveryCodeInput.trim() || !newPasswordInput) {
+      setPasswordResetNotice('Enter your account email, recovery code, and new password.');
+      setPasswordResetPending(false);
+      return;
+    }
+    if (newPasswordInput !== confirmNewPasswordInput) {
+      setPasswordResetNotice('Passwords do not match.');
+      setPasswordResetPending(false);
+      return;
+    }
+
+    const passwordValidation = validatePasswordStrength(recoveryEmail, newPasswordInput);
+    if (passwordValidation) {
+      setPasswordResetNotice(passwordValidation);
+      setPasswordResetPending(false);
+      return;
+    }
+
+    try {
+      const data = await api<any>('/user/password-reset/recovery-code/confirm', {
+        method: 'POST',
+        auth: false,
+        body: {
+          email: recoveryEmail,
+          recoveryCode: recoveryCodeInput,
+          password: newPasswordInput,
+        },
+      });
+      setPasswordResetNotice(data?.message || 'Password reset complete. You can sign in now.');
+      setRecoveryCodeInput('');
       setNewPasswordInput('');
       setConfirmNewPasswordInput('');
       setSigninModalOpen(true);
@@ -2226,6 +2400,7 @@ const App: React.FC = () => {
       setMembershipCheckoutPending(false);
       setMembershipNotice('');
       setPendingCheckoutSessionId(null);
+      setOneTimeRecoveryCodes([]);
       resetSignInChallengeInputs();
       setCurrentView(AppView.ENTRY);
       setSidebarOpen(false);
@@ -2251,6 +2426,7 @@ const App: React.FC = () => {
     setError(''); setEmailInput(''); setPasswordInput(''); setConfirmPasswordInput('');
     resetSignInChallengeInputs();
     setPasswordResetRequestOpen(false); setPasswordResetEmailInput(''); setPasswordResetNotice('');
+    setRecoveryCodeEmailInput(''); setRecoveryCodeInput('');
   };
 
   const getPolicyContent = (policy: string) => {
@@ -2411,6 +2587,7 @@ const App: React.FC = () => {
         AppView.PROVIDER_APPLY,
         AppView.PROVIDER_APPLICANT_SIGN_IN,
         AppView.PROVIDER_APPLICATION_STATUS,
+        AppView.NOTIFICATIONS,
         AppView.CONSCIOUS_CAREERS,
         AppView.ENTREPRENEURSHIP_SUPPORT,
         AppView.PRIVACY_POLICY,
@@ -2574,6 +2751,7 @@ const App: React.FC = () => {
         AppView.PROVIDER_APPLY,
         AppView.PROVIDER_APPLICANT_SIGN_IN,
         AppView.PROVIDER_APPLICATION_STATUS,
+        AppView.NOTIFICATIONS,
         AppView.NOT_FOUND,
       ].includes(currentView)
     ) {
@@ -2671,7 +2849,7 @@ const App: React.FC = () => {
               <p className="text-sm leading-6 text-slate-400 mb-6">
                 {hasPasswordResetToken
                   ? 'Create a new password for this account. Active sessions will be revoked after the reset.'
-                  : 'Enter your account email and we will send a password reset link.'}
+                  : 'Start account recovery. If email delivery is unavailable, use one of your saved recovery codes.'}
               </p>
               {hasPasswordResetToken ? (
                 <form onSubmit={handleResetPasswordConfirm} className="space-y-5">
@@ -2715,7 +2893,7 @@ const App: React.FC = () => {
                   </button>
                 </form>
               ) : (
-                <form onSubmit={handlePasswordResetRequest} className="space-y-5">
+                <div className="space-y-5">
                   <label className="block space-y-2">
                     <span className="text-[10px] font-black uppercase tracking-widest text-slate-500">
                       Account Email
@@ -2725,7 +2903,6 @@ const App: React.FC = () => {
                       value={passwordResetEmailInput}
                       onChange={(event) => setPasswordResetEmailInput(event.target.value)}
                       className="w-full rounded-2xl border border-white/10 bg-white/[0.06] px-5 py-4 text-sm text-white outline-none transition focus:ring-2 focus:ring-blue-500/40"
-                      required
                       placeholder="you@example.com"
                     />
                   </label>
@@ -2735,13 +2912,83 @@ const App: React.FC = () => {
                     </p>
                   )}
                   <button
-                    type="submit"
+                    type="button"
+                    onClick={() => void handlePasswordResetRequest()}
                     disabled={isPasswordResetPending}
                     className="w-full py-4 bg-blue-600 hover:bg-blue-500 disabled:opacity-60 text-white rounded-2xl font-black text-xs uppercase tracking-widest transition-all shadow-xl"
                   >
-                    {isPasswordResetPending ? 'Sending Reset Link...' : 'Send Reset Link'}
+                    {isPasswordResetPending ? 'Starting Recovery...' : 'Start Recovery'}
                   </button>
-                </form>
+                  <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-4 text-xs leading-5 text-slate-300">
+                    Saved recovery code available? Reset your password below without waiting for email.
+                  </div>
+                  <div className="h-px bg-white/10" />
+                  <div>
+                    <h3 className="text-sm font-black uppercase tracking-widest text-white">
+                      Recovery Code Reset
+                    </h3>
+                    <p className="mt-2 text-xs leading-5 text-slate-400">
+                      Use a recovery code you saved when your account was created. Codes are one-time use.
+                    </p>
+                  </div>
+                  <label className="block space-y-2">
+                    <span className="text-[10px] font-black uppercase tracking-widest text-slate-500">
+                      Account Email
+                    </span>
+                    <input
+                      type="email"
+                      value={recoveryCodeEmailInput}
+                      onChange={(event) => setRecoveryCodeEmailInput(event.target.value)}
+                      className="w-full rounded-2xl border border-white/10 bg-white/[0.06] px-5 py-4 text-sm text-white outline-none transition focus:ring-2 focus:ring-blue-500/40"
+                      required
+                      placeholder="you@example.com"
+                    />
+                  </label>
+                  <label className="block space-y-2">
+                    <span className="text-[10px] font-black uppercase tracking-widest text-slate-500">
+                      Recovery Code
+                    </span>
+                    <input
+                      type="text"
+                      value={recoveryCodeInput}
+                      onChange={(event) => setRecoveryCodeInput(event.target.value)}
+                      className="w-full rounded-2xl border border-white/10 bg-white/[0.06] px-5 py-4 font-mono text-sm uppercase text-white outline-none transition focus:ring-2 focus:ring-blue-500/40"
+                      placeholder="CNH-XXXX-XXXX-XXXX"
+                    />
+                  </label>
+                  <label className="block space-y-2">
+                    <span className="text-[10px] font-black uppercase tracking-widest text-slate-500">
+                      New Password
+                    </span>
+                    <input
+                      type="password"
+                      value={newPasswordInput}
+                      onChange={(event) => setNewPasswordInput(event.target.value)}
+                      className="w-full rounded-2xl border border-white/10 bg-white/[0.06] px-5 py-4 text-sm text-white outline-none transition focus:ring-2 focus:ring-blue-500/40"
+                      placeholder="********"
+                    />
+                  </label>
+                  <label className="block space-y-2">
+                    <span className="text-[10px] font-black uppercase tracking-widest text-slate-500">
+                      Confirm Password
+                    </span>
+                    <input
+                      type="password"
+                      value={confirmNewPasswordInput}
+                      onChange={(event) => setConfirmNewPasswordInput(event.target.value)}
+                      className="w-full rounded-2xl border border-white/10 bg-white/[0.06] px-5 py-4 text-sm text-white outline-none transition focus:ring-2 focus:ring-blue-500/40"
+                      placeholder="********"
+                    />
+                  </label>
+                  <button
+                    type="button"
+                    onClick={() => void handleRecoveryCodeResetConfirm()}
+                    disabled={isPasswordResetPending}
+                    className="w-full py-4 bg-white/5 hover:bg-white/10 disabled:opacity-60 text-white rounded-2xl font-black text-xs uppercase tracking-widest transition-all border border-white/10"
+                  >
+                    {isPasswordResetPending ? 'Resetting Password...' : 'Reset With Recovery Code'}
+                  </button>
+                </div>
               )}
               <button
                 type="button"
@@ -2963,40 +3210,12 @@ const App: React.FC = () => {
                       </label>
                       {ACCOUNT_RECOVERY_UI_ENABLED && (
                         <div className="space-y-3 rounded-2xl border border-white/10 bg-white/[0.03] p-4">
-                          <button
-                            type="button"
-                            onClick={() => {
-                              setPasswordResetRequestOpen((open) => !open);
-                              setPasswordResetEmailInput(emailInput);
-                              setPasswordResetNotice('');
-                            }}
-                            className="text-[10px] font-black uppercase tracking-widest text-amber-200 hover:text-amber-100"
-                          >
-                            Forgot Administrator Password?
-                          </button>
-                          {isPasswordResetRequestOpen && (
-                            <div className="space-y-3">
-                              <input
-                                type="email"
-                                value={passwordResetEmailInput}
-                                onChange={(event) => setPasswordResetEmailInput(event.target.value)}
-                                className="w-full rounded-xl border border-white/10 bg-white/5 px-4 py-3 text-sm font-medium text-white outline-none transition focus:ring-2 focus:ring-amber-400/40"
-                                required
-                                placeholder="admin@example.com"
-                              />
-                              <button
-                                type="button"
-                                onClick={() => handlePasswordResetRequest()}
-                                disabled={isPasswordResetPending}
-                                className="w-full rounded-xl border border-white/10 bg-white/5 py-3 text-[10px] font-black uppercase tracking-widest text-white transition hover:bg-white/10 disabled:opacity-60"
-                              >
-                                {isPasswordResetPending ? 'Sending...' : 'Send Reset Link'}
-                              </button>
-                              {passwordResetNotice && (
-                                <p className="text-[10px] leading-5 text-amber-100/80">{passwordResetNotice}</p>
-                              )}
-                            </div>
-                          )}
+                          <p className="text-[10px] font-black uppercase tracking-widest text-amber-200">
+                            Administrator Recovery
+                          </p>
+                          <p className="text-xs leading-5 text-amber-100/75">
+                            Administrator password recovery is handled manually by operations. Use the configured founder wallet, or contact founder support if access is blocked.
+                          </p>
                         </div>
                       )}
                       <button
@@ -3055,7 +3274,61 @@ const App: React.FC = () => {
                     {error}
                   </p>
                 )}
-                {isProviderWalletVerificationRequired ? (
+                {isProviderWalletBindingRequired ? (
+                  <div className="space-y-5 rounded-3xl border border-blue-300/20 bg-blue-500/[0.04] p-5">
+                    <div className="flex items-start gap-4">
+                      <div className="flex h-12 w-12 items-center justify-center rounded-2xl border border-blue-300/20 bg-blue-500/10 text-blue-100">
+                        <WalletCards className="h-5 w-5" />
+                      </div>
+                      <div>
+                        <h3 className="text-sm font-black uppercase tracking-widest text-white">
+                          Bind Provider Wallet
+                        </h3>
+                        <p className="mt-2 text-xs leading-5 text-slate-300">
+                          Bind one wallet to this approved provider account with a gasless signature. Provider tools stay locked until you verify that wallet for the active session.
+                        </p>
+                      </div>
+                    </div>
+                    {providerWalletStatus && (
+                      <p className="rounded-xl border border-blue-300/20 bg-blue-500/10 p-3 text-[10px] font-black uppercase tracking-widest text-blue-100">
+                        {providerWalletStatus}
+                      </p>
+                    )}
+                    <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-4">
+                      <p className="text-[10px] font-black uppercase tracking-widest text-blue-100/80">
+                        {walletEnvironment.guidance}
+                      </p>
+                      {walletEnvironment.actionLabel && walletEnvironment.deepLinkUrl && (
+                        <button
+                          type="button"
+                          onClick={openMetaMaskMobileBrowser}
+                          className="mt-3 w-full rounded-xl border border-blue-300/20 bg-blue-500/10 px-4 py-3 text-[10px] font-black uppercase tracking-widest text-blue-100 transition hover:bg-blue-500/20"
+                        >
+                          {walletEnvironment.actionLabel}
+                        </button>
+                      )}
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => void handleProviderWalletBinding()}
+                      disabled={isProviderWalletBinding || !walletEnvironment.hasProvider}
+                      className="w-full rounded-2xl bg-blue-600 px-5 py-4 text-xs font-black uppercase tracking-widest text-white shadow-xl shadow-blue-950/40 transition hover:bg-blue-500 disabled:opacity-60"
+                    >
+                      {isProviderWalletBinding
+                        ? 'Binding Wallet...'
+                        : !walletEnvironment.hasProvider
+                          ? 'Wallet Browser Required'
+                          : 'Bind Wallet'}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={handleSignOut}
+                      className="w-full rounded-2xl border border-white/10 bg-white/5 px-5 py-4 text-xs font-black uppercase tracking-widest text-white transition hover:bg-white/10"
+                    >
+                      Sign Out
+                    </button>
+                  </div>
+                ) : isProviderWalletVerificationRequired ? (
                   <div className="space-y-5 rounded-3xl border border-blue-300/20 bg-blue-500/[0.04] p-5">
                     <div className="flex items-start gap-4">
                       <div className="flex h-12 w-12 items-center justify-center rounded-2xl border border-blue-300/20 bg-blue-500/10 text-blue-100">
@@ -3159,7 +3432,7 @@ const App: React.FC = () => {
                               disabled={isPasswordResetPending}
                               className="w-full rounded-xl border border-white/10 bg-white/5 py-3 text-[10px] font-black uppercase tracking-widest text-white transition hover:bg-white/10 disabled:opacity-60"
                             >
-                              {isPasswordResetPending ? 'Sending...' : 'Send Reset Link'}
+                              {isPasswordResetPending ? 'Starting...' : 'Start Recovery'}
                             </button>
                             {passwordResetNotice && (
                               <p className="text-[10px] leading-5 text-blue-100/80">{passwordResetNotice}</p>
@@ -4493,6 +4766,33 @@ const App: React.FC = () => {
           </div>
         )}
 
+        {oneTimeRecoveryCodes.length > 0 && (
+          <div className="fixed inset-0 z-[220] flex items-start justify-center overflow-y-auto bg-black/95 p-4 backdrop-blur-3xl sm:items-center">
+            <div className="glass-panel my-6 w-full max-w-lg rounded-[2rem] border border-blue-500/20 p-6 shadow-2xl sm:p-8">
+              <h3 className="text-2xl font-black uppercase tracking-tight text-white">
+                Save Recovery Codes
+              </h3>
+              <p className="mt-3 text-sm leading-6 text-slate-300">
+                These codes are shown once. Store them somewhere private. Each code can reset your password one time without email.
+              </p>
+              <div className="mt-5 grid gap-2 rounded-2xl border border-white/10 bg-black/30 p-4">
+                {oneTimeRecoveryCodes.map((code) => (
+                  <code key={code} className="rounded-xl bg-white/5 px-3 py-2 font-mono text-sm text-blue-100">
+                    {code}
+                  </code>
+                ))}
+              </div>
+              <button
+                type="button"
+                onClick={() => setOneTimeRecoveryCodes([])}
+                className="mt-6 w-full rounded-2xl bg-blue-600 px-5 py-4 text-xs font-black uppercase tracking-widest text-white shadow-xl transition hover:bg-blue-500"
+              >
+                I Saved These Codes
+              </button>
+            </div>
+          </div>
+        )}
+
         {(isSignupModalOpen || isSigninModalOpen) && (
           <div className="fixed inset-0 z-[200] flex items-start sm:items-center justify-center p-3 sm:p-4 overflow-y-auto custom-scrollbar bg-black/95 backdrop-blur-3xl animate-in fade-in duration-300">
             <div className="glass-panel w-full max-w-md p-6 sm:p-10 md:p-12 rounded-[2rem] sm:rounded-[3rem] relative animate-in zoom-in duration-300 border-blue-500/20 my-4 sm:my-8 max-h-[calc(100dvh-1.5rem)] sm:max-h-[92dvh] overflow-y-auto custom-scrollbar scrollable">
@@ -4545,7 +4845,7 @@ const App: React.FC = () => {
                           disabled={isPasswordResetPending}
                           className="w-full py-3 bg-white/5 hover:bg-white/10 disabled:opacity-60 text-white rounded-xl font-black text-[10px] uppercase tracking-widest transition-all border border-white/10"
                         >
-                          {isPasswordResetPending ? 'Sending...' : 'Send Reset Link'}
+                          {isPasswordResetPending ? 'Starting...' : 'Start Recovery'}
                         </button>
                         {passwordResetNotice && (
                           <p className="text-[10px] leading-5 text-blue-100/80">{passwordResetNotice}</p>
