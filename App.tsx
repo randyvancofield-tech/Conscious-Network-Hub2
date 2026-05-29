@@ -1,6 +1,5 @@
 
 import React, { useState, useEffect, useMemo, useRef } from 'react';
-import ThreeScene from './components/ThreeScene';
 import Dashboard from './components/Dashboard';
 import IdentitySecurityPanel from './components/IdentitySecurityPanel';
 import MyCourses from './components/MyCourses';
@@ -9,8 +8,6 @@ import KnowledgePathways from './components/KnowledgePathways';
 import CommunityMembers from './components/CommunityMembers';
 import SocialLearningHub from './components/SocialLearningHub';
 import ConsciousMeetingsUpcomingPage from './components/ConsciousMeetingsUpcomingPage';
-import ConsciousMeetingPortalPage from './components/ConsciousMeetingPortalPage';
-import ConsciousMeetingRoomPage from './components/ConsciousMeetingRoomPage';
 import MembershipPage from './components/MembershipPage';
 import NotFoundPage from './components/NotFoundPage';
 import MusicBox from './components/MusicBox';
@@ -56,6 +53,10 @@ import {
   walletErrorMessage,
   type WalletProviderEnvironment,
 } from './services/walletProvider';
+
+const LazyThreeScene = React.lazy(() => import('./components/ThreeScene'));
+const LazyConsciousMeetingPortalPage = React.lazy(() => import('./components/ConsciousMeetingPortalPage'));
+const LazyConsciousMeetingRoomPage = React.lazy(() => import('./components/ConsciousMeetingRoomPage'));
 
 type RouteState = {
   view: AppView;
@@ -3272,22 +3273,26 @@ const App: React.FC = () => {
         );
       case AppView.CONSCIOUS_MEETINGS_PORTAL:
         return (
-          <ConsciousMeetingPortalPage
-            user={user}
-            onOpenUpcoming={() => setCurrentView(AppView.CONSCIOUS_MEETINGS_UPCOMING)}
-          />
+          <React.Suspense fallback={<div className="rounded-2xl border border-white/10 bg-white/[0.04] p-6 text-sm text-slate-300">Loading meeting portal...</div>}>
+            <LazyConsciousMeetingPortalPage
+              user={user}
+              onOpenUpcoming={() => setCurrentView(AppView.CONSCIOUS_MEETINGS_UPCOMING)}
+            />
+          </React.Suspense>
         );
       case AppView.MEETING_DETAIL:
         return (
-          <ConsciousMeetingRoomPage
-            sessionId={routeParams.id}
-            user={user}
-            onBack={() => setCurrentView(AppView.CONSCIOUS_MEETINGS_UPCOMING)}
-            onSignIn={() => {
-              resetSignInChallengeInputs();
-              setSigninModalOpen(true);
-            }}
-          />
+          <React.Suspense fallback={<div className="rounded-2xl border border-white/10 bg-white/[0.04] p-6 text-sm text-slate-300">Loading meeting room...</div>}>
+            <LazyConsciousMeetingRoomPage
+              sessionId={routeParams.id}
+              user={user}
+              onBack={() => setCurrentView(AppView.CONSCIOUS_MEETINGS_UPCOMING)}
+              onSignIn={() => {
+                resetSignInChallengeInputs();
+                setSigninModalOpen(true);
+              }}
+            />
+          </React.Suspense>
         );
       case AppView.MY_CONSCIOUS_IDENTITY: 
         return (
@@ -3527,10 +3532,22 @@ const App: React.FC = () => {
   const isProviderPublicExperience = isProviderPublicView(currentView);
   const isAdministrativePublicExperience = isAdministrativePublicView(currentView);
   const isCareersPublicExperience = !user && isCareersPublicView(currentView);
+  const shouldLoadImmersiveScene =
+    currentView === AppView.CONSCIOUS_MEETINGS_PORTAL || currentView === AppView.MEETING_DETAIL;
 
   return (
     <div className="app-scroll-root min-h-screen bg-[#05070a] text-slate-200 selection:bg-blue-500/30 flex relative">
-      {currentView !== AppView.ENTRY && <ThreeScene />}
+      {currentView !== AppView.ENTRY && (
+        <div className="fixed inset-0 z-0 overflow-hidden bg-[#05070a]" aria-hidden="true">
+          <div className="absolute inset-0 bg-[radial-gradient(circle_at_50%_18%,_rgba(37,99,235,0.18),_transparent_32%),radial-gradient(circle_at_82%_68%,_rgba(20,184,166,0.13),_transparent_28%),linear-gradient(135deg,_rgba(15,23,42,0.86),_rgba(2,6,23,1))]" />
+          <div className="absolute inset-0 animated-gradient opacity-10" />
+        </div>
+      )}
+      {shouldLoadImmersiveScene && (
+        <React.Suspense fallback={null}>
+          <LazyThreeScene />
+        </React.Suspense>
+      )}
       <MusicBox />
 
       {currentView === AppView.ENTRY && (
@@ -4354,7 +4371,7 @@ const App: React.FC = () => {
                   <div className="h-8 w-px bg-white/10 mx-1 hidden xl:block"></div>
                   <button
                     onClick={() => { setCurrentView(AppView.MY_CONSCIOUS_IDENTITY); closeSidebarOnMobile(); }}
-                    className="flex min-w-0 max-w-[11rem] items-center gap-2 xl:gap-3 px-2 xl:pl-3 xl:pr-4 py-2 hover:bg-white/5 rounded-2xl transition-all border border-transparent hover:border-white/5"
+                    className="flex min-w-0 max-w-[15rem] items-center gap-2 xl:gap-3 px-2 xl:pl-3 xl:pr-4 py-2 hover:bg-white/5 rounded-2xl transition-all border border-transparent hover:border-white/5 2xl:max-w-[18rem]"
                     title={user?.name || 'Guest Node'}
                   >
                     <div className="w-9 h-9 shrink-0 rounded-xl bg-gradient-to-br from-blue-600 to-teal-400 flex items-center justify-center font-black text-sm text-white shadow-xl overflow-hidden">
@@ -4390,9 +4407,9 @@ const App: React.FC = () => {
                         user ? user.name.charAt(0).toUpperCase() : 'G'
                       )}
                     </div>
-                    <div className="min-w-0 text-left hidden xl:block">
-                      <p className="cnh-person-name truncate text-xs font-black text-white leading-none uppercase tracking-tighter">{user?.name || 'Guest Node'}</p>
-                      <p className="truncate text-[8px] text-slate-500 uppercase tracking-[0.3em] mt-1">{user?.tier || 'Explore'} Access</p>
+                    <div className="hidden min-w-0 text-left xl:block">
+                      <p className="cnh-person-name text-[11px] font-black text-white leading-tight uppercase tracking-tighter 2xl:text-xs">{user?.name || 'Guest Node'}</p>
+                      <p className="cnh-action-label mt-1 text-[8px] text-slate-500 uppercase tracking-[0.24em]">{user?.tier || 'Explore'} Access</p>
                     </div>
                   </button>
                 </div>

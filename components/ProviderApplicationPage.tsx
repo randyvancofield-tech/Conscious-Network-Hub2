@@ -403,8 +403,8 @@ const ProviderApplicationPage: React.FC<ProviderApplicationPageProps> = ({
             <div className="mt-4 h-2 overflow-hidden rounded-full bg-white/10">
               <div className="h-full rounded-full bg-amber-300 transition-all" style={{ width: `${completionProgress}%` }} />
             </div>
-            <div className="mt-4 overflow-x-auto pb-1 custom-scrollbar scrollable-x">
-              <div className="grid min-w-[36rem] grid-cols-6 gap-2 lg:min-w-0">
+            <div className="mt-4">
+              <div className="grid grid-cols-2 gap-2 xs:grid-cols-3 lg:grid-cols-6">
                 {steps.map((name, index) => (
                   <button
                     key={name}

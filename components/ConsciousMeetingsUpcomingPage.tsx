@@ -189,7 +189,7 @@ const ConsciousMeetingsUpcomingPage: React.FC<ConsciousMeetingsUpcomingPageProps
             <p className="text-[9px] font-black uppercase tracking-widest text-slate-500">Upcoming</p>
           </div>
           <div className="rounded-xl border border-white/10 bg-white/5 p-4">
-            <p className="text-2xl font-black text-white">{archivedSessions.length + fallbackArchiveEntries.length}</p>
+            <p className="text-2xl font-black text-white">{archiveEntries.length}</p>
             <p className="text-[9px] font-black uppercase tracking-widest text-slate-500">Vault Items</p>
           </div>
         </div>

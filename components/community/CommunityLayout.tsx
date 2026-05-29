@@ -566,7 +566,7 @@ export const ConsciousIdentity: React.FC<ConsciousIdentityProps> = ({
                     </span>
                   </h1>
                   <div className="flex flex-wrap items-center justify-center sm:justify-start gap-3 sm:gap-6 min-w-0">
-                    <span className="text-blue-400 font-bold uppercase tracking-[0.18em] sm:tracking-[0.3em] text-[11px] sm:text-sm flex items-center gap-2 min-w-0 max-w-full break-words">
+                    <span className="cnh-profile-field text-blue-400 font-bold uppercase tracking-[0.18em] sm:tracking-[0.3em] text-[11px] sm:text-sm flex items-center gap-2 min-w-0 max-w-full">
                       <UserCircle className="w-4 h-4" /> @{formData.handle}
                     </span>
                     <div className="h-6 w-px bg-white/10 hidden sm:block" />
@@ -585,7 +585,7 @@ export const ConsciousIdentity: React.FC<ConsciousIdentityProps> = ({
                   <h3 className="text-[10px] font-bold text-slate-500 uppercase tracking-[0.4em] flex items-center gap-3">
                     <UserCircle className="w-6 h-6 text-blue-500" /> Identity Mission Statement
                   </h3>
-                  <p className="text-slate-200 leading-relaxed text-xl sm:text-3xl font-light italic opacity-95 tracking-tight max-w-4xl">
+                  <p className="cnh-user-content text-slate-200 leading-relaxed text-xl sm:text-3xl font-light italic opacity-95 tracking-tight max-w-4xl">
                     "{formData.bio || "Your mission is the core of your conscious node. Define your intentions in the hub."}"
                   </p>
                 </div>
@@ -755,7 +755,7 @@ export const ConsciousIdentity: React.FC<ConsciousIdentityProps> = ({
               )}
               {reflections.map(r => (
                 <div key={r.id} className="p-5 sm:p-8 bg-white/5 border border-white/5 rounded-[1.5rem] sm:rounded-[2.5rem] hover:bg-white/10 transition-all group/ref relative">
-                  <p className="text-slate-200 text-base sm:text-lg leading-relaxed mb-4">{r.text}</p>
+                  <p className="cnh-user-content text-slate-200 text-base sm:text-lg leading-relaxed mb-4">{r.text}</p>
                   <div className="flex items-center justify-between">
                     <div className="flex items-center gap-3">
                       <div className="w-2 h-2 rounded-full bg-blue-400 group-hover/ref:scale-150 transition-transform" />

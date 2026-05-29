@@ -8,6 +8,7 @@ import {
   normalizeMediaAsset,
   type NormalizedMediaAsset,
 } from '../services/mediaAssets';
+import VisualRenderBoundary from './ui/VisualRenderBoundary';
 
 export interface SocialProfileView {
   profile: any;
@@ -108,7 +109,7 @@ const renderWideMedia = (media: NormalizedMediaAsset, alt: string, className: st
   return <img src={media.url} alt={alt} className={className} />;
 };
 
-const SocialProfileViewer: React.FC<SocialProfileViewerProps> = ({
+const SocialProfileViewerContent: React.FC<SocialProfileViewerProps> = ({
   title,
   isOpen,
   loading,
@@ -242,7 +243,7 @@ const SocialProfileViewer: React.FC<SocialProfileViewerProps> = ({
                     <h5 className="cnh-person-name text-2xl font-black tracking-tight text-white sm:text-3xl">
                       {profileName}
                     </h5>
-                    <p className="mt-1 break-all text-[11px] font-black uppercase tracking-widest text-blue-300">
+                    <p className="cnh-profile-field mt-1 text-[11px] font-black uppercase tracking-widest text-blue-300">
                       @{profileView.profile?.handle || 'node'}
                     </p>
                   </div>
@@ -258,7 +259,7 @@ const SocialProfileViewer: React.FC<SocialProfileViewerProps> = ({
               <section className="grid grid-cols-1 gap-3 lg:grid-cols-3">
                 <div className="rounded-xl border border-white/10 bg-white/[0.04] p-4">
                   <p className="text-[10px] font-black uppercase tracking-widest text-slate-500">Location</p>
-                  <p className="mt-1 break-words text-sm text-slate-200">{profileView.profile?.location || 'Not specified'}</p>
+                  <p className="cnh-profile-field mt-1 text-sm text-slate-200">{profileView.profile?.location || 'Not specified'}</p>
                 </div>
                 <div className="rounded-xl border border-white/10 bg-white/[0.04] p-4">
                   <p className="text-[10px] font-black uppercase tracking-widest text-slate-500">Joined</p>
@@ -270,7 +271,7 @@ const SocialProfileViewer: React.FC<SocialProfileViewerProps> = ({
                 </div>
                 <div className="rounded-xl border border-white/10 bg-white/[0.04] p-4 lg:col-span-3">
                   <p className="text-[10px] font-black uppercase tracking-widest text-slate-500">Bio</p>
-                  <p className="mt-1 whitespace-pre-wrap break-words text-sm leading-relaxed text-slate-200">
+                  <p className="cnh-user-content mt-1 text-sm leading-relaxed text-slate-200">
                     {profileView.profile?.bio || 'No biography provided yet.'}
                   </p>
                 </div>
@@ -286,7 +287,7 @@ const SocialProfileViewer: React.FC<SocialProfileViewerProps> = ({
                         className="inline-flex min-w-0 items-center gap-2 rounded-lg border border-blue-500/20 bg-blue-600/10 px-3 py-2 text-xs font-bold text-blue-300 transition-colors hover:bg-blue-600/20"
                       >
                         <ExternalLink className="h-3.5 w-3.5 shrink-0" />
-                        <span className="break-all">{String(link)}</span>
+                        <span className="cnh-profile-field">{String(link)}</span>
                       </a>
                     ))}
                     {publicLinks.length === 0 && (
@@ -316,7 +317,7 @@ const SocialProfileViewer: React.FC<SocialProfileViewerProps> = ({
                             {String(post.visibility || 'public')}
                           </span>
                         </div>
-                        <p className="whitespace-pre-wrap break-words text-sm text-slate-200">
+                        <p className="cnh-user-content text-sm text-slate-200">
                           {String(post.text || '').trim() || 'Media post'}
                         </p>
                         {Array.isArray(post.media) && post.media.length > 0 && (
@@ -360,5 +361,11 @@ const SocialProfileViewer: React.FC<SocialProfileViewerProps> = ({
     </div>
   );
 };
+
+const SocialProfileViewer: React.FC<SocialProfileViewerProps> = (props) => (
+  <VisualRenderBoundary moduleName="SocialProfileViewer" fallbackTitle="Profile view could not render.">
+    <SocialProfileViewerContent {...props} />
+  </VisualRenderBoundary>
+);
 
 export default SocialProfileViewer;

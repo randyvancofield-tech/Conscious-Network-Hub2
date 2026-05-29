@@ -113,15 +113,43 @@
             max-width: 100%;
         }
 
+        :where(p, h1, h2, h3, h4, h5, h6, li, td, th, span) {
+            min-width: 0;
+            overflow-wrap: break-word;
+        }
+
         button, a {
             overflow-wrap: break-word;
         }
 
         .cnh-person-name {
+            max-width: 100%;
+            min-width: 0;
             word-break: normal;
-            overflow-wrap: normal;
+            overflow-wrap: break-word;
             hyphens: none;
             text-wrap: balance;
+        }
+
+        .cnh-profile-field,
+        .cnh-user-content,
+        [data-user-content="true"] {
+            max-width: 100%;
+            min-width: 0;
+            overflow-wrap: anywhere;
+            word-break: break-word;
+        }
+
+        .cnh-user-content,
+        [data-user-content="true"] {
+            white-space: pre-wrap;
+        }
+
+        .cnh-ellipsis {
+            min-width: 0;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
         }
 
         .cnh-status-badge {

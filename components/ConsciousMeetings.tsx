@@ -7,8 +7,11 @@ import {
   Settings, Download, Share2, Info, Loader2, Play,
   ChevronRight, Pause, Square, Image, Upload, UserPlus, Layers
 } from 'lucide-react';
-import { SelfieSegmentation, Results as SelfieSegmentationResults } from '@mediapipe/selfie_segmentation';
-import * as THREE from 'three';
+import type {
+  Results as SelfieSegmentationResults,
+  SelfieSegmentation as SelfieSegmentationInstance,
+} from '@mediapipe/selfie_segmentation';
+import type * as ThreeTypes from 'three';
 import { UserProfile, Provider, Meeting } from '../types';
 import {
   addProviderInviteGroupMember,
@@ -335,7 +338,7 @@ const ConsciousMeetings: React.FC<ConsciousMeetingsProps> = ({ user }) => {
   const xrMountRef = useRef<HTMLDivElement>(null);
   const xrSessionRef = useRef<any>(null);
   const xrCleanupRef = useRef<(() => void) | null>(null);
-  const segmentationRef = useRef<SelfieSegmentation | null>(null);
+  const segmentationRef = useRef<SelfieSegmentationInstance | null>(null);
   const processedStreamCleanupRef = useRef<(() => void) | null>(null);
   const liveStreamRef = useRef<MediaStream | null>(null);
   const selectedBackgroundRef = useRef<string | null>(null);
@@ -1125,9 +1128,9 @@ const ConsciousMeetings: React.FC<ConsciousMeetingsProps> = ({ user }) => {
 
   const setListenerPose = (
     listener: AudioListener,
-    position: THREE.Vector3,
-    forward: THREE.Vector3,
-    up: THREE.Vector3
+    position: ThreeTypes.Vector3,
+    forward: ThreeTypes.Vector3,
+    up: ThreeTypes.Vector3
   ) => {
     const currentTime = (listener as any).context?.currentTime ?? 0;
     if (listener.positionX) {
@@ -1243,17 +1246,17 @@ const ConsciousMeetings: React.FC<ConsciousMeetingsProps> = ({ user }) => {
     let selectedDeviceProfile = 'unknown';
     let handleSessionEnd: (() => void) | null = null;
     let mount: HTMLElement | null = null;
-    let scene: THREE.Scene | null = null;
-    let camera: THREE.PerspectiveCamera | null = null;
-    let renderer: THREE.WebGLRenderer | null = null;
-    let videoTexture: THREE.VideoTexture | null = null;
-    let geometry: THREE.PlaneGeometry | null = null;
-    let material: THREE.MeshBasicMaterial | null = null;
-    let borderGeometry: THREE.RingGeometry | null = null;
-    let borderMaterial: THREE.MeshBasicMaterial | null = null;
-    let particlesGeometry: THREE.BufferGeometry | null = null;
-    let particlesMaterial: THREE.PointsMaterial | null = null;
-    let particlesPositionAttribute: THREE.BufferAttribute | null = null;
+    let scene: ThreeTypes.Scene | null = null;
+    let camera: ThreeTypes.PerspectiveCamera | null = null;
+    let renderer: ThreeTypes.WebGLRenderer | null = null;
+    let videoTexture: ThreeTypes.VideoTexture | null = null;
+    let geometry: ThreeTypes.PlaneGeometry | null = null;
+    let material: ThreeTypes.MeshBasicMaterial | null = null;
+    let borderGeometry: ThreeTypes.RingGeometry | null = null;
+    let borderMaterial: ThreeTypes.MeshBasicMaterial | null = null;
+    let particlesGeometry: ThreeTypes.BufferGeometry | null = null;
+    let particlesMaterial: ThreeTypes.PointsMaterial | null = null;
+    let particlesPositionAttribute: ThreeTypes.BufferAttribute | null = null;
     let particleBasePositions: Float32Array | null = null;
     let particlePhases: Float32Array | null = null;
     let particleSpeeds: Float32Array | null = null;
@@ -1319,6 +1322,7 @@ const ConsciousMeetings: React.FC<ConsciousMeetingsProps> = ({ user }) => {
     };
 
     try {
+      const THREE = await import('./immersive/threeRuntime');
       const xrSystem = (navigator as Navigator & { xr?: any }).xr;
       if (!xrSystem) {
         throw new Error('WebXR is unavailable on this browser/device.');
@@ -2173,7 +2177,7 @@ const ConsciousMeetings: React.FC<ConsciousMeetingsProps> = ({ user }) => {
     let backgroundImage: HTMLImageElement | null = null;
     let renderCanvas: HTMLCanvasElement | null = null;
     let renderContext: CanvasRenderingContext2D | null = null;
-    let localSegmentation: SelfieSegmentation | null = null;
+    let localSegmentation: SelfieSegmentationInstance | null = null;
     let cleaningUp = false;
 
     const cleanupProcessing = () => {
@@ -2269,6 +2273,7 @@ const ConsciousMeetings: React.FC<ConsciousMeetingsProps> = ({ user }) => {
           }
         }
 
+        const { SelfieSegmentation } = await import('@mediapipe/selfie_segmentation');
         localSegmentation = new SelfieSegmentation({
           locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/selfie_segmentation/${file}`,
         });

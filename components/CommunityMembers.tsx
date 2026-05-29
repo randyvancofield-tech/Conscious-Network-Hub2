@@ -25,6 +25,7 @@ import {
   type NormalizedMediaAsset,
 } from '../services/mediaAssets';
 import SocialProfileViewer, { type SocialProfileView } from './SocialProfileViewer';
+import VisualRenderBoundary from './ui/VisualRenderBoundary';
 
 interface Member {
   id: string;
@@ -105,7 +106,7 @@ interface CommunityMembersProps {
   onSignInPrompt?: () => void;
 }
 
-const CommunityMembers: React.FC<CommunityMembersProps> = ({ onSignInPrompt }) => {
+const CommunityMembersContent: React.FC<CommunityMembersProps> = ({ onSignInPrompt }) => {
   const [search, setSearch] = useState('');
   const [selectedMember, setSelectedMember] = useState<Member | null>(null);
   const [messages, setMessages] = useState<{ [key: string]: { text: string; sender: 'me' | 'them'; time: string }[] }>({});
@@ -252,7 +253,7 @@ const CommunityMembers: React.FC<CommunityMembersProps> = ({ onSignInPrompt }) =
 
   const handleSendMessage = (e: React.FormEvent) => {
     e.preventDefault();
-    setDirectoryError('Member messaging requires the Phase 4 backend messaging service before launch-facing use.');
+    setDirectoryError('Member messaging is locked until the native Render API route and Neon persistence tables are enabled.');
   };
 
   useEffect(() => {
@@ -354,7 +355,7 @@ const CommunityMembers: React.FC<CommunityMembersProps> = ({ onSignInPrompt }) =
                   </div>
                   <div className="min-w-0 flex-1">
                     <div className="flex items-center gap-2 mb-0.5">
-                      <h4 className="text-sm font-black text-white uppercase tracking-tighter truncate">{member.name}</h4>
+                      <h4 className="cnh-ellipsis text-sm font-black text-white uppercase tracking-tighter" title={member.name}>{member.name}</h4>
                       {member.verified && <CheckCircle2 className="w-3 h-3 text-blue-400" />}
                     </div>
                     <p className="text-[8px] text-blue-400/60 font-black uppercase tracking-widest truncate">{member.role}</p>
@@ -460,7 +461,7 @@ const CommunityMembers: React.FC<CommunityMembersProps> = ({ onSignInPrompt }) =
               <div className="flex-1 overflow-y-auto p-4 md:p-8 space-y-4 md:space-y-6 custom-scrollbar bg-[radial-gradient(circle_at_top_right,_rgba(37,99,235,0.02)_0%,_transparent_50%)]">
                 <div className="text-center py-4 border-b border-white/5 mb-4">
                   <div className="inline-flex items-center gap-2 px-3 py-1 bg-blue-600/5 border border-blue-500/10 rounded-full text-[8px] md:text-[9px] text-blue-400 font-black uppercase tracking-[0.2em]">
-                    <ShieldCheck className="w-3 h-3" /> Messaging Backend Required
+                    <ShieldCheck className="w-3 h-3" /> Native Messaging Pending
                   </div>
                 </div>
 
@@ -473,7 +474,7 @@ const CommunityMembers: React.FC<CommunityMembersProps> = ({ onSignInPrompt }) =
                           : 'bg-white/5 text-slate-200 rounded-tl-none border border-white/10'
                       }`}
                     >
-                      {msg.text}
+                      <span className="cnh-user-content">{msg.text}</span>
                     </div>
                     <span className="text-[7px] md:text-[8px] text-slate-600 uppercase font-black tracking-widest mt-1.5 px-1">{msg.time}</span>
                   </div>
@@ -484,7 +485,7 @@ const CommunityMembers: React.FC<CommunityMembersProps> = ({ onSignInPrompt }) =
                     <div className="p-8 bg-blue-600/5 rounded-[3rem] border border-blue-500/10">
                       <MessageSquare className="w-10 h-10 text-blue-400" />
                     </div>
-                    <p className="text-[9px] font-bold uppercase tracking-[0.3em] text-blue-400">Secure messaging unlocks after backend completion</p>
+                    <p className="text-[9px] font-bold uppercase tracking-[0.3em] text-blue-400">Secure messaging unlocks after native API persistence is enabled</p>
                   </div>
                 )}
                 <div ref={chatEndRef} />
@@ -521,7 +522,7 @@ const CommunityMembers: React.FC<CommunityMembersProps> = ({ onSignInPrompt }) =
                     type="text"
                     value={input}
                     onChange={(e) => setInput(e.target.value)}
-                    placeholder="Messaging requires the Phase 4 backend service"
+                    placeholder="Messaging unlocks after native API persistence is enabled"
                     disabled
                     className="min-w-0 flex-1 bg-white/5 border border-white/10 rounded-2xl px-5 py-3 md:py-4 text-xs text-white focus:outline-none focus:ring-2 focus:ring-blue-500/30 transition-all font-medium"
                   />
@@ -576,7 +577,7 @@ const CommunityMembers: React.FC<CommunityMembersProps> = ({ onSignInPrompt }) =
               <p>
                 <span className="text-slate-500 uppercase text-[10px] tracking-widest font-black">Status:</span> {selectedMember.status}
               </p>
-              <p className="leading-relaxed">{selectedMember.bio}</p>
+              <p className="cnh-user-content leading-relaxed">{selectedMember.bio}</p>
             </div>
             <button
               onClick={() => setMemberInfoOpen(false)}
@@ -591,5 +592,11 @@ const CommunityMembers: React.FC<CommunityMembersProps> = ({ onSignInPrompt }) =
     </div>
   );
 };
+
+const CommunityMembers: React.FC<CommunityMembersProps> = (props) => (
+  <VisualRenderBoundary moduleName="CommunityMembersProfileModals" fallbackTitle="Member profile tools could not render.">
+    <CommunityMembersContent {...props} />
+  </VisualRenderBoundary>
+);
 
 export default CommunityMembers;

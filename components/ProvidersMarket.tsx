@@ -14,6 +14,7 @@ import {
   type NormalizedMediaAsset,
 } from '../services/mediaAssets';
 import { ActionButton, EmptyState, PageHeader, PageShell, SurfacePanel } from './ui/PlatformPrimitives';
+import VisualRenderBoundary from './ui/VisualRenderBoundary';
 
 interface ProviderProfile {
   id: string;
@@ -88,7 +89,7 @@ const renderProviderMedia = (
   return <img src={media.url || ''} alt={alt} className={className} />;
 };
 
-const ProvidersMarket: React.FC<ProvidersMarketProps> = ({
+const ProvidersMarketContent: React.FC<ProvidersMarketProps> = ({
   providerId,
   onOpenProvider,
   onBackToList,
@@ -302,7 +303,7 @@ const ProvidersMarket: React.FC<ProvidersMarketProps> = ({
             <div className="glass-panel w-full max-w-xl my-4 max-h-[calc(100dvh-2rem)] overflow-y-auto custom-scrollbar rounded-[2rem] border border-white/10 shadow-2xl p-6 sm:p-8 space-y-5 animate-in zoom-in duration-300">
               <h4 className="text-2xl font-black text-white tracking-tight">Access Request</h4>
               <p className="text-sm text-slate-400">
-                Send an introductory message to <span className="text-white font-bold">{connectionTarget.name}</span>.
+                Send an introductory message to <span className="cnh-person-name text-white font-bold">{connectionTarget.name}</span>.
               </p>
               <textarea
                 value={connectionNote}
@@ -312,7 +313,7 @@ const ProvidersMarket: React.FC<ProvidersMarketProps> = ({
               />
               {connectionStatus && (
                 <div className="p-3 rounded-xl bg-emerald-500/10 border border-emerald-500/30 text-emerald-200 text-[11px] font-black uppercase tracking-widest">
-                  {connectionStatus}
+                  <span className="cnh-profile-field">{connectionStatus}</span>
                 </div>
               )}
               {!getAuthToken() && onSignInRequired && (
@@ -440,7 +441,7 @@ const ProvidersMarket: React.FC<ProvidersMarketProps> = ({
                     <Brain className="w-4 h-4 shrink-0 text-blue-500" />
                     <span className="cnh-action-label text-[10px] font-bold uppercase tracking-widest">{provider.specialty}</span>
                   </div>
-                  <p className="text-sm text-slate-400 leading-relaxed font-light line-clamp-3">
+                  <p className="cnh-user-content text-sm text-slate-400 leading-relaxed font-light line-clamp-3">
                     {provider.bio}
                   </p>
                 </div>
@@ -531,15 +532,15 @@ const ProvidersMarket: React.FC<ProvidersMarketProps> = ({
               </div>
             </div>
             <div className="p-6 sm:p-8 space-y-6">
-              <p className="text-sm text-slate-300 leading-relaxed">{selectedProvider.bio}</p>
+              <p className="cnh-user-content text-sm text-slate-300 leading-relaxed">{selectedProvider.bio}</p>
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                 <div className="p-3 bg-white/5 border border-white/10 rounded-xl">
                   <p className="text-[9px] uppercase tracking-widest text-slate-500 font-black">Specialty</p>
-                  <p className="text-white text-sm mt-1">{selectedProvider.specialty}</p>
+                  <p className="cnh-profile-field text-white text-sm mt-1">{selectedProvider.specialty}</p>
                 </div>
                 <div className="p-3 bg-white/5 border border-white/10 rounded-xl">
                   <p className="text-[9px] uppercase tracking-widest text-slate-500 font-black">Status</p>
-                  <p className="text-white text-sm mt-1">{selectedProvider.experience}</p>
+                  <p className="cnh-profile-field text-white text-sm mt-1">{selectedProvider.experience}</p>
                 </div>
                 <div className="p-3 bg-white/5 border border-white/10 rounded-xl">
                   <p className="text-[9px] uppercase tracking-widest text-slate-500 font-black">Verification</p>
@@ -573,7 +574,7 @@ const ProvidersMarket: React.FC<ProvidersMarketProps> = ({
           <div className="glass-panel w-full max-w-xl my-4 max-h-[calc(100dvh-2rem)] overflow-y-auto custom-scrollbar rounded-[2rem] border border-white/10 shadow-2xl p-6 sm:p-8 space-y-5 animate-in zoom-in duration-300">
             <h4 className="text-2xl font-black text-white tracking-tight">Anchor Link Request</h4>
             <p className="text-sm text-slate-400">
-              Send an introductory message to <span className="text-white font-bold">{connectionTarget.name}</span>.
+              Send an introductory message to <span className="cnh-person-name text-white font-bold">{connectionTarget.name}</span>.
             </p>
             <textarea
               value={connectionNote}
@@ -583,7 +584,7 @@ const ProvidersMarket: React.FC<ProvidersMarketProps> = ({
             />
             {connectionStatus && (
               <div className="p-3 rounded-xl bg-emerald-500/10 border border-emerald-500/30 text-emerald-200 text-[11px] font-black uppercase tracking-widest">
-                {connectionStatus}
+                <span className="cnh-profile-field">{connectionStatus}</span>
               </div>
             )}
             {!getAuthToken() && onSignInRequired && (
@@ -616,5 +617,11 @@ const ProvidersMarket: React.FC<ProvidersMarketProps> = ({
     </div>
   );
 };
+
+const ProvidersMarket: React.FC<ProvidersMarketProps> = (props) => (
+  <VisualRenderBoundary moduleName="ProvidersMarketProfileModals" fallbackTitle="Provider profile tools could not render.">
+    <ProvidersMarketContent {...props} />
+  </VisualRenderBoundary>
+);
 
 export default ProvidersMarket;

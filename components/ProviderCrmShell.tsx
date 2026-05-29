@@ -64,6 +64,7 @@ import {
   PROVIDER_SESSION_TOKEN_EVENT,
   setProviderControlSession,
 } from '../services/sessionService';
+import VisualRenderBoundary from './ui/VisualRenderBoundary';
 
 interface ProviderCrmShellProps {
   user: UserProfile | null;
@@ -284,13 +285,13 @@ function buildContentPayload(form: ContentForm) {
 }
 
 const controlClass =
-  'rounded-xl border border-white/10 bg-black/20 px-4 py-3 text-xs font-bold text-white outline-none focus:ring-2 focus:ring-blue-500/30';
+  'min-w-0 w-full rounded-xl border border-white/10 bg-black/20 px-4 py-3 text-xs font-bold text-white outline-none focus:ring-2 focus:ring-blue-500/30';
 const actionClass =
-  'inline-flex items-center justify-center gap-2 rounded-xl bg-blue-600 px-4 py-3 text-[10px] font-black uppercase tracking-widest text-white transition hover:bg-blue-500 disabled:bg-slate-700 disabled:text-slate-500';
+  'inline-flex max-w-full items-center justify-center gap-2 rounded-xl bg-blue-600 px-4 py-3 text-center text-[10px] font-black uppercase tracking-widest leading-4 text-white transition hover:bg-blue-500 disabled:bg-slate-700 disabled:text-slate-500';
 const secondaryActionClass =
-  'inline-flex items-center justify-center gap-2 rounded-xl border border-white/10 bg-white/5 px-4 py-3 text-[10px] font-black uppercase tracking-widest text-slate-200 transition hover:bg-white/10 disabled:opacity-50';
+  'inline-flex max-w-full items-center justify-center gap-2 rounded-xl border border-white/10 bg-white/5 px-4 py-3 text-center text-[10px] font-black uppercase tracking-widest leading-4 text-slate-200 transition hover:bg-white/10 disabled:opacity-50';
 
-const ProviderCrmShell: React.FC<ProviderCrmShellProps> = ({
+const ProviderCrmShellContent: React.FC<ProviderCrmShellProps> = ({
   user,
   onOpenAdministrativeAccess,
   onOpenProviderAccess,
@@ -680,7 +681,7 @@ const ProviderCrmShell: React.FC<ProviderCrmShellProps> = ({
         <div className="mb-3 flex h-10 w-10 items-center justify-center rounded-xl border border-white/10 bg-black/20">
           {icon}
         </div>
-        <p className="text-2xl font-black text-white">{value}</p>
+        <p className="cnh-profile-field text-2xl font-black text-white">{value}</p>
         <p className="mt-1 text-[9px] font-black uppercase tracking-widest text-slate-400 leading-4">{label}</p>
       </div>
     );
@@ -869,7 +870,7 @@ const ProviderCrmShell: React.FC<ProviderCrmShellProps> = ({
                     {note.category} | {note.status} | {formatLocalDateTime(note.updatedAt, localTimezone)}
                   </p>
                 </div>
-                <div className="flex gap-2">
+                <div className="flex flex-wrap gap-2 sm:justify-end">
                   <button type="button" className={secondaryActionClass} onClick={() => { setNoteEditId(note.id); setNoteForm({ title: note.title, body: note.body, category: note.category, status: note.status }); }}>
                     Edit
                   </button>
@@ -1028,7 +1029,7 @@ const ProviderCrmShell: React.FC<ProviderCrmShellProps> = ({
                     {item.status} | {formatLocalDateTime(item.updatedAt, localTimezone)}
                   </p>
                 </div>
-                <div className="flex gap-2">
+                <div className="flex flex-wrap gap-2 sm:justify-end">
                   <button type="button" className={secondaryActionClass} onClick={() => { setCollaborationEditId(item.id); setCollaborationForm({ title: item.title, description: item.description, status: item.status }); }}>
                     Edit
                   </button>
@@ -1099,7 +1100,7 @@ const ProviderCrmShell: React.FC<ProviderCrmShellProps> = ({
                     {item.status} | {item.priority} | due {formatLocalDateTime(item.dueAt, localTimezone)}
                   </p>
                 </div>
-                <div className="flex gap-2">
+                <div className="flex flex-wrap gap-2 sm:justify-end">
                   <button type="button" className={secondaryActionClass} onClick={() => { setFollowUpEditId(item.id); setFollowUpForm({ title: item.title, details: item.details || '', dueAt: item.dueAt ? toDateTimeLocalValue(new Date(item.dueAt)) : '', status: item.status, priority: item.priority }); }}>
                     Edit
                   </button>
@@ -1410,9 +1411,9 @@ const ProviderCrmShell: React.FC<ProviderCrmShellProps> = ({
   }
 
   return (
-    <div className="mx-auto max-w-7xl space-y-6 p-4 sm:p-8">
-      <div className="flex flex-col gap-4 border-b border-white/10 pb-6 lg:flex-row lg:items-end lg:justify-between">
-        <div>
+    <div className="mx-auto min-w-0 max-w-7xl space-y-6 p-4 sm:p-8">
+      <div className="flex min-w-0 flex-col gap-4 border-b border-white/10 pb-6 lg:flex-row lg:items-end lg:justify-between">
+        <div className="min-w-0">
           <p className="text-[10px] font-black uppercase tracking-[0.35em] text-blue-300">
             {isAdmin ? 'Administrative Portal' : 'Provider Portal'}
           </p>
@@ -1432,7 +1433,7 @@ const ProviderCrmShell: React.FC<ProviderCrmShellProps> = ({
         </div>
       </div>
 
-      <div className="grid gap-6 xl:grid-cols-[260px_1fr] 2xl:grid-cols-[280px_1fr]">
+      <div className="grid min-w-0 gap-6 xl:grid-cols-[260px_1fr] 2xl:grid-cols-[280px_1fr]">
         <aside className="grid gap-3 sm:grid-cols-2 xl:block xl:space-y-3">
           {tools.map((tool) => {
             const active = activeTool?.id === tool.id;
@@ -1450,7 +1451,7 @@ const ProviderCrmShell: React.FC<ProviderCrmShellProps> = ({
                 <span className={active ? 'text-blue-200' : 'text-slate-500'}>
                   {TOOL_ICONS[tool.id] || <PanelLeft className="h-4 w-4" />}
                 </span>
-                <span className="min-w-0 flex-1 text-[10px] font-black uppercase tracking-widest leading-4">
+                <span className="cnh-action-label min-w-0 flex-1 text-[10px] font-black uppercase tracking-widest leading-4">
                   {tool.label}
                 </span>
               </button>
@@ -1464,7 +1465,7 @@ const ProviderCrmShell: React.FC<ProviderCrmShellProps> = ({
           )}
         </aside>
 
-        <main className="space-y-6">
+        <main className="min-w-0 space-y-6">
           {renderActiveToolPanel()}
 
           {isAdmin && adminTools.length > 0 && (
@@ -1482,8 +1483,8 @@ const ProviderCrmShell: React.FC<ProviderCrmShellProps> = ({
               </div>
               <div className="mt-5 grid gap-3 md:grid-cols-2">
                 {adminTools.map((tool) => (
-                  <div key={tool.id} className="flex items-center justify-between gap-4 rounded-xl border border-white/10 bg-black/20 p-3">
-                    <div>
+                  <div key={tool.id} className="flex flex-col gap-3 rounded-xl border border-white/10 bg-black/20 p-3 xs:flex-row xs:items-center xs:justify-between">
+                    <div className="min-w-0">
                       <p className="text-[10px] font-black uppercase tracking-widest text-white">{tool.label}</p>
                       <p className="mt-1 text-[9px] uppercase tracking-widest text-slate-500">
                         {tool.enabled ? 'Enabled' : 'Disabled'}
@@ -1507,5 +1508,11 @@ const ProviderCrmShell: React.FC<ProviderCrmShellProps> = ({
     </div>
   );
 };
+
+const ProviderCrmShell: React.FC<ProviderCrmShellProps> = (props) => (
+  <VisualRenderBoundary moduleName="ProviderCrmShell" fallbackTitle="Provider CRM could not render.">
+    <ProviderCrmShellContent {...props} />
+  </VisualRenderBoundary>
+);
 
 export default ProviderCrmShell;

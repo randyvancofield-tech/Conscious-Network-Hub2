@@ -41,5 +41,53 @@ export default defineConfig(({ mode }) => {
         '@': path.resolve(__dirname, '.'),
       },
     },
+
+    build: {
+      chunkSizeWarningLimit: 800,
+      modulePreload: false,
+      rollupOptions: {
+        output: {
+          manualChunks(id) {
+            const normalizedId = id.replace(/\\/g, '/')
+
+            if (normalizedId.includes('vite/preload-helper')) {
+              return 'vite-preload-helper'
+            }
+
+            if (normalizedId.endsWith('/components/immersive/threeRuntime.ts')) {
+              return 'three-runtime'
+            }
+
+            if (!normalizedId.includes('node_modules')) return undefined
+
+            if (normalizedId.includes('lucide-react')) {
+              return 'icons-vendor'
+            }
+
+            if (normalizedId.includes('/react/') || normalizedId.includes('/react-dom/') || normalizedId.includes('/scheduler/')) {
+              return 'react-vendor'
+            }
+
+            if (normalizedId.includes('@react-three')) {
+              return 'react-three-vendor'
+            }
+
+            if (normalizedId.includes('/three/')) {
+              return 'three-vendor'
+            }
+
+            if (normalizedId.includes('@mediapipe')) {
+              return 'media-vendor'
+            }
+
+            if (normalizedId.includes('/ethers/')) {
+              return 'wallet-vendor'
+            }
+
+            return 'vendor'
+          },
+        },
+      },
+    },
   }
 })

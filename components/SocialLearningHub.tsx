@@ -17,6 +17,7 @@ import {
   type NormalizedMediaAsset,
 } from '../services/mediaAssets';
 import SocialProfileViewer, { type SocialProfileView } from './SocialProfileViewer';
+import VisualRenderBoundary from './ui/VisualRenderBoundary';
 
 interface Comment {
   id: string;
@@ -125,7 +126,7 @@ const mapSocialPostToNode = (post: any): NodeContent => {
   };
 };
 
-const SocialLearningHub: React.FC<SocialLearningHubProps> = ({ user }) => {
+const SocialLearningHubContent: React.FC<SocialLearningHubProps> = ({ user }) => {
   const [nodes, setNodes] = useState<NodeContent[]>(INITIAL_NODES);
   const [newPost, setNewPost] = useState('');
   const [isInjecting, setIsInjecting] = useState(false);
@@ -340,7 +341,7 @@ const SocialLearningHub: React.FC<SocialLearningHubProps> = ({ user }) => {
   const handleAddComment = (nodeId: string) => {
     const text = commentInput[nodeId];
     if (!text?.trim()) return;
-    setPostActionError('Comments and linkages require the Phase 4 backend comments service before they can be used.');
+    setPostActionError('Comments and linkages are locked until the native comments API and Neon persistence tables are enabled.');
   };
 
   const openProfileView = async (authorId: string) => {
@@ -811,7 +812,7 @@ const SocialLearningHub: React.FC<SocialLearningHubProps> = ({ user }) => {
                       </div>
 
                       <div className="space-y-4 sm:space-y-5">
-                        <h3 className="text-xl sm:text-4xl font-black text-white tracking-tighter uppercase leading-tight sm:leading-none group-hover:text-blue-400 transition-colors drop-shadow-2xl">
+                        <h3 className="cnh-profile-field text-xl sm:text-4xl font-black text-white tracking-tighter uppercase leading-tight sm:leading-none group-hover:text-blue-400 transition-colors drop-shadow-2xl">
                           {node.title}
                         </h3>
 
@@ -832,7 +833,7 @@ const SocialLearningHub: React.FC<SocialLearningHubProps> = ({ user }) => {
                             </div>
                           ) : (
                             <div className="space-y-4">
-                              <p className="text-slate-300 text-sm sm:text-xl leading-relaxed font-light opacity-80 max-w-4xl">
+                              <p className="cnh-user-content text-slate-300 text-sm sm:text-xl leading-relaxed font-light opacity-80 max-w-4xl">
                                 {node.content}
                               </p>
                               
@@ -961,10 +962,10 @@ const SocialLearningHub: React.FC<SocialLearningHubProps> = ({ user }) => {
                                 )}
                                 <div className="space-y-1 min-w-0">
                                   <div className="flex items-center gap-3">
-                                    <h5 className="text-[10px] sm:text-[11px] font-black text-white uppercase tracking-tighter truncate">{comment.author}</h5>
+                                    <h5 className="cnh-ellipsis text-[10px] sm:text-[11px] font-black text-white uppercase tracking-tighter" title={comment.author}>{comment.author}</h5>
                                     <span className="text-[8px] sm:text-[9px] text-slate-600 uppercase font-black tracking-widest shrink-0">{comment.timestamp}</span>
                                   </div>
-                                  <p className="text-[10px] sm:text-xs text-slate-400 leading-relaxed">{comment.text}</p>
+                                  <p className="cnh-user-content text-[10px] sm:text-xs text-slate-400 leading-relaxed">{comment.text}</p>
                                 </div>
                               </div>
                             ))}
@@ -976,7 +977,7 @@ const SocialLearningHub: React.FC<SocialLearningHubProps> = ({ user }) => {
                               type="text" 
                               value={commentInput[node.id] || ''}
                               onChange={(e) => setCommentInput(prev => ({ ...prev, [node.id]: e.target.value }))}
-                              placeholder="Comments require the Phase 4 comments service"
+                              placeholder="Comments unlock after native API persistence is enabled"
                               disabled
                               className="flex-1 bg-white/5 border border-white/10 rounded-xl sm:rounded-2xl px-4 sm:px-5 py-2.5 sm:py-3 text-[10px] sm:text-xs text-white focus:outline-none focus:ring-2 focus:ring-blue-500/30 transition-all"
                               onKeyDown={(e) => e.key === 'Enter' && handleAddComment(node.id)}
@@ -1014,5 +1015,11 @@ const SocialLearningHub: React.FC<SocialLearningHubProps> = ({ user }) => {
     </div>
   );
 };
+
+const SocialLearningHub: React.FC<SocialLearningHubProps> = (props) => (
+  <VisualRenderBoundary moduleName="SocialLearningHubProfileModals" fallbackTitle="Social profile tools could not render.">
+    <SocialLearningHubContent {...props} />
+  </VisualRenderBoundary>
+);
 
 export default SocialLearningHub;

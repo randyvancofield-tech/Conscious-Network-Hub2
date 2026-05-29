@@ -12,8 +12,10 @@ import {
   XCircle,
 } from 'lucide-react';
 import { UserProfile } from '../types';
-import ConsciousMeetings from './ConsciousMeetings';
 import { ActionButton, PageHeader, PageShell, SurfacePanel } from './ui/PlatformPrimitives';
+import VisualRenderBoundary from './ui/VisualRenderBoundary';
+
+const LazyConsciousMeetings = React.lazy(() => import('./ConsciousMeetings'));
 
 type ConsciousMeetingPortalPageProps = {
   user: UserProfile | null;
@@ -42,7 +44,7 @@ const getPlatformLabel = (): string => {
   return platform;
 };
 
-const ConsciousMeetingPortalPage: React.FC<ConsciousMeetingPortalPageProps> = ({
+const ConsciousMeetingPortalPageContent: React.FC<ConsciousMeetingPortalPageProps> = ({
   user,
   onOpenUpcoming,
   operationsEnabled = false,
@@ -245,7 +247,9 @@ const ConsciousMeetingPortalPage: React.FC<ConsciousMeetingPortalPageProps> = ({
           </p>
         </div>
         {operationsEnabled ? (
-          <ConsciousMeetings user={user} />
+          <React.Suspense fallback={<SurfacePanel className="text-sm text-slate-300">Loading provider host console...</SurfacePanel>}>
+            <LazyConsciousMeetings user={user} />
+          </React.Suspense>
         ) : (
           <SurfacePanel className="space-y-4 border-amber-300/20 bg-amber-300/[0.04]">
             <div className="flex items-start gap-3">
@@ -266,5 +270,11 @@ const ConsciousMeetingPortalPage: React.FC<ConsciousMeetingPortalPageProps> = ({
     </PageShell>
   );
 };
+
+const ConsciousMeetingPortalPage: React.FC<ConsciousMeetingPortalPageProps> = (props) => (
+  <VisualRenderBoundary moduleName="ConsciousMeetingPortalPage" fallbackTitle="Meeting portal could not render.">
+    <ConsciousMeetingPortalPageContent {...props} />
+  </VisualRenderBoundary>
+);
 
 export default ConsciousMeetingPortalPage;
