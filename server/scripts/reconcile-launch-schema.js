@@ -7,6 +7,10 @@ logServerEnvDiagnostics('RECONCILE_LAUNCH_SCHEMA');
 
 const apply = process.argv.includes('--apply');
 
+const userRoleApplicantSql = `
+ALTER TYPE "UserRole" ADD VALUE IF NOT EXISTS 'applicant';
+`;
+
 const providerApplicantSql = `
 CREATE TABLE IF NOT EXISTS "ProviderApplicant" (
   "id" TEXT NOT NULL,
@@ -238,13 +242,32 @@ async function columnExists(client, tableName, columnName) {
   return Boolean(result.rows[0]?.exists);
 }
 
+async function enumValueExists(client, enumName, enumValue) {
+  const result = await client.query(
+    `
+      SELECT EXISTS (
+        SELECT 1
+        FROM pg_enum
+        JOIN pg_type ON pg_enum.enumtypid = pg_type.oid
+        WHERE pg_type.typname = $1
+          AND pg_enum.enumlabel = $2
+      ) AS exists
+    `,
+    [enumName, enumValue]
+  );
+  return Boolean(result.rows[0]?.exists);
+}
+
 async function collectStatus(client) {
   const providerApplicant = await tableExists(client, 'ProviderApplicant');
   const careerGrant = await tableExists(client, 'ConsciousCareerGrantApplication');
   const providerCrmToolVisibility = await tableExists(client, 'ProviderCrmToolVisibility');
   const notification = await tableExists(client, 'Notification');
   const accountRecoveryCode = await tableExists(client, 'AccountRecoveryCode');
+  const user = await tableExists(client, 'User');
   return {
+    userRoleApplicant: await enumValueExists(client, 'UserRole', 'applicant'),
+    userWalletAddress: user && (await columnExists(client, 'User', 'wallet_address')),
     providerApplicant,
     providerApplicantConsentAudit:
       providerApplicant && (await columnExists(client, 'ProviderApplicant', 'consentAudit')),
@@ -262,6 +285,7 @@ async function main() {
     const before = await collectStatus(client);
     if (apply) {
       await client.query('BEGIN');
+      await client.query(userRoleApplicantSql);
       await client.query(providerApplicantSql);
       await client.query(careerGrantSql);
       await client.query(providerCrmToolVisibilitySql);

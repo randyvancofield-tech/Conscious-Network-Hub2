@@ -235,6 +235,24 @@ export const adminRoleUpdateSchema: JsonSchema = {
   },
 };
 
+export const adminUserLockSchema: JsonSchema = {
+  type: 'object',
+  additionalProperties: false,
+  properties: {
+    reason: { type: 'string', maxLength: 512 },
+  },
+};
+
+export const adminUserDeleteSchema: JsonSchema = {
+  type: 'object',
+  additionalProperties: false,
+  required: ['confirm'],
+  properties: {
+    confirm: { type: 'string', enum: ['DELETE USER'] },
+    reason: { type: 'string', maxLength: 512 },
+  },
+};
+
 export const supportContactSchema: JsonSchema = {
   type: 'object',
   additionalProperties: false,

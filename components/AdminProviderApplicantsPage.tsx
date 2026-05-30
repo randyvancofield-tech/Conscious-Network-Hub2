@@ -63,6 +63,7 @@ const toList = (value: unknown): string[] => {
 
 const AdminProviderApplicantsPage: React.FC = () => {
   const [password, setPassword] = useState('');
+  const [elevationCode, setElevationCode] = useState('');
   const [filter, setFilter] = useState('');
   const [applicants, setApplicants] = useState<ProviderApplicantAdminRecord[]>([]);
   const [selectedId, setSelectedId] = useState<string | null>(null);
@@ -132,15 +133,20 @@ const AdminProviderApplicantsPage: React.FC = () => {
 
   const elevate = async (event: React.FormEvent) => {
     event.preventDefault();
+    if (!password.trim() && !elevationCode.trim()) {
+      setError('Enter an admin password or operations elevation code.');
+      return;
+    }
     setElevating(true);
     setError('');
     try {
       const data = await api<{ elevationToken: string }>('/admin/elevate', {
         method: 'POST',
-        body: { password },
+        body: { password, elevationCode },
       });
       setAdminElevationToken(data.elevationToken);
       setPassword('');
+      setElevationCode('');
       await loadApplicants();
     } catch (error) {
       setError(error instanceof Error ? error.message : 'Unable to elevate admin session.');
@@ -211,7 +217,15 @@ const AdminProviderApplicantsPage: React.FC = () => {
                 value={password}
                 onChange={(event) => setPassword(event.target.value)}
                 className="w-full rounded-xl border border-white/10 bg-white/5 px-4 py-3 text-sm text-white outline-none focus:ring-2 focus:ring-blue-500/40"
-                required
+              />
+            </label>
+            <label className="block space-y-2">
+              <span className="text-xs font-black uppercase text-slate-500">Elevation code</span>
+              <input
+                type="password"
+                value={elevationCode}
+                onChange={(event) => setElevationCode(event.target.value)}
+                className="w-full rounded-xl border border-white/10 bg-white/5 px-4 py-3 text-sm text-white outline-none focus:ring-2 focus:ring-blue-500/40"
               />
             </label>
             <ActionButton type="submit" disabled={elevating} icon={<ShieldCheck className="h-4 w-4" />}>

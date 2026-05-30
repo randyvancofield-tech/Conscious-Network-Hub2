@@ -158,6 +158,28 @@ export function requireCanonicalIdentity(
       return;
     }
 
+    const lockoutUntil =
+      user.lockoutUntil instanceof Date
+        ? user.lockoutUntil
+        : user.lockoutUntil
+          ? new Date(user.lockoutUntil)
+          : null;
+    if (lockoutUntil && Number.isFinite(lockoutUntil.getTime()) && lockoutUntil.getTime() > Date.now()) {
+      if (payload.sessionId) {
+        await revokeUserSession(payload.sessionId);
+      }
+      logIdentityValidationFailure(req, 'user_profile_locked', {
+        userId: user.id,
+        sessionId: payload.sessionId || null,
+        lockoutUntil: lockoutUntil.toISOString(),
+      });
+      res.status(423).json({
+        error: 'User profile is locked',
+        lockoutUntil: lockoutUntil.toISOString(),
+      });
+      return;
+    }
+
     if (user.role === 'provider' && !isProviderAccessActive(user)) {
       if (payload.sessionId) {
         await revokeUserSession(payload.sessionId);

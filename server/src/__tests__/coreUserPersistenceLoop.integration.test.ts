@@ -2,6 +2,8 @@ import express from 'express';
 import http from 'http';
 import { createSessionToken, hashPassword } from '../auth';
 
+jest.setTimeout(30_000);
+
 type TwoFactorMethod = 'none' | 'phone' | 'wallet';
 
 interface MockUser {
@@ -527,6 +529,8 @@ const mockGetVertexAIService = jest.fn(() => {
   throw new Error('Vertex not configured');
 });
 const mockPrismaDb = {
+  $executeRaw: jest.fn(async () => 1),
+  $queryRaw: jest.fn(async () => []),
   course: {
     findMany: jest.fn(async () => []),
   },

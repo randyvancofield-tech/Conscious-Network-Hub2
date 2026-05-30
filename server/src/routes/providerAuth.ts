@@ -1,7 +1,7 @@
 import crypto from 'crypto';
 import { Request, Response, Router } from 'express';
 import { ethers } from 'ethers';
-import { createSessionToken } from '../auth';
+import { createAdminElevationToken, createSessionToken } from '../auth';
 import { createProviderSessionToken } from '../auth/providerToken';
 import {
   AuthenticatedRequest,
@@ -658,6 +658,9 @@ router.post('/admin/wallet/verify', async (req: Request, res: Response): Promise
       sessionId: persistedSession.id,
       expiresAt: persistedSession.expiresAt.getTime(),
     });
+    const adminElevation = createAdminElevationToken(adminUser.id, {
+      sessionId: persistedSession.id,
+    });
     const providerSession = await createNativeProviderSessionPayload(req, adminUser.id, 'admin');
 
     recordAuditEvent(req, {
@@ -671,6 +674,7 @@ router.post('/admin/wallet/verify', async (req: Request, res: Response): Promise
         challengeId,
         authSessionId: persistedSession.id,
         providerSessionId: providerSession.session.id,
+        adminElevationExpiresAt: new Date(adminElevation.expiresAt).toISOString(),
         scopesCount: providerSession.session.scopes.length,
       },
     });
@@ -681,6 +685,10 @@ router.post('/admin/wallet/verify', async (req: Request, res: Response): Promise
       token: authSession.token,
       expiresAt: authSession.expiresAt,
       user: toAdminAuthUserPayload(adminUser),
+      adminElevation: {
+        token: adminElevation.token,
+        expiresAt: adminElevation.expiresAt,
+      },
       providerControl: {
         token: providerSession.token.token,
         expiresAt: providerSession.token.expiresAt,

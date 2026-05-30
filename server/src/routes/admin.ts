@@ -15,11 +15,13 @@ import { recordAuditEvent } from '../services/auditTelemetry';
 import emailService from '../services/emailService';
 import { buildProviderApplicantStatusEmail } from '../services/emailTemplates';
 import { createNotification } from '../services/notificationStore';
-import { localStore } from '../services/persistenceStore';
+import { localStore, type LocalUserRecord } from '../services/persistenceStore';
 import { validateJsonBody } from '../validation/jsonSchema';
 import {
   adminElevationSchema,
   adminRoleUpdateSchema,
+  adminUserDeleteSchema,
+  adminUserLockSchema,
 } from '../validation/requestSchemas';
 import {
   PROVIDER_APPLICANT_STATUSES,
@@ -31,10 +33,14 @@ import {
   markProviderAccessApproved,
   revokeProviderAccessForUser,
 } from '../services/providerAccess';
+import { getPrisma } from '../services/prismaClient';
+import { revokeProviderSessionsByDid } from '../services/providerSessionStore';
+import { revokeUserSessionsByUserId } from '../services/userSessionStore';
 
 const router = Router();
 const PROVIDER_APPLICANT_CALENDLY_URL =
   'https://calendly.com/randycofield/buildingconnections';
+const ADMIN_PROFILE_LOCK_MS = 10 * 365 * 24 * 60 * 60 * 1000;
 
 type AdminVisibleRole = 'user' | 'applicant' | 'provider' | 'admin';
 
@@ -63,9 +69,125 @@ const toAdminUserSummary = (user: any) => ({
   providerApprovalStatus: user.providerApprovalStatus || null,
   providerApproved: user.providerApproved === true,
   twoFactorMethod: user.twoFactorMethod || 'none',
+  lockoutUntil: user.lockoutUntil || null,
+  locked:
+    user.lockoutUntil instanceof Date
+      ? user.lockoutUntil.getTime() > Date.now()
+      : Boolean(user.lockoutUntil && new Date(user.lockoutUntil).getTime() > Date.now()),
   createdAt: user.createdAt,
   updatedAt: user.updatedAt,
 });
+
+const providerDidForUser = (userId: string): string => `provider:${userId}`;
+const userDidForUser = (userId: string): string => `user:${userId}`;
+
+const accessDidsForUser = (userId: string): string[] => [
+  userDidForUser(userId),
+  providerDidForUser(userId),
+];
+
+const isAdminTarget = (user: LocalUserRecord): boolean => normalizeRole(user.role) === 'admin';
+
+const revokeAllAccessForUser = async (
+  userId: string
+): Promise<{ userSessionsRevoked: number; providerSessionsRevoked: number }> => {
+  const [userSessionsRevoked, providerSessionsRevoked] = await Promise.all([
+    revokeUserSessionsByUserId(userId),
+    revokeProviderSessionsByDid(providerDidForUser(userId)),
+  ]);
+  return { userSessionsRevoked, providerSessionsRevoked };
+};
+
+const deleteUserAndDetachedAccess = async (
+  target: LocalUserRecord
+): Promise<{
+  providerSessionsDeleted: number;
+  providerChallengesDeleted: number;
+  providerInviteGroupsDeleted: number;
+  meetingSessionsDeleted: number;
+  aiInteractionsDeleted: number;
+  legacyLaunchesDeleted: number;
+}> => {
+  const db = getPrisma();
+  const dids = accessDidsForUser(target.id);
+  return db.$transaction(async (tx) => {
+    const providerSessionsDeleted = await tx.providerSession.deleteMany({
+      where: { did: { in: dids } },
+    });
+    const providerChallengesDeleted = await tx.providerChallenge.deleteMany({
+      where: { did: { in: dids } },
+    });
+    const providerInviteGroupsDeleted = await tx.providerInviteGroup.deleteMany({
+      where: { did: { in: dids } },
+    });
+    const meetingSessionsDeleted = await tx.meetingSession.deleteMany({
+      where: { providerId: target.id },
+    });
+    const aiInteractionsDeleted = await tx.aiInteraction.deleteMany({
+      where: { userId: target.id },
+    });
+    const legacyLaunchesDeleted = await tx.providerBridgeLaunch.deleteMany({
+      where: {
+        OR: [
+          { providerId: target.id },
+          { email: target.email },
+        ],
+      },
+    });
+    await tx.user.delete({ where: { id: target.id } });
+
+    return {
+      providerSessionsDeleted: providerSessionsDeleted.count,
+      providerChallengesDeleted: providerChallengesDeleted.count,
+      providerInviteGroupsDeleted: providerInviteGroupsDeleted.count,
+      meetingSessionsDeleted: meetingSessionsDeleted.count,
+      aiInteractionsDeleted: aiInteractionsDeleted.count,
+      legacyLaunchesDeleted: legacyLaunchesDeleted.count,
+    };
+  });
+};
+
+const denyProtectedUserMutation = (
+  req: Request,
+  res: Response,
+  options: {
+    action: string;
+    actorUserId: string | null;
+    targetUserId: string;
+    target: LocalUserRecord;
+  }
+): boolean => {
+  const { action, actorUserId, targetUserId, target } = options;
+  if (actorUserId === targetUserId) {
+    recordAuditEvent(req, {
+      domain: 'admin',
+      action,
+      outcome: 'deny',
+      actorUserId,
+      targetUserId,
+      statusCode: 400,
+      metadata: { reason: 'self_mutation_denied' },
+    });
+    res.status(400).json({ error: 'Admins cannot lock, unlock, or delete their own profile' });
+    return true;
+  }
+
+  if (isAdminTarget(target)) {
+    recordAuditEvent(req, {
+      domain: 'admin',
+      action,
+      outcome: 'deny',
+      actorUserId,
+      targetUserId,
+      statusCode: 403,
+      metadata: { reason: 'admin_target_protected' },
+    });
+    res.status(403).json({ error: 'Admin profiles are protected from lock/delete console actions' });
+    return true;
+  }
+
+  return false;
+};
 
 const resolveFrontendBaseUrl = (req: Request): string => {
   const configured = String(process.env.FRONTEND_BASE_URL || '').trim().replace(/\/+$/, '');
@@ -219,7 +341,7 @@ router.get('/dashboard', async (req: Request, res: Response): Promise<void> => {
       activeMemberships: users.filter((user) => user.subscriptionStatus === 'active').length,
       providerApproved: users.filter((user) => user.providerApproved === true).length,
     },
-    recentUsers: users.slice(0, 50).map(toAdminUserSummary),
+    recentUsers: users.slice(0, 500).map(toAdminUserSummary),
   });
 });
 
@@ -242,6 +364,213 @@ router.get('/users', async (req: Request, res: Response): Promise<void> => {
     users: users.map(toAdminUserSummary),
   });
 });
+
+router.post(
+  '/users/:id/lock',
+  validateJsonBody(adminUserLockSchema),
+  async (req: Request, res: Response): Promise<void> => {
+    const actorUserId = getAuthenticatedUserId(req);
+    const targetUserId = String(req.params.id || '').trim();
+    const reason = String(req.body?.reason || '').trim() || 'Admin console lock';
+
+    if (!targetUserId) {
+      res.status(400).json({ error: 'Target user is required' });
+      return;
+    }
+
+    const target = await localStore.getUserById(targetUserId);
+    if (!target) {
+      recordAuditEvent(req, {
+        domain: 'admin',
+        action: 'user_lock',
+        outcome: 'deny',
+        actorUserId,
+        targetUserId,
+        statusCode: 404,
+        metadata: { reason: 'target_user_not_found' },
+      });
+      res.status(404).json({ error: 'Target user not found' });
+      return;
+    }
+
+    if (denyProtectedUserMutation(req, res, {
+      action: 'user_lock',
+      actorUserId,
+      targetUserId,
+      target,
+    })) {
+      return;
+    }
+
+    const lockoutUntil = new Date(Date.now() + ADMIN_PROFILE_LOCK_MS);
+    const updated = await localStore.updateUser(targetUserId, {
+      lockoutUntil,
+      failedSignInAttempts: 0,
+    });
+    if (!updated) {
+      res.status(500).json({ error: 'Failed to lock target user' });
+      return;
+    }
+
+    const revoked = await revokeAllAccessForUser(targetUserId);
+    recordAuditEvent(req, {
+      domain: 'admin',
+      action: 'user_lock',
+      outcome: 'success',
+      actorUserId,
+      targetUserId,
+      statusCode: 200,
+      metadata: {
+        reason,
+        lockoutUntil: lockoutUntil.toISOString(),
+        ...revoked,
+      },
+    });
+
+    res.json({
+      success: true,
+      user: toAdminUserSummary(updated),
+      accessRevoked: revoked,
+    });
+  }
+);
+
+router.post(
+  '/users/:id/unlock',
+  validateJsonBody(adminUserLockSchema),
+  async (req: Request, res: Response): Promise<void> => {
+    const actorUserId = getAuthenticatedUserId(req);
+    const targetUserId = String(req.params.id || '').trim();
+    const reason = String(req.body?.reason || '').trim() || 'Admin console unlock';
+
+    if (!targetUserId) {
+      res.status(400).json({ error: 'Target user is required' });
+      return;
+    }
+
+    const target = await localStore.getUserById(targetUserId);
+    if (!target) {
+      recordAuditEvent(req, {
+        domain: 'admin',
+        action: 'user_unlock',
+        outcome: 'deny',
+        actorUserId,
+        targetUserId,
+        statusCode: 404,
+        metadata: { reason: 'target_user_not_found' },
+      });
+      res.status(404).json({ error: 'Target user not found' });
+      return;
+    }
+
+    if (denyProtectedUserMutation(req, res, {
+      action: 'user_unlock',
+      actorUserId,
+      targetUserId,
+      target,
+    })) {
+      return;
+    }
+
+    const updated = await localStore.updateUser(targetUserId, {
+      lockoutUntil: null,
+      failedSignInAttempts: 0,
+    });
+    if (!updated) {
+      res.status(500).json({ error: 'Failed to unlock target user' });
+      return;
+    }
+
+    recordAuditEvent(req, {
+      domain: 'admin',
+      action: 'user_unlock',
+      outcome: 'success',
+      actorUserId,
+      targetUserId,
+      statusCode: 200,
+      metadata: { reason },
+    });
+
+    res.json({
+      success: true,
+      user: toAdminUserSummary(updated),
+    });
+  }
+);
+
+router.delete(
+  '/users/:id',
+  validateJsonBody(adminUserDeleteSchema),
+  async (req: Request, res: Response): Promise<void> => {
+    const actorUserId = getAuthenticatedUserId(req);
+    const targetUserId = String(req.params.id || '').trim();
+    const reason = String(req.body?.reason || '').trim() || 'Admin console delete';
+
+    if (!targetUserId) {
+      res.status(400).json({ error: 'Target user is required' });
+      return;
+    }
+
+    const target = await localStore.getUserById(targetUserId);
+    if (!target) {
+      recordAuditEvent(req, {
+        domain: 'admin',
+        action: 'user_delete',
+        outcome: 'deny',
+        actorUserId,
+        targetUserId,
+        statusCode: 404,
+        metadata: { reason: 'target_user_not_found' },
+      });
+      res.status(404).json({ error: 'Target user not found' });
+      return;
+    }
+
+    if (denyProtectedUserMutation(req, res, {
+      action: 'user_delete',
+      actorUserId,
+      targetUserId,
+      target,
+    })) {
+      return;
+    }
+
+    try {
+      const deleted = await deleteUserAndDetachedAccess(target);
+      recordAuditEvent(req, {
+        domain: 'admin',
+        action: 'user_delete',
+        outcome: 'success',
+        actorUserId,
+        targetUserId,
+        statusCode: 200,
+        metadata: {
+          reason,
+          targetEmail: target.email,
+          ...deleted,
+        },
+      });
+
+      res.json({
+        success: true,
+        deletedUserId: targetUserId,
+        deleted,
+      });
+    } catch (error) {
+      console.error('[Admin] user delete failed', error);
+      recordAuditEvent(req, {
+        domain: 'admin',
+        action: 'user_delete',
+        outcome: 'error',
+        actorUserId,
+        targetUserId,
+        statusCode: 500,
+        metadata: { reason: 'delete_failed' },
+      });
+      res.status(500).json({ error: 'Failed to delete target user' });
+    }
+  }
+);
 
 router.get('/provider-applicants', async (req: Request, res: Response): Promise<void> => {
   const actorUserId = getAuthenticatedUserId(req);

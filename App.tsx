@@ -40,6 +40,7 @@ import nistMappingSummary from './docs/compliance/nist-mapping-summary.md?raw';
 import {
   getAuthToken,
   getCachedAuthUser,
+  setAdminElevationToken,
   setGuestSession,
   setProviderControlSession,
   setUserAuthSession,
@@ -1871,8 +1872,13 @@ const App: React.FC = () => {
         setError('Administrative wallet verification did not return an administrator session.');
         return;
       }
+      if (!result.adminElevation?.token) {
+        setError('Administrative wallet verified, but elevated admin console access was not issued.');
+        return;
+      }
 
       setUserAuthSession(result.token, canonicalUser);
+      setAdminElevationToken(result.adminElevation.token);
       setUser(canonicalUser);
       setSelectedTier(canonicalUser.tier || 'Accelerated Tier');
       setIsSelectingTier(false);

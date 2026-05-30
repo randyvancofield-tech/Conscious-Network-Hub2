@@ -6,6 +6,17 @@ loadServerEnv();
 logServerEnvDiagnostics('VERIFY_LAUNCH_DATA_PATHS');
 
 const REQUIRED_COLUMNS = {
+  User: [
+    'id',
+    'email',
+    'role',
+    'providerApprovalStatus',
+    'provider_status',
+    'providerRevokedAt',
+    'providerAccessUpdatedAt',
+    'wallet_address',
+    'walletDid',
+  ],
   ProviderApplicant: [
     'id',
     'userId',
@@ -20,7 +31,10 @@ const REQUIRED_COLUMNS = {
     'integrityConsents',
     'consentAudit',
     'status',
+    'adminNotes',
     'submittedAt',
+    'calendlyShownAt',
+    'reviewedAt',
     'updatedAt',
   ],
   ConsciousCareerGrantApplication: [
@@ -68,6 +82,10 @@ const REQUIRED_COLUMNS = {
     'createdAt',
     'updatedAt',
   ],
+};
+
+const REQUIRED_ENUM_VALUES = {
+  UserRole: ['user', 'applicant', 'provider', 'admin'],
 };
 
 function buildClient() {
@@ -118,6 +136,20 @@ async function listColumns(client, tableName) {
   return new Set(result.rows.map((row) => String(row.column_name)));
 }
 
+async function listEnumValues(client, enumName) {
+  const result = await client.query(
+    `
+      SELECT enumlabel
+      FROM pg_enum
+      JOIN pg_type ON pg_enum.enumtypid = pg_type.oid
+      WHERE pg_type.typname = $1
+      ORDER BY enumsortorder
+    `,
+    [enumName]
+  );
+  return new Set(result.rows.map((row) => String(row.enumlabel)));
+}
+
 async function main() {
   const client = buildClient();
   client.on('error', (error) => {
@@ -137,6 +169,16 @@ async function main() {
       };
     }
 
+    checks.enums = {};
+    for (const [enumName, requiredValues] of Object.entries(REQUIRED_ENUM_VALUES)) {
+      const values = await listEnumValues(client, enumName);
+      checks.enums[enumName] = {
+        values: Array.from(values),
+        missingValues: requiredValues.filter((value) => !values.has(value)),
+      };
+    }
+
+    checks.User.prismaCount = await prisma.user.count();
     checks.ProviderApplicant.prismaCount = await prisma.providerApplicant.count();
     checks.ConsciousCareerGrantApplication.prismaCount =
       await prisma.consciousCareerGrantApplication.count();
@@ -151,11 +193,15 @@ async function main() {
       .then((result) => Number(result.rows[0]?.count || 0));
 
     const failures = Object.entries(checks).flatMap(([tableName, check]) => {
+      if (tableName === 'enums') return [];
       const missing = [];
       if (!check.tableExists) missing.push(`${tableName}:table`);
       for (const column of check.missingColumns) missing.push(`${tableName}.${column}`);
       return missing;
     });
+    for (const [enumName, check] of Object.entries(checks.enums)) {
+      for (const value of check.missingValues) failures.push(`${enumName}.${value}`);
+    }
 
     console.log(
       JSON.stringify(
