@@ -222,6 +222,7 @@ export const adminElevationSchema: JsonSchema = {
   properties: {
     password: { type: 'string', maxLength: 512 },
     elevationCode: { type: 'string', maxLength: 512 },
+    providerControlToken: { type: 'string', maxLength: 4096 },
   },
 };
 

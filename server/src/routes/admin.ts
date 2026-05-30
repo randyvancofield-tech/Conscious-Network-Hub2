@@ -3,6 +3,7 @@ import {
   createAdminElevationToken,
   verifyPassword,
 } from '../auth';
+import { verifyProviderSessionToken } from '../auth/providerToken';
 import {
   getAuthenticatedRole,
   getAuthenticatedSessionId,
@@ -34,7 +35,9 @@ import {
   revokeProviderAccessForUser,
 } from '../services/providerAccess';
 import { getPrisma } from '../services/prismaClient';
-import { revokeProviderSessionsByDid } from '../services/providerSessionStore';
+import { getProviderSessionById, revokeProviderSessionsByDid } from '../services/providerSessionStore';
+import { type SocialPostRecord, socialStore } from '../services/socialStore';
+import { deleteUploadObjectByKey } from '../services/uploadBlobStore';
 import { revokeUserSessionsByUserId } from '../services/userSessionStore';
 
 const router = Router();
@@ -57,6 +60,12 @@ const isElevationCodeValid = (value: unknown): boolean => {
   const expected = String(process.env.ADMIN_ELEVATION_CODE || '').trim();
   const provided = String(value || '').trim();
   return Boolean(expected && provided && expected === provided);
+};
+
+const readHeaderValue = (req: Request, name: string): string => {
+  const value = req.headers[name.toLowerCase()];
+  if (Array.isArray(value)) return String(value[0] || '').trim();
+  return String(value || '').trim();
 };
 
 const toAdminUserSummary = (user: any) => ({
@@ -87,6 +96,77 @@ const accessDidsForUser = (userId: string): string[] => [
 ];
 
 const isAdminTarget = (user: LocalUserRecord): boolean => normalizeRole(user.role) === 'admin';
+
+const validateProviderControlElevation = async (
+  actorUserId: string,
+  token: string
+): Promise<{ valid: boolean; reason: string; providerSessionId?: string }> => {
+  const payload = verifyProviderSessionToken(token);
+  if (!payload) return { valid: false, reason: 'invalid_provider_control_token' };
+
+  const session = await getProviderSessionById(payload.sessionId);
+  if (!session) return { valid: false, reason: 'provider_control_session_not_found' };
+  if (session.revokedAt) return { valid: false, reason: 'provider_control_session_revoked' };
+  if (session.expiresAt.getTime() <= Date.now()) {
+    return { valid: false, reason: 'provider_control_session_expired' };
+  }
+  if (session.did !== payload.did || session.did !== providerDidForUser(actorUserId)) {
+    return { valid: false, reason: 'provider_control_identity_mismatch' };
+  }
+  if (!session.scopes.includes('provider:*')) {
+    return { valid: false, reason: 'provider_control_scope_missing' };
+  }
+
+  return { valid: true, reason: 'provider_control_session_valid', providerSessionId: session.id };
+};
+
+const extractUploadObjectKey = (value: unknown): string | null => {
+  const raw = typeof value === 'string' ? value.trim() : '';
+  if (!raw) return null;
+  if (!raw.includes('/') && !raw.includes(':')) return raw;
+
+  const marker = '/api/upload/object/';
+  const markerIndex = raw.indexOf(marker);
+  if (markerIndex >= 0) {
+    return decodeURIComponent(raw.slice(markerIndex + marker.length).split(/[?#]/)[0] || '').trim() || null;
+  }
+
+  return null;
+};
+
+const cleanupSocialPostMedia = async (post: SocialPostRecord): Promise<number> => {
+  const cleanupKeys = new Set<string>();
+  for (const media of post.media || []) {
+    const objectKey = extractUploadObjectKey(media.objectKey) || extractUploadObjectKey(media.url);
+    if (objectKey) cleanupKeys.add(objectKey);
+  }
+
+  for (const key of cleanupKeys) {
+    try {
+      await deleteUploadObjectByKey(key);
+    } catch (cleanupError) {
+      console.error('[Admin] Failed to clean up upload object after moderated post delete', cleanupError);
+    }
+  }
+
+  return cleanupKeys.size;
+};
+
+const toAdminSocialPostSummary = (
+  post: SocialPostRecord,
+  author?: LocalUserRecord | null
+) => ({
+  id: post.id,
+  authorId: post.authorId,
+  authorName: author?.name || author?.handle || author?.email || 'Unknown user',
+  authorEmail: author?.email || null,
+  text: post.text,
+  visibility: post.visibility,
+  mediaCount: post.media.length,
+  likeCount: post.likeCount,
+  createdAt: post.createdAt,
+  updatedAt: post.updatedAt,
+});
 
 const revokeAllAccessForUser = async (
   userId: string
@@ -255,7 +335,14 @@ router.post(
     const password = String(req.body?.password || '');
     const passwordValid = Boolean(password && verifyPassword(password, user.password));
     const codeValid = isElevationCodeValid(req.body?.elevationCode);
-    if (!passwordValid && !codeValid) {
+    const providerControlToken =
+      readHeaderValue(req, 'x-provider-control-token') ||
+      String(req.body?.providerControlToken || '').trim();
+    const providerControl = providerControlToken
+      ? await validateProviderControlElevation(actorUserId, providerControlToken)
+      : { valid: false, reason: 'provider_control_token_missing' };
+
+    if (!passwordValid && !codeValid && !providerControl.valid) {
       recordAuditEvent(req, {
         domain: 'admin',
         action: 'elevation',
@@ -265,12 +352,13 @@ router.post(
         metadata: {
           reason: 'elevation_factor_invalid',
           configuredCodeAvailable: hasConfiguredElevationCode(),
+          providerControlReason: providerControl.reason,
         },
       });
       res.status(403).json({
         error: hasConfiguredElevationCode()
-          ? 'Admin elevation requires account password or elevation code'
-          : 'Admin elevation requires account password',
+          ? 'Admin elevation requires account password, elevation code, or verified wallet control session'
+          : 'Admin elevation requires account password or verified wallet control session',
       });
       return;
     }
@@ -287,7 +375,8 @@ router.post(
       targetUserId: actorUserId,
       statusCode: 200,
       metadata: {
-        method: codeValid ? 'elevation_code' : 'password',
+        method: providerControl.valid ? 'provider_control_session' : codeValid ? 'elevation_code' : 'password',
+        providerSessionId: providerControl.providerSessionId || null,
         expiresAt: new Date(elevated.expiresAt).toISOString(),
       },
     });
@@ -305,6 +394,8 @@ router.use(requireAdminElevation);
 router.get('/dashboard', async (req: Request, res: Response): Promise<void> => {
   const actorUserId = getAuthenticatedUserId(req);
   const users = await localStore.listUsers(500);
+  const userById = new Map(users.map((user) => [user.id, user]));
+  const recentSocialPosts = await socialStore.listPosts({ limit: 50 });
   const roleCounts = users.reduce(
     (counts, user) => {
       const role = normalizeRole(user.role) || 'user';
@@ -323,6 +414,7 @@ router.get('/dashboard', async (req: Request, res: Response): Promise<void> => {
     metadata: {
       visibleUsers: users.length,
       roleCounts,
+      recentSocialPosts: recentSocialPosts.length,
     },
   });
 
@@ -342,7 +434,91 @@ router.get('/dashboard', async (req: Request, res: Response): Promise<void> => {
       providerApproved: users.filter((user) => user.providerApproved === true).length,
     },
     recentUsers: users.slice(0, 500).map(toAdminUserSummary),
+    recentSocialPosts: recentSocialPosts.map((post) =>
+      toAdminSocialPostSummary(post, userById.get(post.authorId))
+    ),
   });
+});
+
+router.post('/social/posts/:postId/hide', async (req: Request, res: Response): Promise<void> => {
+  const actorUserId = getAuthenticatedUserId(req);
+  const postId = String(req.params.postId || '').trim();
+  const reason = String(req.body?.reason || '').trim() || 'Admin content moderation';
+  if (!postId) {
+    res.status(400).json({ error: 'postId is required' });
+    return;
+  }
+
+  const existing = await socialStore.getPostById(postId);
+  if (!existing) {
+    res.status(404).json({ error: 'Post not found' });
+    return;
+  }
+
+  const updated = await socialStore.updatePost({ postId, visibility: 'private' });
+  if (!updated) {
+    res.status(404).json({ error: 'Post not found after moderation update' });
+    return;
+  }
+  const author = await localStore.getUserById(updated.authorId);
+
+  recordAuditEvent(req, {
+    domain: 'admin',
+    action: 'social_post_hide',
+    outcome: 'success',
+    actorUserId,
+    targetUserId: updated.authorId,
+    statusCode: 200,
+    metadata: {
+      postId,
+      reason,
+      previousVisibility: existing.visibility,
+      nextVisibility: updated.visibility,
+    },
+  });
+
+  res.json({
+    success: true,
+    post: toAdminSocialPostSummary(updated, author),
+  });
+});
+
+router.delete('/social/posts/:postId', async (req: Request, res: Response): Promise<void> => {
+  const actorUserId = getAuthenticatedUserId(req);
+  const postId = String(req.params.postId || '').trim();
+  const confirm = String(req.body?.confirm || '').trim();
+  const reason = String(req.body?.reason || '').trim() || 'Admin content moderation';
+  if (!postId) {
+    res.status(400).json({ error: 'postId is required' });
+    return;
+  }
+  if (confirm !== 'DELETE POST') {
+    res.status(400).json({ error: 'Post deletion requires DELETE POST confirmation' });
+    return;
+  }
+
+  const deleted = await socialStore.deletePost(postId);
+  if (!deleted) {
+    res.status(404).json({ error: 'Post not found' });
+    return;
+  }
+
+  const mediaDeleted = await cleanupSocialPostMedia(deleted);
+  recordAuditEvent(req, {
+    domain: 'admin',
+    action: 'social_post_delete',
+    outcome: 'success',
+    actorUserId,
+    targetUserId: deleted.authorId,
+    statusCode: 200,
+    metadata: {
+      postId,
+      reason,
+      mediaDeleted,
+    },
+  });
+
+  res.json({ success: true, postId, mediaDeleted });
 });
 
 router.get('/users', async (req: Request, res: Response): Promise<void> => {

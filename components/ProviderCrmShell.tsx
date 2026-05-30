@@ -14,6 +14,7 @@ import {
   Network,
   PanelLeft,
   Save,
+  ShieldCheck,
   Target,
   Trash2,
   Users,
@@ -68,6 +69,7 @@ import VisualRenderBoundary from './ui/VisualRenderBoundary';
 
 interface ProviderCrmShellProps {
   user: UserProfile | null;
+  onOpenAdminConsole: () => void;
   onOpenAdministrativeAccess: () => void;
   onOpenProviderAccess: () => void;
 }
@@ -293,6 +295,7 @@ const secondaryActionClass =
 
 const ProviderCrmShellContent: React.FC<ProviderCrmShellProps> = ({
   user,
+  onOpenAdminConsole,
   onOpenAdministrativeAccess,
   onOpenProviderAccess,
 }) => {
@@ -1426,10 +1429,22 @@ const ProviderCrmShellContent: React.FC<ProviderCrmShellProps> = ({
               : 'Approved-provider workspace for relationships, notes, content, collaboration, follow-ups, sessions, resources, and impact metrics.'}
           </p>
         </div>
-        <div className="max-w-full rounded-2xl border border-white/10 bg-white/[0.03] px-4 py-3">
-          <p className="text-[10px] font-black uppercase tracking-widest text-slate-500">
-            {isLoading ? 'Syncing' : summaryText || status}
-          </p>
+        <div className="flex flex-col gap-3 sm:items-end">
+          {isAdmin && (
+            <button
+              type="button"
+              onClick={onOpenAdminConsole}
+              className="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl border border-amber-300/30 bg-amber-400/10 px-4 py-3 text-xs font-black uppercase tracking-widest text-amber-100 transition hover:bg-amber-400/20"
+            >
+              <ShieldCheck className="h-4 w-4" />
+              <span className="cnh-action-label">Admin Console</span>
+            </button>
+          )}
+          <div className="max-w-full rounded-2xl border border-white/10 bg-white/[0.03] px-4 py-3">
+            <p className="text-[10px] font-black uppercase tracking-widest text-slate-500">
+              {isLoading ? 'Syncing' : summaryText || status}
+            </p>
+          </div>
         </div>
       </div>
 

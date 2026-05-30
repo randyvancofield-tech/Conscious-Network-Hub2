@@ -83,6 +83,35 @@ export const requireProviderSession = async (
       return;
     }
 
+    const lockoutUntil =
+      providerUser.lockoutUntil instanceof Date
+        ? providerUser.lockoutUntil
+        : providerUser.lockoutUntil
+          ? new Date(providerUser.lockoutUntil)
+          : null;
+    if (lockoutUntil && Number.isFinite(lockoutUntil.getTime()) && lockoutUntil.getTime() > Date.now()) {
+      await revokeProviderSession(session.id);
+      recordAuditEvent(req, {
+        domain: 'auth',
+        action: 'provider_session_access',
+        outcome: 'deny',
+        actorUserId: providerUserId,
+        targetUserId: providerUserId,
+        statusCode: 423,
+        metadata: {
+          reason: 'user_profile_locked',
+          providerSessionId: session.id,
+          role: normalizedRole,
+          lockoutUntil: lockoutUntil.toISOString(),
+        },
+      });
+      res.status(423).json({
+        error: 'User profile is locked',
+        lockoutUntil: lockoutUntil.toISOString(),
+      });
+      return;
+    }
+
     if (!isProviderAccessActive(providerUser)) {
       await revokeProviderSession(session.id);
       const reason = getProviderAccessDenyReason(providerUser);

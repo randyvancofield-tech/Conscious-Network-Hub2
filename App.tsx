@@ -3539,6 +3539,7 @@ const App: React.FC = () => {
         return hasProviderOperationsAccess(user) ? (
           <ProviderCrmShell
             user={user}
+            onOpenAdminConsole={() => setCurrentView(AppView.ADMIN_DASHBOARD)}
             onOpenAdministrativeAccess={() => setCurrentView(AppView.ADMINISTRATIVE_ACCESS)}
             onOpenProviderAccess={() => setCurrentView(AppView.PROVIDER_ACCESS)}
           />

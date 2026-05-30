@@ -1,7 +1,12 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { KeyRound, LockKeyhole, RefreshCw, ShieldCheck, Trash2, UnlockKeyhole, Users } from 'lucide-react';
+import { EyeOff, KeyRound, LockKeyhole, MessageSquare, RefreshCw, ShieldCheck, Trash2, UnlockKeyhole, Users } from 'lucide-react';
 import { api, ApiError } from '../services/apiClient';
-import { getAdminElevationToken, getCachedAuthUser, setAdminElevationToken } from '../services/sessionService';
+import {
+  getAdminElevationToken,
+  getCachedAuthUser,
+  getProviderControlSession,
+  setAdminElevationToken,
+} from '../services/sessionService';
 import { ActionButton, EmptyState, PageHeader, PageShell, SurfacePanel } from './ui/PlatformPrimitives';
 
 type AdminRole = 'user' | 'applicant' | 'provider' | 'admin';
@@ -29,6 +34,20 @@ interface AdminDashboardPayload {
     providerApproved: number;
   };
   recentUsers: AdminUserSummary[];
+  recentSocialPosts?: AdminSocialPostSummary[];
+}
+
+interface AdminSocialPostSummary {
+  id: string;
+  authorId: string;
+  authorName: string;
+  authorEmail: string | null;
+  text: string;
+  visibility: 'public' | 'private';
+  mediaCount: number;
+  likeCount: number;
+  createdAt: string;
+  updatedAt: string;
 }
 
 const adminHeaders = (): HeadersInit => {
@@ -53,6 +72,8 @@ const AdminDashboard: React.FC = () => {
   const [roleChangeUserId, setRoleChangeUserId] = useState<string | null>(null);
   const [accountActionUserId, setAccountActionUserId] = useState<string | null>(null);
   const [deleteConfirmUserId, setDeleteConfirmUserId] = useState<string | null>(null);
+  const [contentActionPostId, setContentActionPostId] = useState<string | null>(null);
+  const [deleteConfirmPostId, setDeleteConfirmPostId] = useState<string | null>(null);
 
   const isElevated = useMemo(() => Boolean(getAdminElevationToken()), [dashboard, error]);
   const currentAdminId = getCachedAuthUser()?.id || null;
@@ -78,16 +99,47 @@ const AdminDashboard: React.FC = () => {
     }
   };
 
+  const elevateWithProviderControl = async (showError = true): Promise<boolean> => {
+    const providerControlToken = getProviderControlSession();
+    if (!providerControlToken) {
+      if (showError) setError('Open Administrative Access with the founder wallet before opening Admin Console.');
+      return false;
+    }
+
+    setElevating(true);
+    setError('');
+    try {
+      const data = await api<{ elevationToken: string }>('/admin/elevate', {
+        method: 'POST',
+        headers: { 'X-Provider-Control-Token': providerControlToken },
+        body: { providerControlToken },
+      });
+      setAdminElevationToken(data.elevationToken);
+      await loadDashboard();
+      return true;
+    } catch (error) {
+      if (showError) {
+        setError(error instanceof Error ? error.message : 'Unable to use wallet admin session.');
+      }
+      return false;
+    } finally {
+      setElevating(false);
+    }
+  };
+
   useEffect(() => {
     if (getAdminElevationToken()) {
       void loadDashboard();
+      return;
     }
+    void elevateWithProviderControl(false);
   }, []);
 
   const elevate = async (event: React.FormEvent) => {
     event.preventDefault();
-    if (!password.trim() && !elevationCode.trim()) {
-      setError('Enter an admin password or operations elevation code.');
+    const providerControlToken = getProviderControlSession();
+    if (!password.trim() && !elevationCode.trim() && !providerControlToken) {
+      setError('Enter an admin password, operations elevation code, or re-enter through wallet Administrative Access.');
       return;
     }
     setElevating(true);
@@ -95,7 +147,8 @@ const AdminDashboard: React.FC = () => {
     try {
       const data = await api<{ elevationToken: string }>('/admin/elevate', {
         method: 'POST',
-        body: { password, elevationCode },
+        headers: providerControlToken ? { 'X-Provider-Control-Token': providerControlToken } : {},
+        body: { password, elevationCode, providerControlToken },
       });
       setAdminElevationToken(data.elevationToken);
       setPassword('');
@@ -105,6 +158,51 @@ const AdminDashboard: React.FC = () => {
       setError(error instanceof Error ? error.message : 'Unable to elevate admin session.');
     } finally {
       setElevating(false);
+    }
+  };
+
+  const hidePost = async (postId: string) => {
+    setContentActionPostId(postId);
+    setDeleteConfirmPostId(null);
+    setError('');
+    try {
+      await api(`/admin/social/posts/${encodeURIComponent(postId)}/hide`, {
+        method: 'POST',
+        headers: adminHeaders(),
+        body: { reason: 'Admin console content moderation' },
+      });
+      await loadDashboard();
+    } catch (error) {
+      setError(error instanceof Error ? error.message : 'Unable to hide post.');
+    } finally {
+      setContentActionPostId(null);
+    }
+  };
+
+  const deletePost = async (postId: string) => {
+    if (deleteConfirmPostId !== postId) {
+      setDeleteConfirmPostId(postId);
+      setError('');
+      return;
+    }
+
+    setContentActionPostId(postId);
+    setError('');
+    try {
+      await api(`/admin/social/posts/${encodeURIComponent(postId)}`, {
+        method: 'DELETE',
+        headers: adminHeaders(),
+        body: {
+          confirm: 'DELETE POST',
+          reason: 'Admin console content removal',
+        },
+      });
+      setDeleteConfirmPostId(null);
+      await loadDashboard();
+    } catch (error) {
+      setError(error instanceof Error ? error.message : 'Unable to delete post.');
+    } finally {
+      setContentActionPostId(null);
     }
   };
 
@@ -230,6 +328,17 @@ const AdminDashboard: React.FC = () => {
             <ActionButton type="submit" disabled={elevating} icon={<ShieldCheck className="h-4 w-4" />}>
               {elevating ? 'Verifying' : 'Elevate Session'}
             </ActionButton>
+            {getProviderControlSession() && (
+              <ActionButton
+                type="button"
+                variant="secondary"
+                disabled={elevating}
+                onClick={() => void elevateWithProviderControl(true)}
+                icon={<ShieldCheck className="h-4 w-4" />}
+              >
+                Use Wallet Session
+              </ActionButton>
+            )}
           </form>
         </SurfacePanel>
       </PageShell>
@@ -387,6 +496,89 @@ const AdminDashboard: React.FC = () => {
             </tbody>
           </table>
         </div>
+      </SurfacePanel>
+
+      <SurfacePanel className="overflow-hidden">
+        <div className="mb-5 flex items-center gap-3">
+          <MessageSquare className="h-5 w-5 text-blue-300" />
+          <h2 className="text-sm font-black uppercase text-white">Content Moderation</h2>
+        </div>
+        {(dashboard.recentSocialPosts || []).length === 0 ? (
+          <p className="text-sm text-slate-400">No social posts are currently present.</p>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="w-full min-w-[980px] text-left text-sm">
+              <thead className="text-xs uppercase text-slate-500">
+                <tr>
+                  <th className="py-3 pr-4">Post</th>
+                  <th className="py-3 pr-4">Author</th>
+                  <th className="py-3 pr-4">Visibility</th>
+                  <th className="py-3 pr-4">Signals</th>
+                  <th className="py-3 pr-4">Moderation</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-white/10">
+                {(dashboard.recentSocialPosts || []).map((post) => {
+                  const actionBusy = contentActionPostId === post.id;
+                  return (
+                    <tr key={post.id}>
+                      <td className="py-4 pr-4">
+                        <p className="line-clamp-3 max-w-xl text-sm leading-6 text-slate-200">
+                          {post.text || post.mediaCount > 0 ? post.text || 'Media post' : 'Empty post'}
+                        </p>
+                        <p className="mt-2 text-[10px] font-black uppercase tracking-widest text-slate-600">
+                          {new Date(post.createdAt).toLocaleString()}
+                        </p>
+                      </td>
+                      <td className="py-4 pr-4">
+                        <p className="cnh-person-name font-bold text-white">{post.authorName}</p>
+                        <p className="break-words text-xs text-slate-500">{post.authorEmail || post.authorId}</p>
+                      </td>
+                      <td className="py-4 pr-4">
+                        <span
+                          className={`cnh-status-badge inline-flex rounded-full border px-3 py-1 text-[10px] font-black uppercase tracking-widest ${
+                            post.visibility === 'public'
+                              ? 'border-blue-300/25 bg-blue-300/10 text-blue-100'
+                              : 'border-white/10 bg-white/5 text-slate-400'
+                          }`}
+                        >
+                          {post.visibility}
+                        </span>
+                      </td>
+                      <td className="py-4 pr-4 text-slate-400">
+                        {post.likeCount} resonances / {post.mediaCount} media
+                      </td>
+                      <td className="py-4 pr-4">
+                        <div className="flex min-w-[240px] flex-wrap gap-2">
+                          <ActionButton
+                            type="button"
+                            variant="secondary"
+                            disabled={post.visibility === 'private' || actionBusy || loading}
+                            onClick={() => void hidePost(post.id)}
+                            icon={<EyeOff className="h-4 w-4" />}
+                            className="min-h-10 px-3 py-2 text-[10px]"
+                          >
+                            Hide
+                          </ActionButton>
+                          <ActionButton
+                            type="button"
+                            variant="ghost"
+                            disabled={actionBusy || loading}
+                            onClick={() => void deletePost(post.id)}
+                            icon={<Trash2 className="h-4 w-4" />}
+                            className="min-h-10 px-3 py-2 text-[10px]"
+                          >
+                            {deleteConfirmPostId === post.id ? 'Confirm Delete' : 'Delete'}
+                          </ActionButton>
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        )}
       </SurfacePanel>
     </PageShell>
   );
