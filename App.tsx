@@ -40,6 +40,7 @@ import nistMappingSummary from './docs/compliance/nist-mapping-summary.md?raw';
 import {
   getAuthToken,
   getCachedAuthUser,
+  getProviderControlSession,
   setAdminElevationToken,
   setGuestSession,
   setProviderControlSession,
@@ -1052,6 +1053,14 @@ const App: React.FC = () => {
 
   const hasProviderOperationsAccess = (profile: UserProfile | null | undefined): boolean =>
     Boolean(profile?.role === 'admin' || hasApprovedProviderProfile(profile));
+
+  const hasActiveProviderControlSession = (): boolean => Boolean(getProviderControlSession());
+
+  const canOpenProviderCrm = (profile: UserProfile | null | undefined): boolean => {
+    if (!hasProviderOperationsAccess(profile)) return false;
+    if (profile?.role === 'admin') return true;
+    return hasActiveProviderControlSession();
+  };
 
   const hasConfirmedMembership = (profile: UserProfile | null | undefined): boolean =>
     Boolean(
@@ -2671,6 +2680,94 @@ const App: React.FC = () => {
     }
   };
 
+  const renderProviderCrmAccessGate = () => {
+    const role = user?.role || 'user';
+    const approvalStatus = String(user?.providerApprovalStatus || '').trim().toLowerCase();
+    const isProvider = role === 'provider';
+    const isApplicant = role === 'applicant';
+    const isApprovedProvider = hasApprovedProviderProfile(user);
+    const hasProviderSession = hasActiveProviderControlSession();
+
+    const title = isApplicant
+      ? 'Provider Review In Progress'
+      : isProvider && !isApprovedProvider
+        ? approvalStatus === 'rejected'
+          ? 'Provider Application Not Approved'
+          : 'Provider Approval Required'
+        : isApprovedProvider && !hasProviderSession
+          ? 'Wallet Verification Required'
+          : 'Approved Provider Required';
+
+    const description = isApplicant
+      ? 'Your application has not yet unlocked Provider CRM. View the applicant portal for status, requests, and next steps.'
+      : isProvider && !isApprovedProvider
+        ? 'This provider account is not in an active approved state. Provider CRM remains locked until admin approval is restored.'
+        : isApprovedProvider && !hasProviderSession
+          ? 'Your provider account is approved, but Provider CRM requires a fresh wallet-verified provider session before tools open.'
+          : 'Provider CRM is available only to approved providers after wallet verification, or to an elevated administrator.';
+
+    const actionLabel = isApplicant || (isProvider && !isApprovedProvider)
+      ? 'View Application Status'
+      : isApprovedProvider && !hasProviderSession
+        ? 'Verify Provider Wallet'
+        : 'Open Provider Access';
+
+    const action = () => {
+      if (isApplicant || (isProvider && !isApprovedProvider)) {
+        setCurrentView(AppView.PROVIDER_APPLICATION_STATUS);
+        return;
+      }
+      if (isApprovedProvider && !hasProviderSession) {
+        resetSignInChallengeInputs();
+        setCurrentView(AppView.PROVIDER_SIGN_IN);
+        return;
+      }
+      setCurrentView(AppView.PROVIDER_ACCESS);
+    };
+
+    return (
+      <div className="p-4 sm:p-8 max-w-3xl mx-auto">
+        <div className="glass-panel p-6 sm:p-8 rounded-3xl border border-blue-500/20 bg-blue-500/[0.04]">
+          <div className="mb-5 flex h-12 w-12 items-center justify-center rounded-2xl border border-blue-300/20 bg-blue-500/10 text-blue-100">
+            <WalletCards className="h-5 w-5" />
+          </div>
+          <h2 className="text-2xl font-black text-white uppercase tracking-tight mb-4">
+            {title}
+          </h2>
+          <p className="text-slate-300 text-sm leading-relaxed mb-6">{description}</p>
+          <button
+            onClick={action}
+            className="px-5 py-3 bg-blue-600 hover:bg-blue-500 text-white rounded-xl text-xs font-black uppercase tracking-widest transition-colors"
+          >
+            {actionLabel}
+          </button>
+        </div>
+      </div>
+    );
+  };
+
+  const renderAdminAccessGate = () => (
+    <div className="p-4 sm:p-8 max-w-3xl mx-auto">
+      <div className="glass-panel p-6 sm:p-8 rounded-3xl border border-amber-200/20 bg-amber-400/[0.04]">
+        <div className="mb-5 flex h-12 w-12 items-center justify-center rounded-2xl border border-amber-200/20 bg-amber-400/10 text-amber-100">
+          <LockKeyhole className="h-5 w-5" />
+        </div>
+        <h2 className="text-2xl font-black text-white uppercase tracking-tight mb-4">
+          Admin Access Required
+        </h2>
+        <p className="text-slate-300 text-sm leading-relaxed mb-6">
+          This console is limited to the platform administrator. Use Administrative Access with the authorized admin wallet or account session.
+        </p>
+        <button
+          onClick={() => setCurrentView(AppView.ADMINISTRATIVE_ACCESS)}
+          className="px-5 py-3 bg-amber-500 hover:bg-amber-400 text-slate-950 rounded-xl text-xs font-black uppercase tracking-widest transition-colors"
+        >
+          Administrative Access
+        </button>
+      </div>
+    </div>
+  );
+
   const renderActiveView = () => {
     if (!user && currentView === AppView.PROVIDER_APPLICATION_STATUS) {
       return (
@@ -2747,6 +2844,18 @@ const App: React.FC = () => {
           </div>
         </div>
       );
+    }
+
+    if (
+      user &&
+      [AppView.ADMIN_DASHBOARD, AppView.ADMIN_PROVIDER_APPLICANTS].includes(currentView) &&
+      !hasAdminRole(user)
+    ) {
+      return renderAdminAccessGate();
+    }
+
+    if (user && currentView === AppView.PROVIDER_CRM && !canOpenProviderCrm(user)) {
+      return renderProviderCrmAccessGate();
     }
 
     if (
@@ -3536,7 +3645,7 @@ const App: React.FC = () => {
           />
         );
       case AppView.PROVIDER_CRM:
-        return hasProviderOperationsAccess(user) ? (
+        return canOpenProviderCrm(user) ? (
           <ProviderCrmShell
             user={user}
             onOpenAdminConsole={() => setCurrentView(AppView.ADMIN_DASHBOARD)}

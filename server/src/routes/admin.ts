@@ -906,6 +906,7 @@ router.patch('/provider-applicants/:id', async (req: Request, res: Response): Pr
         applicantId: id,
         previousStatus: existing.status,
         nextStatus,
+        applicantMessage: applicantMessage || null,
         emailSkipped: Boolean(applicantEmailResult?.skipped),
         emailSent: applicantEmailResult?.ok === true && !applicantEmailResult?.skipped,
       },

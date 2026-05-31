@@ -15,6 +15,15 @@ export interface AuthenticatedRequest extends Request {
 
 export type PlatformRole = 'guest' | 'user' | 'applicant' | 'provider' | 'admin';
 
+const isProviderApplicantLifecycleStatusRoute = (req: Request): boolean => {
+  const baseUrl = String(req.baseUrl || '').replace(/\/+$/, '');
+  const path = String(req.path || '').replace(/\/+$/, '') || '/';
+  if (!baseUrl.endsWith('/provider-applicants')) return false;
+  if (req.method === 'GET' && path === '/current') return true;
+  if (req.method === 'POST' && path === '/current/calendly-shown') return true;
+  return false;
+};
+
 /**
  * Input validation middleware
  */
@@ -180,7 +189,11 @@ export function requireCanonicalIdentity(
       return;
     }
 
-    if (user.role === 'provider' && !isProviderAccessActive(user)) {
+    if (
+      user.role === 'provider' &&
+      !isProviderAccessActive(user) &&
+      !isProviderApplicantLifecycleStatusRoute(req)
+    ) {
       if (payload.sessionId) {
         await revokeUserSession(payload.sessionId);
       }

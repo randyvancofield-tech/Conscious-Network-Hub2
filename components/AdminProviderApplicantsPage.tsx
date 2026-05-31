@@ -2,7 +2,11 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { FileText, KeyRound, Mail, RefreshCw, Save, ShieldCheck, Users } from 'lucide-react';
 import { api, ApiError } from '../services/apiClient';
 import { openPrivateUpload } from '../services/privateUploadService';
-import { getAdminElevationToken, setAdminElevationToken } from '../services/sessionService';
+import {
+  getAdminElevationToken,
+  getProviderControlSession,
+  setAdminElevationToken,
+} from '../services/sessionService';
 import { ActionButton, EmptyState, PageHeader, PageShell, SurfacePanel } from './ui/PlatformPrimitives';
 
 const statuses = [
@@ -80,6 +84,34 @@ const AdminProviderApplicantsPage: React.FC = () => {
 
   const isElevated = useMemo(() => Boolean(getAdminElevationToken()), [applicants, error]);
 
+  const elevateWithProviderControl = async (showError = true): Promise<boolean> => {
+    const providerControlToken = getProviderControlSession();
+    if (!providerControlToken) {
+      if (showError) setError('Open Administrative Access with the founder wallet before reviewing applicants.');
+      return false;
+    }
+
+    setElevating(true);
+    setError('');
+    try {
+      const data = await api<{ elevationToken: string }>('/admin/elevate', {
+        method: 'POST',
+        headers: { 'X-Provider-Control-Token': providerControlToken },
+        body: { providerControlToken },
+      });
+      setAdminElevationToken(data.elevationToken);
+      await loadApplicants();
+      return true;
+    } catch (error) {
+      if (showError) {
+        setError(error instanceof Error ? error.message : 'Unable to use wallet admin session.');
+      }
+      return false;
+    } finally {
+      setElevating(false);
+    }
+  };
+
   const loadApplicants = async () => {
     setLoading(true);
     setError('');
@@ -124,7 +156,11 @@ const AdminProviderApplicantsPage: React.FC = () => {
   };
 
   useEffect(() => {
-    if (getAdminElevationToken()) void loadApplicants();
+    if (getAdminElevationToken()) {
+      void loadApplicants();
+      return;
+    }
+    void elevateWithProviderControl(false);
   }, [filter]);
 
   useEffect(() => {
@@ -133,8 +169,9 @@ const AdminProviderApplicantsPage: React.FC = () => {
 
   const elevate = async (event: React.FormEvent) => {
     event.preventDefault();
-    if (!password.trim() && !elevationCode.trim()) {
-      setError('Enter an admin password or operations elevation code.');
+    const providerControlToken = getProviderControlSession();
+    if (!password.trim() && !elevationCode.trim() && !providerControlToken) {
+      setError('Enter an admin password, operations elevation code, or re-enter through wallet Administrative Access.');
       return;
     }
     setElevating(true);
@@ -142,7 +179,8 @@ const AdminProviderApplicantsPage: React.FC = () => {
     try {
       const data = await api<{ elevationToken: string }>('/admin/elevate', {
         method: 'POST',
-        body: { password, elevationCode },
+        headers: providerControlToken ? { 'X-Provider-Control-Token': providerControlToken } : {},
+        body: { password, elevationCode, providerControlToken },
       });
       setAdminElevationToken(data.elevationToken);
       setPassword('');
@@ -231,6 +269,17 @@ const AdminProviderApplicantsPage: React.FC = () => {
             <ActionButton type="submit" disabled={elevating} icon={<ShieldCheck className="h-4 w-4" />}>
               {elevating ? 'Verifying' : 'Elevate Session'}
             </ActionButton>
+            {getProviderControlSession() && (
+              <ActionButton
+                type="button"
+                variant="secondary"
+                disabled={elevating}
+                onClick={() => void elevateWithProviderControl(true)}
+                icon={<ShieldCheck className="h-4 w-4" />}
+              >
+                Use Wallet Session
+              </ActionButton>
+            )}
           </form>
         </SurfacePanel>
       </PageShell>

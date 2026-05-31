@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { Bell, CalendarCheck, ChevronRight, FileText, LockKeyhole, RefreshCw } from 'lucide-react';
+import { Bell, CalendarCheck, ChevronRight, FileText, LockKeyhole, RefreshCw, WalletCards } from 'lucide-react';
 import { api } from '../services/apiClient';
 import { openPrivateUpload } from '../services/privateUploadService';
 
@@ -50,6 +50,7 @@ interface ApplicantNotificationRecord {
   type: string;
   title: string;
   body: string;
+  metadata?: Record<string, unknown> | null;
   createdAt?: string;
 }
 
@@ -135,6 +136,23 @@ const ProviderApplicationStatusPage: React.FC<ProviderApplicationStatusPageProps
     return 'Your application is pending review.';
   }, [applicant?.status]);
 
+  const requestedInfoNotice = useMemo(() => {
+    const status = String(applicant?.status || '').toLowerCase();
+    if (status !== 'needs_more_info') return null;
+    return (
+      notifications.find((notification) => {
+        const nextStatus = String(notification.metadata?.nextStatus || '').toLowerCase();
+        return nextStatus === 'needs_more_info';
+      }) ||
+      notifications.find((notification) =>
+        /additional information|more information|needs more info/i.test(
+          `${notification.title} ${notification.body}`
+        )
+      ) ||
+      null
+    );
+  }, [applicant?.status, notifications]);
+
   return (
     <div className="min-h-[100dvh] overflow-y-auto bg-[#100f0a] p-4 text-white sm:p-6 lg:p-8">
       <div className="mx-auto max-w-6xl">
@@ -166,8 +184,8 @@ const ProviderApplicationStatusPage: React.FC<ProviderApplicationStatusPageProps
                 Application Review Portal
               </h1>
               <p className="mt-4 max-w-2xl text-sm leading-7 text-slate-300">
-                Your provider application is currently under review. Provider CRM tools unlock only
-                after approval through native CNH provider sign-in.
+                Track application status, review requests, approval state, and the next secure step.
+                Provider CRM tools unlock only after approval and wallet verification.
               </p>
             </div>
             <button
@@ -206,6 +224,28 @@ const ProviderApplicationStatusPage: React.FC<ProviderApplicationStatusPageProps
                 </h2>
                 <p className="mt-3 text-sm leading-6 text-slate-300">{nextStep}</p>
               </div>
+
+              {requestedInfoNotice && (
+                <div className="rounded-3xl border border-amber-200/30 bg-amber-400/10 p-6">
+                  <p className="text-[10px] font-black uppercase tracking-[0.3em] text-amber-100/70">
+                    Requested Information
+                  </p>
+                  <p className="mt-3 text-sm leading-6 text-amber-50">
+                    {requestedInfoNotice.body}
+                  </p>
+                </div>
+              )}
+
+              {String(applicant.status || '').toLowerCase() === 'approved' && (
+                <button
+                  type="button"
+                  onClick={onBack}
+                  className="flex w-full items-center justify-center gap-2 rounded-2xl bg-blue-600 px-5 py-4 text-xs font-black uppercase tracking-widest text-white transition hover:bg-blue-500"
+                >
+                  <WalletCards className="h-4 w-4" />
+                  <span className="cnh-action-label">Continue To Provider Access</span>
+                </button>
+              )}
 
               {['submitted', 'under_review'].includes(String(applicant.status || '').toLowerCase()) && (
                 <a

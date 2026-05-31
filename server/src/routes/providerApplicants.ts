@@ -391,6 +391,10 @@ publicRouter.post(
         password: hashPassword(password),
         passwordFingerprint,
         tier: '',
+        providerApproved: false,
+        providerApprovalStatus: 'submitted',
+        providerRevokedAt: null,
+        providerAccessUpdatedAt: new Date(),
         phoneNumber: phone,
         twoFactorMethod: 'none',
       });
@@ -559,8 +563,8 @@ protectedRouter.get('/current', async (req: Request, res: Response): Promise<voi
     res.status(401).json({ error: 'Authentication required' });
     return;
   }
-  if (role !== 'applicant' && role !== 'admin') {
-    res.status(403).json({ error: 'Applicant status access only.' });
+  if (role !== 'applicant' && role !== 'provider' && role !== 'admin') {
+    res.status(403).json({ error: 'Applicant or provider status access only.' });
     return;
   }
 
@@ -585,8 +589,8 @@ protectedRouter.post('/current/calendly-shown', async (req: Request, res: Respon
     res.status(401).json({ error: 'Authentication required' });
     return;
   }
-  if (role !== 'applicant' && role !== 'admin') {
-    res.status(403).json({ error: 'Applicant status access only.' });
+  if (role !== 'applicant' && role !== 'provider' && role !== 'admin') {
+    res.status(403).json({ error: 'Applicant or provider status access only.' });
     return;
   }
 
