@@ -4470,7 +4470,7 @@ const App: React.FC = () => {
           !isProviderPublicExperience &&
           !isAdministrativePublicExperience &&
           !isCareersPublicExperience) && (
-          <div className="flex flex-1 min-h-[100dvh] overflow-hidden animate-in fade-in duration-500 relative z-10">
+          <div className="flex min-h-[100dvh] w-full min-w-0 flex-1 overflow-hidden animate-in fade-in duration-500 relative z-10">
             {isSidebarOpen && (
               <div 
                 className="fixed inset-0 bg-black/80 backdrop-blur-md z-[105] lg:hidden transition-opacity"
@@ -4479,12 +4479,16 @@ const App: React.FC = () => {
             )}
 
             <aside
-              className={`fixed inset-y-0 left-0 z-[110] w-80 glass-panel border-r border-white/5 transition-all duration-500 ease-in-out overflow-hidden lg:w-64 xl:w-72 2xl:w-80 ${
-                isSidebarOpen ? 'translate-x-0' : '-translate-x-full'
+              aria-hidden={!isSidebarOpen}
+              inert={!isSidebarOpen ? true : undefined}
+              className={`fixed inset-y-0 left-0 z-[110] w-80 max-w-[calc(100vw-1rem)] transition-all duration-500 ease-in-out overflow-hidden lg:static lg:max-w-none lg:shrink-0 ${
+                isSidebarOpen
+                  ? 'translate-x-0 pointer-events-auto glass-panel border-r border-white/5'
+                  : '-translate-x-full pointer-events-none border-0 bg-transparent shadow-none'
               } ${
                 isSidebarOpen
                   ? 'lg:static lg:translate-x-0 lg:w-64 lg:opacity-100 xl:w-72 2xl:w-80'
-                  : 'lg:static lg:translate-x-0 lg:w-0 lg:opacity-0 lg:border-r-0 lg:pointer-events-none'
+                  : 'lg:static lg:translate-x-0 lg:w-0 xl:w-0 2xl:w-0 lg:opacity-0'
               }`}
             >
               <div className="h-full flex flex-col p-4 sm:p-5 xl:p-6 2xl:p-7 overflow-y-auto custom-scrollbar scrollable">
@@ -4714,8 +4718,8 @@ const App: React.FC = () => {
               </div>
             </aside>
 
-            <div className="flex-1 flex flex-col min-h-0 overflow-hidden relative">
-              <header className="min-h-16 sm:min-h-20 flex items-center justify-between gap-2 sm:gap-3 px-3 sm:px-5 md:px-6 lg:px-5 xl:px-8 2xl:px-10 border-b border-white/5 z-20 backdrop-blur-3xl bg-black/20 overflow-x-hidden">
+            <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden relative">
+              <header className="min-h-16 sm:min-h-20 flex min-w-0 items-center justify-between gap-2 sm:gap-3 px-3 sm:px-5 md:px-6 lg:px-5 xl:px-8 2xl:px-10 border-b border-white/5 z-20 backdrop-blur-3xl bg-black/20 overflow-x-hidden">
                 <div className="flex min-w-0 flex-1 items-center gap-2 sm:gap-3 lg:gap-4">
                   {!isSidebarOpen && (
                     <button
@@ -4878,7 +4882,7 @@ const App: React.FC = () => {
 
               <main
                 ref={primaryScrollRef}
-                className={`app-main-scroll flex-1 min-h-0 overflow-y-auto custom-scrollbar scrollable p-4 sm:p-5 md:p-6 relative z-10 transition-[padding] duration-300 ${
+                className={`app-main-scroll min-h-0 w-full min-w-0 flex-1 overflow-y-auto custom-scrollbar scrollable p-4 sm:p-5 md:p-6 relative z-10 transition-[padding] duration-300 ${
                   isSidebarOpen ? 'lg:p-6 xl:p-8 2xl:p-10' : 'lg:p-8 xl:p-10 2xl:p-12'
                 }`}
                 data-page-scroll-root="true"
