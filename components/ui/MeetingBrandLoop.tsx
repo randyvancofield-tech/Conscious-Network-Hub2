@@ -8,7 +8,7 @@ type MeetingBrandLoopProps = {
 };
 
 const cnhLogo = '/brand/conscious-network-hub-logo.png';
-const meetingBrandLoop = '/brand/conscious-meetings-loop.gif';
+const meetingBrandLoop = '/brand/conscious-meetings-loop.jpg';
 
 const prefersReducedMotion = (): boolean =>
   typeof window !== 'undefined' &&
