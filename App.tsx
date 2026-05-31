@@ -1079,8 +1079,17 @@ const App: React.FC = () => {
         hasProviderOperationsAccess(profile)
     );
 
-  const hasApplicantRole = (profile: UserProfile | null | undefined): boolean =>
-    profile?.role === 'applicant';
+  const hasApplicantRole = (profile: UserProfile | null | undefined): boolean => {
+    const providerStatus = String(profile?.providerApprovalStatus || '').trim().toLowerCase();
+    return Boolean(
+      profile?.role === 'applicant' ||
+        (
+          profile?.role === 'user' &&
+          profile.providerApproved !== true &&
+          ['submitted', 'under_review', 'needs_more_info', 'discovery_scheduled', 'rejected'].includes(providerStatus)
+        )
+    );
+  };
 
   const hasAdminRole = (profile: UserProfile | null | undefined): boolean =>
     profile?.role === 'admin';

@@ -1,4 +1,4 @@
-import { Router, Request, Response } from 'express';
+import { Router, Request, Response, NextFunction } from 'express';
 import {
   createAdminElevationToken,
   verifyPassword,
@@ -12,14 +12,23 @@ import {
   requireAdminRole,
   requireCanonicalIdentity,
 } from '../middleware';
-import { recordAuditEvent } from '../services/auditTelemetry';
+import { listRecentAuditEvents, recordAuditEvent } from '../services/auditTelemetry';
 import emailService from '../services/emailService';
 import { buildProviderApplicantStatusEmail } from '../services/emailTemplates';
 import { createNotification } from '../services/notificationStore';
 import { localStore, type LocalUserRecord } from '../services/persistenceStore';
 import { validateJsonBody } from '../validation/jsonSchema';
 import {
+  ADMIN_INBOX_RECIPIENT_EMAIL,
+  getAdminMessageSummary,
+  listAdminMessages,
+  normalizeAdminMessageStatus,
+  normalizeAdminMessageType,
+  updateAdminMessage,
+} from '../services/adminMessageStore';
+import {
   adminElevationSchema,
+  adminMessageUpdateSchema,
   adminRoleUpdateSchema,
   adminUserDeleteSchema,
   adminUserLockSchema,
@@ -41,17 +50,22 @@ import { type SocialPostRecord, socialStore } from '../services/socialStore';
 import { deleteUploadObjectByKey } from '../services/uploadBlobStore';
 import { revokeUserSessionsByUserId } from '../services/userSessionStore';
 import { hasTierAccess, TIER_VALUES, type TierValue } from '../tierPolicy';
+import {
+  PROVIDER_CRM_SOLE_ADMIN_EMAIL,
+  isProviderCrmSoleAdmin,
+} from '../services/providerCrm';
 
 const router = Router();
 const PROVIDER_APPLICANT_CALENDLY_URL =
   'https://calendly.com/randycofield/buildingconnections';
 const ADMIN_PROFILE_LOCK_MS = 10 * 365 * 24 * 60 * 60 * 1000;
 
-type AdminVisibleRole = 'user' | 'applicant' | 'provider' | 'admin';
+type AdminVisibleRole = 'user' | 'provider' | 'admin';
 
 const normalizeRole = (value: unknown): AdminVisibleRole | null => {
   const role = String(value || '').trim().toLowerCase();
-  if (role === 'user' || role === 'applicant' || role === 'provider' || role === 'admin') return role;
+  if (role === 'admin' || role === 'provider') return role;
+  if (role === 'user' || role === 'applicant') return 'user';
   return null;
 };
 
@@ -97,7 +111,42 @@ const accessDidsForUser = (userId: string): string[] => [
   providerDidForUser(userId),
 ];
 
-const isAdminTarget = (user: LocalUserRecord): boolean => normalizeRole(user.role) === 'admin';
+const normalizeEmail = (value: unknown): string => String(value || '').trim().toLowerCase();
+
+const isSoleAdminEmail = (email: unknown): boolean =>
+  normalizeEmail(email) === PROVIDER_CRM_SOLE_ADMIN_EMAIL;
+
+const isAdminTarget = (user: LocalUserRecord): boolean =>
+  normalizeRole(user.role) === 'admin' || isSoleAdminEmail(user.email);
+
+const requireSoleFounderAdmin = async (
+  req: Request,
+  res: Response,
+  next: NextFunction
+): Promise<void> => {
+  const actorUserId = getAuthenticatedUserId(req);
+  const actor = actorUserId ? await localStore.getUserById(actorUserId) : null;
+  if (!isProviderCrmSoleAdmin(actor)) {
+    recordAuditEvent(req, {
+      domain: 'admin',
+      action: 'sole_founder_admin_access',
+      outcome: 'deny',
+      actorUserId,
+      statusCode: 403,
+      metadata: {
+        reason: 'sole_founder_admin_required',
+        requiredAdminEmail: PROVIDER_CRM_SOLE_ADMIN_EMAIL,
+      },
+    });
+    res.status(403).json({
+      error: 'Solo founder admin access required',
+      requiredAdminEmail: PROVIDER_CRM_SOLE_ADMIN_EMAIL,
+    });
+    return;
+  }
+
+  next();
+};
 
 const validateProviderControlElevation = async (
   actorUserId: string,
@@ -470,6 +519,7 @@ const formatApplicantStatus = (status: unknown): string => {
 
 router.use(requireCanonicalIdentity);
 router.use(requireAdminRole);
+router.use(requireSoleFounderAdmin);
 
 router.post(
   '/elevate',
@@ -565,15 +615,32 @@ router.get('/dashboard', async (req: Request, res: Response): Promise<void> => {
   const actorUserId = getAuthenticatedUserId(req);
   const users = await localStore.listUsers(500);
   const userById = new Map(users.map((user) => [user.id, user]));
-  const recentSocialPosts = await socialStore.listPosts({ limit: 50 });
-  const courseGovernance = await buildAdminCourseGovernance();
+  const [
+    recentSocialPosts,
+    courseGovernance,
+    adminMessageSummary,
+    recentAdminMessages,
+    providerApplicants,
+  ] = await Promise.all([
+    socialStore.listPosts({ limit: 50 }),
+    buildAdminCourseGovernance(),
+    getAdminMessageSummary(),
+    listAdminMessages({ limit: 50 }),
+    listProviderApplicants({ limit: 500 }),
+  ]);
+  const recentAuditEvents = listRecentAuditEvents({ limit: 50 });
+  const pendingProviderApplications = providerApplicants.filter((applicant) =>
+    ['submitted', 'under_review', 'needs_more_info', 'discovery_scheduled'].includes(
+      String(applicant.status || '').trim().toLowerCase()
+    )
+  ).length;
   const roleCounts = users.reduce(
     (counts, user) => {
       const role = normalizeRole(user.role) || 'user';
       counts[role] += 1;
       return counts;
     },
-    { user: 0, applicant: 0, provider: 0, admin: 0 }
+    { user: 0, provider: 0, admin: 0 }
   );
 
   recordAuditEvent(req, {
@@ -585,7 +652,11 @@ router.get('/dashboard', async (req: Request, res: Response): Promise<void> => {
     metadata: {
       visibleUsers: users.length,
       roleCounts,
+      providerApplicationsPending: pendingProviderApplications,
       recentSocialPosts: recentSocialPosts.length,
+      adminMessagesOpen:
+        adminMessageSummary.new + adminMessageSummary.reviewing + adminMessageSummary.inProgress,
+      auditEventsReturned: recentAuditEvents.length,
     },
   });
 
@@ -594,10 +665,17 @@ router.get('/dashboard', async (req: Request, res: Response): Promise<void> => {
     roleModel: {
       guest: ['public:read'],
       member: ['self:read', 'self:update', 'courses:enroll', 'social:write', 'meetings:join'],
-      applicant: ['provider-application:read'],
       provider: ['provider-session:request-after-approval', 'provider-crm:use-after-wallet'],
-      admin: ['platform:read', 'users:read', 'roles:update', 'audit:read'],
+      admin: [
+        'solo-founder',
+        PROVIDER_CRM_SOLE_ADMIN_EMAIL,
+        'platform:read',
+        'users:read',
+        'roles:update',
+        'audit:read',
+      ],
     },
+    soleAdminEmail: PROVIDER_CRM_SOLE_ADMIN_EMAIL,
     summary: {
       usersTotal: users.length,
       roleCounts,
@@ -608,14 +686,143 @@ router.get('/dashboard', async (req: Request, res: Response): Promise<void> => {
         (total: number, course: any) => total + Number(course.actualEnrollmentCount || 0),
         0
       ),
+      adminMessagesTotal: adminMessageSummary.total,
+      adminMessagesOpen:
+        adminMessageSummary.new + adminMessageSummary.reviewing + adminMessageSummary.inProgress,
+      adminMessagesUrgent: adminMessageSummary.urgent,
+      providerApplicationsTotal: providerApplicants.length,
+      providerApplicationsPending: pendingProviderApplications,
+      auditEventsRecent: recentAuditEvents.length,
+      auditDeniedRecent: recentAuditEvents.filter((event) => event.outcome === 'deny').length,
+      auditErrorsRecent: recentAuditEvents.filter((event) => event.outcome === 'error').length,
     },
     recentUsers: users.slice(0, 500).map(toAdminUserSummary),
     recentSocialPosts: recentSocialPosts.map((post) =>
       toAdminSocialPostSummary(post, userById.get(post.authorId))
     ),
     courseGovernance,
+    adminInbox: {
+      recipientEmail: ADMIN_INBOX_RECIPIENT_EMAIL,
+      summary: adminMessageSummary,
+      recent: recentAdminMessages,
+    },
+    recentAuditEvents,
   });
 });
+
+router.get('/audit-events', async (req: Request, res: Response): Promise<void> => {
+  const actorUserId = getAuthenticatedUserId(req);
+  const limit = Number(req.query.limit || 100);
+  const domain = String(req.query.domain || 'all').trim().toLowerCase();
+  const outcome = String(req.query.outcome || 'all').trim().toLowerCase();
+  const events = listRecentAuditEvents({
+    limit: Number.isFinite(limit) ? limit : 100,
+    domain,
+    outcome,
+  });
+
+  recordAuditEvent(req, {
+    domain: 'admin',
+    action: 'audit_events_view',
+    outcome: 'success',
+    actorUserId,
+    statusCode: 200,
+    metadata: {
+      returned: events.length,
+      domain,
+      outcome,
+    },
+  });
+
+  res.json({ success: true, events });
+});
+
+router.get('/messages', async (req: Request, res: Response): Promise<void> => {
+  const actorUserId = getAuthenticatedUserId(req);
+  const statusQuery = String(req.query.status || 'all').trim();
+  const typeQuery = String(req.query.type || 'all').trim();
+  const status = statusQuery === 'all' ? 'all' : normalizeAdminMessageStatus(statusQuery);
+  const limit = Number(req.query.limit || 100);
+  const [summary, messages] = await Promise.all([
+    getAdminMessageSummary(),
+    listAdminMessages({
+      status,
+      type: typeQuery === 'all' ? 'all' : normalizeAdminMessageType(typeQuery),
+      limit: Number.isFinite(limit) ? limit : 100,
+    }),
+  ]);
+
+  recordAuditEvent(req, {
+    domain: 'admin',
+    action: 'admin_messages_view',
+    outcome: 'success',
+    actorUserId,
+    statusCode: 200,
+    metadata: {
+      status,
+      returned: messages.length,
+    },
+  });
+
+  res.json({
+    success: true,
+    recipientEmail: ADMIN_INBOX_RECIPIENT_EMAIL,
+    summary,
+    messages,
+  });
+});
+
+router.patch(
+  '/messages/:id',
+  validateJsonBody(adminMessageUpdateSchema),
+  async (req: Request, res: Response): Promise<void> => {
+    const actorUserId = getAuthenticatedUserId(req);
+    const messageId = String(req.params.id || '').trim();
+    if (!messageId) {
+      res.status(400).json({ error: 'Message id is required' });
+      return;
+    }
+
+    const updated = await updateAdminMessage(
+      messageId,
+      {
+        status: req.body?.status || undefined,
+        priority: req.body?.priority || undefined,
+        adminNotes: req.body?.adminNotes,
+        resolutionSummary: req.body?.resolutionSummary,
+      },
+      actorUserId
+    );
+
+    if (!updated) {
+      recordAuditEvent(req, {
+        domain: 'admin',
+        action: 'admin_message_update',
+        outcome: 'deny',
+        actorUserId,
+        statusCode: 404,
+        metadata: { messageId, reason: 'not_found' },
+      });
+      res.status(404).json({ error: 'Admin message not found' });
+      return;
+    }
+
+    recordAuditEvent(req, {
+      domain: 'admin',
+      action: 'admin_message_update',
+      outcome: 'success',
+      actorUserId,
+      statusCode: 200,
+      metadata: {
+        messageId,
+        status: updated.status,
+        priority: updated.priority,
+      },
+    });
+
+    res.json({ success: true, message: updated });
+  }
+);
 
 router.get('/courses', async (req: Request, res: Response): Promise<void> => {
   const actorUserId = getAuthenticatedUserId(req);
@@ -1345,7 +1552,7 @@ router.patch('/provider-applicants/:id', async (req: Request, res: Response): Pr
           ? 'provider'
           : targetUser?.role === 'provider'
           ? 'provider'
-          : 'applicant',
+          : 'user',
       metadata: {
         applicantId: id,
         previousStatus: existing.status,
@@ -1444,6 +1651,56 @@ router.patch(
     }
 
     const previousRole = normalizeRole(target.role) || 'user';
+    if (nextRole === 'admin' && !isSoleAdminEmail(target.email)) {
+      recordAuditEvent(req, {
+        domain: 'admin',
+        action: 'role_change',
+        outcome: 'deny',
+        actorUserId,
+        targetUserId,
+        statusCode: 403,
+        metadata: {
+          reason: 'sole_admin_email_required',
+          requestedRole: nextRole,
+          requiredAdminEmail: PROVIDER_CRM_SOLE_ADMIN_EMAIL,
+        },
+      });
+      res.status(403).json({
+        error: `The only admin account is ${PROVIDER_CRM_SOLE_ADMIN_EMAIL}`,
+      });
+      return;
+    }
+
+    if (isSoleAdminEmail(target.email) && nextRole !== 'admin') {
+      recordAuditEvent(req, {
+        domain: 'admin',
+        action: 'role_change',
+        outcome: 'deny',
+        actorUserId,
+        targetUserId,
+        statusCode: 403,
+        metadata: {
+          reason: 'sole_admin_demotion_denied',
+          requestedRole: nextRole,
+        },
+      });
+      res.status(403).json({ error: 'The solo founder admin account cannot be demoted' });
+      return;
+    }
+
+    let revokedProviderAccess:
+      | { providerSessionsRevoked: number; userSessionsRevoked: number }
+      | null = null;
+    if (previousRole === 'provider' && nextRole !== 'provider') {
+      const revoked = await revokeProviderAccessForUser(target, {
+        approvalStatus: 'manual_role_change',
+      });
+      revokedProviderAccess = {
+        providerSessionsRevoked: revoked.providerSessionsRevoked,
+        userSessionsRevoked: revoked.userSessionsRevoked,
+      };
+    }
+
     const updated = await localStore.updateUser(targetUserId, {
       role: nextRole,
       ...(nextRole === 'provider'
@@ -1480,6 +1737,7 @@ router.patch(
         previousRole,
         nextRole,
         reason,
+        revokedProviderAccess,
       },
     });
 

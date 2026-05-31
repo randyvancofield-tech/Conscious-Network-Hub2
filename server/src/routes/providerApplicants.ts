@@ -387,7 +387,7 @@ publicRouter.post(
       const user = await localStore.createUser({
         email,
         name: `${firstName} ${lastName}`.trim(),
-        role: 'applicant',
+        role: 'user',
         password: hashPassword(password),
         passwordFingerprint,
         tier: '',
@@ -498,7 +498,7 @@ publicRouter.post(
         title: 'Provider application submitted',
         body:
           'Your provider application was received. Use the applicant portal to view review status and next steps.',
-        roleScope: 'applicant',
+        roleScope: 'user',
         metadata: {
           applicantId: applicant.id,
           status: applicant.status,
@@ -563,13 +563,17 @@ protectedRouter.get('/current', async (req: Request, res: Response): Promise<voi
     res.status(401).json({ error: 'Authentication required' });
     return;
   }
-  if (role !== 'applicant' && role !== 'provider' && role !== 'admin') {
-    res.status(403).json({ error: 'Applicant or provider status access only.' });
+  if (role !== 'user' && role !== 'applicant' && role !== 'provider' && role !== 'admin') {
+    res.status(403).json({ error: 'Provider application status access only.' });
     return;
   }
 
   const applicant = await getProviderApplicantByUserId(userId);
   if (!applicant) {
+    if (role === 'user') {
+      res.status(403).json({ error: 'Provider application status access only.' });
+      return;
+    }
     res.status(404).json({ error: 'Provider application not found.' });
     return;
   }
@@ -589,13 +593,17 @@ protectedRouter.post('/current/calendly-shown', async (req: Request, res: Respon
     res.status(401).json({ error: 'Authentication required' });
     return;
   }
-  if (role !== 'applicant' && role !== 'provider' && role !== 'admin') {
-    res.status(403).json({ error: 'Applicant or provider status access only.' });
+  if (role !== 'user' && role !== 'applicant' && role !== 'provider' && role !== 'admin') {
+    res.status(403).json({ error: 'Provider application status access only.' });
     return;
   }
 
   const applicant = await getProviderApplicantByUserId(userId);
   if (!applicant) {
+    if (role === 'user') {
+      res.status(403).json({ error: 'Provider application status access only.' });
+      return;
+    }
     res.status(404).json({ error: 'Provider application not found.' });
     return;
   }

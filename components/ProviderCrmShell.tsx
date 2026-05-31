@@ -1227,38 +1227,36 @@ const ProviderCrmShellContent: React.FC<ProviderCrmShellProps> = ({
           </div>
         </section>
 
-        <section className="grid gap-4 xl:grid-cols-[1.2fr_0.8fr]">
-          <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-5 sm:p-6">
-            <h3 className="text-sm font-black uppercase tracking-widest text-white">12-Room Hour Grid</h3>
-            <div className="mt-4 grid grid-cols-3 gap-2 sm:grid-cols-4 lg:grid-cols-6">
-              {rooms.map((room) => {
-                const reserved = reservedRoomsForSelectedHour.has(room);
-                return (
-                  <button
-                    key={room}
-                    type="button"
-                    onClick={() => setRoundtableRoomInput(room)}
-                    disabled={reserved}
-                    className={`rounded-xl border px-3 py-4 text-[10px] font-black uppercase tracking-widest transition ${
-                      roundtableRoomInput === room
-                        ? 'border-cyan-300/40 bg-cyan-500/20 text-white'
-                        : reserved
-                          ? 'border-red-300/20 bg-red-500/[0.05] text-red-200 opacity-60'
-                          : 'border-white/10 bg-black/20 text-slate-300 hover:bg-white/10'
-                    }`}
-                  >
-                    Room {room}
-                  </button>
-                );
-              })}
-            </div>
+        <section className="rounded-2xl border border-white/10 bg-white/[0.03] p-5 sm:p-6">
+          <h3 className="text-sm font-black uppercase tracking-widest text-white">12-Room Hour Grid</h3>
+          <div className="mt-4 grid grid-cols-3 gap-2 sm:grid-cols-4 lg:grid-cols-6">
+            {rooms.map((room) => {
+              const reserved = reservedRoomsForSelectedHour.has(room);
+              return (
+                <button
+                  key={room}
+                  type="button"
+                  onClick={() => setRoundtableRoomInput(room)}
+                  disabled={reserved}
+                  className={`rounded-xl border px-3 py-4 text-[10px] font-black uppercase tracking-widest transition ${
+                    roundtableRoomInput === room
+                      ? 'border-cyan-300/40 bg-cyan-500/20 text-white'
+                      : reserved
+                        ? 'border-red-300/20 bg-red-500/[0.05] text-red-200 opacity-60'
+                        : 'border-white/10 bg-black/20 text-slate-300 hover:bg-white/10'
+                  }`}
+                >
+                  Room {room}
+                </button>
+              );
+            })}
           </div>
 
-          <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-5 sm:p-6">
+          <div className="mt-6 border-t border-white/10 pt-5">
             <h3 className="text-sm font-black uppercase tracking-widest text-white">Branded Room Frame</h3>
             <div className="mt-4 overflow-hidden rounded-xl border border-white/10 bg-black/30">
               {selectedReservationUrl ? (
-                <div className="grid min-h-[320px] lg:grid-cols-[0.42fr_1fr]">
+                <div className="grid min-h-[380px] lg:grid-cols-[minmax(12rem,0.3fr)_1fr]">
                   <div className="flex flex-col justify-center gap-4 bg-black/40 p-5">
                     <img src={cnhLogo} alt="Conscious Network Hub" className="h-16 w-16 rounded-2xl bg-white/95 object-contain p-1.5" />
                     <p className="text-[9px] font-black uppercase tracking-widest text-cyan-100">
@@ -1266,10 +1264,10 @@ const ProviderCrmShellContent: React.FC<ProviderCrmShellProps> = ({
                     </p>
                     <p className="break-all text-[10px] leading-5 text-slate-400">{selectedReservationUrl}</p>
                   </div>
-                  <iframe title="Conscious Roundtable" src={selectedReservationUrl} className="h-[320px] w-full" />
+                  <iframe title="Conscious Roundtable" src={selectedReservationUrl} className="h-[380px] w-full" />
                 </div>
               ) : (
-                <div className="relative flex h-[320px] items-center justify-center overflow-hidden p-6 text-center">
+                <div className="relative flex h-[380px] items-center justify-center overflow-hidden p-6 text-center">
                   <MeetingBrandLoop
                     alt="Conscious Meetings branded WebRTC room animation"
                     className="absolute inset-0 h-full w-full"

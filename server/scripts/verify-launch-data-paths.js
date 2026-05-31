@@ -73,6 +73,28 @@ const REQUIRED_COLUMNS = {
     'createdAt',
     'updatedAt',
   ],
+  AdminMessage: [
+    'id',
+    'type',
+    'status',
+    'priority',
+    'subject',
+    'message',
+    'submitterName',
+    'submitterEmail',
+    'submitterUserId',
+    'route',
+    'category',
+    'source',
+    'recipientEmail',
+    'metadata',
+    'aiAnalysis',
+    'adminNotes',
+    'resolutionSummary',
+    'resolvedAt',
+    'createdAt',
+    'updatedAt',
+  ],
   AccountRecoveryCode: [
     'id',
     'userId',
@@ -187,6 +209,9 @@ async function main() {
       .then((result) => Number(result.rows[0]?.count || 0));
     checks.Notification.rowCount = await client
       .query('SELECT COUNT(*)::int AS count FROM "Notification"')
+      .then((result) => Number(result.rows[0]?.count || 0));
+    checks.AdminMessage.rowCount = await client
+      .query('SELECT COUNT(*)::int AS count FROM "AdminMessage"')
       .then((result) => Number(result.rows[0]?.count || 0));
     checks.AccountRecoveryCode.rowCount = await client
       .query('SELECT COUNT(*)::int AS count FROM "AccountRecoveryCode"')

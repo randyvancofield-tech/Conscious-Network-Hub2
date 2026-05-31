@@ -105,4 +105,26 @@ describe('admin route role boundaries', () => {
     expect(response.status).toBe(403);
     expect(response.body?.error).toBe('Forbidden: insufficient role');
   });
+
+  it('denies non-founder admin-role accounts access to admin routes', async () => {
+    users.set('other-admin', {
+      id: 'other-admin',
+      email: 'other-admin@example.com',
+      role: 'admin',
+      tier: 'Accelerated Tier',
+      providerApproved: false,
+      providerApprovalStatus: null,
+      providerRevokedAt: null,
+    });
+
+    const response = await requestJson({
+      method: 'GET',
+      path: '/api/admin/users',
+      token: createSessionToken('other-admin').token,
+    });
+
+    expect(response.status).toBe(403);
+    expect(response.body?.error).toBe('Solo founder admin access required');
+    expect(response.body?.requiredAdminEmail).toBe('higherconscious.network1@gmail.com');
+  });
 });

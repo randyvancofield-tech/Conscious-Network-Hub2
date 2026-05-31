@@ -211,6 +211,34 @@ model Notification {
   @@index([type])
 }
 
+model AdminMessage {
+  id                String    @id
+  type              String
+  status            String    @default("new")
+  priority          String    @default("normal")
+  subject           String
+  message           String
+  submitterName     String?
+  submitterEmail    String?
+  submitterUserId   String?
+  route             String?
+  category          String?
+  source            String    @default("platform")
+  recipientEmail    String    @default("higherconscious.network1@gmail.com")
+  metadata          Json?
+  aiAnalysis        String?
+  adminNotes        String?
+  resolutionSummary String?
+  resolvedAt        DateTime?
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+
+  @@index([recipientEmail, status])
+  @@index([type, createdAt])
+  @@index([priority, status])
+  @@index([submitterUserId])
+}
+
 model Course {
   id            String   @id
   ownerId       String?

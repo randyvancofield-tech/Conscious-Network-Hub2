@@ -100,7 +100,7 @@ const internalLaunchDocuments: PlatformKnowledgeDocument[] = [
     lastReviewed: LAST_REVIEWED,
     content: [
       'Conscious Network Hub is a secure social-learning and human-development platform for members, providers, learning, ethical AI support, reflections, privacy-centered identity, and role-appropriate platform operations.',
-      'The active app uses protected backend routes, signed sessions, persisted sessions, Prisma/PostgreSQL persistence, membership tier enforcement, and separate member, applicant, provider, and admin access boundaries.',
+      'The active app uses protected backend routes, signed sessions, persisted sessions, Prisma/PostgreSQL persistence, membership tier enforcement, and separate member, provider-application, provider, and solo-admin access boundaries.',
       'AI responses should explain CNH using public and internal-safe platform facts only. They must not expose private users, applicants, provider records, admin records, private reflections, private uploads, wallet identifiers, secrets, tokens, or unpublished operational data.',
     ].join(' '),
   },
@@ -267,7 +267,7 @@ export const buildPlatformFallbackReply = (message: string): string | null => {
     '',
     'At launch, CNH supports members, membership tiers, learning pathways, reflective tools, ethical AI assistance, provider applications, applicant status tracking, admin review, approved provider sign-in, wallet verification for provider CRM access, and privacy-aware profile/reflection behavior.',
     '',
-    'The role model matters: members, applicants, approved providers, and admins have different access. Approved providers are not admins, admin review tools remain separate, and private records are not exposed through AI chat.',
+    'The role model matters: members, provider-application status records, approved providers, and the solo founder admin have different access. Approved providers are not admins, admin review tools remain separate, and private records are not exposed through AI chat.',
     '',
     'The public CNH identity emphasizes autonomy, data ownership, provider dignity, ethical technology, and Conscious Careers as an entrepreneurship and economic mobility pathway. CNH AI can help explain the platform and suggest safe next steps, but it is not emergency support or a substitute for qualified professional advice.',
   ].join('\n');

@@ -7,8 +7,8 @@ import {
   requireCanonicalIdentity,
 } from '../middleware';
 import { getVertexAIService } from '../services/vertexAiService';
-import emailService from '../services/emailService';
 import { chatWithOpenAI, isOpenAIConfigured } from "../services/openAiService";
+import { createAdminMessage, normalizeAdminMessagePriority } from '../services/adminMessageStore';
 import {
   buildAiContext,
   getAiContextIndexStatus,
@@ -77,7 +77,7 @@ const buildGroundedPrompt = (input: {
       ? [
           'Ground platform-specific answers in the supplied context.',
           'For CNH questions, distinguish implemented app behavior from public website future intent or informational positioning.',
-          'Use role-safe explanations for member, applicant, provider, and admin distinctions.',
+          'Use role-safe explanations for member, provider-application status, approved provider, and solo-admin distinctions.',
           'Never expose private session personalization data as a source, and do not claim unavailable services, grants, partnerships, or access permissions are complete unless the context explicitly says so.',
         ].join(' ')
       : '',
@@ -533,7 +533,7 @@ router.post('/summarize-meeting', async (req: Request, res: Response): Promise<v
 
 /**
  * POST /api/ai/report-issue
- * Process a platform issue report and send email
+ * Process a platform issue report and route it to the admin inbox.
  */
 router.post('/report-issue', validateChatInput, async (req: Request, res: Response): Promise<void> => {
   console.log('[API] POST /api/ai/report-issue - Issue report received');
@@ -549,7 +549,6 @@ router.post('/report-issue', validateChatInput, async (req: Request, res: Respon
 
     let priority = 'MEDIUM';
     let analysis = '';
-    let emailSent = false;
 
     // Wrap AI call with timeout to prevent hanging
     const aiTimeout = new Promise<{ priority: string; analysis: string }>((resolve) => {
@@ -614,23 +613,21 @@ router.post('/report-issue', validateChatInput, async (req: Request, res: Respon
     priority = aiResult.priority;
     analysis = aiResult.analysis;
 
-    // Send email to admin asynchronously (don't wait for it)
-    try {
-      console.log('[API] Sending issue report email...');
-      const emailResult = await emailService.sendIssueReport({
-        title,
-        description,
-        category,
-        userEmail,
-        priority,
-        analysis
-      });
-      emailSent = emailResult?.ok === true && emailResult?.skipped !== true;
-      console.log('[API] Issue report email result:', emailResult);
-    } catch (emailError) {
-      console.error('[API] Failed to send email:', emailError);
-      emailSent = false;
-    }
+    const adminMessage = await createAdminMessage({
+      type: 'report_issue',
+      subject: title,
+      message: description,
+      priority: normalizeAdminMessagePriority(priority),
+      submitterEmail: userEmail,
+      submitterUserId: getAuthenticatedUserId(req),
+      category,
+      source: 'ai_report_issue',
+      aiAnalysis: analysis,
+      metadata: {
+        delivery: 'admin_console',
+        aiTriagePriority: priority,
+      },
+    });
 
     // Always return success response to frontend
     console.log('[API] Returning success response to client');
@@ -638,12 +635,14 @@ router.post('/report-issue', validateChatInput, async (req: Request, res: Respon
       ok: true,
       analysis: analysis || 'Issue report received and will be reviewed.',
       priority,
-      suggestedActions: ['Issue has been forwarded to the team', 'You will receive updates via email'],
+      suggestedActions: ['Issue has been routed to the Admin Console', 'An administrator will review the report'],
       reply: analysis || 'Issue report received and will be reviewed.',
       citations: [],
       confidenceScore: 80,
       processingTimeMs: 100,
-      emailSent,
+      ticketId: adminMessage.id,
+      delivery: 'admin-console',
+      emailSent: false,
     });
   } catch (error) {
     console.error('[API] Issue Report Error:', error);

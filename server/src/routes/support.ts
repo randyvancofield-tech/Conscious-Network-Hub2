@@ -1,9 +1,8 @@
-import crypto from 'crypto';
 import { Request, Response, Router } from 'express';
 import { validateJsonBody } from '../validation/jsonSchema';
 import { supportContactSchema } from '../validation/requestSchemas';
-import emailService from '../services/emailService';
 import { recordAuditEvent } from '../services/auditTelemetry';
+import { createAdminMessage } from '../services/adminMessageStore';
 
 const router = Router();
 
@@ -22,7 +21,6 @@ router.post(
     const subject = normalizeText(req.body?.subject || 'Platform contact request', 200);
     const message = normalizeText(req.body?.message, 5000);
     const route = normalizeText(req.body?.route, 512);
-    const ticketId = `contact_${crypto.randomUUID()}`;
 
     if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
       recordAuditEvent(req, {
@@ -36,45 +34,51 @@ router.post(
       return;
     }
 
-    const result = await emailService.sendIssueReport({
-      userEmail: email,
-      title: subject || `Contact request from ${name}`,
-      description: [
-        `Ticket: ${ticketId}`,
-        `Name: ${name}`,
-        `Email: ${email}`,
-        route ? `Route: ${route}` : '',
-        '',
+    try {
+      const adminMessage = await createAdminMessage({
+        type: 'contact',
+        subject: subject || `Contact request from ${name}`,
         message,
-      ]
-        .filter(Boolean)
-        .join('\n'),
-      category: 'contact',
-      priority: 'normal',
-    });
+        submitterName: name,
+        submitterEmail: email,
+        route: route || null,
+        category: 'contact',
+        source: 'contact_modal',
+        metadata: {
+          delivery: 'admin_console',
+          originalRoute: route || null,
+        },
+      });
 
-    recordAuditEvent(req, {
-      domain: 'security',
-      action: 'contact_submit',
-      outcome: result.ok ? 'success' : 'error',
-      statusCode: result.ok ? 200 : 502,
-      metadata: {
-        ticketId,
-        emailDeliveryConfigured: emailService.configured(),
-        emailSkipped: result.skipped === true,
-      },
-    });
+      recordAuditEvent(req, {
+        domain: 'security',
+        action: 'contact_submit',
+        outcome: 'success',
+        statusCode: 200,
+        metadata: {
+          messageId: adminMessage.id,
+          delivery: 'admin_console',
+        },
+      });
 
-    if (!result.ok) {
-      res.status(502).json({ error: 'Contact request could not be delivered. Please try again later.' });
-      return;
+      res.json({
+        success: true,
+        ticketId: adminMessage.id,
+        delivery: 'admin-console',
+      });
+    } catch (error) {
+      console.error('[Support] Failed to create admin inbox contact message', error);
+      recordAuditEvent(req, {
+        domain: 'security',
+        action: 'contact_submit',
+        outcome: 'error',
+        statusCode: 500,
+        metadata: {
+          reason: 'admin_message_create_failed',
+        },
+      });
+      res.status(500).json({ error: 'Contact request could not be recorded. Please try again later.' });
     }
-
-    res.json({
-      success: true,
-      ticketId,
-      delivery: result.skipped === true ? 'accepted-dev-mode' : 'sent',
-    });
   }
 );
 

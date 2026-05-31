@@ -33,7 +33,9 @@ type ActionButtonProps = React.ButtonHTMLAttributes<HTMLButtonElement> & {
 const cnhLogoPath = '/brand/conscious-network-hub-logo.png';
 
 export const PageShell: React.FC<PageShellProps> = ({ children, className = '' }) => (
-  <div className={`mx-auto w-full max-w-[100rem] space-y-6 pb-20 sm:space-y-8 sm:pb-24 ${className}`}>{children}</div>
+  <div className={`mx-auto w-full max-w-full min-w-0 space-y-6 pb-20 sm:space-y-8 sm:pb-24 2xl:max-w-[100rem] ${className}`}>
+    {children}
+  </div>
 );
 
 export const PageHeader: React.FC<PageHeaderProps> = ({ eyebrow, title, description, actions }) => (
@@ -59,7 +61,9 @@ export const PageHeader: React.FC<PageHeaderProps> = ({ eyebrow, title, descript
 );
 
 export const SurfacePanel: React.FC<SurfacePanelProps> = ({ children, className = '' }) => (
-  <section className={`glass-panel rounded-2xl border-white/10 p-5 sm:p-6 lg:p-8 ${className}`}>{children}</section>
+  <section className={`glass-panel w-full max-w-full min-w-0 rounded-2xl border-white/10 p-5 sm:p-6 lg:p-8 ${className}`}>
+    {children}
+  </section>
 );
 
 export const EmptyState: React.FC<EmptyStateProps> = ({ icon, title, description, action }) => (

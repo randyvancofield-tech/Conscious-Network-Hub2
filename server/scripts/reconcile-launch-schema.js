@@ -161,6 +161,37 @@ BEGIN
 END $$;
 `;
 
+const adminMessageSql = `
+CREATE TABLE IF NOT EXISTS "AdminMessage" (
+  "id" TEXT NOT NULL,
+  "type" TEXT NOT NULL,
+  "status" TEXT NOT NULL DEFAULT 'new',
+  "priority" TEXT NOT NULL DEFAULT 'normal',
+  "subject" TEXT NOT NULL,
+  "message" TEXT NOT NULL,
+  "submitterName" TEXT,
+  "submitterEmail" TEXT,
+  "submitterUserId" TEXT,
+  "route" TEXT,
+  "category" TEXT,
+  "source" TEXT NOT NULL DEFAULT 'platform',
+  "recipientEmail" TEXT NOT NULL DEFAULT 'higherconscious.network1@gmail.com',
+  "metadata" JSONB,
+  "aiAnalysis" TEXT,
+  "adminNotes" TEXT,
+  "resolutionSummary" TEXT,
+  "resolvedAt" TIMESTAMPTZ,
+  "createdAt" TIMESTAMPTZ NOT NULL DEFAULT now(),
+  "updatedAt" TIMESTAMPTZ NOT NULL DEFAULT now(),
+  CONSTRAINT "AdminMessage_pkey" PRIMARY KEY ("id")
+);
+
+CREATE INDEX IF NOT EXISTS "AdminMessage_recipient_status_idx" ON "AdminMessage"("recipientEmail", "status");
+CREATE INDEX IF NOT EXISTS "AdminMessage_type_created_idx" ON "AdminMessage"("type", "createdAt");
+CREATE INDEX IF NOT EXISTS "AdminMessage_priority_status_idx" ON "AdminMessage"("priority", "status");
+CREATE INDEX IF NOT EXISTS "AdminMessage_submitter_idx" ON "AdminMessage"("submitterUserId");
+`;
+
 const accountRecoveryCodeSql = `
 CREATE TABLE IF NOT EXISTS "AccountRecoveryCode" (
   "id" TEXT NOT NULL,
@@ -263,6 +294,7 @@ async function collectStatus(client) {
   const careerGrant = await tableExists(client, 'ConsciousCareerGrantApplication');
   const providerCrmToolVisibility = await tableExists(client, 'ProviderCrmToolVisibility');
   const notification = await tableExists(client, 'Notification');
+  const adminMessage = await tableExists(client, 'AdminMessage');
   const accountRecoveryCode = await tableExists(client, 'AccountRecoveryCode');
   const user = await tableExists(client, 'User');
   return {
@@ -274,6 +306,7 @@ async function collectStatus(client) {
     consciousCareerGrantApplication: careerGrant,
     providerCrmToolVisibility,
     notification,
+    adminMessage,
     accountRecoveryCode,
   };
 }
@@ -290,6 +323,7 @@ async function main() {
       await client.query(careerGrantSql);
       await client.query(providerCrmToolVisibilitySql);
       await client.query(notificationSql);
+      await client.query(adminMessageSql);
       await client.query(accountRecoveryCodeSql);
       await client.query('COMMIT');
     }

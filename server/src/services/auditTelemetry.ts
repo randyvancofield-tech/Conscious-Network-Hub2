@@ -16,7 +16,7 @@ interface AuditEventInput {
   metadata?: Record<string, unknown>;
 }
 
-interface AuditEventRecord {
+export interface AuditEventRecord {
   at: string;
   domain: AuditDomain;
   action: string;
@@ -36,6 +36,7 @@ interface AuditEventRecord {
 }
 
 const DEFAULT_AUDIT_LOG_FILE = path.resolve(__dirname, '../../data/audit-events.log');
+const MAX_AUDIT_READ_BYTES = 1_000_000;
 const MAX_METADATA_DEPTH = 4;
 const MAX_ARRAY_LENGTH = 30;
 const MAX_STRING_LENGTH = 1024;
@@ -142,6 +143,56 @@ const appendAuditLine = (line: string): void => {
   } catch (error) {
     console.error('[AUDIT][WARN] Failed to persist audit event', error);
   }
+};
+
+const readRecentAuditLines = (): string[] => {
+  if (!shouldWriteAuditFile()) return [];
+  const filePath = resolveAuditLogFile();
+  try {
+    if (!fs.existsSync(filePath)) return [];
+    const stat = fs.statSync(filePath);
+    if (!stat.isFile() || stat.size <= 0) return [];
+
+    const bytesToRead = Math.min(stat.size, MAX_AUDIT_READ_BYTES);
+    const start = Math.max(0, stat.size - bytesToRead);
+    const fd = fs.openSync(filePath, 'r');
+    try {
+      const buffer = Buffer.alloc(bytesToRead);
+      fs.readSync(fd, buffer, 0, bytesToRead, start);
+      const lines = buffer.toString('utf8').split(/\r?\n/).filter(Boolean);
+      return start > 0 ? lines.slice(1) : lines;
+    } finally {
+      fs.closeSync(fd);
+    }
+  } catch (error) {
+    console.error('[AUDIT][WARN] Failed to read audit events', error);
+    return [];
+  }
+};
+
+export const listRecentAuditEvents = (input?: {
+  limit?: number;
+  domain?: string | 'all';
+  outcome?: string | 'all';
+}): AuditEventRecord[] => {
+  const limit = Math.min(Math.max(Number(input?.limit || 100), 1), 250);
+  const domain = String(input?.domain || 'all').trim().toLowerCase();
+  const outcome = String(input?.outcome || 'all').trim().toLowerCase();
+  const events: AuditEventRecord[] = [];
+
+  for (const line of readRecentAuditLines().reverse()) {
+    try {
+      const parsed = JSON.parse(line) as AuditEventRecord;
+      if (domain !== 'all' && String(parsed.domain || '').toLowerCase() !== domain) continue;
+      if (outcome !== 'all' && String(parsed.outcome || '').toLowerCase() !== outcome) continue;
+      events.push(parsed);
+      if (events.length >= limit) break;
+    } catch {
+      continue;
+    }
+  }
+
+  return events;
 };
 
 export const recordAuditEvent = (req: Request, input: AuditEventInput): void => {

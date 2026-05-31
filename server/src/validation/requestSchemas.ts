@@ -231,7 +231,7 @@ export const adminRoleUpdateSchema: JsonSchema = {
   additionalProperties: false,
   required: ['role'],
   properties: {
-    role: { type: 'string', enum: ['user', 'applicant', 'provider', 'admin'] },
+    role: { type: 'string', enum: ['user', 'provider', 'admin'] },
     reason: { type: 'string', maxLength: 512 },
   },
 };
@@ -271,6 +271,37 @@ export const supportContactSchema: JsonSchema = {
     route: {
       anyOf: [
         { type: 'string', maxLength: 512 },
+        { type: 'null' },
+      ],
+    },
+  },
+};
+
+export const adminMessageUpdateSchema: JsonSchema = {
+  type: 'object',
+  additionalProperties: false,
+  properties: {
+    status: {
+      anyOf: [
+        { type: 'string', enum: ['new', 'reviewing', 'in_progress', 'resolved', 'archived'] },
+        { type: 'null' },
+      ],
+    },
+    priority: {
+      anyOf: [
+        { type: 'string', enum: ['low', 'normal', 'high', 'urgent'] },
+        { type: 'null' },
+      ],
+    },
+    adminNotes: {
+      anyOf: [
+        { type: 'string', maxLength: 8000 },
+        { type: 'null' },
+      ],
+    },
+    resolutionSummary: {
+      anyOf: [
+        { type: 'string', maxLength: 8000 },
         { type: 'null' },
       ],
     },

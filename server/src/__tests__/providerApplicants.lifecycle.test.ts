@@ -165,7 +165,46 @@ describe('provider applicant lifecycle status access', () => {
     expect(response.body?.notifications?.[0]?.metadata?.nextStatus).toBe('rejected');
   });
 
-  it('blocks ordinary member accounts from applicant status data', async () => {
+  it('lets a member with a provider application view their application status', async () => {
+    users.set(
+      'member-applicant',
+      createUser('member-applicant', 'user', {
+        providerApproved: false,
+        providerApprovalStatus: 'submitted',
+      })
+    );
+    applicants.set('member-applicant', {
+      id: 'applicant-member',
+      userId: 'member-applicant',
+      email: 'member-applicant@example.com',
+      firstName: 'Member',
+      lastName: 'Applicant',
+      providerCategory: 'Mental Wellness',
+      status: 'submitted',
+    });
+    notifications.set('member-applicant', [
+      {
+        id: 'notification-2',
+        type: 'provider_application_submitted',
+        title: 'Provider application submitted',
+        body: 'Your provider application was received.',
+        roleScope: 'user',
+        metadata: { status: 'submitted' },
+      },
+    ]);
+
+    const response = await requestJson({
+      method: 'GET',
+      path: '/api/provider-applicants/current',
+      token: tokenFor('member-applicant'),
+    });
+
+    expect(response.status).toBe(200);
+    expect(response.body?.applicant?.status).toBe('submitted');
+    expect(response.body?.notifications?.[0]?.metadata?.status).toBe('submitted');
+  });
+
+  it('blocks ordinary member accounts from provider application status data', async () => {
     users.set('member-1', createUser('member-1', 'user'));
 
     const response = await requestJson({
@@ -175,6 +214,6 @@ describe('provider applicant lifecycle status access', () => {
     });
 
     expect(response.status).toBe(403);
-    expect(response.body?.error).toBe('Applicant or provider status access only.');
+    expect(response.body?.error).toBe('Provider application status access only.');
   });
 });
