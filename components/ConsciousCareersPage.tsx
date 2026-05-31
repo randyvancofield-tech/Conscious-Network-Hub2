@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { BadgeDollarSign, ChevronRight, Home, Rocket, Shield } from 'lucide-react';
+import careersLogo from '../src/assets/brand/conscious-careers-logo.png';
 
 interface ConsciousCareersPageProps {
   onGoHome: () => void;
@@ -123,6 +124,13 @@ const ConsciousCareersPage: React.FC<ConsciousCareersPageProps> = ({
         </button>
 
         <div className="text-center space-y-3 sm:space-y-4">
+          <div className="mx-auto flex w-fit items-center justify-center rounded-3xl border border-emerald-100/20 bg-white/95 p-2 shadow-2xl shadow-blue-950/30">
+            <img
+              src={careersLogo}
+              alt="Conscious Careers"
+              className="h-20 w-20 rounded-2xl object-contain sm:h-24 sm:w-24 md:h-28 md:w-28"
+            />
+          </div>
           <p className="hidden text-[9px] font-black uppercase tracking-[0.6em] text-blue-300/70 lg:block">
             Start Here
           </p>

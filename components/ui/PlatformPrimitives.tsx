@@ -31,7 +31,7 @@ type ActionButtonProps = React.ButtonHTMLAttributes<HTMLButtonElement> & {
 };
 
 export const PageShell: React.FC<PageShellProps> = ({ children, className = '' }) => (
-  <div className={`mx-auto w-full max-w-7xl space-y-6 pb-20 sm:space-y-8 sm:pb-24 ${className}`}>{children}</div>
+  <div className={`mx-auto w-full max-w-[100rem] space-y-6 pb-20 sm:space-y-8 sm:pb-24 ${className}`}>{children}</div>
 );
 
 export const PageHeader: React.FC<PageHeaderProps> = ({ eyebrow, title, description, actions }) => (

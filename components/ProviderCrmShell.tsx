@@ -65,7 +65,9 @@ import {
   PROVIDER_SESSION_TOKEN_EVENT,
   setProviderControlSession,
 } from '../services/sessionService';
+import MeetingBrandLoop from './ui/MeetingBrandLoop';
 import VisualRenderBoundary from './ui/VisualRenderBoundary';
+import cnhLogo from '../src/assets/brand/conscious-network-hub-logo.png';
 
 interface ProviderCrmShellProps {
   user: UserProfile | null;
@@ -1256,10 +1258,30 @@ const ProviderCrmShellContent: React.FC<ProviderCrmShellProps> = ({
             <h3 className="text-sm font-black uppercase tracking-widest text-white">Branded Room Frame</h3>
             <div className="mt-4 overflow-hidden rounded-xl border border-white/10 bg-black/30">
               {selectedReservationUrl ? (
-                <iframe title="Conscious Roundtable" src={selectedReservationUrl} className="h-[320px] w-full" />
+                <div className="grid min-h-[320px] lg:grid-cols-[0.42fr_1fr]">
+                  <div className="flex flex-col justify-center gap-4 bg-black/40 p-5">
+                    <img src={cnhLogo} alt="Conscious Network Hub" className="h-16 w-16 rounded-2xl bg-white/95 object-contain p-1.5" />
+                    <p className="text-[9px] font-black uppercase tracking-widest text-cyan-100">
+                      CNH room link generated
+                    </p>
+                    <p className="break-all text-[10px] leading-5 text-slate-400">{selectedReservationUrl}</p>
+                  </div>
+                  <iframe title="Conscious Roundtable" src={selectedReservationUrl} className="h-[320px] w-full" />
+                </div>
               ) : (
-                <div className="flex h-[320px] items-center justify-center p-6 text-center text-xs leading-6 text-slate-400">
-                  Reserve a room to generate the private Conscious Roundtable frame.
+                <div className="relative flex h-[320px] items-center justify-center overflow-hidden p-6 text-center">
+                  <MeetingBrandLoop
+                    alt="Conscious Meetings branded WebRTC room animation"
+                    className="absolute inset-0 h-full w-full"
+                    imageClassName="h-full w-full object-cover"
+                  />
+                  <div className="absolute inset-0 bg-black/65" />
+                  <div className="relative flex max-w-sm flex-col items-center">
+                    <img src={cnhLogo} alt="Conscious Network Hub" className="mb-4 h-16 w-16 rounded-2xl bg-white/95 object-contain p-1.5" />
+                    <p className="text-xs leading-6 text-slate-200">
+                      Reserve a room to generate the private Conscious Roundtable frame.
+                    </p>
+                  </div>
                 </div>
               )}
             </div>
@@ -1302,6 +1324,13 @@ const ProviderCrmShellContent: React.FC<ProviderCrmShellProps> = ({
                       <Link2 className="h-3.5 w-3.5" />
                       Copy Link
                     </button>
+                  </div>
+                  <div className="mt-3 overflow-hidden rounded-xl border border-cyan-300/10 bg-black/30">
+                    <MeetingBrandLoop
+                      alt="Conscious Roundtable branded meeting animation"
+                      className="h-28 w-full"
+                      imageClassName="h-full w-full object-cover"
+                    />
                   </div>
                   <p className="mt-3 break-all rounded-lg border border-white/10 bg-black/30 p-3 text-[10px] text-slate-400">
                     {url}
@@ -1414,7 +1443,7 @@ const ProviderCrmShellContent: React.FC<ProviderCrmShellProps> = ({
   }
 
   return (
-    <div className="mx-auto min-w-0 max-w-7xl space-y-6 p-4 sm:p-8">
+    <div className="mx-auto min-w-0 max-w-[100rem] space-y-6 p-4 sm:p-8">
       <div className="flex min-w-0 flex-col gap-4 border-b border-white/10 pb-6 lg:flex-row lg:items-end lg:justify-between">
         <div className="min-w-0">
           <p className="text-[10px] font-black uppercase tracking-[0.35em] text-blue-300">

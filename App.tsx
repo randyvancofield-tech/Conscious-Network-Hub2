@@ -27,10 +27,11 @@ import { ConsciousIdentity } from './components/community/CommunityLayout';
 import { AppView, UserProfile, Course } from './types';
 import { NAVIGATION_ITEMS } from './constants';
 import { 
-  Shield, Menu, X, Search, Bell,
+  Shield, X, Search, Bell,
   ChevronRight, Home, LogOut, Building2, CheckCircle2, Sparkles, Key, WalletCards, LockKeyhole
 } from 'lucide-react';
-import logo from './src/assets/brand/logo.png';
+import cnhLogo from './src/assets/brand/conscious-network-hub-logo.png';
+import careersLogo from './src/assets/brand/conscious-careers-logo.png';
 import privacyPolicy from './docs/compliance/privacy-policy-draft.md?raw';
 import termsOfService from './docs/compliance/terms-of-service-draft.md?raw';
 import aiTransparencyPolicy from './docs/compliance/ai-transparency-policy-draft.md?raw';
@@ -996,7 +997,11 @@ const App: React.FC = () => {
       membershipEndDate: toNullableTrimmedString(rawUser?.membershipEndDate),
       createdAt: rawUser.createdAt || new Date().toISOString(),
       hasProfile: rawUser.hasProfile ?? false,
-      identityVerified: true,
+      identityVerified:
+        rawUser.identityVerified === true ||
+        rawUser.emailVerified === true ||
+        Boolean(rawUser.walletDid) ||
+        rawUser.providerWalletAddressBound === true,
       emailVerified: rawUser.emailVerified === true,
       providerApproved: rawUser.providerApproved === true,
       providerApprovalStatus: toNullableTrimmedString(rawUser.providerApprovalStatus),
@@ -3982,7 +3987,7 @@ const App: React.FC = () => {
             <div className="portal-entry-card w-full max-w-[calc(100vw-2rem)] sm:max-w-5xl space-y-6 sm:space-y-8 md:space-y-10 overflow-hidden backdrop-blur-[4px] p-6 sm:p-8 md:p-12 lg:p-14 rounded-2xl sm:rounded-3xl md:rounded-[2.5rem] lg:rounded-[4rem] border border-white/5 bg-white/[0.01] shadow-[0_0_100px_rgba(0,0,0,0.6)]">
               <div className="flex justify-center">
                 <div className="p-4 sm:p-6 bg-blue-600/10 rounded-2xl sm:rounded-3xl md:rounded-[2.5rem] border border-blue-500/20 backdrop-blur-3xl shadow-[0_0_30px_rgba(37,99,235,0.2)] animate-pulse">
-                  <img src={logo} alt="Conscious Network Hub Logo" className="w-12 h-12 sm:w-14 sm:h-14 md:w-16 md:h-16" />
+                  <img src={cnhLogo} alt="Conscious Network Hub Logo" className="w-12 h-12 sm:w-14 sm:h-14 md:w-16 md:h-16" />
                 </div>
               </div>
               
@@ -4054,7 +4059,11 @@ const App: React.FC = () => {
                         Grant applications & entrepreneurship support
                       </p>
                     </div>
-                    <Sparkles className="w-5 h-5 text-teal-300 flex-shrink-0 group-hover:text-white transition-colors" />
+                    <img
+                      src={careersLogo}
+                      alt="Conscious Careers logo"
+                      className="h-11 w-11 flex-shrink-0 rounded-xl bg-white/95 object-contain p-1 shadow-lg shadow-blue-950/20 transition-transform group-hover:scale-105"
+                    />
                   </div>
                   <span className="mt-4 inline-flex w-fit rounded-full border border-blue-400/20 bg-blue-500/10 px-3 py-1 text-[9px] font-black uppercase tracking-[0.25em] text-blue-100/70">
                     Conscious Careers
@@ -4447,21 +4456,26 @@ const App: React.FC = () => {
                   : 'lg:static lg:translate-x-0 lg:w-0 lg:opacity-0 lg:border-r-0 lg:pointer-events-none'
               }`}
             >
-              <div className="h-full flex flex-col p-6 sm:p-8 lg:p-5 xl:p-6 2xl:p-8 overflow-y-auto custom-scrollbar scrollable">
-                <button 
-                  onClick={() => setSidebarOpen(false)} 
-                  className="absolute top-8 right-8 p-3 hover:bg-white/5 rounded-2xl text-slate-500"
-                >
-                  <X className="w-6 h-6" />
-                </button>
-
-                <div className="flex items-center gap-5 mb-16">
-                  <div className="p-4 bg-blue-600 rounded-2xl shadow-xl shadow-blue-900/40">
-                    <Shield className="w-7 h-7 text-white" />
-                  </div>
-                  <div>
-                    <h1 className="text-xl font-black text-white tracking-tighter leading-none uppercase">CONSCIOUS<br /><span className="text-blue-400 text-[10px] tracking-[0.4em] font-black">NODE</span></h1>
-                  </div>
+              <div className="h-full flex flex-col p-4 sm:p-5 xl:p-6 2xl:p-7 overflow-y-auto custom-scrollbar scrollable">
+                <div className="mb-10 flex items-center justify-between gap-3">
+                  <button
+                    type="button"
+                    onClick={() => setCurrentView(AppView.DASHBOARD)}
+                    className="flex h-14 w-14 items-center justify-center overflow-hidden rounded-2xl border border-white/10 bg-white/95 p-1.5 shadow-xl shadow-blue-950/20 transition-all hover:scale-[1.03]"
+                    aria-label="Open Conscious Network Hub home"
+                    title="Conscious Network Hub"
+                  >
+                    <img src={cnhLogo} alt="" className="h-full w-full object-contain" />
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setSidebarOpen(false)}
+                    className="flex h-11 w-11 items-center justify-center rounded-xl border border-white/10 bg-white/5 text-slate-400 transition-all hover:bg-white/10 hover:text-white"
+                    aria-label="Close platform menu"
+                    title="Close menu"
+                  >
+                    <X className="w-5 h-5" />
+                  </button>
                 </div>
                 
                 <nav className="flex-1 space-y-3 pr-1">
@@ -4673,8 +4687,14 @@ const App: React.FC = () => {
               <header className="min-h-16 sm:min-h-20 flex items-center justify-between gap-2 sm:gap-3 px-3 sm:px-5 md:px-6 lg:px-5 xl:px-8 2xl:px-10 border-b border-white/5 z-20 backdrop-blur-3xl bg-black/20 overflow-x-hidden">
                 <div className="flex min-w-0 flex-1 items-center gap-2 sm:gap-3 lg:gap-4">
                   {!isSidebarOpen && (
-                    <button onClick={toggleSidebar} className="shrink-0 p-3 bg-white/5 hover:bg-white/10 rounded-xl text-slate-400 border border-white/10 shadow-lg">
-                      <Menu className="w-5 h-5" />
+                    <button
+                      type="button"
+                      onClick={toggleSidebar}
+                      className="shrink-0 flex h-12 w-12 items-center justify-center overflow-hidden rounded-xl border border-white/10 bg-white/95 p-1.5 shadow-lg transition-all hover:scale-[1.03]"
+                      aria-label="Open platform menu"
+                      title="Open menu"
+                    >
+                      <img src={cnhLogo} alt="" className="h-full w-full object-contain" />
                     </button>
                   )}
                   <form onSubmit={handleGlobalSearchSubmit} className="relative group hidden min-w-0 flex-1 lg:block lg:max-w-[18rem] xl:max-w-sm 2xl:max-w-md">
@@ -4805,7 +4825,9 @@ const App: React.FC = () => {
 
               <main
                 ref={primaryScrollRef}
-                className="app-main-scroll flex-1 min-h-0 overflow-y-auto custom-scrollbar scrollable p-4 sm:p-5 md:p-6 lg:p-6 xl:p-8 2xl:p-10 relative z-10"
+                className={`app-main-scroll flex-1 min-h-0 overflow-y-auto custom-scrollbar scrollable p-4 sm:p-5 md:p-6 relative z-10 transition-[padding] duration-300 ${
+                  isSidebarOpen ? 'lg:p-6 xl:p-8 2xl:p-10' : 'lg:p-8 xl:p-10 2xl:p-12'
+                }`}
                 data-page-scroll-root="true"
                 tabIndex={0}
                 aria-label="Scrollable page content"

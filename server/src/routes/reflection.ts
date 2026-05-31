@@ -5,10 +5,15 @@ import {
   requireCanonicalIdentity,
 } from '../middleware';
 import { localStore } from '../services/persistenceStore';
-import { deleteUploadObjectByKey } from '../services/uploadBlobStore';
+import {
+  deleteUploadObjectByKey,
+  getUploadObjectAccessMetadata,
+} from '../services/uploadBlobStore';
 
 const router = Router();
 router.use(requireCanonicalIdentity);
+const MAX_REFLECTION_CONTENT_LENGTH = 10_000;
+const REFLECTION_FILE_TYPES = new Set(['video', 'document']);
 
 function getPublicBaseUrl(req: Request): string {
   const configured = process.env.PUBLIC_BASE_URL?.trim();
@@ -44,6 +49,29 @@ function extractUploadObjectKey(fileUrl?: string | null): string | null {
   }
 }
 
+function normalizeReflectionContent(value: unknown): string | null {
+  if (value === null || value === undefined) return null;
+  const content = String(value).trim();
+  return content || null;
+}
+
+function normalizeReflectionFileType(value: unknown): string | null {
+  const fileType = String(value || '').trim().toLowerCase();
+  return REFLECTION_FILE_TYPES.has(fileType) ? fileType : null;
+}
+
+function canAttachReflectionUpload(fileUrl: string, ownerUserId: string): boolean {
+  const objectKey = extractUploadObjectKey(fileUrl);
+  if (!objectKey) return false;
+  const metadata = getUploadObjectAccessMetadata(objectKey);
+  return Boolean(
+    metadata &&
+      metadata.access === 'private' &&
+      metadata.ownerUserId === ownerUserId &&
+      metadata.category === 'reflection'
+  );
+}
+
 /**
  * POST /api/reflection
  * Create a new reflection (with fileUrl and fileType)
@@ -51,13 +79,23 @@ function extractUploadObjectKey(fileUrl?: string | null): string | null {
 router.post('/', async (req: Request, res: Response): Promise<any> => {
   try {
     const authUserId = getAuthenticatedUserId(req);
-    const { userId, content, fileUrl, fileType } = req.body;
+    const { userId, fileUrl } = req.body;
+    const content = normalizeReflectionContent(req.body?.content);
+    const fileType = normalizeReflectionFileType(req.body?.fileType);
 
     if (!authUserId || !userId || !fileUrl || !fileType) {
       return res.status(400).json({ error: 'Missing required fields' });
     }
     if (!enforceAuthenticatedUserMatch(req, res, userId, 'body.userId')) {
       return;
+    }
+    if (content && content.length > MAX_REFLECTION_CONTENT_LENGTH) {
+      return res.status(400).json({ error: 'Reflection notes are too long' });
+    }
+    if (!canAttachReflectionUpload(String(fileUrl), authUserId)) {
+      return res.status(403).json({
+        error: 'Reflection file must be a private upload owned by the authenticated user',
+      });
     }
 
     const reflection = await localStore.createReflection({
@@ -120,12 +158,13 @@ router.patch('/:reflectionId', async (req: Request, res: Response): Promise<any>
     if (!Object.prototype.hasOwnProperty.call(req.body || {}, 'content')) {
       return res.status(400).json({ error: 'No editable fields provided' });
     }
+    const content = normalizeReflectionContent(req.body?.content);
+    if (content && content.length > MAX_REFLECTION_CONTENT_LENGTH) {
+      return res.status(400).json({ error: 'Reflection notes are too long' });
+    }
 
     const updated = await localStore.updateReflection(reflectionId, {
-      content:
-        req.body?.content === null || req.body?.content === undefined
-          ? null
-          : String(req.body.content),
+      content,
     });
     if (!updated) {
       return res.status(404).json({ error: 'Reflection not found after update' });

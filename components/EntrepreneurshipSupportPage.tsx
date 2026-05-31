@@ -1,5 +1,6 @@
 import React from 'react';
-import { ArrowLeft, Clock3, Rocket, ShieldCheck } from 'lucide-react';
+import { ArrowLeft, Rocket, ShieldCheck } from 'lucide-react';
+import careersLogo from '../src/assets/brand/conscious-careers-logo.png';
 
 interface EntrepreneurshipSupportPageProps {
   onBack: () => void;
@@ -24,8 +25,8 @@ const EntrepreneurshipSupportPage: React.FC<EntrepreneurshipSupportPageProps> = 
           </div>
 
           <div className="relative z-10 max-w-3xl space-y-6">
-            <div className="flex h-16 w-16 items-center justify-center rounded-2xl border border-teal-200/20 bg-teal-400/10 text-teal-100">
-              <Clock3 className="h-8 w-8" />
+            <div className="flex h-24 w-24 items-center justify-center rounded-3xl border border-teal-200/20 bg-white/95 p-2 shadow-xl">
+              <img src={careersLogo} alt="Conscious Careers" className="h-full w-full rounded-2xl object-contain" />
             </div>
             <div className="space-y-3">
               <p className="text-[10px] font-black uppercase tracking-[0.45em] text-teal-200/70">

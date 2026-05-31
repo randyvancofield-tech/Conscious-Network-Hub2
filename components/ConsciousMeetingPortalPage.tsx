@@ -13,7 +13,9 @@ import {
 } from 'lucide-react';
 import { UserProfile } from '../types';
 import { ActionButton, PageHeader, PageShell, SurfacePanel } from './ui/PlatformPrimitives';
+import MeetingBrandLoop from './ui/MeetingBrandLoop';
 import VisualRenderBoundary from './ui/VisualRenderBoundary';
+import cnhLogo from '../src/assets/brand/conscious-network-hub-logo.png';
 
 const LazyConsciousMeetings = React.lazy(() => import('./ConsciousMeetings'));
 
@@ -158,6 +160,32 @@ const ConsciousMeetingPortalPageContent: React.FC<ConsciousMeetingPortalPageProp
           </>
         }
       />
+
+      <SurfacePanel className="overflow-hidden p-0">
+        <div className="grid gap-0 lg:grid-cols-[1fr_0.55fr]">
+          <div className="relative min-h-56 overflow-hidden bg-black">
+            <MeetingBrandLoop
+              alt="Conscious Meetings branded WebRTC room animation"
+              className="h-full min-h-56 w-full"
+              imageClassName="h-full w-full object-cover"
+            />
+            <div className="absolute inset-0 bg-gradient-to-r from-black/25 via-transparent to-black/60" />
+          </div>
+          <div className="flex flex-col justify-center gap-4 bg-slate-950/70 p-5 sm:p-6 lg:p-8">
+            <img
+              src={cnhLogo}
+              alt="Conscious Network Hub"
+              className="h-20 w-20 rounded-2xl bg-white/95 object-contain p-1.5 shadow-xl"
+            />
+            <div>
+              <p className="text-[10px] font-black uppercase tracking-widest text-blue-200">Branded Meeting Gateway</p>
+              <p className="mt-2 text-sm leading-6 text-slate-300">
+                CNH meeting confirmations, checks, and host controls use the native WebRTC room identity.
+              </p>
+            </div>
+          </div>
+        </div>
+      </SurfacePanel>
 
       <div className="grid grid-cols-1 gap-6 xl:grid-cols-[0.9fr_1.1fr]">
         <SurfacePanel className="space-y-5">

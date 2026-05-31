@@ -1,5 +1,5 @@
 
-import React, { useMemo, useRef, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { 
   Camera, Edit3, Plus, ChevronRight, ArrowLeft, X, ShieldCheck, 
   UserCircle, Upload, LogOut, Layout, 
@@ -9,6 +9,7 @@ import {
 } from 'lucide-react';
 import { UserProfile, Course } from '../../types';
 import { api } from '../../services/apiClient';
+import { openPrivateUpload } from '../../services/privateUploadService';
 import ProfileIntegrityVerificationPanel from '../ProfileIntegrityVerificationPanel';
 
 interface ConsciousIdentityProps {
@@ -18,6 +19,15 @@ interface ConsciousIdentityProps {
   onSignOut: () => void;
   onGoBack: () => void;
   onSignInPrompt: () => void;
+}
+
+interface ReflectionRecord {
+  id: string;
+  content?: string | null;
+  fileUrl?: string | null;
+  fileType?: string | null;
+  createdAt: string;
+  updatedAt?: string;
 }
 
 const decodeUploadObjectKeyMimeType = (objectKey?: string | null): string | null => {
@@ -152,9 +162,25 @@ export const ConsciousIdentity: React.FC<ConsciousIdentityProps> = ({
   const avatarMimeType = decodeUploadObjectKeyMimeType(formData.profileMedia?.avatar?.objectKey);
   const bannerIsVideo = isVideoMediaAsset(formData.bannerUrl, bannerMimeType);
   const avatarIsVideo = isVideoMediaAsset(formData.avatarUrl, avatarMimeType);
+  const hasVerifiedIdentitySignal = Boolean(
+    user.emailVerified || user.walletDid || user.providerWalletAddressBound
+  );
+  const securityStatusLabel = hasVerifiedIdentitySignal
+    ? user.walletDid || user.providerWalletAddressBound
+      ? 'Wallet linked'
+      : 'Email verified'
+    : 'Launch sign-in active';
+  const securityStatusDetail = hasVerifiedIdentitySignal
+    ? 'At least one identity signal is verified for this profile.'
+    : 'Signed sessions are active. Email or wallet verification is not required for launch access.';
 
-  const [reflections, setReflections] = useState<Array<{ id: number; text: string; date: string }>>([]);
+  const [reflections, setReflections] = useState<ReflectionRecord[]>([]);
   const [newReflection, setNewReflection] = useState('');
+  const [reflectionFile, setReflectionFile] = useState<File | null>(null);
+  const [reflectionLoading, setReflectionLoading] = useState(false);
+  const [reflectionNotice, setReflectionNotice] = useState('');
+  const [editingReflectionId, setEditingReflectionId] = useState<string | null>(null);
+  const [editingReflectionContent, setEditingReflectionContent] = useState('');
 
   const handleFileUpload = async (
     e: React.ChangeEvent<HTMLInputElement>,
@@ -219,12 +245,101 @@ export const ConsciousIdentity: React.FC<ConsciousIdentityProps> = ({
     setIsEditing(false);
   };
 
-  const addReflection = () => {
-    setNewReflection('');
+  const loadReflections = async () => {
+    setReflectionNotice('');
+    try {
+      const data = await api<{ reflections?: ReflectionRecord[] }>(`/reflection/${user.id}`, {
+        cache: 'no-store',
+      });
+      setReflections(Array.isArray(data.reflections) ? data.reflections : []);
+    } catch (error) {
+      setReflectionNotice(
+        error instanceof Error ? error.message : 'Unable to load private reflections.'
+      );
+    }
   };
 
-  const pruneReflection = (reflectionId: number) => {
-    setReflections((prev) => prev.filter((reflection) => reflection.id !== reflectionId));
+  useEffect(() => {
+    void loadReflections();
+  }, [user.id]);
+
+  const addReflection = async () => {
+    if (!reflectionFile) {
+      setReflectionNotice('Choose a private reflection file before saving.');
+      return;
+    }
+
+    setReflectionLoading(true);
+    setReflectionNotice('');
+    try {
+      const payload = new FormData();
+      payload.append('file', reflectionFile);
+      const upload = await api<any>('/upload/reflection', {
+        method: 'POST',
+        body: payload,
+      });
+      const fileUrl = String(upload?.fileUrl || '').trim();
+      if (!fileUrl) {
+        throw new Error('Private reflection upload did not return a file URL.');
+      }
+      const fileType = reflectionFile.type.startsWith('video/') ? 'video' : 'document';
+      await api('/reflection', {
+        method: 'POST',
+        body: {
+          userId: user.id,
+          content: newReflection,
+          fileUrl,
+          fileType,
+        },
+      });
+      setNewReflection('');
+      setReflectionFile(null);
+      await loadReflections();
+      setReflectionNotice('Private reflection saved.');
+    } catch (error) {
+      setReflectionNotice(error instanceof Error ? error.message : 'Unable to save reflection.');
+    } finally {
+      setReflectionLoading(false);
+    }
+  };
+
+  const updateReflection = async (reflectionId: string) => {
+    setReflectionLoading(true);
+    setReflectionNotice('');
+    try {
+      const data = await api<{ reflection?: ReflectionRecord }>(`/reflection/${reflectionId}`, {
+        method: 'PATCH',
+        body: { content: editingReflectionContent },
+      });
+      setReflections((current) =>
+        current.map((reflection) =>
+          reflection.id === reflectionId
+            ? { ...reflection, content: data.reflection?.content ?? editingReflectionContent }
+            : reflection
+        )
+      );
+      setEditingReflectionId(null);
+      setEditingReflectionContent('');
+      setReflectionNotice('Reflection notes updated.');
+    } catch (error) {
+      setReflectionNotice(error instanceof Error ? error.message : 'Unable to update reflection.');
+    } finally {
+      setReflectionLoading(false);
+    }
+  };
+
+  const pruneReflection = async (reflectionId: string) => {
+    setReflectionLoading(true);
+    setReflectionNotice('');
+    try {
+      await api(`/reflection/${reflectionId}`, { method: 'DELETE' });
+      setReflections((prev) => prev.filter((reflection) => reflection.id !== reflectionId));
+      setReflectionNotice('Private reflection deleted.');
+    } catch (error) {
+      setReflectionNotice(error instanceof Error ? error.message : 'Unable to delete reflection.');
+    } finally {
+      setReflectionLoading(false);
+    }
   };
 
   if (isEditing) {
@@ -303,7 +418,7 @@ export const ConsciousIdentity: React.FC<ConsciousIdentityProps> = ({
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
                 <div className="space-y-3">
-                  <label className="text-[10px] font-bold text-slate-500 uppercase tracking-widest ml-1">Sovereign Handle</label>
+                  <label className="text-[10px] font-bold text-slate-500 uppercase tracking-widest ml-1">Profile Handle</label>
                   <div className="relative group">
                     <span className="absolute left-5 top-1/2 -translate-y-1/2 text-blue-500 font-bold text-lg group-focus-within:text-teal-400 transition-colors">@</span>
                     <input 
@@ -316,7 +431,7 @@ export const ConsciousIdentity: React.FC<ConsciousIdentityProps> = ({
                   </div>
                 </div>
                 <div className="space-y-3">
-                  <label className="text-[10px] font-bold text-slate-500 uppercase tracking-widest ml-1">Verified Node Name</label>
+                  <label className="text-[10px] font-bold text-slate-500 uppercase tracking-widest ml-1">Profile Name</label>
                   <div className="w-full px-6 py-5 bg-white/5 border border-white/5 rounded-3xl text-slate-500 cursor-not-allowed font-medium text-lg">
                     {user.name}
                   </div>
@@ -377,7 +492,7 @@ export const ConsciousIdentity: React.FC<ConsciousIdentityProps> = ({
               </div>
 
               <div className="space-y-4">
-                <label className="text-[10px] font-bold text-slate-500 uppercase tracking-[0.2em]">Sovereign Connections</label>
+                <label className="text-[10px] font-bold text-slate-500 uppercase tracking-[0.2em]">Public Links</label>
                 <div className="space-y-4">
                   <div className="relative group">
                     <Twitter className="absolute left-5 top-1/2 -translate-y-1/2 w-5 h-5 text-blue-400" />
@@ -413,7 +528,7 @@ export const ConsciousIdentity: React.FC<ConsciousIdentityProps> = ({
               </div>
 
               <div className="space-y-4">
-                <label className="text-[10px] font-bold text-slate-500 uppercase tracking-[0.2em]">Privacy Toggles</label>
+                <label className="text-[10px] font-bold text-slate-500 uppercase tracking-[0.2em]">Privacy Settings</label>
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   <button
                     onClick={() =>
@@ -444,7 +559,7 @@ export const ConsciousIdentity: React.FC<ConsciousIdentityProps> = ({
                   >
                     <div className="flex items-center gap-3 text-sm font-bold uppercase tracking-wider">
                       {formData.privacySettings.showEmail ? <Eye className="w-4 h-4 text-blue-400" /> : <EyeOff className="w-4 h-4" />}
-                      Public Email
+                      Email Visibility
                     </div>
                     <div className={`w-10 h-5 rounded-full relative transition-colors ${formData.privacySettings.showEmail ? 'bg-blue-500' : 'bg-slate-700'}`}>
                       <div className={`absolute top-1 w-3 h-3 bg-white rounded-full transition-all ${formData.privacySettings.showEmail ? 'right-1' : 'left-1'}`} />
@@ -457,7 +572,7 @@ export const ConsciousIdentity: React.FC<ConsciousIdentityProps> = ({
                   >
                     <div className="flex items-center gap-3 text-sm font-bold uppercase tracking-wider">
                       <MessageSquare className={`w-4 h-4 ${formData.privacySettings.allowMessages ? 'text-teal-400' : ''}`} />
-                      Messaging
+                      Future Messaging Preference
                     </div>
                     <div className={`w-10 h-5 rounded-full relative transition-colors ${formData.privacySettings.allowMessages ? 'bg-teal-500' : 'bg-slate-700'}`}>
                       <div className={`absolute top-1 w-3 h-3 bg-white rounded-full transition-all ${formData.privacySettings.allowMessages ? 'right-1' : 'left-1'}`} />
@@ -471,10 +586,10 @@ export const ConsciousIdentity: React.FC<ConsciousIdentityProps> = ({
                   <ShieldCheck className="w-6 h-6 text-white" />
                 </div>
                 <h4 className="text-base font-bold text-blue-400 flex items-center gap-2 mb-3 uppercase tracking-widest">
-                  Encryption Agreement
+                  Storage and Privacy Notice
                 </h4>
                 <p className="text-sm text-slate-400 leading-relaxed">
-                  Establishing this identity will generate a unique hash in your browser's secure storage. Your portrait and banner remain encrypted locally until you broadcast to the Community Layer.
+                  Profile changes are saved to your authenticated account. Avatar and cover media are public profile media; reflection uploads use private authenticated storage.
                 </p>
               </div>
 
@@ -552,7 +667,7 @@ export const ConsciousIdentity: React.FC<ConsciousIdentityProps> = ({
                       <img src={formData.avatarUrl} className="w-full h-full rounded-[2.7rem] sm:rounded-[4.2rem] object-cover border-[6px] sm:border-[10px] border-[#05070a]" />
                     )}
                   </div>
-                  {user.identityVerified && (
+                  {hasVerifiedIdentitySignal && (
                     <div className="absolute bottom-4 sm:bottom-10 right-0 p-2.5 sm:p-3.5 bg-blue-600 rounded-[1.2rem] sm:rounded-[1.8rem] shadow-2xl ring-[6px] sm:ring-[10px] ring-[#05070a] group-hover:rotate-12 transition-transform">
                       <ShieldCheck className="w-6 h-6 sm:w-10 sm:h-10 text-white" />
                     </div>
@@ -592,7 +707,7 @@ export const ConsciousIdentity: React.FC<ConsciousIdentityProps> = ({
                 
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-6 sm:gap-10">
                   <div className="p-6 sm:p-10 bg-white/5 border border-white/5 rounded-[2rem] sm:rounded-[3rem] hover:bg-white/10 transition-all group shadow-xl">
-                    <h4 className="text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-8 text-center sm:text-left">Verified Sovereignty</h4>
+                    <h4 className="text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-8 text-center sm:text-left">Public Links</h4>
                     <div className="flex justify-center sm:justify-start gap-6">
                       {formData.twitterUrl ? (
                         <a
@@ -639,15 +754,18 @@ export const ConsciousIdentity: React.FC<ConsciousIdentityProps> = ({
                     </div>
                   </div>
                   <div className="p-6 sm:p-10 bg-white/5 border border-white/5 rounded-[2rem] sm:rounded-[3rem] hover:bg-white/10 transition-all flex flex-col justify-between shadow-xl group">
-                    <h4 className="text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-6">Integrity Node</h4>
+                    <h4 className="text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-6">Account Security</h4>
                     <div className="flex flex-col gap-5 sm:flex-row sm:items-end sm:justify-between">
                       <div className="flex items-center gap-4">
                         <div className="w-12 h-12 bg-yellow-400/10 rounded-2xl flex items-center justify-center">
                           <Zap className="w-7 h-7 text-yellow-400" />
                         </div>
-                        <span className="text-base sm:text-lg text-slate-300 font-medium">Security Posture</span>
+                        <span className="text-base sm:text-lg text-slate-300 font-medium">Security Status</span>
                       </div>
-                      <span className="self-start sm:self-auto text-4xl sm:text-5xl font-mono font-bold text-white group-hover:scale-105 transition-transform">{user.reputationScore}</span>
+                      <div className="text-left sm:text-right">
+                        <span className="block text-xl sm:text-2xl font-bold text-white">{securityStatusLabel}</span>
+                        <span className="mt-2 block max-w-xs text-xs leading-5 text-slate-500">{securityStatusDetail}</span>
+                      </div>
                     </div>
                   </div>
                 </div>
@@ -658,7 +776,7 @@ export const ConsciousIdentity: React.FC<ConsciousIdentityProps> = ({
                   <div className="absolute top-0 right-0 p-8 opacity-5 group-hover:opacity-10 transition-opacity">
                     <Lock className="w-24 h-24 text-blue-400" />
                   </div>
-                  <h4 className="text-[10px] font-bold text-slate-500 uppercase tracking-[0.4em] mb-6">Sovereign Privacy</h4>
+                  <h4 className="text-[10px] font-bold text-slate-500 uppercase tracking-[0.4em] mb-6">Profile Privacy</h4>
                   <div className="space-y-6 relative z-10">
                     <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                       <div className="flex items-center gap-3">
@@ -672,23 +790,26 @@ export const ConsciousIdentity: React.FC<ConsciousIdentityProps> = ({
                     <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                       <div className="flex items-center gap-3">
                         <Mail className={`w-5 h-5 ${formData.privacySettings.showEmail ? 'text-blue-400' : 'text-slate-600'}`} />
-                        <span className="text-sm font-medium text-slate-300">Public Email</span>
+                        <span className="text-sm font-medium text-slate-300">Email Visibility</span>
                       </div>
                       <div className={`cnh-status-badge px-3 py-1 rounded-full text-[9px] font-bold uppercase tracking-widest ${formData.privacySettings.showEmail ? 'bg-blue-500/20 text-blue-400' : 'bg-white/5 text-slate-600'}`}>
-                        {formData.privacySettings.showEmail ? 'Broadcasting' : 'Cloaked'}
+                        {formData.privacySettings.showEmail ? 'Visible on Profile' : 'Hidden'}
                       </div>
                     </div>
                     <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                       <div className="flex items-center gap-3">
                         <MessageSquare className={`w-5 h-5 ${formData.privacySettings.allowMessages ? 'text-teal-400' : 'text-slate-600'}`} />
-                        <span className="text-sm font-medium text-slate-300">Direct Comms</span>
+                        <span className="text-sm font-medium text-slate-300">Messaging Preference</span>
                       </div>
                       <div className={`cnh-status-badge px-3 py-1 rounded-full text-[9px] font-bold uppercase tracking-widest ${formData.privacySettings.allowMessages ? 'bg-teal-500/20 text-teal-400' : 'bg-white/5 text-slate-600'}`}>
-                        {formData.privacySettings.allowMessages ? 'Enabled' : 'Restricted'}
+                        {formData.privacySettings.allowMessages ? 'Opted In' : 'Opted Out'}
                       </div>
                     </div>
+                    <p className="text-xs leading-5 text-slate-500">
+                      Messaging preference is saved to your profile settings. Full direct messaging is not active in the launch path.
+                    </p>
                     <button onClick={() => setIsEditing(true)} className="w-full py-4 bg-white/5 hover:bg-white/10 border border-white/5 rounded-2xl text-[10px] font-bold uppercase tracking-widest transition-all">
-                      Configure Secure Layer
+                      Edit Privacy Settings
                     </button>
                   </div>
                 </div>
@@ -724,49 +845,129 @@ export const ConsciousIdentity: React.FC<ConsciousIdentityProps> = ({
         <div className="glass-panel p-6 sm:p-8 2xl:p-12 rounded-[2rem] sm:rounded-[3rem] 2xl:rounded-[4rem] border-white/5 shadow-2xl space-y-8 sm:space-y-10">
           <div className="flex justify-between items-center gap-3">
             <h3 className="text-2xl sm:text-3xl font-bold text-white flex items-center gap-3 sm:gap-4">
-              <PenTool className="w-6 h-6 sm:w-8 sm:h-8 text-blue-400" /> Sovereign Reflections
+              <PenTool className="w-6 h-6 sm:w-8 sm:h-8 text-blue-400" /> Private Reflections
             </h3>
-            <span className="px-4 py-1 bg-white/5 rounded-full text-[11px] text-slate-500 font-bold uppercase tracking-widest">{reflections.length} Nodes</span>
+            <span className="px-4 py-1 bg-white/5 rounded-full text-[11px] text-slate-500 font-bold uppercase tracking-widest">{reflections.length} Saved</span>
           </div>
 
           <div className="space-y-6 sm:space-y-8">
-            <div className="relative group">
+            <div className="space-y-4">
               <textarea 
                 value={newReflection}
                 onChange={e => setNewReflection(e.target.value)}
-                placeholder="Private reflection writing is being prepared"
-                disabled
+                placeholder="Optional private notes for this reflection file"
                 className="w-full bg-white/5 border border-white/10 rounded-[1.5rem] sm:rounded-[2.5rem] p-5 sm:p-8 text-base sm:text-lg text-white focus:outline-none focus:ring-2 focus:ring-blue-500/30 transition-all min-h-[160px] resize-none shadow-inner placeholder:text-slate-600"
               />
+              <div className="rounded-[1.5rem] border border-white/10 bg-white/[0.03] p-4">
+                <input
+                  key={reflectionFile ? reflectionFile.name : 'reflection-file-empty'}
+                  type="file"
+                  accept="video/*,application/pdf,text/plain,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document,application/rtf"
+                  onChange={(event) => setReflectionFile(event.target.files?.[0] || null)}
+                  className="w-full text-xs text-slate-300 file:mr-4 file:rounded-xl file:border-0 file:bg-blue-600 file:px-4 file:py-3 file:text-xs file:font-bold file:uppercase file:tracking-widest file:text-white"
+                />
+                <p className="mt-3 text-xs leading-5 text-slate-500">
+                  Reflection files are stored as private uploads and require your signed session to open.
+                </p>
+              </div>
               <button 
                 onClick={addReflection}
-                disabled
-                className="absolute bottom-4 right-4 sm:bottom-6 sm:right-6 w-11 h-11 sm:w-14 sm:h-14 bg-blue-600 hover:bg-blue-500 disabled:opacity-50 text-white rounded-xl sm:rounded-2xl shadow-2xl transition-all active:scale-90 flex items-center justify-center"
+                disabled={reflectionLoading || !reflectionFile}
+                className="inline-flex min-h-12 items-center justify-center gap-2 rounded-2xl bg-blue-600 px-5 py-4 text-xs font-bold uppercase tracking-widest text-white shadow-2xl transition-all hover:bg-blue-500 disabled:opacity-50"
               >
-                <Plus className="w-6 h-6 sm:w-8 sm:h-8" />
+                <Plus className="w-5 h-5" />
+                {reflectionLoading ? 'Saving' : 'Save Private Reflection'}
               </button>
+              {reflectionNotice && (
+                <p className="rounded-2xl border border-blue-300/15 bg-blue-500/10 p-4 text-xs leading-5 text-blue-100">
+                  {reflectionNotice}
+                </p>
+              )}
             </div>
 
             <div className="space-y-4 sm:space-y-6 max-h-[500px] overflow-y-auto pr-2 sm:pr-6 custom-scrollbar">
               {reflections.length === 0 && (
                 <div className="rounded-[1.5rem] border border-amber-300/20 bg-amber-300/[0.04] p-5 text-sm leading-6 text-slate-300">
-                  Private reflection writing is being prepared. Your saved reflections will appear here when this feature is available.
+                  No private reflections saved yet.
                 </div>
               )}
               {reflections.map(r => (
                 <div key={r.id} className="p-5 sm:p-8 bg-white/5 border border-white/5 rounded-[1.5rem] sm:rounded-[2.5rem] hover:bg-white/10 transition-all group/ref relative">
-                  <p className="cnh-user-content text-slate-200 text-base sm:text-lg leading-relaxed mb-4">{r.text}</p>
-                  <div className="flex items-center justify-between">
+                  {editingReflectionId === r.id ? (
+                    <div className="mb-4 space-y-3">
+                      <textarea
+                        value={editingReflectionContent}
+                        onChange={(event) => setEditingReflectionContent(event.target.value)}
+                        className="w-full rounded-2xl border border-white/10 bg-black/20 p-4 text-sm leading-6 text-white outline-none focus:ring-2 focus:ring-blue-500/30"
+                      />
+                      <div className="flex flex-wrap gap-3">
+                        <button
+                          type="button"
+                          onClick={() => void updateReflection(r.id)}
+                          disabled={reflectionLoading}
+                          className="rounded-xl bg-blue-600 px-4 py-3 text-[10px] font-bold uppercase tracking-widest text-white transition hover:bg-blue-500 disabled:opacity-50"
+                        >
+                          Save Notes
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setEditingReflectionId(null);
+                            setEditingReflectionContent('');
+                          }}
+                          disabled={reflectionLoading}
+                          className="rounded-xl border border-white/10 bg-white/5 px-4 py-3 text-[10px] font-bold uppercase tracking-widest text-slate-200 transition hover:bg-white/10 disabled:opacity-50"
+                        >
+                          Cancel
+                        </button>
+                      </div>
+                    </div>
+                  ) : (
+                    <p className="cnh-user-content text-slate-200 text-base sm:text-lg leading-relaxed mb-4">
+                      {r.content || 'Private reflection file saved.'}
+                    </p>
+                  )}
+                  <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
                     <div className="flex items-center gap-3">
                       <div className="w-2 h-2 rounded-full bg-blue-400 group-hover/ref:scale-150 transition-transform" />
-                      <span className="text-[10px] text-slate-500 uppercase font-bold tracking-widest">{r.date} Timestamp</span>
+                      <span className="text-[10px] text-slate-500 uppercase font-bold tracking-widest">
+                        {new Date(r.createdAt).toLocaleString()}
+                      </span>
                     </div>
-                    <button
-                      onClick={() => pruneReflection(r.id)}
-                      className="text-[10px] text-slate-700 hover:text-red-400 font-bold uppercase tracking-widest transition-colors opacity-0 group-hover/ref:opacity-100"
-                    >
-                      Prune Node
-                    </button>
+                    <div className="flex flex-wrap gap-3">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          void openPrivateUpload({
+                            url: r.fileUrl || '',
+                            originalName: r.fileType === 'video' ? 'reflection-video' : 'reflection-document',
+                          }).catch((error) => {
+                            window.alert(error instanceof Error ? error.message : 'Unable to open private reflection.');
+                          });
+                        }}
+                        className="text-[10px] text-blue-300 hover:text-blue-100 font-bold uppercase tracking-widest transition-colors"
+                      >
+                        Open Private File
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setEditingReflectionId(r.id);
+                          setEditingReflectionContent(r.content || '');
+                        }}
+                        className="text-[10px] text-slate-400 hover:text-white font-bold uppercase tracking-widest transition-colors"
+                      >
+                        Edit Notes
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => void pruneReflection(r.id)}
+                        disabled={reflectionLoading}
+                        className="text-[10px] text-slate-500 hover:text-red-300 font-bold uppercase tracking-widest transition-colors disabled:opacity-50"
+                      >
+                        Delete
+                      </button>
+                    </div>
                   </div>
                 </div>
               ))}
@@ -817,7 +1018,7 @@ export const ConsciousIdentity: React.FC<ConsciousIdentityProps> = ({
 
       <div className="text-center py-12 sm:py-20 border-t border-white/5">
         <p className="text-[10px] sm:text-[11px] text-slate-700 uppercase tracking-[0.35em] sm:tracking-[0.6em] font-bold">
-          CONSCIOUS NETWORK HUB NODE PROTOCOL v0.9.5-ESTABLISHED
+          Profile and private reflections are protected by your signed platform session
         </p>
       </div>
     </div>

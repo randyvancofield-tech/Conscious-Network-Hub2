@@ -1,6 +1,5 @@
 import React, { useMemo, useState } from 'react';
 import {
-  BadgeDollarSign,
   CheckCircle2,
   ChevronRight,
   Globe2,
@@ -11,6 +10,7 @@ import {
   ShieldCheck,
 } from 'lucide-react';
 import { UserProfile } from '../types';
+import careersLogo from '../src/assets/brand/conscious-careers-logo.png';
 
 interface GrantApplicationPageProps {
   user: UserProfile | null;
@@ -345,8 +345,8 @@ const GrantApplicationPage: React.FC<GrantApplicationPageProps> = ({
       <div className="min-h-[100dvh] bg-[#07120d] p-4 text-white sm:p-8">
         <div className="mx-auto flex min-h-[calc(100dvh-2rem)] max-w-3xl items-center">
           <div className="glass-panel w-full rounded-3xl border border-emerald-200/20 bg-emerald-400/[0.05] p-6 text-center shadow-2xl sm:p-10">
-            <div className="mx-auto mb-6 flex h-16 w-16 items-center justify-center rounded-2xl border border-emerald-200/20 bg-emerald-400/10 text-emerald-100">
-              <CheckCircle2 className="h-8 w-8" />
+            <div className="mx-auto mb-6 flex h-24 w-24 items-center justify-center rounded-3xl border border-emerald-200/20 bg-white/95 p-2 shadow-xl">
+              <img src={careersLogo} alt="Conscious Careers" className="h-full w-full rounded-2xl object-contain" />
             </div>
             <p className="text-[10px] font-black uppercase tracking-[0.35em] text-emerald-100/60">
               Grant Application Submitted
@@ -386,8 +386,8 @@ const GrantApplicationPage: React.FC<GrantApplicationPageProps> = ({
           <div className="glass-panel rounded-3xl border border-emerald-200/20 bg-emerald-400/[0.04] p-5 sm:p-6 lg:p-7">
             <div className="flex flex-col gap-5 lg:flex-row lg:items-end lg:justify-between">
               <div className="min-w-0">
-                <div className="mb-4 flex h-12 w-12 items-center justify-center rounded-2xl border border-emerald-200/20 bg-emerald-400/10 text-emerald-100">
-                  <BadgeDollarSign className="h-5 w-5" />
+                <div className="mb-4 flex h-20 w-20 items-center justify-center rounded-3xl border border-emerald-200/20 bg-white/95 p-2 shadow-xl">
+                  <img src={careersLogo} alt="Conscious Careers" className="h-full w-full rounded-2xl object-contain" />
                 </div>
                 <p className="text-[10px] font-black uppercase tracking-[0.35em] text-emerald-100/60">
                   Higher Conscious Network dba Conscious Careers

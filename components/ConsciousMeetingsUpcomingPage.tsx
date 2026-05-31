@@ -21,6 +21,8 @@ import {
   MeetingSessionSummary,
 } from '../services/backendApiService';
 import { ActionButton, EmptyState, LoadingPanel, PageHeader, PageShell, SurfacePanel } from './ui/PlatformPrimitives';
+import MeetingBrandLoop from './ui/MeetingBrandLoop';
+import cnhLogo from '../src/assets/brand/conscious-network-hub-logo.png';
 
 type ConsciousMeetingsUpcomingPageProps = {
   user: UserProfile | null;
@@ -176,6 +178,32 @@ const ConsciousMeetingsUpcomingPage: React.FC<ConsciousMeetingsUpcomingPageProps
         }
       />
 
+      <SurfacePanel className="overflow-hidden p-0">
+        <div className="grid gap-0 lg:grid-cols-[0.42fr_1fr]">
+          <div className="flex min-h-48 flex-col justify-between gap-5 bg-slate-950/70 p-5 sm:p-6 lg:p-8">
+            <img
+              src={cnhLogo}
+              alt="Conscious Network Hub"
+              className="h-20 w-20 rounded-2xl bg-white/95 object-contain p-1.5 shadow-xl"
+            />
+            <div>
+              <p className="text-[10px] font-black uppercase tracking-widest text-blue-200">CNH Native WebRTC</p>
+              <p className="mt-2 text-sm leading-6 text-slate-300">
+                Posted meetings carry the Conscious Network Hub room brand and route into signed-session access.
+              </p>
+            </div>
+          </div>
+          <div className="relative min-h-56 overflow-hidden bg-black lg:min-h-64">
+            <MeetingBrandLoop
+              alt="Conscious Meetings branded WebRTC room animation"
+              className="h-full min-h-56 w-full lg:min-h-64"
+              imageClassName="h-full w-full object-cover"
+            />
+            <div className="absolute inset-0 bg-gradient-to-r from-black/45 via-transparent to-black/20" />
+          </div>
+        </div>
+      </SurfacePanel>
+
       <SurfacePanel className="grid gap-4 md:grid-cols-[1fr_0.65fr]">
         <div className="space-y-2">
           <p className="text-[10px] font-black uppercase tracking-widest text-blue-200">Live stream listener</p>
@@ -241,6 +269,19 @@ const ConsciousMeetingsUpcomingPage: React.FC<ConsciousMeetingsUpcomingPageProps
                     <span className="rounded-full border border-white/10 bg-white/5 px-3 py-1 text-[9px] font-black uppercase tracking-widest text-slate-300">
                       {session.mode === 'immersive-5d' ? '5D Ready' : 'Standard Ready'}
                     </span>
+                  </div>
+
+                  <div className="relative aspect-[16/6] overflow-hidden rounded-xl border border-blue-300/20 bg-black/40">
+                    <MeetingBrandLoop
+                      alt="Conscious Meetings branded room animation"
+                      className="h-full w-full"
+                      imageClassName="h-full w-full object-cover"
+                    />
+                    <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-transparent to-black/20" />
+                    <div className="absolute bottom-3 left-3 flex items-center gap-2 rounded-full border border-white/10 bg-black/55 px-3 py-1.5 backdrop-blur-md">
+                      <img src={cnhLogo} alt="" className="h-7 w-7 rounded-lg bg-white/95 object-contain p-0.5" />
+                      <span className="text-[8px] font-black uppercase tracking-widest text-blue-100">Branded CNH Room</span>
+                    </div>
                   </div>
 
                   <div className="space-y-3">

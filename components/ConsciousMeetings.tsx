@@ -46,6 +46,8 @@ import type {
   MeetingSummary,
   ProviderInviteGroup,
 } from '../services/backendApiService';
+import MeetingBrandLoop from './ui/MeetingBrandLoop';
+import cnhLogo from '../src/assets/brand/conscious-network-hub-logo.png';
 
 interface ConsciousMeetingsProps {
   user: UserProfile | null;
@@ -2608,6 +2610,19 @@ const ConsciousMeetings: React.FC<ConsciousMeetingsProps> = ({ user }) => {
                       <span className="text-[9px] sm:text-[10px] font-black text-teal-400 uppercase tracking-[0.4em]">Next Session Ready</span>
                     </div>
 
+                    <div className="relative aspect-[16/7] overflow-hidden rounded-2xl border border-blue-300/20 bg-black/40">
+                      <MeetingBrandLoop
+                        alt="Conscious Meetings branded WebRTC room animation"
+                        className="h-full w-full"
+                        imageClassName="h-full w-full object-cover"
+                      />
+                      <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-transparent to-black/20" />
+                      <div className="absolute bottom-4 left-4 flex items-center gap-3 rounded-full border border-white/10 bg-black/55 px-4 py-2 backdrop-blur-md">
+                        <img src={cnhLogo} alt="" className="h-8 w-8 rounded-xl bg-white/95 object-contain p-1" />
+                        <span className="text-[8px] font-black uppercase tracking-widest text-blue-100">CNH Native Room</span>
+                      </div>
+                    </div>
+
                     <div>
                       <h3 className="text-xl sm:text-2xl md:text-3xl lg:text-4xl font-black text-white uppercase tracking-tighter leading-none mb-3 sm:mb-4">
                         {meetings[0].title}
@@ -3074,6 +3089,21 @@ const ConsciousMeetings: React.FC<ConsciousMeetingsProps> = ({ user }) => {
                 Providers create/start sessions, invite platform users/groups, and issue external guest links.
                 Provider host access is granted through native CNH provider authentication.
               </p>
+
+              <div className="relative overflow-hidden rounded-2xl border border-blue-300/20 bg-black/40">
+                <MeetingBrandLoop
+                  alt="Conscious Meetings branded WebRTC room animation"
+                  className="h-44 w-full sm:h-52"
+                  imageClassName="h-full w-full object-cover"
+                />
+                <div className="absolute inset-0 bg-gradient-to-t from-black/75 via-transparent to-black/20" />
+                <div className="absolute bottom-4 left-4 flex items-center gap-3 rounded-full border border-white/10 bg-black/55 px-4 py-2 backdrop-blur-md">
+                  <img src={cnhLogo} alt="" className="h-9 w-9 rounded-xl bg-white/95 object-contain p-1" />
+                  <span className="text-[9px] font-black uppercase tracking-widest text-blue-100">
+                    Branded CNH Meeting Confirmation
+                  </span>
+                </div>
+              </div>
 
               <div className="p-3 rounded-xl bg-white/5 border border-white/10">
                 <p className="text-[8px] sm:text-[9px] text-slate-500 uppercase tracking-widest">
@@ -3551,6 +3581,18 @@ const ConsciousMeetings: React.FC<ConsciousMeetingsProps> = ({ user }) => {
               <div className="lg:col-span-2 space-y-4 sm:space-y-5 md:space-y-6">
                 {meetings.map((meeting) => (
                   <div key={meeting.id} className="glass-panel rounded-lg sm:rounded-[1.5rem] md:rounded-[2.25rem] lg:rounded-[2.5rem] p-4 sm:p-6 md:p-8 border-white/5 hover:border-blue-500/20 transition-all shadow-xl group">
+                    <div className="relative mb-5 aspect-[16/6] overflow-hidden rounded-xl border border-blue-300/20 bg-black/40">
+                      <MeetingBrandLoop
+                        alt="Conscious Meetings branded room animation"
+                        className="h-full w-full"
+                        imageClassName="h-full w-full object-cover"
+                      />
+                      <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-transparent to-black/10" />
+                      <div className="absolute bottom-3 left-3 flex items-center gap-2 rounded-full border border-white/10 bg-black/55 px-3 py-1.5 backdrop-blur-md">
+                        <img src={cnhLogo} alt="" className="h-7 w-7 rounded-lg bg-white/95 object-contain p-0.5" />
+                        <span className="text-[8px] font-black uppercase tracking-widest text-blue-100">Branded CNH Post</span>
+                      </div>
+                    </div>
                     <div className="flex flex-col sm:flex-row justify-between gap-4 sm:gap-6">
                       <div className="space-y-3 sm:space-y-4">
                         <div className="flex items-center gap-2 sm:gap-3 flex-wrap">

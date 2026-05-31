@@ -24,6 +24,8 @@ import {
   postMeetingSignal,
 } from '../services/backendApiService';
 import { ActionButton, EmptyState, PageHeader, PageShell, SurfacePanel } from './ui/PlatformPrimitives';
+import MeetingBrandLoop from './ui/MeetingBrandLoop';
+import cnhLogo from '../src/assets/brand/conscious-network-hub-logo.png';
 
 type ConsciousMeetingRoomPageProps = {
   sessionId?: string;
@@ -329,21 +331,39 @@ const ConsciousMeetingRoomPage: React.FC<ConsciousMeetingRoomPageProps> = ({ ses
                   className="h-full w-full bg-black object-cover"
                 />
               ) : (
-                <div className="flex h-full flex-col items-center justify-center bg-[radial-gradient(circle_at_top_left,rgba(59,130,246,0.24),transparent_34%),linear-gradient(135deg,rgba(15,23,42,0.98),rgba(2,6,23,0.94))] p-6 text-center">
-                  <Radio className="mb-4 h-12 w-12 text-blue-300" />
-                  <h2 className="text-xl font-black uppercase text-white">Native Standard Room</h2>
-                  <p className="mt-2 max-w-xl text-sm leading-6 text-slate-400">
-                    This room uses CNH-issued meeting links, signed-session access, and browser WebRTC readiness without a paid meeting vendor.
-                  </p>
+                <div className="relative flex h-full flex-col items-center justify-center overflow-hidden p-6 text-center">
+                  <MeetingBrandLoop
+                    eager
+                    alt="Conscious Meetings branded WebRTC room animation"
+                    className="absolute inset-0 h-full w-full"
+                    imageClassName="h-full w-full object-cover"
+                  />
+                  <div className="absolute inset-0 bg-black/55" />
+                  <div className="relative flex max-w-xl flex-col items-center">
+                    <img src={cnhLogo} alt="Conscious Network Hub" className="mb-4 h-16 w-16 rounded-2xl bg-white/95 object-contain p-1.5 shadow-xl" />
+                    <Radio className="mb-4 h-12 w-12 text-blue-300" />
+                    <h2 className="text-xl font-black uppercase text-white">Native Standard Room</h2>
+                    <p className="mt-2 text-sm leading-6 text-slate-200">
+                      This room uses CNH-issued meeting links, signed-session access, and browser WebRTC readiness without a paid meeting vendor.
+                    </p>
+                  </div>
                 </div>
               )
             ) : (
-              <div className="relative flex h-full flex-col items-center justify-center overflow-hidden bg-[radial-gradient(circle_at_center,rgba(45,212,191,0.28),transparent_28%),linear-gradient(160deg,rgba(8,47,73,0.94),rgba(2,6,23,0.98))] p-6 text-center">
+              <div className="relative flex h-full flex-col items-center justify-center overflow-hidden p-6 text-center">
+                <MeetingBrandLoop
+                  eager
+                  alt="Conscious Meetings branded spatial room animation"
+                  className="absolute inset-0 h-full w-full"
+                  imageClassName="h-full w-full object-cover"
+                />
+                <div className="absolute inset-0 bg-cyan-950/60" />
                 <div className="absolute inset-6 rounded-full border border-cyan-200/20" />
                 <div className="absolute inset-16 rounded-full border border-blue-200/10" />
+                <img src={cnhLogo} alt="Conscious Network Hub" className="relative mb-4 h-16 w-16 rounded-2xl bg-white/95 object-contain p-1.5 shadow-xl" />
                 <Layers className="relative mb-4 h-12 w-12 text-teal-200" />
                 <h2 className="relative text-xl font-black uppercase text-white">5D Spatial Viewport</h2>
-                <p className="relative mt-2 max-w-xl text-sm leading-6 text-slate-300">
+                <p className="relative mt-2 max-w-xl text-sm leading-6 text-slate-100">
                   {xrSupported
                     ? 'WebXR tracking profile detected. The provider stream is ready for spatial placement.'
                     : 'WebXR tracking is not detected. Connect your spatial tools or continue in Standard View.'}
