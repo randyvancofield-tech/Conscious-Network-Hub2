@@ -341,14 +341,17 @@ const resolveRoute = (pathname: string, search = ''): RouteState => {
   };
 
   if (staticRoutes[path]) {
+    const staticParams =
+      path === '/reset-password' || path === '/verify-email'
+        ? { token: params.get('token') || '' }
+        : path === '/verify-session'
+          ? { sessionId: params.get('session_id') || params.get('sessionId') || '' }
+          : path === '/social' || path === '/social-learning'
+            ? { node: params.get('node') || '' }
+            : {};
     return {
       view: staticRoutes[path],
-      params:
-        path === '/reset-password' || path === '/verify-email'
-          ? { token: params.get('token') || '' }
-          : path === '/verify-session'
-          ? { sessionId: params.get('session_id') || params.get('sessionId') || '' }
-          : {},
+      params: staticParams,
       path,
     };
   }
@@ -3642,10 +3645,20 @@ const App: React.FC = () => {
           />
         );
       case AppView.CONSCIOUS_SOCIAL_LEARNING:
-        return <SocialLearningHub user={user} />;
+        return (
+          <SocialLearningHub
+            user={user}
+            deepLinkNodeId={routeParams.node}
+            onSignInPrompt={() => {
+              resetSignInChallengeInputs();
+              setSigninModalOpen(true);
+            }}
+          />
+        );
       case AppView.COMMUNITY:
         return (
           <CommunityMembers
+            user={user}
             onSignInPrompt={() => {
               resetSignInChallengeInputs();
               setSigninModalOpen(true);

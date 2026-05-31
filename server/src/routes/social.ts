@@ -13,9 +13,10 @@ import { normalizePrivacySettings } from '../services/profileNormalization';
 import {
   SocialPostMediaInput,
   SocialPostVisibility,
+  SocialPostRecord,
   socialStore,
 } from '../services/socialStore';
-import { deleteUploadObjectByKey } from '../services/uploadBlobStore';
+import { deleteUploadObjectByKey, getUploadObjectAccessMetadata } from '../services/uploadBlobStore';
 import {
   parseUserProfilePatch,
   SOCIAL_PROFILE_PATCH_FIELDS,
@@ -89,6 +90,65 @@ const extractUploadObjectKey = (value: unknown): string | null => {
   } catch {
     return null;
   }
+};
+
+const validatePostMediaAccess = (
+  media: SocialPostMediaInput[],
+  visibility: SocialPostVisibility
+): string | null => {
+  if (media.length === 0) return null;
+  if (visibility !== 'public') {
+    return 'Private media posts are unavailable until private social media delivery is enabled';
+  }
+
+  for (const entry of media) {
+    const objectKey =
+      extractUploadObjectKey(entry.objectKey) ||
+      extractUploadObjectKey(entry.url);
+    if (!objectKey) continue;
+
+    const metadata = getUploadObjectAccessMetadata(objectKey);
+    if (!metadata) {
+      return 'Attached media could not be verified';
+    }
+    if (metadata.access !== 'public') {
+      return 'Private uploads cannot be attached to public social posts';
+    }
+    if (metadata.category && metadata.category !== 'social') {
+      return 'Only social media uploads can be attached to social posts';
+    }
+  }
+
+  return null;
+};
+
+const enrichPostForResponse = (req: Request, post: SocialPostRecord, author: any) => ({
+  ...post,
+  media: Array.isArray(post.media)
+    ? post.media.map((entry) => ({
+        ...entry,
+        url: absolutizeUrl(req, (entry as any)?.url),
+      }))
+    : [],
+  authorName: author?.name || 'Node',
+  authorAvatarUrl: absolutizeUrl(req, author?.avatarUrl),
+});
+
+const canViewPostForViewer = async (
+  viewerUser: any,
+  post: SocialPostRecord,
+  author: any
+): Promise<boolean> => {
+  if (!viewerUser || !author) return false;
+  const viewerId = String(viewerUser.id || '');
+  const authorId = String(author.id || post.authorId || '');
+  const viewerPrivacy = normalizePrivacySettings(viewerUser.privacySettings);
+  const authorPrivacy = normalizePrivacySettings(author.privacySettings);
+  const blockState = resolvePrivacyBlockState(viewerId, viewerPrivacy, authorId, authorPrivacy);
+  if (blockState.blockedEitherWay) return false;
+  if (post.visibility === 'public') return true;
+  if (authorId === viewerId) return true;
+  return socialStore.isFollowing(viewerId, authorId);
 };
 
 const toPublicProfile = (req: Request, user: any, viewerId: string) => {
@@ -309,6 +369,7 @@ router.post('/posts', validateJsonBody(socialCreatePostSchema), async (req: Requ
   const text = String(req.body?.text || '').trim();
   const visibility = normalizePostVisibility(req.body?.visibility);
   const media = normalizePostMedia(req.body?.media);
+  const mediaAccessError = validatePostMediaAccess(media, visibility);
 
   if (!text && media.length === 0) {
     recordAuditEvent(req, {
@@ -321,6 +382,18 @@ router.post('/posts', validateJsonBody(socialCreatePostSchema), async (req: Requ
       metadata: { reason: 'missing_text_and_media' },
     });
     return res.status(400).json({ error: 'Post requires text or media' });
+  }
+  if (mediaAccessError) {
+    recordAuditEvent(req, {
+      domain: 'social',
+      action: 'post_create',
+      outcome: 'deny',
+      actorUserId: authUserId,
+      targetUserId: authUserId,
+      statusCode: 400,
+      metadata: { reason: 'media_access_policy' },
+    });
+    return res.status(400).json({ error: mediaAccessError });
   }
 
   try {
@@ -370,6 +443,48 @@ router.post('/posts', validateJsonBody(socialCreatePostSchema), async (req: Requ
       error: error instanceof Error ? error.message : 'Failed to create post',
     });
   }
+});
+
+/**
+ * GET /api/social/posts/:postId
+ * Resolve a shared/deep-linked post if visible to the authenticated viewer.
+ */
+router.get('/posts/:postId', async (req: Request, res: Response): Promise<any> => {
+  const authUserId = getAuthenticatedUserId(req);
+  if (!authUserId) {
+    return res.status(401).json({ error: 'Authentication required' });
+  }
+
+  const postId = String(req.params.postId || '').trim();
+  if (!postId) {
+    return res.status(400).json({ error: 'postId is required' });
+  }
+
+  const [viewerUser, post] = await Promise.all([
+    localStore.getUserById(authUserId),
+    socialStore.getPostById(postId),
+  ]);
+  if (!viewerUser) {
+    return res.status(401).json({ error: 'Viewer session is invalid' });
+  }
+  if (!post) {
+    return res.status(404).json({ error: 'Post not found' });
+  }
+
+  const author = await localStore.getUserById(post.authorId);
+  if (!author) {
+    return res.status(404).json({ error: 'Post author not found' });
+  }
+
+  const visible = await canViewPostForViewer(viewerUser, post, author);
+  if (!visible) {
+    return res.status(403).json({ error: 'Post is unavailable' });
+  }
+
+  return res.json({
+    success: true,
+    post: enrichPostForResponse(req, post, author),
+  });
 });
 
 /**

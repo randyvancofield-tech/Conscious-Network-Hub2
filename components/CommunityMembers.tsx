@@ -4,11 +4,9 @@ import {
   MessageSquare,
   Search,
   ShieldCheck,
-  Send,
   X,
   ArrowLeft,
   ChevronRight,
-  Paperclip,
   CheckCircle2,
   Lock,
   Smartphone,
@@ -103,24 +101,20 @@ const renderAvatarMedia = (
 };
 
 interface CommunityMembersProps {
+  user: UserProfile | null;
   onSignInPrompt?: () => void;
 }
 
-const CommunityMembersContent: React.FC<CommunityMembersProps> = ({ onSignInPrompt }) => {
+const CommunityMembersContent: React.FC<CommunityMembersProps> = ({ user, onSignInPrompt }) => {
   const [search, setSearch] = useState('');
   const [selectedMember, setSelectedMember] = useState<Member | null>(null);
-  const [messages, setMessages] = useState<{ [key: string]: { text: string; sender: 'me' | 'them'; time: string }[] }>({});
-  const [input, setInput] = useState('');
   const [allMembers, setAllMembers] = useState<Member[]>([]);
   const [directoryLoading, setDirectoryLoading] = useState(false);
   const [directoryError, setDirectoryError] = useState('');
-  const [selectedAttachment, setSelectedAttachment] = useState<File | null>(null);
   const [isMemberInfoOpen, setMemberInfoOpen] = useState(false);
   const [selectedProfileView, setSelectedProfileView] = useState<SocialProfileView | null>(null);
   const [profileViewLoading, setProfileViewLoading] = useState(false);
   const [profileViewError, setProfileViewError] = useState('');
-  const chatEndRef = useRef<HTMLDivElement>(null);
-  const attachmentInputRef = useRef<HTMLInputElement>(null);
   const profilePanelRef = useRef<HTMLDivElement>(null);
   const profileViewRequestRef = useRef(0);
 
@@ -137,7 +131,6 @@ const CommunityMembersContent: React.FC<CommunityMembersProps> = ({ onSignInProm
       setDirectoryLoading(true);
       setDirectoryError('');
       try {
-        const activeUser: UserProfile | null = JSON.parse(localStorage.getItem('hcn_active_user') || 'null');
         const payload = await api<any>('/user/directory');
 
         const directoryUsers = Array.isArray(payload?.users) ? payload.users : [];
@@ -158,7 +151,7 @@ const CommunityMembersContent: React.FC<CommunityMembersProps> = ({ onSignInProm
               bio: String(profile.bio || 'Mission statement established.'),
               image: imageMedia.url || toAssetUrl(profile?.avatarUrl) || null,
               imageMedia,
-              status: activeUser?.id === profile.id ? 'online' : 'offline',
+              status: user?.id === profile.id ? 'online' : 'offline',
               verified: true,
             };
           })
@@ -181,7 +174,7 @@ const CommunityMembersContent: React.FC<CommunityMembersProps> = ({ onSignInProm
     };
     window.addEventListener('storage', handleStorage);
     return () => window.removeEventListener('storage', handleStorage);
-  }, []);
+  }, [user?.id]);
 
   const filteredMembers = useMemo(
     () =>
@@ -250,15 +243,6 @@ const CommunityMembersContent: React.FC<CommunityMembersProps> = ({ onSignInProm
     setSelectedProfileView(null);
     setProfileViewError('');
   };
-
-  const handleSendMessage = (e: React.FormEvent) => {
-    e.preventDefault();
-    setDirectoryError('Member messaging is being prepared and is not yet available.');
-  };
-
-  useEffect(() => {
-    chatEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-  }, [messages, selectedMember]);
 
   const emptyStateMessage = search.trim()
     ? 'No member matched this search.'
@@ -376,7 +360,7 @@ const CommunityMembersContent: React.FC<CommunityMembersProps> = ({ onSignInProm
                     onClick={() => setSelectedMember(member)}
                     className="flex items-center justify-center gap-1.5 py-2.5 bg-blue-600 hover:bg-blue-500 text-white rounded-xl font-black text-[9px] uppercase tracking-widest transition-all active:scale-95"
                   >
-                    <MessageSquare className="w-3.5 h-3.5 shrink-0" /> <span className="cnh-action-label">Open</span>
+                    <MessageSquare className="w-3.5 h-3.5 shrink-0" /> <span className="cnh-action-label">Select</span>
                   </button>
                   <button
                     type="button"
@@ -461,80 +445,32 @@ const CommunityMembersContent: React.FC<CommunityMembersProps> = ({ onSignInProm
               <div className="flex-1 overflow-y-auto p-4 md:p-8 space-y-4 md:space-y-6 custom-scrollbar bg-[radial-gradient(circle_at_top_right,_rgba(37,99,235,0.02)_0%,_transparent_50%)]">
                 <div className="text-center py-4 border-b border-white/5 mb-4">
                   <div className="inline-flex items-center gap-2 px-3 py-1 bg-blue-600/5 border border-blue-500/10 rounded-full text-[8px] md:text-[9px] text-blue-400 font-black uppercase tracking-[0.2em]">
-                    <ShieldCheck className="w-3 h-3" /> Native Messaging Pending
+                    <ShieldCheck className="w-3 h-3" /> Messaging Unavailable In Launch
                   </div>
                 </div>
 
-                {(messages[selectedMember.id] || []).map((msg, i) => (
-                  <div key={i} className={`flex flex-col ${msg.sender === 'me' ? 'items-end' : 'items-start'} animate-in slide-in-from-bottom-2`}>
-                    <div
-                      className={`max-w-[90%] md:max-w-[80%] p-3 md:p-4 rounded-[1rem] md:rounded-[1.5rem] text-xs md:text-sm leading-relaxed ${
-                        msg.sender === 'me'
-                          ? 'bg-blue-600 text-white rounded-tr-none shadow-xl'
-                          : 'bg-white/5 text-slate-200 rounded-tl-none border border-white/10'
-                      }`}
-                    >
-                      <span className="cnh-user-content">{msg.text}</span>
-                    </div>
-                    <span className="text-[7px] md:text-[8px] text-slate-600 uppercase font-black tracking-widest mt-1.5 px-1">{msg.time}</span>
+                <div className="flex flex-col items-center justify-center h-full text-center space-y-6 py-12">
+                  <div className="p-8 bg-blue-600/5 rounded-[3rem] border border-blue-500/10">
+                    <MessageSquare className="w-10 h-10 text-blue-400" />
                   </div>
-                ))}
-
-                {(!messages[selectedMember.id] || messages[selectedMember.id].length === 0) && (
-                  <div className="flex flex-col items-center justify-center h-full opacity-30 text-center space-y-6 py-12">
-                    <div className="p-8 bg-blue-600/5 rounded-[3rem] border border-blue-500/10">
-                      <MessageSquare className="w-10 h-10 text-blue-400" />
-                    </div>
-                    <p className="text-[9px] font-bold uppercase tracking-[0.3em] text-blue-400">Secure messaging is being prepared</p>
+                  <div className="max-w-lg space-y-3">
+                    <p className="text-[10px] font-black uppercase tracking-[0.3em] text-blue-300">
+                      Secure messaging is gated
+                    </p>
+                    <p className="text-sm leading-6 text-slate-400">
+                      Direct member messages and message attachments are not active until private conversation storage,
+                      participant access checks, and moderation controls are enabled.
+                    </p>
                   </div>
-                )}
-                <div ref={chatEndRef} />
+                </div>
               </div>
 
-              <form onSubmit={handleSendMessage} className="p-4 md:p-8 border-t border-white/5 bg-black/40">
-                {selectedAttachment && (
-                  <div className="mb-3 p-2.5 bg-blue-600/10 border border-blue-500/20 rounded-xl text-[10px] text-blue-300 font-black uppercase tracking-widest flex items-center justify-between gap-2">
-                    <span className="min-w-0 break-words">Attached: {selectedAttachment.name}</span>
-                    <button type="button" onClick={() => setSelectedAttachment(null)} className="p-1 hover:bg-blue-500/20 rounded-md">
-                      <X className="w-3.5 h-3.5" />
-                    </button>
-                  </div>
-                )}
-                <div className="flex items-center gap-3">
-                  <button
-                    type="button"
-                    disabled
-                    onClick={() => attachmentInputRef.current?.click()}
-                    className="hidden sm:flex p-3 text-slate-500 transition-colors bg-white/5 rounded-xl disabled:opacity-40"
-                  >
-                    <Paperclip className="w-5 h-5" />
-                  </button>
-                  <input
-                    ref={attachmentInputRef}
-                    type="file"
-                    className="hidden"
-                    onChange={(e) => {
-                      const file = e.target.files?.[0] || null;
-                      setSelectedAttachment(file);
-                    }}
-                  />
-                  <input
-                    type="text"
-                    value={input}
-                    onChange={(e) => setInput(e.target.value)}
-                    placeholder="Messaging is being prepared"
-                    disabled
-                    className="min-w-0 flex-1 bg-white/5 border border-white/10 rounded-2xl px-5 py-3 md:py-4 text-xs text-white focus:outline-none focus:ring-2 focus:ring-blue-500/30 transition-all font-medium"
-                  />
-                  <button
-                    type="submit"
-                    disabled
-                    className="p-3 md:p-4 bg-blue-600 hover:bg-blue-500 disabled:bg-slate-800 disabled:text-slate-600 rounded-2xl text-white transition-all shadow-xl active:scale-95"
-                  >
-                    <Send className="w-4 h-4 md:w-5 md:h-5" />
-                  </button>
+              <div className="p-4 md:p-8 border-t border-white/5 bg-black/40">
+                <div className="rounded-2xl border border-amber-300/20 bg-amber-300/[0.04] p-4 text-xs leading-5 text-slate-300">
+                  Messaging controls are intentionally unavailable. Use profile views and provider request flows until
+                  private conversations are fully persisted and audited.
                 </div>
-              </form>
+              </div>
             </>
           ) : (
             <div className="flex-1 flex flex-col items-center justify-center p-8 md:p-16 text-center space-y-8 opacity-40">
@@ -547,7 +483,7 @@ const CommunityMembersContent: React.FC<CommunityMembersProps> = ({ onSignInProm
               <div className="space-y-4">
                 <h4 className="text-xl md:text-2xl font-black text-white uppercase tracking-tighter">Identity Interface</h4>
                 <p className="text-[9px] md:text-[10px] text-slate-500 font-bold uppercase tracking-[0.4em] max-w-xs mx-auto leading-relaxed">
-                  Select a member profile to send a message or open a full profile view.
+                  Select a member profile to view details. Direct messaging is unavailable until secure conversation storage is enabled.
                 </p>
               </div>
             </div>

@@ -48,6 +48,20 @@ const isAllowedProfileMediaMimeType = (mimeType: string): boolean => {
   return mimeType.startsWith('image/') || mimeType.startsWith('video/');
 };
 
+const isAllowedSocialUploadMimeType = (mimeType: string): boolean => {
+  return (
+    mimeType.startsWith('image/') ||
+    mimeType.startsWith('video/') ||
+    mimeType === 'text/plain' ||
+    mimeType === 'text/markdown' ||
+    mimeType === 'text/csv' ||
+    mimeType === 'application/pdf' ||
+    mimeType === 'application/rtf' ||
+    mimeType === 'application/msword' ||
+    mimeType === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
+  );
+};
+
 const getUploadAccessForCategory = (category: UploadCategory): UploadObjectAccess =>
   category === 'reflection' ? 'private' : 'public';
 
@@ -324,6 +338,14 @@ protectedRouter.post('/social', upload.single('file'), async (req: Request, res:
   const mReq = req as MulterRequest;
   if (!mReq.file) {
     res.status(400).json({ error: 'No file uploaded' });
+    return;
+  }
+  const mimeType = String(mReq.file.mimetype || '').trim().toLowerCase();
+  if (!isAllowedSocialUploadMimeType(mimeType)) {
+    res.status(400).json({
+      error:
+        'Unsupported social upload type. Allowed formats: image, video, plain text, markdown, CSV, PDF, RTF, DOC, and DOCX.',
+    });
     return;
   }
   await sendStoredUpload(req, res, 'social', mReq.file);

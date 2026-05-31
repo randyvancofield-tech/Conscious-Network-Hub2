@@ -897,6 +897,15 @@ describe('Core user persistence loop', () => {
     expect(alphaProfileAfterRelogin.body?.posts?.[0]?.id).toBe(postId);
     expect(alphaProfileAfterRelogin.body?.posts?.[0]?.media?.[0]?.objectKey).toBe(socialUploadObjectKey);
 
+    const deepLinkedPost = await requestJson({
+      method: 'GET',
+      path: `/api/social/posts/${postId}`,
+      token: alphaTokenAfterLogin,
+    });
+    expect(deepLinkedPost.status).toBe(200);
+    expect(deepLinkedPost.body?.post?.id).toBe(postId);
+    expect(deepLinkedPost.body?.post?.media?.[0]?.objectKey).toBe(socialUploadObjectKey);
+
     const betaBlocksAlpha = await requestJson({
       method: 'POST',
       path: `/api/user/privacy/block/${alphaId}`,

@@ -24,6 +24,10 @@ import emailService from '../services/emailService';
 import { buildPasswordResetEmail } from '../services/emailTemplates';
 import { createNotification } from '../services/notificationStore';
 import {
+  canViewProfileByPrivacy,
+  resolvePrivacyBlockState,
+} from '../services/privacyGuard';
+import {
   createRecoveryCodesForUser,
   getRecoveryCodeStatusForUser,
   verifyAndConsumeRecoveryCode,
@@ -40,6 +44,7 @@ import {
   USER_PROFILE_PATCH_FIELDS,
 } from '../services/userProfilePatch';
 import { normalizeTier } from '../tierPolicy';
+import { socialStore } from '../services/socialStore';
 import { validateJsonBody } from '../validation/jsonSchema';
 import {
   userCreateSchema,
@@ -1336,8 +1341,39 @@ protectedRouter.get('/reconcile/:id', async (req: Request, res: Response): Promi
  */
 protectedRouter.get('/directory', async (req: Request, res: Response): Promise<any> => {
   try {
+    const authUserId = getAuthenticatedUserId(req);
+    if (!authUserId) {
+      return res.status(401).json({ error: 'Authentication required' });
+    }
+    const viewerUser = await localStore.getUserById(authUserId);
+    if (!viewerUser) {
+      return res.status(401).json({ error: 'Viewer session is invalid' });
+    }
+
     const users = await localStore.listUsers(250);
-    const visibleUsers = users.filter((user) => !isAutomatedDirectoryProfile(user));
+    const viewerPrivacy = normalizePrivacySettings(viewerUser.privacySettings);
+    const followingIds = new Set(await socialStore.listFollowingIds(authUserId));
+    const visibleUsers = users.filter((user) => {
+      if (!user?.id || isAutomatedDirectoryProfile(user)) return false;
+      if (normalizeRole(user.role) === 'admin' || normalizeRole(user.role) === 'applicant') {
+        return user.id === authUserId;
+      }
+
+      const targetPrivacy = normalizePrivacySettings(user.privacySettings);
+      const blockState = resolvePrivacyBlockState(
+        authUserId,
+        viewerPrivacy,
+        user.id,
+        targetPrivacy
+      );
+      if (blockState.blockedEitherWay) return false;
+      return canViewProfileByPrivacy({
+        viewerUserId: authUserId,
+        targetUserId: user.id,
+        targetPrivacy,
+        isFollowing: followingIds.has(user.id),
+      });
+    });
 
     return res.json({
       success: true,

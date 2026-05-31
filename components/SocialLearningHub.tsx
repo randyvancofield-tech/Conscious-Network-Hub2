@@ -52,6 +52,8 @@ interface SelectedUpload {
 
 interface SocialLearningHubProps {
   user: UserProfile | null;
+  deepLinkNodeId?: string;
+  onSignInPrompt?: () => void;
 }
 
 const INITIAL_NODES: NodeContent[] = [];
@@ -126,7 +128,11 @@ const mapSocialPostToNode = (post: any): NodeContent => {
   };
 };
 
-const SocialLearningHubContent: React.FC<SocialLearningHubProps> = ({ user }) => {
+const SocialLearningHubContent: React.FC<SocialLearningHubProps> = ({
+  user,
+  deepLinkNodeId,
+  onSignInPrompt,
+}) => {
   const [nodes, setNodes] = useState<NodeContent[]>(INITIAL_NODES);
   const [newPost, setNewPost] = useState('');
   const [isInjecting, setIsInjecting] = useState(false);
@@ -134,9 +140,10 @@ const SocialLearningHubContent: React.FC<SocialLearningHubProps> = ({ user }) =>
   const [selectedFile, setSelectedFile] = useState<SelectedUpload | null>(null);
   const [injectError, setInjectError] = useState('');
   const [postActionError, setPostActionError] = useState('');
+  const [deepLinkStatus, setDeepLinkStatus] = useState('');
+  const [highlightedNodeId, setHighlightedNodeId] = useState('');
   const [tilt, setTilt] = useState({ x: 0, y: 0 });
   const [expandedComments, setExpandedComments] = useState<string[]>([]);
-  const [commentInput, setCommentInput] = useState<{[key: string]: string}>({});
   const [showFilters, setShowFilters] = useState(false);
   const [contentFilter, setContentFilter] = useState<'all' | 'text' | 'image' | 'video' | 'file'>('all');
   const [showMineOnly, setShowMineOnly] = useState(false);
@@ -154,6 +161,10 @@ const SocialLearningHubContent: React.FC<SocialLearningHubProps> = ({ user }) =>
 
   const detectedUrl = useMemo(() => getFirstUrl(newPost), [newPost]);
   const detectedYoutubeId = useMemo(() => detectedUrl ? getYoutubeId(detectedUrl) : null, [detectedUrl]);
+  const normalizedDeepLinkNodeId = useMemo(
+    () => String(deepLinkNodeId || '').trim(),
+    [deepLinkNodeId]
+  );
 
   const loadFeed = useCallback(async () => {
     if (!user) {
@@ -178,6 +189,50 @@ const SocialLearningHubContent: React.FC<SocialLearningHubProps> = ({ user }) =>
   useEffect(() => {
     void loadFeed();
   }, [loadFeed]);
+
+  useEffect(() => {
+    if (!normalizedDeepLinkNodeId) {
+      setDeepLinkStatus('');
+      setHighlightedNodeId('');
+      return;
+    }
+    if (!user) {
+      setDeepLinkStatus('Sign in to view this shared social post.');
+      return;
+    }
+
+    let isMounted = true;
+    setDeepLinkStatus('Opening shared social post...');
+    void (async () => {
+      try {
+        const data = await api<any>(`/social/posts/${encodeURIComponent(normalizedDeepLinkNodeId)}`, {
+          cache: 'no-store',
+        });
+        const mapped = mapSocialPostToNode(data.post);
+        if (!isMounted) return;
+        setNodes((prev) => [mapped, ...prev.filter((entry) => entry.id !== mapped.id)]);
+        setHighlightedNodeId(mapped.id);
+        setDeepLinkStatus('Shared social post loaded.');
+        window.setTimeout(() => {
+          document.getElementById(`social-node-${mapped.id}`)?.scrollIntoView({
+            behavior: 'smooth',
+            block: 'center',
+          });
+        }, 100);
+      } catch (error) {
+        if (!isMounted) return;
+        setDeepLinkStatus(
+          error instanceof Error
+            ? error.message
+            : 'This shared social post is unavailable or private.'
+        );
+      }
+    })();
+
+    return () => {
+      isMounted = false;
+    };
+  }, [normalizedDeepLinkNodeId, user?.id]);
 
   const visibleNodes = useMemo(() => {
     return nodes.filter((node) => {
@@ -338,12 +393,6 @@ const SocialLearningHubContent: React.FC<SocialLearningHubProps> = ({ user }) =>
     );
   };
 
-  const handleAddComment = (nodeId: string) => {
-    const text = commentInput[nodeId];
-    if (!text?.trim()) return;
-    setPostActionError('Comments and linkages are being prepared and are not yet available.');
-  };
-
   const openProfileView = async (authorId: string) => {
     if (!authorId || !user) return;
     const requestId = profileViewRequestRef.current + 1;
@@ -450,7 +499,7 @@ const SocialLearningHubContent: React.FC<SocialLearningHubProps> = ({ user }) =>
   const resonateGlobally = async (node: NodeContent) => {
     const shareUrl =
       typeof window !== 'undefined'
-        ? `${window.location.origin}${window.location.pathname}?node=${encodeURIComponent(node.id)}`
+        ? `${window.location.origin}/social?node=${encodeURIComponent(node.id)}`
         : node.id;
     try {
       if (navigator.share) {
@@ -493,7 +542,7 @@ const SocialLearningHubContent: React.FC<SocialLearningHubProps> = ({ user }) =>
           <div className="flex items-center gap-4">
             <div className="hidden sm:flex items-center gap-2 px-4 py-2 bg-white/5 border border-white/10 rounded-xl text-[10px] font-black uppercase tracking-widest text-slate-500">
               <Activity className="w-4 h-4 text-blue-400" />
-              <span>Entropy: 0.042 Stable</span>
+              <span>Member Feed Protected</span>
             </div>
             <button
               onClick={() => setShowFilters((prev) => !prev)}
@@ -555,6 +604,21 @@ const SocialLearningHubContent: React.FC<SocialLearningHubProps> = ({ user }) =>
             onClose={closeProfileView}
             presentation="inline"
           />
+        </div>
+      )}
+
+      {deepLinkStatus && (
+        <div className="rounded-2xl border border-blue-300/20 bg-blue-500/10 px-4 py-3 text-xs font-black uppercase tracking-widest text-blue-100">
+          {deepLinkStatus}
+          {!user && onSignInPrompt && (
+            <button
+              type="button"
+              onClick={onSignInPrompt}
+              className="ml-0 mt-3 inline-flex rounded-xl bg-blue-600 px-4 py-2 text-[10px] text-white transition hover:bg-blue-500 sm:ml-3 sm:mt-0"
+            >
+              Sign In
+            </button>
+          )}
         </div>
       )}
 
@@ -699,6 +763,16 @@ const SocialLearningHubContent: React.FC<SocialLearningHubProps> = ({ user }) =>
                 )}
               </button>
 
+              {!user && onSignInPrompt && (
+                <button
+                  type="button"
+                  onClick={onSignInPrompt}
+                  className="w-full rounded-2xl border border-blue-400/30 bg-blue-500/10 p-4 text-[10px] font-black uppercase tracking-widest text-blue-100 transition hover:bg-blue-500/20"
+                >
+                  Sign In To Publish And View Feed
+                </button>
+              )}
+
               {injectError && (
                 <div className="rounded-xl border border-red-500/40 bg-red-500/10 px-4 py-3 text-[10px] font-black uppercase tracking-widest text-red-200">
                   {injectError}
@@ -770,10 +844,23 @@ const SocialLearningHubContent: React.FC<SocialLearningHubProps> = ({ user }) =>
             )}
             {visibleNodes.length === 0 && (
               <div className="xl:col-span-2 glass-panel p-6 sm:p-8 rounded-[2rem] border-white/10 text-center">
-                <h4 className="text-lg font-black text-white uppercase tracking-tight">No social posts yet</h4>
+                <h4 className="text-lg font-black text-white uppercase tracking-tight">
+                  {user ? 'No social posts yet' : 'Social feed requires sign-in'}
+                </h4>
                 <p className="text-sm text-slate-400 mt-2">
-                  Real posts created by signed-in members will appear here.
+                  {user
+                    ? 'Real posts created by signed-in members will appear here.'
+                    : 'Guest posting is disabled for launch integrity. Sign in to view and publish member posts.'}
                 </p>
+                {!user && onSignInPrompt && (
+                  <button
+                    type="button"
+                    onClick={onSignInPrompt}
+                    className="mt-5 rounded-xl bg-blue-600 px-5 py-3 text-[10px] font-black uppercase tracking-widest text-white transition hover:bg-blue-500"
+                  >
+                    Sign In Or Create Profile
+                  </button>
+                )}
               </div>
             )}
             {visibleNodes.map((node, i) => {
@@ -783,8 +870,11 @@ const SocialLearningHubContent: React.FC<SocialLearningHubProps> = ({ user }) =>
 
               return (
                 <div 
+                  id={`social-node-${node.id}`}
                   key={node.id} 
-                  className="glass-panel rounded-[2rem] sm:rounded-[2.5rem] 2xl:rounded-[3.5rem] overflow-hidden border-white/5 lg:hover:border-blue-500/20 transition-all duration-700 lg:hover:-translate-y-2 shadow-[0_40px_80px_-20px_rgba(0,0,0,0.6)] group relative bg-black/40 backdrop-blur-3xl"
+                  className={`glass-panel rounded-[2rem] sm:rounded-[2.5rem] 2xl:rounded-[3.5rem] overflow-hidden lg:hover:border-blue-500/20 transition-all duration-700 lg:hover:-translate-y-2 shadow-[0_40px_80px_-20px_rgba(0,0,0,0.6)] group relative bg-black/40 backdrop-blur-3xl ${
+                    highlightedNodeId === node.id ? 'border-blue-300/60 ring-2 ring-blue-400/40' : 'border-white/5'
+                  }`}
                   style={{ animationDelay: `${i * 100}ms` }}
                 >
                   <div className="p-6 md:p-8 2xl:p-10 flex flex-col gap-8 sm:gap-10">
@@ -807,7 +897,7 @@ const SocialLearningHubContent: React.FC<SocialLearningHubProps> = ({ user }) =>
                         </button>
                         <div className="cnh-status-badge flex items-center gap-2 px-3 py-1.5 sm:px-4 bg-teal-400/5 border border-teal-400/20 rounded-full w-fit">
                           <ShieldCheck className="w-3.5 h-3.5 text-teal-400" />
-                          <span className="text-[8px] sm:text-[9px] font-black text-teal-400 uppercase tracking-widest">NODE VERIFIED</span>
+                          <span className="text-[8px] sm:text-[9px] font-black text-teal-400 uppercase tracking-widest">Signed Member Post</span>
                         </div>
                       </div>
 
@@ -938,7 +1028,7 @@ const SocialLearningHubContent: React.FC<SocialLearningHubProps> = ({ user }) =>
                             className={`flex items-center gap-2 sm:gap-3 transition-all group/btn ${isCommentsExpanded ? 'text-blue-400' : 'text-slate-500 hover:text-blue-400'}`}
                           >
                             <MessageSquare className="w-5 h-5 sm:w-6 sm:h-6 lg:group-hover/btn:scale-125 transition-transform" />
-                            <span className="text-[9px] sm:text-[11px] font-black uppercase tracking-widest">{node.comments.length} Linkages</span>
+                            <span className="text-[9px] sm:text-[11px] font-black uppercase tracking-widest">Comments Paused</span>
                           </button>
                         </div>
                         <button
@@ -949,46 +1039,12 @@ const SocialLearningHubContent: React.FC<SocialLearningHubProps> = ({ user }) =>
                         </button>
                       </div>
 
-                      {/* Comment Section (Linkages) */}
+                      {/* Comment Section */}
                       {isCommentsExpanded && (
                         <div className="mt-6 sm:mt-8 space-y-4 sm:space-y-6 pt-6 sm:pt-8 border-t border-white/5 animate-in slide-in-from-top-4 duration-500">
-                          <div className="space-y-4">
-                            {node.comments.map((comment) => (
-                              <div key={comment.id} className="flex gap-3 sm:gap-4 p-4 sm:p-5 bg-white/[0.02] border border-white/5 rounded-[1.5rem] sm:rounded-[1.8rem] animate-in fade-in">
-                                {renderAvatarMedia(
-                                  normalizeMediaAsset({ url: comment.avatar }),
-                                  comment.author,
-                                  'w-8 h-8 sm:w-10 sm:h-10 rounded-xl object-cover ring-2 ring-white/5 shrink-0'
-                                )}
-                                <div className="space-y-1 min-w-0">
-                                  <div className="flex items-center gap-3">
-                                    <h5 className="cnh-ellipsis text-[10px] sm:text-[11px] font-black text-white uppercase tracking-tighter" title={comment.author}>{comment.author}</h5>
-                                    <span className="text-[8px] sm:text-[9px] text-slate-600 uppercase font-black tracking-widest shrink-0">{comment.timestamp}</span>
-                                  </div>
-                                  <p className="cnh-user-content text-[10px] sm:text-xs text-slate-400 leading-relaxed">{comment.text}</p>
-                                </div>
-                              </div>
-                            ))}
-                          </div>
-
-                          {/* Add Comment Input */}
-                          <div className="flex items-center gap-2 sm:gap-3 pt-4">
-                            <input 
-                              type="text" 
-                              value={commentInput[node.id] || ''}
-                              onChange={(e) => setCommentInput(prev => ({ ...prev, [node.id]: e.target.value }))}
-                              placeholder="Comments are being prepared"
-                              disabled
-                              className="flex-1 bg-white/5 border border-white/10 rounded-xl sm:rounded-2xl px-4 sm:px-5 py-2.5 sm:py-3 text-[10px] sm:text-xs text-white focus:outline-none focus:ring-2 focus:ring-blue-500/30 transition-all"
-                              onKeyDown={(e) => e.key === 'Enter' && handleAddComment(node.id)}
-                            />
-                            <button 
-                              onClick={() => handleAddComment(node.id)}
-                              disabled
-                              className="p-2.5 sm:p-3 bg-blue-600 hover:bg-blue-500 disabled:bg-slate-800 disabled:text-slate-600 rounded-xl text-white transition-all active:scale-95"
-                            >
-                              <Send className="w-4 h-4" />
-                            </button>
+                          <div className="rounded-2xl border border-amber-300/20 bg-amber-300/[0.04] p-5 text-sm leading-6 text-slate-300">
+                            Comment storage is not active in the launch path yet. This post can be shared with a protected
+                            deep link, but replies will stay unavailable until a moderated comment backend is enabled.
                           </div>
                         </div>
                       )}
