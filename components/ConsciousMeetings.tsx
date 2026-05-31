@@ -2615,6 +2615,7 @@ const ConsciousMeetings: React.FC<ConsciousMeetingsProps> = ({ user }) => {
                         alt="Conscious Meetings branded WebRTC room animation"
                         className="h-full w-full"
                         imageClassName="h-full w-full object-cover"
+                        eager
                       />
                       <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-transparent to-black/20" />
                       <div className="absolute bottom-4 left-4 flex items-center gap-3 rounded-full border border-white/10 bg-black/55 px-4 py-2 backdrop-blur-md">
@@ -3095,6 +3096,7 @@ const ConsciousMeetings: React.FC<ConsciousMeetingsProps> = ({ user }) => {
                   alt="Conscious Meetings branded WebRTC room animation"
                   className="h-44 w-full sm:h-52"
                   imageClassName="h-full w-full object-cover"
+                  eager
                 />
                 <div className="absolute inset-0 bg-gradient-to-t from-black/75 via-transparent to-black/20" />
                 <div className="absolute bottom-4 left-4 flex items-center gap-3 rounded-full border border-white/10 bg-black/55 px-4 py-2 backdrop-blur-md">

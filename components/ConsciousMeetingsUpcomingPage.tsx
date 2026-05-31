@@ -198,6 +198,7 @@ const ConsciousMeetingsUpcomingPage: React.FC<ConsciousMeetingsUpcomingPageProps
               alt="Conscious Meetings branded WebRTC room animation"
               className="h-full min-h-56 w-full lg:min-h-64"
               imageClassName="h-full w-full object-cover"
+              eager
             />
             <div className="absolute inset-0 bg-gradient-to-r from-black/45 via-transparent to-black/20" />
           </div>

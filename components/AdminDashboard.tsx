@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { EyeOff, KeyRound, LockKeyhole, MessageSquare, RefreshCw, ShieldCheck, Trash2, UnlockKeyhole, Users } from 'lucide-react';
+import { BookOpen, EyeOff, KeyRound, LockKeyhole, MessageSquare, RefreshCw, ShieldCheck, Trash2, UnlockKeyhole, UserPlus, Users } from 'lucide-react';
 import { api, ApiError } from '../services/apiClient';
 import {
   getAdminElevationToken,
@@ -32,9 +32,12 @@ interface AdminDashboardPayload {
     roleCounts: Record<AdminRole, number>;
     activeMemberships: number;
     providerApproved: number;
+    coursesTotal?: number;
+    courseEnrollmentsTotal?: number;
   };
   recentUsers: AdminUserSummary[];
   recentSocialPosts?: AdminSocialPostSummary[];
+  courseGovernance?: AdminCourseGovernance;
 }
 
 interface AdminSocialPostSummary {
@@ -48,6 +51,47 @@ interface AdminSocialPostSummary {
   likeCount: number;
   createdAt: string;
   updatedAt: string;
+}
+
+interface AdminCourseEnrollmentSummary {
+  userId: string;
+  userName: string | null;
+  userEmail: string | null;
+  userRole: AdminRole;
+  userTier: string | null;
+  status: string;
+  progressScore: number;
+}
+
+interface AdminCourseSummary {
+  id: string;
+  title: string;
+  provider: string;
+  tier: string;
+  requiredMembershipTier: string;
+  status: string;
+  ownerId: string | null;
+  ownerName: string | null;
+  ownerEmail: string | null;
+  enrolledCount: number;
+  actualEnrollmentCount: number;
+  enrollments: AdminCourseEnrollmentSummary[];
+}
+
+interface AdminCourseAssignableUser {
+  id: string;
+  email: string;
+  name: string | null;
+  role: AdminRole;
+  tier: string | null;
+  membershipStatus: string | null;
+  providerApproved: boolean;
+}
+
+interface AdminCourseGovernance {
+  courses: AdminCourseSummary[];
+  providers: AdminCourseAssignableUser[];
+  assignableUsers: AdminCourseAssignableUser[];
 }
 
 const adminHeaders = (): HeadersInit => {
@@ -74,6 +118,9 @@ const AdminDashboard: React.FC = () => {
   const [deleteConfirmUserId, setDeleteConfirmUserId] = useState<string | null>(null);
   const [contentActionPostId, setContentActionPostId] = useState<string | null>(null);
   const [deleteConfirmPostId, setDeleteConfirmPostId] = useState<string | null>(null);
+  const [courseActionId, setCourseActionId] = useState<string | null>(null);
+  const [courseOwnerDrafts, setCourseOwnerDrafts] = useState<Record<string, string>>({});
+  const [courseEnrollmentDrafts, setCourseEnrollmentDrafts] = useState<Record<string, string>>({});
 
   const isElevated = useMemo(() => Boolean(getAdminElevationToken()), [dashboard, error]);
   const currentAdminId = getCachedAuthUser()?.id || null;
@@ -292,6 +339,62 @@ const AdminDashboard: React.FC = () => {
     }
   };
 
+  const updateCourseOwner = async (courseId: string) => {
+    setCourseActionId(courseId);
+    setError('');
+    try {
+      const ownerId = courseOwnerDrafts[courseId] || null;
+      await api(`/admin/courses/${encodeURIComponent(courseId)}/owner`, {
+        method: 'PATCH',
+        headers: adminHeaders(),
+        body: { ownerId },
+      });
+      await loadDashboard();
+    } catch (error) {
+      setError(error instanceof Error ? error.message : 'Unable to update course owner.');
+    } finally {
+      setCourseActionId(null);
+    }
+  };
+
+  const assignCourseEnrollment = async (courseId: string) => {
+    const userId = courseEnrollmentDrafts[courseId] || '';
+    if (!userId) {
+      setError('Choose a user before assigning a course.');
+      return;
+    }
+    setCourseActionId(courseId);
+    setError('');
+    try {
+      await api(`/admin/courses/${encodeURIComponent(courseId)}/enrollments`, {
+        method: 'POST',
+        headers: adminHeaders(),
+        body: { userId },
+      });
+      await loadDashboard();
+    } catch (error) {
+      setError(error instanceof Error ? error.message : 'Unable to assign course.');
+    } finally {
+      setCourseActionId(null);
+    }
+  };
+
+  const removeCourseEnrollment = async (courseId: string, userId: string) => {
+    setCourseActionId(courseId);
+    setError('');
+    try {
+      await api(`/admin/courses/${encodeURIComponent(courseId)}/enrollments/${encodeURIComponent(userId)}`, {
+        method: 'DELETE',
+        headers: adminHeaders(),
+      });
+      await loadDashboard();
+    } catch (error) {
+      setError(error instanceof Error ? error.message : 'Unable to remove course enrollment.');
+    } finally {
+      setCourseActionId(null);
+    }
+  };
+
   if (!isElevated || !dashboard) {
     return (
       <PageShell>
@@ -366,7 +469,7 @@ const AdminDashboard: React.FC = () => {
           ['Members', dashboard.summary.roleCounts.user],
           ['Applicants', dashboard.summary.roleCounts.applicant],
           ['Providers', dashboard.summary.roleCounts.provider],
-          ['Admins', dashboard.summary.roleCounts.admin],
+          ['Courses', dashboard.summary.coursesTotal || 0],
         ].map(([label, value]) => (
           <SurfacePanel key={label} className="space-y-2">
             <p className="text-xs font-black uppercase text-slate-500">{label}</p>
@@ -374,6 +477,165 @@ const AdminDashboard: React.FC = () => {
           </SurfacePanel>
         ))}
       </div>
+
+      <SurfacePanel className="overflow-hidden">
+        <div className="mb-5 flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+          <div className="flex items-center gap-3">
+            <BookOpen className="h-5 w-5 text-blue-300" />
+            <div>
+              <h2 className="text-sm font-black uppercase text-white">Course Governance</h2>
+              <p className="mt-1 text-xs text-slate-500">
+                View enrolled users, provider/course leaders, and assign or reassign courses.
+              </p>
+            </div>
+          </div>
+          <span className="rounded-full border border-white/10 bg-white/5 px-3 py-1 text-[10px] font-black uppercase tracking-widest text-slate-300">
+            {dashboard.summary.courseEnrollmentsTotal || 0} enrollments
+          </span>
+        </div>
+        {!dashboard.courseGovernance || dashboard.courseGovernance.courses.length === 0 ? (
+          <p className="text-sm text-slate-400">No course records are currently present.</p>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="w-full min-w-[1280px] text-left text-sm">
+              <thead className="text-xs uppercase text-slate-500">
+                <tr>
+                  <th className="py-3 pr-4">Course</th>
+                  <th className="py-3 pr-4">Leader</th>
+                  <th className="py-3 pr-4">Visibility</th>
+                  <th className="py-3 pr-4">Enrolled Users</th>
+                  <th className="py-3 pr-4">Reassign Leader</th>
+                  <th className="py-3 pr-4">Assign User</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-white/10">
+                {dashboard.courseGovernance.courses.map((course) => {
+                  const busy = courseActionId === course.id;
+                  const ownerDraft = courseOwnerDrafts[course.id] ?? course.ownerId ?? '';
+                  const userDraft = courseEnrollmentDrafts[course.id] ?? '';
+                  return (
+                    <tr key={course.id}>
+                      <td className="py-4 pr-4">
+                        <p className="font-bold text-white">{course.title}</p>
+                        <p className="mt-1 text-xs text-slate-500">
+                          {course.tier} / requires {course.requiredMembershipTier}
+                        </p>
+                      </td>
+                      <td className="py-4 pr-4">
+                        <p className="font-bold text-slate-200">{course.ownerName || course.provider}</p>
+                        <p className="break-words text-xs text-slate-500">{course.ownerEmail || 'Admin curriculum'}</p>
+                      </td>
+                      <td className="py-4 pr-4">
+                        <span
+                          className={`inline-flex rounded-full border px-3 py-1 text-[10px] font-black uppercase tracking-widest ${
+                            course.status === 'published'
+                              ? 'border-emerald-300/25 bg-emerald-300/10 text-emerald-100'
+                              : 'border-amber-300/25 bg-amber-300/10 text-amber-100'
+                          }`}
+                        >
+                          {course.status}
+                        </span>
+                      </td>
+                      <td className="py-4 pr-4">
+                        <div className="max-h-44 min-w-[280px] space-y-2 overflow-y-auto pr-2 custom-scrollbar">
+                          {course.enrollments.length === 0 ? (
+                            <p className="text-xs text-slate-500">No enrolled users.</p>
+                          ) : (
+                            course.enrollments.map((enrollment) => (
+                              <div key={enrollment.userId} className="rounded-xl border border-white/10 bg-white/5 p-3">
+                                <div className="flex items-start justify-between gap-3">
+                                  <div>
+                                    <p className="font-bold text-white">{enrollment.userName || enrollment.userEmail}</p>
+                                    <p className="break-words text-xs text-slate-500">{enrollment.userEmail || enrollment.userId}</p>
+                                    <p className="mt-1 text-[10px] uppercase tracking-widest text-slate-500">
+                                      {enrollment.userTier || 'No tier'} / {enrollment.progressScore}% / {enrollment.status}
+                                    </p>
+                                  </div>
+                                  <button
+                                    type="button"
+                                    disabled={busy || loading}
+                                    onClick={() => void removeCourseEnrollment(course.id, enrollment.userId)}
+                                    className="rounded-lg border border-white/10 bg-white/5 px-2 py-1 text-[10px] font-black uppercase text-slate-300 hover:bg-white/10 disabled:opacity-50"
+                                  >
+                                    Remove
+                                  </button>
+                                </div>
+                              </div>
+                            ))
+                          )}
+                        </div>
+                      </td>
+                      <td className="py-4 pr-4">
+                        <div className="flex min-w-[260px] flex-col gap-2">
+                          <select
+                            value={ownerDraft}
+                            disabled={busy || loading}
+                            onChange={(event) =>
+                              setCourseOwnerDrafts((current) => ({ ...current, [course.id]: event.target.value }))
+                            }
+                            className="rounded-lg border border-white/10 bg-slate-950 px-3 py-2 text-xs text-white"
+                          >
+                            <option value="">Admin Curriculum</option>
+                            {dashboard.courseGovernance?.providers.map((provider) => (
+                              <option key={provider.id} value={provider.id}>
+                                {provider.name || provider.email} ({provider.role})
+                              </option>
+                            ))}
+                          </select>
+                          <ActionButton
+                            type="button"
+                            variant="secondary"
+                            disabled={busy || loading}
+                            onClick={() => void updateCourseOwner(course.id)}
+                            icon={<ShieldCheck className="h-4 w-4" />}
+                            className="min-h-10 px-3 py-2 text-[10px]"
+                          >
+                            Save Leader
+                          </ActionButton>
+                        </div>
+                      </td>
+                      <td className="py-4 pr-4">
+                        <div className="flex min-w-[280px] flex-col gap-2">
+                          <select
+                            value={userDraft}
+                            disabled={busy || loading || course.status !== 'published'}
+                            onChange={(event) =>
+                              setCourseEnrollmentDrafts((current) => ({ ...current, [course.id]: event.target.value }))
+                            }
+                            className="rounded-lg border border-white/10 bg-slate-950 px-3 py-2 text-xs text-white"
+                          >
+                            <option value="">Choose user</option>
+                            {dashboard.courseGovernance?.assignableUsers.map((targetUser) => (
+                              <option key={targetUser.id} value={targetUser.id}>
+                                {targetUser.name || targetUser.email} / {targetUser.tier || 'no tier'}
+                              </option>
+                            ))}
+                          </select>
+                          <ActionButton
+                            type="button"
+                            variant="secondary"
+                            disabled={busy || loading || course.status !== 'published'}
+                            onClick={() => void assignCourseEnrollment(course.id)}
+                            icon={<UserPlus className="h-4 w-4" />}
+                            className="min-h-10 px-3 py-2 text-[10px]"
+                          >
+                            Assign Course
+                          </ActionButton>
+                          {course.status !== 'published' && (
+                            <p className="text-[10px] leading-4 text-amber-200">
+                              Draft courses cannot be assigned to members.
+                            </p>
+                          )}
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </SurfacePanel>
 
       <SurfacePanel className="overflow-hidden">
         <div className="mb-5 flex items-center gap-3">

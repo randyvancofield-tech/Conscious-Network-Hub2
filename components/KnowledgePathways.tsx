@@ -88,9 +88,16 @@ const KnowledgePathways: React.FC<KnowledgePathwaysProps> = ({
       setIsLoading(true);
       setLoadError('');
       try {
-        const data = await api<any>('/courses', { auth: false, signal: controller.signal });
+        const endpoint = courseId ? `/courses/${encodeURIComponent(courseId)}` : '/courses';
+        const data = await api<any>(endpoint, { auth: false, signal: controller.signal });
         if (isMounted) {
-          const liveCourses = Array.isArray(data.courses) ? data.courses.map(normalizeCourse) : [];
+          const liveCourses = courseId
+            ? data.course
+              ? [normalizeCourse(data.course)]
+              : []
+            : Array.isArray(data.courses)
+              ? data.courses.map(normalizeCourse)
+              : [];
           setPathways(liveCourses);
         }
       } catch (error) {
@@ -118,7 +125,7 @@ const KnowledgePathways: React.FC<KnowledgePathwaysProps> = ({
       controller.abort();
       window.clearTimeout(timeoutId);
     };
-  }, []);
+  }, [courseId]);
 
   if (courseId && isLoading) {
     return (

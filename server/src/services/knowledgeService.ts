@@ -1,6 +1,7 @@
 import fs from 'fs/promises';
 import path from 'path';
 import trustedSources from '../data/trusted_sources.json';
+import { getApprovedPlatformKnowledgeDocuments } from './platformKnowledge';
 
 interface HCNKnowledge {
   founder: { name: string; linkedinUrl: string; role: string };
@@ -39,8 +40,7 @@ export interface KnowledgeContextResult {
 }
 
 const ROOT_DIR = path.resolve(__dirname, '../../..');
-const HCN_KNOWLEDGE_URL =
-  process.env.HCN_KNOWLEDGE_URL || 'https://conscious-network.org/hcn-knowledge.json';
+const HCN_KNOWLEDGE_URL = process.env.HCN_KNOWLEDGE_URL || '';
 const KNOWLEDGE_TTL_MS = 10 * 60 * 1000;
 const MAX_CHUNK_CHARS = 900;
 const MAX_CONTEXT_CHARS = 4000;
@@ -145,6 +145,19 @@ const readFileIfExists = async (relativePath: string): Promise<string | null> =>
 };
 
 const fetchWithTimeout = async (url: string, timeoutMs: number): Promise<string | null> => {
+  try {
+    const parsed = new URL(url);
+    const approvedHosts = new Set([
+      'higherconscious.network',
+      'www.higherconscious.network',
+      'conscious-network.org',
+      'www.conscious-network.org',
+    ]);
+    if (!approvedHosts.has(parsed.hostname.toLowerCase())) return null;
+  } catch {
+    return null;
+  }
+
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), timeoutMs);
 
@@ -160,7 +173,7 @@ const fetchWithTimeout = async (url: string, timeoutMs: number): Promise<string 
 };
 
 const loadHCNKnowledge = async (): Promise<HCNKnowledge | null> => {
-  const remote = await fetchWithTimeout(HCN_KNOWLEDGE_URL, 4000);
+  const remote = HCN_KNOWLEDGE_URL ? await fetchWithTimeout(HCN_KNOWLEDGE_URL, 4000) : null;
   if (remote) {
     try {
       return JSON.parse(remote) as HCNKnowledge;
@@ -258,6 +271,15 @@ const loadTrustedDocs = (): KnowledgeDocument[] => {
   }));
 };
 
+const loadApprovedPlatformDocs = (): KnowledgeDocument[] =>
+  getApprovedPlatformKnowledgeDocuments().map((source) => ({
+    id: `platform:${source.id}`,
+    title: source.title,
+    content: source.content,
+    url: source.url,
+    sourceType: source.sourceType,
+  }));
+
 const loadKnowledgeDocuments = async (): Promise<KnowledgeDocument[]> => {
   const now = Date.now();
   if (cachedDocs.length > 0 && now - cachedAt < KNOWLEDGE_TTL_MS) {
@@ -281,6 +303,7 @@ const loadKnowledgeDocuments = async (): Promise<KnowledgeDocument[]> => {
   }
 
   docs.push(...loadTrustedDocs());
+  docs.push(...loadApprovedPlatformDocs());
   docs.push(...(await loadInternalDocs()));
 
   cachedDocs = docs;

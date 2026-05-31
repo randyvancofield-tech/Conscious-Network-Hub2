@@ -35,10 +35,12 @@ import {
   revokeProviderAccessForUser,
 } from '../services/providerAccess';
 import { getPrisma } from '../services/prismaClient';
+import { normalizeCourseSyllabusMetadata } from '../services/courseMetadata';
 import { getProviderSessionById, revokeProviderSessionsByDid } from '../services/providerSessionStore';
 import { type SocialPostRecord, socialStore } from '../services/socialStore';
 import { deleteUploadObjectByKey } from '../services/uploadBlobStore';
 import { revokeUserSessionsByUserId } from '../services/userSessionStore';
+import { hasTierAccess, TIER_VALUES, type TierValue } from '../tierPolicy';
 
 const router = Router();
 const PROVIDER_APPLICANT_CALENDLY_URL =
@@ -167,6 +169,174 @@ const toAdminSocialPostSummary = (
   createdAt: post.createdAt,
   updatedAt: post.updatedAt,
 });
+
+const courseTierToMembershipTier = (courseTier: unknown): TierValue => {
+  const normalized = String(courseTier || '').trim().toLowerCase();
+  if (normalized === 'elite' || normalized === 'accelerated tier') return TIER_VALUES.ACCELERATED;
+  if (normalized === 'professional' || normalized === 'guided tier') return TIER_VALUES.GUIDED;
+  return TIER_VALUES.FREE;
+};
+
+const isActiveMembershipStatus = (value: unknown): boolean => {
+  const normalized = String(value || '').trim().toLowerCase();
+  return normalized === 'active' || normalized === 'trialing';
+};
+
+const toAdminCourseEnrollmentSummary = (entry: any) => ({
+  userId: entry.userId,
+  userName: entry.user?.name || null,
+  userEmail: entry.user?.email || null,
+  userRole: normalizeRole(entry.user?.role) || 'user',
+  userTier: entry.user?.tier || null,
+  userMembershipStatus: entry.user?.membershipStatus || null,
+  status: entry.status,
+  progressScore: Number(entry.progressScore || 0),
+  enrolledAt: entry.enrolledAt,
+  updatedAt: entry.updatedAt,
+});
+
+const toAdminCourseSummary = (course: any) => {
+  const metadata = normalizeCourseSyllabusMetadata(course.syllabus);
+  const enrollments = Array.isArray(course.enrollments) ? course.enrollments : [];
+  return {
+    id: course.id,
+    title: course.title,
+    provider: course.provider,
+    description: course.description,
+    tier: course.tier,
+    requiredMembershipTier: courseTierToMembershipTier(course.tier),
+    status: course.status,
+    ownerId: course.ownerId || null,
+    ownerType: course.ownerType || null,
+    ownerName: course.owner?.name || null,
+    ownerEmail: course.owner?.email || null,
+    ownerRole: normalizeRole(course.owner?.role) || null,
+    enrolledCount: Number(course.enrolledCount || 0),
+    actualEnrollmentCount: enrollments.length,
+    category: metadata.category,
+    estimatedDuration: metadata.estimatedDuration,
+    contentSectionCount: metadata.contentSections.length,
+    enrollments: enrollments.map(toAdminCourseEnrollmentSummary),
+    createdAt: course.createdAt,
+    updatedAt: course.updatedAt,
+  };
+};
+
+const toCourseAssignableUser = (user: any) => ({
+  id: user.id,
+  email: user.email,
+  name: user.name || null,
+  role: normalizeRole(user.role) || 'user',
+  tier: user.tier || null,
+  membershipStatus: user.membershipStatus || null,
+  subscriptionStatus: user.subscriptionStatus || null,
+  providerApproved: user.providerApproved === true,
+});
+
+const syncAdminCourseEnrollmentCount = async (courseId: string): Promise<number> => {
+  const db = getPrisma() as any;
+  const enrolledCount = await db.userCourse.count({
+    where: {
+      courseId,
+      status: { in: ['enrolled', 'completed'] },
+    },
+  });
+  await db.course.update({
+    where: { id: courseId },
+    data: { enrolledCount },
+  });
+  return enrolledCount;
+};
+
+const verifyAdminAssignableCourseAccess = async (
+  user: any,
+  course: any
+): Promise<{ allowed: true } | { allowed: false; error: string }> => {
+  if (!user) return { allowed: false, error: 'Target user not found' };
+  if (!course || course.status !== 'published') {
+    return { allowed: false, error: 'Only published courses can be assigned to users' };
+  }
+  if (normalizeRole(user.role) === 'admin') return { allowed: true };
+
+  const db = getPrisma() as any;
+  const membership = await db.membership.findUnique({ where: { userId: user.id } });
+  const hasActiveMembership =
+    isActiveMembershipStatus(membership?.status) || isActiveMembershipStatus(user.membershipStatus);
+  if (!hasActiveMembership) {
+    return { allowed: false, error: 'Target user needs an active membership before course assignment' };
+  }
+
+  const requiredTier = courseTierToMembershipTier(course.tier);
+  const effectiveTier = membership?.tier || user.tier || null;
+  if (!hasTierAccess(effectiveTier, requiredTier)) {
+    return { allowed: false, error: `Target user tier does not meet ${requiredTier}` };
+  }
+
+  return { allowed: true };
+};
+
+const buildAdminCourseGovernance = async () => {
+  const db = getPrisma() as any;
+  const [courses, users] = await Promise.all([
+    db.course.findMany({
+      orderBy: { updatedAt: 'desc' },
+      take: 250,
+      include: {
+        owner: {
+          select: {
+            id: true,
+            email: true,
+            name: true,
+            role: true,
+          },
+        },
+        enrollments: {
+          orderBy: { updatedAt: 'desc' },
+          take: 500,
+          include: {
+            user: {
+              select: {
+                id: true,
+                email: true,
+                name: true,
+                role: true,
+                tier: true,
+                membershipStatus: true,
+              },
+            },
+          },
+        },
+      },
+    }),
+    db.user.findMany({
+      orderBy: { createdAt: 'desc' },
+      take: 500,
+      select: {
+        id: true,
+        email: true,
+        name: true,
+        role: true,
+        tier: true,
+        membershipStatus: true,
+        subscriptionStatus: true,
+        providerApproved: true,
+      },
+    }),
+  ]);
+
+  const providers = users
+    .filter((user: any) => {
+      const role = normalizeRole(user.role);
+      return role === 'admin' || (role === 'provider' && user.providerApproved === true);
+    })
+    .map(toCourseAssignableUser);
+
+  return {
+    courses: courses.map(toAdminCourseSummary),
+    providers,
+    assignableUsers: users.map(toCourseAssignableUser),
+  };
+};
 
 const revokeAllAccessForUser = async (
   userId: string
@@ -396,6 +566,7 @@ router.get('/dashboard', async (req: Request, res: Response): Promise<void> => {
   const users = await localStore.listUsers(500);
   const userById = new Map(users.map((user) => [user.id, user]));
   const recentSocialPosts = await socialStore.listPosts({ limit: 50 });
+  const courseGovernance = await buildAdminCourseGovernance();
   const roleCounts = users.reduce(
     (counts, user) => {
       const role = normalizeRole(user.role) || 'user';
@@ -432,12 +603,285 @@ router.get('/dashboard', async (req: Request, res: Response): Promise<void> => {
       roleCounts,
       activeMemberships: users.filter((user) => user.subscriptionStatus === 'active').length,
       providerApproved: users.filter((user) => user.providerApproved === true).length,
+      coursesTotal: courseGovernance.courses.length,
+      courseEnrollmentsTotal: courseGovernance.courses.reduce(
+        (total: number, course: any) => total + Number(course.actualEnrollmentCount || 0),
+        0
+      ),
     },
     recentUsers: users.slice(0, 500).map(toAdminUserSummary),
     recentSocialPosts: recentSocialPosts.map((post) =>
       toAdminSocialPostSummary(post, userById.get(post.authorId))
     ),
+    courseGovernance,
   });
+});
+
+router.get('/courses', async (req: Request, res: Response): Promise<void> => {
+  const actorUserId = getAuthenticatedUserId(req);
+  const courseGovernance = await buildAdminCourseGovernance();
+
+  recordAuditEvent(req, {
+    domain: 'admin',
+    action: 'course_governance_view',
+    outcome: 'success',
+    actorUserId,
+    statusCode: 200,
+    metadata: {
+      courses: courseGovernance.courses.length,
+      providers: courseGovernance.providers.length,
+      assignableUsers: courseGovernance.assignableUsers.length,
+    },
+  });
+
+  res.json({ success: true, courseGovernance });
+});
+
+router.patch('/courses/:id/owner', async (req: Request, res: Response): Promise<void> => {
+  const actorUserId = getAuthenticatedUserId(req);
+  const courseId = String(req.params.id || '').trim();
+  const ownerIdRaw = req.body?.ownerId === null ? null : String(req.body?.ownerId || '').trim();
+  const providerLabelRaw = String(req.body?.provider || '').trim();
+  if (!courseId) {
+    res.status(400).json({ error: 'Course id is required' });
+    return;
+  }
+
+  const db = getPrisma() as any;
+  const existing = await db.course.findUnique({ where: { id: courseId } });
+  if (!existing) {
+    res.status(404).json({ error: 'Course not found' });
+    return;
+  }
+
+  let owner: any = null;
+  if (ownerIdRaw) {
+    owner = await db.user.findUnique({
+      where: { id: ownerIdRaw },
+      select: { id: true, email: true, name: true, role: true, providerApproved: true },
+    });
+    const ownerRole = normalizeRole(owner?.role);
+    if (!owner || (ownerRole !== 'provider' && ownerRole !== 'admin')) {
+      res.status(400).json({ error: 'Course owner must be an admin or provider user' });
+      return;
+    }
+    if (ownerRole === 'provider' && owner.providerApproved !== true) {
+      res.status(400).json({ error: 'Course owner provider must be approved' });
+      return;
+    }
+  }
+
+  const provider = providerLabelRaw || owner?.name || owner?.email || 'Conscious Network Curriculum';
+  const updated = await db.course.update({
+    where: { id: courseId },
+    data: {
+      ownerId: owner?.id || null,
+      ownerType: owner ? normalizeRole(owner.role) || 'provider' : 'admin',
+      provider,
+    },
+    include: {
+      owner: { select: { id: true, email: true, name: true, role: true } },
+      enrollments: {
+        include: {
+          user: {
+            select: {
+              id: true,
+              email: true,
+              name: true,
+              role: true,
+              tier: true,
+              membershipStatus: true,
+            },
+          },
+        },
+      },
+    },
+  });
+
+  recordAuditEvent(req, {
+    domain: 'admin',
+    action: 'course_owner_update',
+    outcome: 'success',
+    actorUserId,
+    targetUserId: owner?.id || null,
+    statusCode: 200,
+    metadata: {
+      courseId,
+      previousOwnerId: existing.ownerId || null,
+      nextOwnerId: owner?.id || null,
+      provider,
+    },
+  });
+
+  res.json({ success: true, course: toAdminCourseSummary(updated) });
+});
+
+router.post('/courses/:id/enrollments', async (req: Request, res: Response): Promise<void> => {
+  const actorUserId = getAuthenticatedUserId(req);
+  const courseId = String(req.params.id || '').trim();
+  const targetUserId = String(req.body?.userId || '').trim();
+  const rawScore = Number(req.body?.progressScore ?? 0);
+  if (!courseId || !targetUserId) {
+    res.status(400).json({ error: 'Course id and user id are required' });
+    return;
+  }
+
+  const db = getPrisma() as any;
+  const [course, targetUser] = await Promise.all([
+    db.course.findUnique({ where: { id: courseId } }),
+    db.user.findUnique({
+      where: { id: targetUserId },
+      select: {
+        id: true,
+        email: true,
+        name: true,
+        role: true,
+        tier: true,
+        membershipStatus: true,
+      },
+    }),
+  ]);
+  const access = await verifyAdminAssignableCourseAccess(targetUser, course);
+  if (!access.allowed) {
+    res.status(400).json({ error: access.error });
+    return;
+  }
+
+  const progressScore = Number.isFinite(rawScore) ? Math.max(0, Math.min(100, Math.round(rawScore))) : 0;
+  const enrollment = await db.userCourse.upsert({
+    where: { userId_courseId: { userId: targetUserId, courseId } },
+    update: {
+      status: progressScore >= 100 ? 'completed' : 'enrolled',
+      progressScore,
+    },
+    create: {
+      userId: targetUserId,
+      courseId,
+      progressScore,
+      status: progressScore >= 100 ? 'completed' : 'enrolled',
+    },
+    include: {
+      user: {
+        select: {
+          id: true,
+          email: true,
+          name: true,
+          role: true,
+          tier: true,
+          membershipStatus: true,
+        },
+      },
+    },
+  });
+  await syncAdminCourseEnrollmentCount(courseId);
+
+  recordAuditEvent(req, {
+    domain: 'admin',
+    action: 'course_enrollment_assign',
+    outcome: 'success',
+    actorUserId,
+    targetUserId,
+    statusCode: 200,
+    metadata: {
+      courseId,
+      progressScore,
+      status: enrollment.status,
+    },
+  });
+
+  res.json({ success: true, enrollment: toAdminCourseEnrollmentSummary(enrollment) });
+});
+
+router.patch('/courses/:id/enrollments/:userId', async (req: Request, res: Response): Promise<void> => {
+  const actorUserId = getAuthenticatedUserId(req);
+  const courseId = String(req.params.id || '').trim();
+  const targetUserId = String(req.params.userId || '').trim();
+  const rawScore = Number(req.body?.progressScore ?? req.body?.progress);
+  const status = String(req.body?.status || '').trim().toLowerCase();
+  if (!courseId || !targetUserId) {
+    res.status(400).json({ error: 'Course id and user id are required' });
+    return;
+  }
+  if (!Number.isFinite(rawScore) && !status) {
+    res.status(400).json({ error: 'progressScore or status is required' });
+    return;
+  }
+  if (status && !['enrolled', 'completed'].includes(status)) {
+    res.status(400).json({ error: 'Enrollment status must be enrolled or completed' });
+    return;
+  }
+
+  const data: Record<string, unknown> = {};
+  if (Number.isFinite(rawScore)) {
+    const progressScore = Math.max(0, Math.min(100, Math.round(rawScore)));
+    data.progressScore = progressScore;
+    data.status = progressScore >= 100 ? 'completed' : status || 'enrolled';
+  } else if (status) {
+    data.status = status;
+  }
+
+  try {
+    const enrollment = await (getPrisma() as any).userCourse.update({
+      where: { userId_courseId: { userId: targetUserId, courseId } },
+      data,
+      include: {
+        user: {
+          select: {
+            id: true,
+            email: true,
+            name: true,
+            role: true,
+            tier: true,
+            membershipStatus: true,
+          },
+        },
+      },
+    });
+    await syncAdminCourseEnrollmentCount(courseId);
+
+    recordAuditEvent(req, {
+      domain: 'admin',
+      action: 'course_enrollment_update',
+      outcome: 'success',
+      actorUserId,
+      targetUserId,
+      statusCode: 200,
+      metadata: { courseId, data },
+    });
+
+    res.json({ success: true, enrollment: toAdminCourseEnrollmentSummary(enrollment) });
+  } catch {
+    res.status(404).json({ error: 'Course enrollment not found' });
+  }
+});
+
+router.delete('/courses/:id/enrollments/:userId', async (req: Request, res: Response): Promise<void> => {
+  const actorUserId = getAuthenticatedUserId(req);
+  const courseId = String(req.params.id || '').trim();
+  const targetUserId = String(req.params.userId || '').trim();
+  if (!courseId || !targetUserId) {
+    res.status(400).json({ error: 'Course id and user id are required' });
+    return;
+  }
+
+  try {
+    await (getPrisma() as any).userCourse.delete({
+      where: { userId_courseId: { userId: targetUserId, courseId } },
+    });
+    const enrolledCount = await syncAdminCourseEnrollmentCount(courseId);
+    recordAuditEvent(req, {
+      domain: 'admin',
+      action: 'course_enrollment_remove',
+      outcome: 'success',
+      actorUserId,
+      targetUserId,
+      statusCode: 200,
+      metadata: { courseId, enrolledCount },
+    });
+    res.json({ success: true, courseId, userId: targetUserId, enrolledCount });
+  } catch {
+    res.status(404).json({ error: 'Course enrollment not found' });
+  }
 });
 
 router.post('/social/posts/:postId/hide', async (req: Request, res: Response): Promise<void> => {

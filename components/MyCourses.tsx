@@ -1,15 +1,54 @@
 
 import React, { useState } from 'react';
-import { BookOpen, PlayCircle, Clock, ChevronRight, Trophy, Search, X, FileText } from 'lucide-react';
+import { BookOpen, PlayCircle, Clock, ChevronRight, Trophy, Search, X, FileText, CheckCircle2 } from 'lucide-react';
 import { Course } from '../types';
 
 interface MyCoursesProps {
   enrolledCourses: Course[];
   onNavigateToUniversity: () => void;
+  onUpdateProgress?: (courseId: string, progressScore: number) => Promise<Course | void>;
 }
 
-const MyCourses: React.FC<MyCoursesProps> = ({ enrolledCourses, onNavigateToUniversity }) => {
+const getCourseSections = (course: Course): Array<{ title: string; body: string }> => {
+  if (course.contentSections && course.contentSections.length > 0) return course.contentSections;
+  if (course.learningObjectives && course.learningObjectives.length > 0) {
+    return course.learningObjectives.map((objective, index) => ({
+      title: `Objective ${index + 1}`,
+      body: objective,
+    }));
+  }
+  return [
+    {
+      title: 'Course overview',
+      body: course.fullDescription || course.description || 'Course content is being prepared by the owner.',
+    },
+  ];
+};
+
+const MyCourses: React.FC<MyCoursesProps> = ({ enrolledCourses, onNavigateToUniversity, onUpdateProgress }) => {
   const [activeCourse, setActiveCourse] = useState<{ course: Course; mode: 'resume' | 'details' } | null>(null);
+  const [progressSaving, setProgressSaving] = useState(false);
+  const [progressError, setProgressError] = useState('');
+
+  const saveProgress = async (course: Course, progressScore: number) => {
+    const boundedProgress = Math.max(0, Math.min(100, Math.round(progressScore)));
+    setProgressSaving(true);
+    setProgressError('');
+    try {
+      const updated = await onUpdateProgress?.(course.id, boundedProgress);
+      const nextCourse = {
+        ...course,
+        ...(updated || {}),
+        progress: (updated as Course | undefined)?.progress ?? boundedProgress,
+        progressScore: (updated as Course | undefined)?.progressScore ?? boundedProgress,
+      };
+      setActiveCourse((current) => (current ? { ...current, course: nextCourse } : current));
+    } catch (error) {
+      setProgressError(error instanceof Error ? error.message : 'Unable to save course progress.');
+    } finally {
+      setProgressSaving(false);
+    }
+  };
 
   return (
     <div className="space-y-8 animate-in fade-in duration-500">
@@ -62,7 +101,7 @@ const MyCourses: React.FC<MyCoursesProps> = ({ enrolledCourses, onNavigateToUniv
                   <div className="flex flex-col gap-2 xs:flex-row xs:items-center xs:justify-between mb-2">
                     <span className="text-[10px] font-bold text-teal-400 uppercase tracking-widest">{course.provider}</span>
                     <span className="text-[10px] text-slate-500 flex items-center gap-1">
-                      <Clock className="w-3 h-3" /> 2h left
+                      <Clock className="w-3 h-3" /> {course.estimatedDuration || 'Self-paced'}
                     </span>
                   </div>
                   <h4 className="text-xl font-bold text-white mb-3 leading-tight group-hover:text-blue-400 transition-colors">{course.title}</h4>
@@ -145,11 +184,73 @@ const MyCourses: React.FC<MyCoursesProps> = ({ enrolledCourses, onNavigateToUniv
                   <p className="text-white font-bold mt-1">{activeCourse.course.enrolled.toLocaleString()} members</p>
                 </div>
               </div>
-              <div className="p-4 bg-blue-600/5 rounded-xl border border-blue-500/20 text-sm text-slate-300">
-                {activeCourse.mode === 'resume'
-                  ? 'Course resume is being prepared. Published course details remain available in the catalog.'
-                  : 'Detailed course continuity is being prepared. Published course catalog details remain available in Courses.'}
-              </div>
+              {progressError && (
+                <div className="rounded-xl border border-amber-400/20 bg-amber-400/10 p-4 text-sm text-amber-100">
+                  {progressError}
+                </div>
+              )}
+
+              {activeCourse.mode === 'resume' ? (
+                <div className="space-y-3">
+                  <div className="flex items-center justify-between gap-3">
+                    <h5 className="text-[11px] font-black uppercase tracking-widest text-slate-400">Course Player</h5>
+                    <button
+                      type="button"
+                      disabled={progressSaving}
+                      onClick={() => void saveProgress(activeCourse.course, 100)}
+                      className="rounded-xl border border-emerald-300/20 bg-emerald-300/10 px-3 py-2 text-[10px] font-black uppercase tracking-widest text-emerald-100 transition-colors hover:bg-emerald-300/20 disabled:opacity-50"
+                    >
+                      Mark Complete
+                    </button>
+                  </div>
+                  {getCourseSections(activeCourse.course).map((section, index, sections) => {
+                    const sectionProgress = Math.round(((index + 1) / sections.length) * 100);
+                    const isComplete = (activeCourse.course.progress || 0) >= sectionProgress;
+                    return (
+                      <div key={`${section.title}-${index}`} className="rounded-xl border border-white/10 bg-white/5 p-4">
+                        <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                          <div>
+                            <p className="text-[10px] font-black uppercase tracking-widest text-blue-300">Module {index + 1}</p>
+                            <h5 className="mt-1 text-sm font-black text-white">{section.title}</h5>
+                          </div>
+                          <button
+                            type="button"
+                            disabled={progressSaving}
+                            onClick={() => void saveProgress(activeCourse.course, sectionProgress)}
+                            className={`inline-flex items-center justify-center gap-2 rounded-xl border px-3 py-2 text-[10px] font-black uppercase tracking-widest transition-colors disabled:opacity-50 ${
+                              isComplete
+                                ? 'border-emerald-300/20 bg-emerald-300/10 text-emerald-100'
+                                : 'border-white/10 bg-white/5 text-slate-300 hover:bg-white/10'
+                            }`}
+                          >
+                            <CheckCircle2 className="h-3.5 w-3.5" />
+                            {isComplete ? 'Saved' : 'Save Progress'}
+                          </button>
+                        </div>
+                        <p className="mt-3 whitespace-pre-wrap text-xs leading-6 text-slate-400">{section.body}</p>
+                      </div>
+                    );
+                  })}
+                </div>
+              ) : (
+                <div className="space-y-4 rounded-xl border border-blue-500/20 bg-blue-600/5 p-4 text-sm text-slate-300">
+                  <p className="whitespace-pre-wrap leading-6">
+                    {activeCourse.course.fullDescription ||
+                      activeCourse.course.description ||
+                      'Detailed course description is being prepared by the owner.'}
+                  </p>
+                  <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                    <div className="rounded-xl border border-white/10 bg-white/5 p-3">
+                      <p className="text-[9px] font-black uppercase tracking-widest text-slate-500">Category</p>
+                      <p className="mt-1 text-white">{activeCourse.course.category || 'Uncategorized'}</p>
+                    </div>
+                    <div className="rounded-xl border border-white/10 bg-white/5 p-3">
+                      <p className="text-[9px] font-black uppercase tracking-widest text-slate-500">Duration</p>
+                      <p className="mt-1 text-white">{activeCourse.course.estimatedDuration || 'Self-paced'}</p>
+                    </div>
+                  </div>
+                </div>
+              )}
               <div className="flex flex-col sm:flex-row gap-3">
                 <button
                   onClick={() => setActiveCourse((prev) => (prev ? { ...prev, mode: 'resume' } : prev))}

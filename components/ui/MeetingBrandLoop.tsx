@@ -1,6 +1,4 @@
 import React, { useEffect, useRef, useState } from 'react';
-import cnhLogo from '../../src/assets/brand/conscious-network-hub-logo.png';
-import meetingBrandLoop from '../../src/assets/brand/conscious-meetings-loop.gif';
 
 type MeetingBrandLoopProps = {
   alt?: string;
@@ -8,6 +6,9 @@ type MeetingBrandLoopProps = {
   imageClassName?: string;
   eager?: boolean;
 };
+
+const cnhLogo = '/brand/conscious-network-hub-logo.png';
+const meetingBrandLoop = '/brand/conscious-meetings-loop.gif';
 
 const prefersReducedMotion = (): boolean =>
   typeof window !== 'undefined' &&
@@ -27,8 +28,8 @@ const MeetingBrandLoop: React.FC<MeetingBrandLoopProps> = ({
   useEffect(() => {
     const reduced = prefersReducedMotion();
     setReduceMotion(reduced);
-    if (eager || reduced) {
-      setShouldLoad(eager && !reduced);
+    if (eager) {
+      setShouldLoad(true);
       return;
     }
 
@@ -73,7 +74,7 @@ const MeetingBrandLoop: React.FC<MeetingBrandLoopProps> = ({
               className="h-14 w-14 rounded-2xl bg-white/95 object-contain p-1.5 shadow-xl"
             />
             <p className="text-[9px] font-black uppercase tracking-widest text-blue-100">
-              {reduceMotion ? 'CNH meeting media paused' : 'CNH native WebRTC'}
+              {reduceMotion ? 'CNH meeting media ready' : 'CNH native WebRTC'}
             </p>
           </div>
         </div>

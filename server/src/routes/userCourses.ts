@@ -2,6 +2,7 @@ import { Router, Request, Response } from 'express';
 import { getAuthenticatedUserId, requireCanonicalIdentity } from '../middleware';
 import { getPrisma } from '../services/prismaClient';
 import { normalizeCourseSyllabusMetadata } from '../services/courseMetadata';
+import { hasTierAccess, TIER_VALUES, type TierValue } from '../tierPolicy';
 
 const router = Router();
 router.use(requireCanonicalIdentity);
@@ -29,6 +30,55 @@ const toUserCourseResponse = (entry: any) => {
   };
 };
 
+const courseTierToMembershipTier = (courseTier: unknown): TierValue => {
+  const normalized = String(courseTier || '').trim().toLowerCase();
+  if (normalized === 'elite' || normalized === 'accelerated tier') return TIER_VALUES.ACCELERATED;
+  if (normalized === 'professional' || normalized === 'guided tier') return TIER_VALUES.GUIDED;
+  return TIER_VALUES.FREE;
+};
+
+const isActiveMembershipStatus = (value: unknown): boolean => {
+  const normalized = String(value || '').trim().toLowerCase();
+  return normalized === 'active' || normalized === 'trialing';
+};
+
+const verifyProgressAccess = async (
+  userId: string,
+  course: any
+): Promise<{ allowed: true } | { allowed: false; statusCode: number; error: string }> => {
+  const db = getPrisma() as any;
+  const [user, membership] = await Promise.all([
+    db.user.findUnique({
+      where: { id: userId },
+      select: { role: true, tier: true, membershipStatus: true },
+    }),
+    db.membership.findUnique({ where: { userId } }),
+  ]);
+  if (!user) return { allowed: false, statusCode: 401, error: 'Authentication required' };
+
+  const hasActiveMembership =
+    isActiveMembershipStatus(membership?.status) || isActiveMembershipStatus(user.membershipStatus);
+  if (!hasActiveMembership && user.role !== 'admin') {
+    return {
+      allowed: false,
+      statusCode: 403,
+      error: 'Active membership is required to resume courses',
+    };
+  }
+
+  const requiredTier = courseTierToMembershipTier(course.tier);
+  const effectiveTier = membership?.tier || user.tier || null;
+  if (!hasTierAccess(effectiveTier, requiredTier)) {
+    return {
+      allowed: false,
+      statusCode: 403,
+      error: `Course requires ${requiredTier}`,
+    };
+  }
+
+  return { allowed: true };
+};
+
 router.get('/courses', async (req: Request, res: Response): Promise<void> => {
   const userId = getAuthenticatedUserId(req);
   if (!userId) {
@@ -39,7 +89,7 @@ router.get('/courses', async (req: Request, res: Response): Promise<void> => {
   try {
     const db = getPrisma() as any;
     const enrollments = await db.userCourse.findMany({
-      where: { userId },
+      where: { userId, course: { status: 'published' } },
       include: { course: true },
       orderBy: { updatedAt: 'desc' },
     });
@@ -66,6 +116,21 @@ router.patch('/courses/:id/progress', async (req: Request, res: Response): Promi
   const progressScore = Math.max(0, Math.min(100, Math.round(rawScore)));
   try {
     const db = getPrisma() as any;
+    const existing = await db.userCourse.findUnique({
+      where: { userId_courseId: { userId, courseId } },
+      include: { course: true },
+    });
+    if (!existing || existing.course?.status !== 'published') {
+      res.status(404).json({ error: 'Course enrollment not found' });
+      return;
+    }
+
+    const access = await verifyProgressAccess(userId, existing.course);
+    if (!access.allowed) {
+      res.status(access.statusCode).json({ error: access.error });
+      return;
+    }
+
     const updated = await db.userCourse.update({
       where: { userId_courseId: { userId, courseId } },
       data: {

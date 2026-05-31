@@ -1,3 +1,5 @@
+import { buildPlatformFallbackReply } from './platformKnowledge';
+
 export type RuntimeAiProvider = 'ollama' | 'openrouter' | 'groq' | 'local';
 
 export interface RuntimeAiRequest {
@@ -173,11 +175,13 @@ const localFallback = async (input: RuntimeAiRequest): Promise<RuntimeAiResponse
   } else if (isIssueReport) {
     reply = 'MEDIUM priority. Issue received for review. Next steps: confirm the affected page or workflow, capture the user role and device type, and route the report to the platform team for triage.';
   } else {
-    reply = [
-      'I can offer a privacy-first platform response while the enhanced AI model is temporarily unavailable.',
-      '',
-      'For personal health, mental-health, legal, financial, or safety-critical concerns, please rely on qualified local professionals. Within Conscious Network Hub, keep sensitive details minimal, use trusted learning spaces, and choose resources that support dignity, consent, and practical next steps.',
-    ].join('\n');
+    reply =
+      buildPlatformFallbackReply(input.message) ||
+      [
+        'I can offer a privacy-first response while the enhanced AI model is temporarily unavailable.',
+        '',
+        'I am strongest on Conscious Network Hub, Higher Conscious Network, membership tiers, provider pathways, privacy, learning, and Conscious Careers. For personal health, mental-health, legal, financial, or safety-critical concerns, please rely on qualified local professionals. Within CNH, keep sensitive details minimal, use trusted learning spaces, and choose resources that support dignity, consent, and practical next steps.',
+      ].join('\n');
   }
 
   return {

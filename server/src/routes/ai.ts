@@ -74,7 +74,12 @@ const buildGroundedPrompt = (input: {
     AI_SECURITY_SYSTEM_PROMPT,
     safetyContext,
     input.contextText
-      ? 'Ground platform-specific answers in the supplied context. Do not expose private session personalization data as a source.'
+      ? [
+          'Ground platform-specific answers in the supplied context.',
+          'For CNH questions, distinguish implemented app behavior from public website future intent or informational positioning.',
+          'Use role-safe explanations for member, applicant, provider, and admin distinctions.',
+          'Never expose private session personalization data as a source, and do not claim unavailable services, grants, partnerships, or access permissions are complete unless the context explicitly says so.',
+        ].join(' ')
       : '',
   ].filter(Boolean).join('\n\n');
 

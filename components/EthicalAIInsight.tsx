@@ -7,7 +7,7 @@ import {
 } from 'lucide-react';
 import backendAPI, {
   askEthicalAI, getDailyWisdom, processPlatformIssue, generateSuggestedQuestions,
-  getTrendingInsights, EnhancedResponse
+  getTrendingInsights, type EnhancedResponse, type GroundingChunk
 } from '../services/backendApiService';
 import { ApiError } from '../services/apiClient';
 import { securityService } from '../services/securityService';
@@ -59,6 +59,89 @@ const getActionableAiErrorMessage = (error: unknown): string => {
   }
 
   return message || 'Ethical AI Insight is temporarily unavailable. Please try again.';
+};
+
+const clampGroundingScore = (value?: number): number => {
+  if (typeof value !== 'number' || !Number.isFinite(value)) return 0;
+  return Math.max(0, Math.min(100, Math.round(value || 0)));
+};
+
+const getSourceLabel = (source: GroundingChunk): string => {
+  const raw = source.web?.title || source.text || 'Platform reference';
+  const normalized = raw.replace(/\s+/g, ' ').trim();
+  return normalized.length > 80 ? `${normalized.slice(0, 77)}...` : normalized;
+};
+
+const hasSourceLabel = (source: GroundingChunk): boolean =>
+  Boolean((source.web?.title || source.text || '').trim());
+
+const getVisibleSources = (sources?: GroundingChunk[]): GroundingChunk[] =>
+  (sources || []).filter(hasSourceLabel).slice(0, 4);
+
+const GroundingMeter: React.FC<{ score?: number }> = ({ score }) => {
+  const value = clampGroundingScore(score);
+
+  return (
+    <div
+      className="flex items-center gap-2 text-[7px] text-slate-400"
+      title="Grounding estimate reflects provider confidence and available CNH context. It is not a factual guarantee."
+    >
+      <div className="h-1.5 w-14 overflow-hidden rounded-full bg-white/10" aria-hidden="true">
+        <div
+          className="h-full bg-gradient-to-r from-green-400 to-teal-400"
+          style={{ width: `${value}%` }}
+        />
+      </div>
+      <span className="uppercase tracking-widest">Grounding estimate: {value}%</span>
+    </div>
+  );
+};
+
+const SourceReferences: React.FC<{ sources?: GroundingChunk[] }> = ({ sources }) => {
+  const visibleSources = getVisibleSources(sources);
+  if (visibleSources.length === 0) return null;
+
+  return (
+    <div className="space-y-2 border-t border-white/10 pt-2 text-[7px] text-slate-400">
+      <div className="flex items-center gap-2">
+        <Globe className="h-3 w-3 text-teal-400" />
+        <span className="font-black uppercase tracking-[0.2em] text-slate-400">
+          Grounding references ({visibleSources.length})
+        </span>
+      </div>
+      <p className="leading-relaxed text-slate-500">
+        Public or internal-safe CNH context labels. Private user data is not shown as a source.
+      </p>
+      <div className="flex flex-wrap gap-1.5">
+        {visibleSources.map((source, idx) => {
+          const label = getSourceLabel(source);
+          if (source.web?.uri) {
+            return (
+              <a
+                key={`${label}-${idx}`}
+                href={source.web.uri}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="flex min-w-0 items-center gap-1 rounded border border-blue-500/20 bg-blue-500/10 px-2 py-1 font-bold uppercase tracking-widest text-blue-300 transition-all hover:border-blue-400/50 hover:text-blue-200"
+              >
+                <span className="min-w-0 truncate">{label}</span>
+                <ArrowRight className="h-2 w-2 shrink-0" />
+              </a>
+            );
+          }
+
+          return (
+            <span
+              key={`${label}-${idx}`}
+              className="min-w-0 rounded border border-white/10 bg-white/5 px-2 py-1 font-bold uppercase tracking-widest text-slate-300"
+            >
+              {label}
+            </span>
+          );
+        })}
+      </div>
+    </div>
+  );
 };
 
 const EthicalAIInsight: React.FC<EthicalAIInsightProps> = ({ userEmail, userId = 'default-user' }) => {
@@ -453,7 +536,7 @@ const EthicalAIInsight: React.FC<EthicalAIInsightProps> = ({ userEmail, userId =
         ))}
       </div>
 
-      <div className="rounded-xl border border-amber-400/20 bg-amber-400/10 px-4 py-3 text-[10px] leading-relaxed text-amber-100">
+      <div className="rounded-xl border border-white/10 bg-white/5 px-4 py-2.5 text-[10px] leading-relaxed text-slate-300">
         AI responses are reflective support only. Use qualified professionals or emergency services for medical, mental health, legal, financial, or safety-critical issues.
       </div>
 
@@ -484,31 +567,11 @@ const EthicalAIInsight: React.FC<EthicalAIInsightProps> = ({ userEmail, userId =
             {dailyWisdom && !wisdomLoading && (
               <div className="mt-4 space-y-3">
                 <div className="flex flex-col gap-1 text-[8px] xs:flex-row xs:items-center xs:justify-between">
-                  <span className="text-slate-400 uppercase tracking-widest font-bold">Confidence: {dailyWisdom.confidenceScore}%</span>
+                  <GroundingMeter score={dailyWisdom.confidenceScore} />
                   <span className="text-slate-500">⏱️ {dailyWisdom.processingTimeMs}ms</span>
                 </div>
 
-                {dailyWisdom.groundingChunks.length > 0 && (
-                  <div className="space-y-2">
-                    <div className="flex items-center gap-2">
-                      <Globe className="w-3 h-3 text-teal-400" />
-                      <span className="text-[8px] text-slate-400 uppercase tracking-[0.2em] font-black">Sources ({dailyWisdom.sourceCount})</span>
-                    </div>
-                    <div className="flex flex-wrap gap-1.5">
-                      {dailyWisdom.groundingChunks.slice(0, 3).map((s, idx) => s.web && (
-                        <a
-                          key={idx}
-                          href={s.web.uri}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="flex min-w-0 items-center gap-1 rounded border border-blue-500/20 bg-blue-500/10 px-2 py-1 text-[7px] font-bold uppercase tracking-widest text-blue-300 transition-all hover:border-blue-400/50 hover:text-blue-200"
-                        >
-                          {s.web.title.substring(0, 25)}... <ArrowRight className="w-2 h-2" />
-                        </a>
-                      ))}
-                    </div>
-                  </div>
-                )}
+                <SourceReferences sources={dailyWisdom.groundingChunks} />
               </div>
             )}
           </div>
@@ -590,21 +653,15 @@ const EthicalAIInsight: React.FC<EthicalAIInsightProps> = ({ userEmail, userId =
                   >
                     <p className="break-words text-[9px] md:text-[10px] leading-relaxed">{msg.content}</p>
 
-                    {msg.role === 'ai' && msg.sources && msg.sources.length > 0 && (
-                      <div className="mt-2 text-[7px] text-slate-400 italic border-t border-white/10 pt-2">
-                        📚 {msg.sources.length} sources
+                    {msg.role === 'ai' && (
+                      <div className="mt-2">
+                        <SourceReferences sources={msg.sources as GroundingChunk[] | undefined} />
                       </div>
                     )}
 
                     {msg.role === 'ai' && msg.confidenceScore !== undefined && (
-                      <div className="mt-2 text-[7px] text-slate-400 flex items-center gap-2">
-                        <div className="w-12 h-1.5 bg-white/10 rounded-full overflow-hidden">
-                          <div
-                            className="h-full bg-gradient-to-r from-green-400 to-teal-400"
-                            style={{ width: `${msg.confidenceScore}%` }}
-                          ></div>
-                        </div>
-                        {msg.confidenceScore}%
+                      <div className="mt-2">
+                        <GroundingMeter score={msg.confidenceScore} />
                       </div>
                     )}
 

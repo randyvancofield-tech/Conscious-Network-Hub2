@@ -1274,6 +1274,7 @@ const ProviderCrmShellContent: React.FC<ProviderCrmShellProps> = ({
                     alt="Conscious Meetings branded WebRTC room animation"
                     className="absolute inset-0 h-full w-full"
                     imageClassName="h-full w-full object-cover"
+                    eager
                   />
                   <div className="absolute inset-0 bg-black/65" />
                   <div className="relative flex max-w-sm flex-col items-center">
@@ -1330,6 +1331,7 @@ const ProviderCrmShellContent: React.FC<ProviderCrmShellProps> = ({
                       alt="Conscious Roundtable branded meeting animation"
                       className="h-28 w-full"
                       imageClassName="h-full w-full object-cover"
+                      eager
                     />
                   </div>
                   <p className="mt-3 break-all rounded-lg border border-white/10 bg-black/30 p-3 text-[10px] text-slate-400">

@@ -7,7 +7,7 @@
   "organization": {
     "name": "Higher Conscious Network LLC",
     "shortName": "HCN",
-    "officialUrl": "https://conscious-network.org",
+    "officialUrl": "https://www.higherconscious.network/",
     "description": "A decentralized social learning infrastructure designed to restore autonomy, protect identity, and create equitable economic opportunity through community-centered ethical technology."
   },
   "products": [
@@ -17,10 +17,14 @@
       "description": "The primary platform for decentralized learning, provider marketplace, and community engagement.",
       "features": [
         "User identity management",
-        "Provider scheduling and billing",
+        "Membership tier access",
+        "Provider application and review",
+        "Provider wallet verification",
         "Conscious Careers marketplace",
         "Social learning community",
-        "Meeting synthesis and notes"
+        "Reflection persistence",
+        "Meeting synthesis and notes",
+        "Ethical AI support"
       ]
     },
     {
@@ -49,5 +53,5 @@
   },
   "closedKnowledgeMessage": "At this time, Wisdom Node is limited to official Higher Conscious Network sources for accuracy. I can answer questions about Higher Conscious Network LLC, Conscious Network Hub (CNH), Conscious Careers, and the Founder profile. For anything else, please rephrase the question to relate to HCN/CNH/Conscious Careers, or consult external sources.",
   "mvpNotice": "MVP Mode: Answers are limited to HCN official sources for accuracy and reliability.",
-  "lastUpdated": "2026-01-19"
+  "lastUpdated": "2026-05-31"
 }

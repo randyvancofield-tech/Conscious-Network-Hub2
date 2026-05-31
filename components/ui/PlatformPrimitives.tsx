@@ -30,20 +30,29 @@ type ActionButtonProps = React.ButtonHTMLAttributes<HTMLButtonElement> & {
   icon?: React.ReactNode;
 };
 
+const cnhLogoPath = '/brand/conscious-network-hub-logo.png';
+
 export const PageShell: React.FC<PageShellProps> = ({ children, className = '' }) => (
   <div className={`mx-auto w-full max-w-[100rem] space-y-6 pb-20 sm:space-y-8 sm:pb-24 ${className}`}>{children}</div>
 );
 
 export const PageHeader: React.FC<PageHeaderProps> = ({ eyebrow, title, description, actions }) => (
   <header className="flex min-w-0 flex-col gap-5 lg:flex-row lg:items-end lg:justify-between">
-    <div className="min-w-0 max-w-3xl space-y-3">
-      {eyebrow && (
-        <p className="text-[10px] font-black uppercase tracking-widest text-blue-300/70">{eyebrow}</p>
-      )}
-      <h1 className="break-words text-3xl font-black uppercase leading-tight text-white sm:text-4xl 2xl:text-5xl">
-        {title}
-      </h1>
-      {description && <p className="max-w-2xl text-sm leading-6 text-slate-400 sm:text-base">{description}</p>}
+    <div className="flex min-w-0 max-w-4xl items-start gap-3 sm:gap-4">
+      <img
+        src={cnhLogoPath}
+        alt="Conscious Network Hub"
+        className="mt-1 h-12 w-12 shrink-0 rounded-xl bg-white/95 object-contain p-1 shadow-xl shadow-blue-950/20 sm:h-14 sm:w-14"
+      />
+      <div className="min-w-0 space-y-3">
+        {eyebrow && (
+          <p className="text-[10px] font-black uppercase tracking-widest text-blue-300/70">{eyebrow}</p>
+        )}
+        <h1 className="break-words text-3xl font-black uppercase leading-tight text-white sm:text-4xl 2xl:text-5xl">
+          {title}
+        </h1>
+        {description && <p className="max-w-2xl text-sm leading-6 text-slate-400 sm:text-base">{description}</p>}
+      </div>
     </div>
     {actions && <div className="flex min-w-0 flex-wrap items-center gap-3">{actions}</div>}
   </header>

@@ -7,8 +7,9 @@ import {
 } from './knowledgeService';
 import { redactSensitiveText } from './aiSafetyPolicy';
 import { normalizeCourseSyllabusMetadata } from './courseMetadata';
+import { getApprovedPlatformKnowledgeDocuments } from './platformKnowledge';
 
-type IndexedSourceType = 'course' | 'social_post' | 'profile' | 'knowledge' | 'trusted';
+type IndexedSourceType = 'course' | 'social_post' | 'profile' | 'knowledge' | 'trusted' | 'hcn' | 'internal';
 
 interface IndexedDocument {
   id: string;
@@ -210,6 +211,19 @@ const crawlKnowledgeSeed = async (docs: IndexedDocument[]): Promise<void> => {
   });
 };
 
+const crawlApprovedPlatformKnowledge = async (docs: IndexedDocument[]): Promise<void> => {
+  for (const source of getApprovedPlatformKnowledgeDocuments()) {
+    pushDoc(docs, {
+      id: `platform:${source.id}`,
+      title: source.title,
+      content: source.content,
+      sourceType: source.sourceType,
+      visibility: 'public',
+      updatedAt: source.lastReviewed,
+    });
+  }
+};
+
 export const triggerAiContextCrawl = async (reason = 'manual'): Promise<AiIndexStatus> => {
   if (!isCrawlerEnabled()) return getAiContextIndexStatus();
   if (crawlPromise) {
@@ -221,7 +235,13 @@ export const triggerAiContextCrawl = async (reason = 'manual'): Promise<AiIndexS
     const docs: IndexedDocument[] = [];
     const errors: string[] = [];
 
-    for (const task of [crawlKnowledgeSeed, crawlCourses, crawlPublicPosts, crawlPublicProfiles]) {
+    for (const task of [
+      crawlApprovedPlatformKnowledge,
+      crawlKnowledgeSeed,
+      crawlCourses,
+      crawlPublicPosts,
+      crawlPublicProfiles,
+    ]) {
       try {
         await task(docs);
       } catch (error) {
@@ -340,7 +360,12 @@ export const buildAiContext = async (query: string, userId?: string): Promise<Ai
 
   const indexedSources: KnowledgeSource[] = localMatches.map(({ doc, score }) => ({
     title: doc.title,
-    sourceType: doc.sourceType === 'trusted' ? 'trusted' : doc.sourceType === 'knowledge' ? 'internal' : 'hcn',
+    sourceType:
+      doc.sourceType === 'trusted'
+        ? 'trusted'
+        : doc.sourceType === 'knowledge' || doc.sourceType === 'internal'
+          ? 'internal'
+          : 'hcn',
     relevance: Math.min(1, score / Math.max(1, queryTokens.length)),
     snippet: doc.content.slice(0, 220),
   }));

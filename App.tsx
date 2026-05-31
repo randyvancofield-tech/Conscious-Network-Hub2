@@ -2512,6 +2512,18 @@ const App: React.FC = () => {
     })();
   };
 
+  const updateCourseProgress = async (courseId: string, progressScore: number): Promise<Course> => {
+    const data = await api<any>(`/user/courses/${encodeURIComponent(courseId)}/progress`, {
+      method: 'PATCH',
+      body: { progressScore },
+    });
+    const updatedCourse = normalizeCourse(data.course || {});
+    setEnrolledCourses((current) =>
+      current.map((course) => (course.id === updatedCourse.id ? { ...course, ...updatedCourse } : course))
+    );
+    return updatedCourse;
+  };
+
   const updateActiveUser = (updated: UserProfile) => {
     const token = getAuthToken();
     const canonicalUpdated = toPlatformUser({ ...user, ...updated });
@@ -3702,7 +3714,13 @@ const App: React.FC = () => {
           />
         );
       case AppView.MY_COURSES: 
-        return <MyCourses enrolledCourses={enrolledCourses} onNavigateToUniversity={() => setCurrentView(AppView.KNOWLEDGE_PATHWAYS)} />;
+        return (
+          <MyCourses
+            enrolledCourses={enrolledCourses}
+            onNavigateToUniversity={() => setCurrentView(AppView.KNOWLEDGE_PATHWAYS)}
+            onUpdateProgress={updateCourseProgress}
+          />
+        );
       case AppView.PROVIDERS:
         return (
           <ProvidersMarket
@@ -4697,6 +4715,28 @@ const App: React.FC = () => {
                       <img src={cnhLogo} alt="" className="h-full w-full object-contain" />
                     </button>
                   )}
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setCurrentView(AppView.DASHBOARD);
+                      closeSidebarOnMobile();
+                    }}
+                    className="hidden min-w-0 shrink-0 items-center gap-3 rounded-xl border border-white/10 bg-white/[0.04] px-3 py-2 text-left transition-all hover:bg-white/[0.08] md:flex"
+                    aria-label="Open Conscious Network Hub dashboard"
+                    title="Conscious Network Hub"
+                  >
+                    {isSidebarOpen && (
+                      <img
+                        src={cnhLogo}
+                        alt=""
+                        className="h-9 w-9 shrink-0 rounded-lg bg-white/95 object-contain p-1 shadow-lg"
+                      />
+                    )}
+                    <span className="flex min-w-0 flex-col leading-none">
+                      <span className="text-[10px] font-black uppercase text-blue-200">Conscious</span>
+                      <span className="mt-1 truncate text-xs font-black uppercase text-white">Network Hub</span>
+                    </span>
+                  </button>
                   <form onSubmit={handleGlobalSearchSubmit} className="relative group hidden min-w-0 flex-1 lg:block lg:max-w-[18rem] xl:max-w-sm 2xl:max-w-md">
                     <Search className="absolute left-4 sm:left-5 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-600 group-focus-within:text-blue-400 transition-colors" />
                     <input
