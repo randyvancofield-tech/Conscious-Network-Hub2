@@ -55,6 +55,8 @@ const ConsciousMeetingPortalPageContent: React.FC<ConsciousMeetingPortalPageProp
   const [history, setHistory] = useState<DeviceCheck[]>([]);
   const [isChecking, setIsChecking] = useState(false);
   const historyKey = user?.id ? `hcn.meetingDeviceHistory.${user.id}` : 'hcn.meetingDeviceHistory.guest';
+  const canOpenHostConsole =
+    operationsEnabled || user?.role === 'provider' || user?.role === 'admin';
 
   useEffect(() => {
     try {
@@ -272,10 +274,10 @@ const ConsciousMeetingPortalPageContent: React.FC<ConsciousMeetingPortalPageProp
         <div>
           <h2 className="text-sm font-black uppercase tracking-widest text-white">Live Stream Readiness</h2>
           <p className="mt-2 text-xs leading-5 text-slate-500">
-            Certified host operations are available only for verified provider sessions. Advanced host controls are being prepared for launch.
+            Certified host operations are available only for verified provider accounts and the solo admin operator.
           </p>
         </div>
-        {operationsEnabled ? (
+        {canOpenHostConsole ? (
           <React.Suspense fallback={<SurfacePanel className="text-sm text-slate-300">Loading provider host console...</SurfacePanel>}>
             <LazyConsciousMeetings user={user} />
           </React.Suspense>
@@ -286,7 +288,7 @@ const ConsciousMeetingPortalPageContent: React.FC<ConsciousMeetingPortalPageProp
               <div>
                 <h3 className="text-sm font-black uppercase tracking-widest text-white">Provider Host Console Unavailable</h3>
                 <p className="mt-2 text-sm leading-6 text-slate-300">
-                  Provider host controls are being prepared and are not yet available in this portal.
+                  Provider host controls require an approved provider account or admin operations access. Members can join authorized sessions from the upcoming board.
                 </p>
               </div>
             </div>

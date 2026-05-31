@@ -1,18 +1,18 @@
 
 import React, { useState, useRef, useEffect } from 'react';
-import { 
-  Video, Calendar, Users, ShieldCheck, Zap, 
-  Search, Filter, Clock, CreditCard, CheckCircle2, 
-  Plus, X, Camera, Mic, MicOff, CameraOff, 
+import {
+  Video, Calendar, Users, ShieldCheck, Zap,
+  Clock, CheckCircle2,
+  X, Camera, Mic, MicOff, CameraOff,
   Settings, Download, Share2, Info, Loader2, Play,
-  ChevronRight, Pause, Square, Image, Upload, UserPlus, Layers
+  Pause, Square, Image, Upload
 } from 'lucide-react';
 import type {
   Results as SelfieSegmentationResults,
   SelfieSegmentation as SelfieSegmentationInstance,
 } from '@mediapipe/selfie_segmentation';
 import type * as ThreeTypes from 'three';
-import { UserProfile, Provider, Meeting } from '../types';
+import { UserProfile, Meeting } from '../types';
 import {
   addProviderInviteGroupMember,
   createNativeProviderControlSession,
@@ -32,7 +32,6 @@ import {
   previewExternalMeetingInvite,
   reportImmersiveSessionEvent,
   startProviderMeetingSession,
-  summarizeMeeting,
 } from '../services/backendApiService';
 import {
   PROVIDER_SESSION_TOKEN_EVENT,
@@ -43,7 +42,6 @@ import type {
   ExternalMeetingPreview,
   MeetingSessionMode,
   MeetingSessionSummary,
-  MeetingSummary,
   ProviderInviteGroup,
 } from '../services/backendApiService';
 import MeetingBrandLoop from './ui/MeetingBrandLoop';
@@ -179,86 +177,16 @@ const BACKGROUND_PRESETS: MeetingBackgroundPreset[] = [
   },
 ];
 
-const PROVIDERS: Provider[] = [
-  {
-    id: 'p1',
-    name: 'Dr. Jordan Wells',
-    specialty: 'Trauma-informed coaching',
-    rating: 4.9,
-    avatar: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?auto=format&fit=crop&q=80&w=200',
-    bio: 'Specialist in restorative trauma-informed coaching for digital nomads navigating decentralized systems.',
-    availabilitySlots: ['Mon 10:00 AM', 'Wed 02:00 PM', 'Fri 09:00 AM'],
-    tierIncludedMin: 'Guided Tier'
-  },
-  {
-    id: 'p2',
-    name: 'Coach Amira Santos',
-    specialty: 'Conscious Careers',
-    rating: 4.8,
-    avatar: 'https://images.unsplash.com/photo-1544005313-94ddf0286df2?auto=format&fit=crop&q=80&w=200',
-    bio: 'Helping professionals navigate career transitions and find purpose in the decentralized economy.',
-    availabilitySlots: ['Tue 11:00 AM', 'Thu 03:00 PM'],
-    tierIncludedMin: 'Accelerated Tier'
-  },
-  {
-    id: 'p3',
-    name: 'Master Sven Bergstrom',
-    specialty: 'Sovereign Performance',
-    rating: 4.7,
-    avatar: 'https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?auto=format&fit=crop&q=80&w=200',
-    bio: 'Performance expert focused on high-stakes decision making, sovereignty, and cognitive optimization.',
-    availabilitySlots: ['Sat 10:00 AM'],
-    tierIncludedMin: 'Accelerated Tier'
-  }
-];
-
 const ConsciousMeetings: React.FC<ConsciousMeetingsProps> = ({ user }) => {
-  const [meetings, setMeetings] = useState<Meeting[]>([
-    {
-      id: 'm1',
-      title: 'Divine Alignment Check-In',
-      hostUserId: user?.id || 'guest',
-      providerId: 'p1',
-      startTime: 'Today, 2:00 PM',
-      endTime: 'Today, 3:00 PM',
-      participants: [
-        { id: user?.id || 'guest', name: user?.name || 'Guest', role: 'User' },
-        { id: 'p1', name: 'Dr. Jordan Wells', role: 'Provider' }
-      ],
-      status: 'Upcoming',
-      accessType: 'tier',
-      notes: { transcript: [], summary: '', decisions: [], actionItems: [] }
-    },
-    {
-      id: 'm2',
-      title: 'Career Purpose Mapping (Group)',
-      hostUserId: user?.id || 'guest',
-      providerId: 'p2',
-      startTime: 'Friday, 11:00 AM',
-      endTime: 'Friday, 12:30 PM',
-      participants: [
-        { id: user?.id || 'guest', name: user?.name || 'Guest', role: 'User' },
-        { id: 'p2', name: 'Coach Amira Santos', role: 'Provider' },
-        { id: 'u2', name: 'Zara Khan', role: 'User' },
-        { id: 'u3', name: 'Aarav Sharma', role: 'User' }
-      ],
-      status: 'Upcoming',
-      accessType: 'tier',
-      notes: { transcript: [], summary: '', decisions: [], actionItems: [] }
-    }
-  ]);
+  const [meetings, setMeetings] = useState<Meeting[]>([]);
 
   const [activeTab, setActiveTab] = useState<'schedule' | 'lobby' | 'calendar'>('schedule');
-  const [selectedProvider, setSelectedProvider] = useState<Provider | null>(null);
   const [isSchedulingModalOpen, setSchedulingModalOpen] = useState(false);
   const [isNoteTakerOn, setNoteTakerOn] = useState(false);
   const [showSynthesisConsentModal, setShowSynthesisConsentModal] = useState(false);
   const [synthesisAgentMode, setSynthesisAgentMode] = useState<SynthesisAgentMode>('meeting-bot');
   const [isSynthesizingNotes, setIsSynthesizingNotes] = useState(false);
   const [permissionState, setPermissionState] = useState<'idle' | 'pending' | 'granted' | 'denied'>('idle');
-  const [searchQuery, setSearchQuery] = useState('');
-  const [showFilterPanel, setShowFilterPanel] = useState(false);
-  const [showIncludedOnly, setShowIncludedOnly] = useState(false);
   const [isJoining, setIsJoining] = useState(false);
   const [directoryUsers, setDirectoryUsers] = useState<MeetingDirectoryUser[]>([]);
   const [isDirectoryLoading, setIsDirectoryLoading] = useState(false);
@@ -306,6 +234,46 @@ const ConsciousMeetings: React.FC<ConsciousMeetingsProps> = ({ user }) => {
   const selectedHostedSession =
     hostedMeetingSessions.find((session) => session.id === selectedHostedSessionId) || null;
   const selectedInternalRoomLink = toAppHostedRoomLink(selectedHostedSession);
+  const formatMeetingTime = (value?: number | null): string =>
+    value ? new Date(value).toLocaleString() : 'Unscheduled';
+  const mapBackendSessionToMeeting = (session: MeetingSessionSummary): Meeting => {
+    const providerParticipant = {
+      id: session.providerUserId || session.providerDid || 'provider',
+      name: session.providerDisplayName || 'Verified Provider',
+      role: 'Provider' as const,
+    };
+    const participantRows = session.participants
+      .filter((participant) => participant.kind !== 'provider')
+      .map((participant) => ({
+        id: participant.id,
+        name: participant.displayName,
+        role: 'User' as const,
+      }));
+
+    return {
+      id: session.routeKey || session.id,
+      title: session.title,
+      hostUserId: session.providerUserId || '',
+      providerId: session.providerDid || CNH_NATIVE_ROOM_PROVIDER_ID,
+      startTime: formatMeetingTime(session.scheduledAtMs || session.startedAtMs || session.createdAtMs),
+      endTime: session.endedAtMs ? formatMeetingTime(session.endedAtMs) : 'Open until host ends session',
+      participants: [providerParticipant, ...participantRows],
+      status:
+        session.status === 'live'
+          ? 'Live'
+          : session.status === 'ended'
+            ? 'Completed'
+            : 'Upcoming',
+      accessType: session.publicStream ? 'tier' : 'restricted',
+      notes: EMPTY_MEETING_NOTES(),
+    };
+  };
+  const syncMeetingsFromBackendSessions = (sessions: MeetingSessionSummary[]) => {
+    const uniqueSessions = Array.from(
+      new Map(sessions.map((session) => [session.id, session])).values()
+    );
+    setMeetings(uniqueSessions.map(mapBackendSessionToMeeting));
+  };
 
   // Solo Session States
   const [isSoloSessionActive, setIsSoloSessionActive] = useState(false);
@@ -349,14 +317,6 @@ const ConsciousMeetings: React.FC<ConsciousMeetingsProps> = ({ user }) => {
   const immersiveSessionModeRef = useRef<'immersive-ar' | 'immersive-vr' | 'unknown'>('unknown');
   const immersiveDeviceProfileRef = useRef<string>('unknown');
   const immersiveTelemetryOpenRef = useRef(false);
-
-  const synthesisTranscript = [
-    "Jordan: Welcome to our session. How are you feeling about your digital boundaries?",
-    "User: I'm feeling overwhelmed with information. I need to restrict my neural input.",
-    "Jordan: Understood. Let's set a goal to implement a 2-hour digital fast daily.",
-    "User: That sounds manageable. I'll start tomorrow.",
-    "Jordan: Great, I will also provide you with the bio-hacking resource by Sven."
-  ];
 
   const providerTokenStorageKey = PROVIDER_SESSION_TOKEN_KEY;
   const externalGuestSessionStorageKey = 'hcn_external_guest_session_token';
@@ -452,40 +412,10 @@ const ConsciousMeetings: React.FC<ConsciousMeetingsProps> = ({ user }) => {
     }
   };
 
-  const handleSchedule = (provider: Provider) => {
-    setSelectedProvider(provider);
-    resetSchedulingComposer();
-    setSelectedSlot(provider.availabilitySlots?.[0] || null);
-    setSchedulingModalOpen(true);
-  };
-
   const confirmBooking = async () => {
-    if (!selectedProvider || !user) return;
-
-    const newMeeting: Meeting = {
-      id: Date.now().toString(),
-      title: `${selectedProvider.specialty} Session`,
-      hostUserId: user.id,
-      providerId: selectedProvider.id,
-      startTime: selectedSlot || selectedProvider.availabilitySlots?.[0] || 'Next Available',
-      endTime: selectedSlot ? `${selectedSlot} + 60m` : 'Next Available + 60m',
-      participants: [
-        { id: user.id, name: user.name, role: 'User' },
-        { id: selectedProvider.id, name: selectedProvider.name, role: 'Provider' },
-        ...pendingInviteMembers.map((member) => ({
-          id: member.id,
-          name: member.displayName,
-          role: 'User' as const,
-        })),
-      ],
-      status: 'Upcoming',
-      accessType: 'tier'
-    };
-
-    setMeetings([newMeeting, ...meetings]);
+    setMeetingOpsStatus('Member self-booking is not active for launch. Providers publish real CNH rooms through host controls.');
     resetSchedulingComposer();
     setSchedulingModalOpen(false);
-    setActiveTab('calendar');
   };
 
   const revokeCustomBackgroundObjectUrl = (backgroundUrl: string | null, file: File | null) => {
@@ -511,74 +441,6 @@ const ConsciousMeetings: React.FC<ConsciousMeetingsProps> = ({ user }) => {
     setIsSynthesizingNotes(false);
   };
 
-  const buildFallbackMeetingSummary = (): MeetingSummary => ({
-    summary: 'Participants aligned on digital boundaries and committed to a daily two-hour digital fast.',
-    decisions: [
-      'Adopt a daily two-hour digital fast.',
-      'Use provider-guided check-ins to protect focus blocks.',
-    ],
-    actionItems: [
-      {
-        owner: user?.name || 'Host',
-        task: 'Begin the two-hour digital fast protocol and log completion.',
-        dueDate: 'Daily',
-      },
-      {
-        owner: 'Provider',
-        task: 'Share follow-up bio-hacking and attention-restoration resources.',
-        dueDate: 'Before next session',
-      },
-    ],
-  });
-
-  const mapSummaryForAgent = (
-    summary: MeetingSummary,
-    agentMode: SynthesisAgentMode
-  ): MeetingNotes => {
-    if (agentMode === 'action-agent') {
-      return {
-        transcript: [...synthesisTranscript],
-        summary: `Action Agent Brief: ${summary.summary}`,
-        decisions: [...summary.decisions, 'Execution priorities confirmed with accountable owners.'],
-        actionItems: summary.actionItems.length
-          ? summary.actionItems
-          : [
-              {
-                owner: user?.name || 'Host',
-                task: 'Capture three measurable outcomes before the next meeting.',
-                dueDate: 'Before next session',
-              },
-            ],
-      };
-    }
-
-    if (agentMode === 'security-agent') {
-      return {
-        transcript: [...synthesisTranscript],
-        summary: `Security Agent Brief: ${summary.summary} Notes are ephemeral and will be purged when the session ends.`,
-        decisions: [
-          ...summary.decisions,
-          'Meeting notes remain session-scoped and are never persisted to Conscious Network Hub storage.',
-        ],
-        actionItems: [
-          ...summary.actionItems,
-          {
-            owner: 'All Participants',
-            task: 'Download notes during the meeting if retention is needed offline.',
-            dueDate: 'Before session close',
-          },
-        ],
-      };
-    }
-
-    return {
-      transcript: [...synthesisTranscript],
-      summary: `Meeting Bot Brief: ${summary.summary}`,
-      decisions: summary.decisions,
-      actionItems: summary.actionItems,
-    };
-  };
-
   const generateAINotes = async (
     meetingId: string,
     agentMode: SynthesisAgentMode = synthesisAgentMode
@@ -588,12 +450,8 @@ const ConsciousMeetings: React.FC<ConsciousMeetingsProps> = ({ user }) => {
 
     setIsSynthesizingNotes(true);
     try {
-      const result = await summarizeMeeting(synthesisTranscript);
-      const summaryPayload = result || buildFallbackMeetingSummary();
-      const notesPayload = mapSummaryForAgent(summaryPayload, agentMode);
-
-      setMeetings((prev) =>
-        prev.map((entry) => (entry.id === meetingId ? { ...entry, notes: notesPayload } : entry))
+      setMeetingOpsStatus(
+        `${agentMode.replace('-', ' ')} is gated until real transcript capture is connected. No mock transcript or generated notes were used.`
       );
     } finally {
       setIsSynthesizingNotes(false);
@@ -602,10 +460,13 @@ const ConsciousMeetings: React.FC<ConsciousMeetingsProps> = ({ user }) => {
 
   const initiateSynthesisAgent = async () => {
     const activeMeeting = meetings[0];
-    if (!activeMeeting) return;
+    if (!activeMeeting) {
+      setMeetingOpsStatus('No real meeting session is selected for synthesis.');
+      return;
+    }
 
     if (!isSoloSessionActive && !isJoining) {
-      alert('Start or join a meeting session before initiating synthesis notes.');
+      setMeetingOpsStatus('Start or join a real meeting session before initiating synthesis notes.');
       return;
     }
 
@@ -629,6 +490,7 @@ const ConsciousMeetings: React.FC<ConsciousMeetingsProps> = ({ user }) => {
   const confirmSynthesisConsent = () => {
     setNoteTakerOn(true);
     setShowSynthesisConsentModal(false);
+    setMeetingOpsStatus('Synthesis consent captured. Notes remain gated until real transcript capture is connected.');
   };
 
   const parseBatchUsernames = (rawValue: string): string[] => {
@@ -648,6 +510,7 @@ const ConsciousMeetings: React.FC<ConsciousMeetingsProps> = ({ user }) => {
       setProviderInviteGroups([]);
       setHostedMeetingSessions([]);
       setSelectedHostedSessionId('');
+      syncMeetingsFromBackendSessions(joinableMeetingSessions);
       return;
     }
 
@@ -658,6 +521,7 @@ const ConsciousMeetings: React.FC<ConsciousMeetingsProps> = ({ user }) => {
 
     setProviderInviteGroups(groups);
     setHostedMeetingSessions(sessions);
+    syncMeetingsFromBackendSessions([...sessions, ...joinableMeetingSessions]);
     setSelectedHostedSessionId((current) => {
       if (sessions.length === 0) return '';
       if (current && sessions.some((entry) => entry.id === current)) return current;
@@ -668,6 +532,7 @@ const ConsciousMeetings: React.FC<ConsciousMeetingsProps> = ({ user }) => {
   const refreshJoinableSessions = async () => {
     const sessions = await listJoinableMeetingSessions();
     setJoinableMeetingSessions(sessions);
+    syncMeetingsFromBackendSessions([...hostedMeetingSessions, ...sessions]);
   };
 
   const disconnectProviderSessionToken = (
@@ -679,6 +544,7 @@ const ConsciousMeetings: React.FC<ConsciousMeetingsProps> = ({ user }) => {
     setSelectedHostedSessionId('');
     setSelectedProviderGroupIds([]);
     setLatestExternalJoinLink('');
+    syncMeetingsFromBackendSessions(joinableMeetingSessions);
     setMeetingOpsStatus(statusMessage);
   };
 
@@ -1078,14 +944,6 @@ const ConsciousMeetings: React.FC<ConsciousMeetingsProps> = ({ user }) => {
       setIsMeetingOpsBusy(false);
     }
   };
-
-  const filteredProviders = PROVIDERS.filter((p) => {
-    const matchesSearch =
-      p.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      p.specialty.toLowerCase().includes(searchQuery.toLowerCase());
-    const matchesAvailability = !showIncludedOnly || (p.availabilitySlots?.length || 0) > 0;
-    return matchesSearch && matchesAvailability;
-  });
 
   const hasLiveTracks = (candidate: MediaStream | null): candidate is MediaStream =>
     candidate instanceof MediaStream && candidate.getTracks().some((track) => track.readyState === 'live');
@@ -1602,7 +1460,7 @@ const ConsciousMeetings: React.FC<ConsciousMeetingsProps> = ({ user }) => {
   // Solo Session Functions
   const startSoloSession = async () => {
     if (!providerSessionToken.trim()) {
-      alert('Provider host access is required. Sign in through Provider Access.');
+      setMeetingOpsStatus('Provider host access is required. Sign in through Provider Access.');
       return;
     }
     try {
@@ -1640,7 +1498,7 @@ const ConsciousMeetings: React.FC<ConsciousMeetingsProps> = ({ user }) => {
 
     } catch (err) {
       setPermissionState('denied');
-      alert('Camera and microphone access is required for solo sessions. Please check your browser permissions.');
+      setMeetingOpsStatus('Camera and microphone access is required for solo sessions. Please check your browser permissions.');
     }
   };
 
@@ -1695,7 +1553,7 @@ const ConsciousMeetings: React.FC<ConsciousMeetingsProps> = ({ user }) => {
     const activeMeeting = meetings[0];
     const canSaveRecording = Boolean(user?.id && activeMeeting && user.id === activeMeeting.hostUserId);
     if (!canSaveRecording) {
-      alert('Only the session initiator can record or download the meeting video.');
+      setMeetingOpsStatus('Only the session initiator can record or download the meeting video.');
       return;
     }
 
@@ -1774,7 +1632,7 @@ const ConsciousMeetings: React.FC<ConsciousMeetingsProps> = ({ user }) => {
     const activeMeeting = meetings[0];
     const canSaveRecording = Boolean(user?.id && activeMeeting && user.id === activeMeeting.hostUserId);
     if (!canSaveRecording) {
-      alert('Only the session initiator can download the meeting video.');
+      setMeetingOpsStatus('Only the session initiator can download the meeting video.');
       return;
     }
 
@@ -1820,13 +1678,13 @@ const ConsciousMeetings: React.FC<ConsciousMeetingsProps> = ({ user }) => {
     const isImage = normalizedType.startsWith('image/');
     const isAllowedVideo = ALLOWED_BACKGROUND_VIDEO_TYPES.has(normalizedType);
     if (!isImage && !isAllowedVideo) {
-      alert('Allowed background uploads: JPG, PNG, WEBP, GIF, MP4, or WEBM.');
+      setMeetingOpsStatus('Allowed background uploads: JPG, PNG, WEBP, GIF, MP4, or WEBM.');
       event.target.value = '';
       return;
     }
 
     if (file.size > BACKGROUND_UPLOAD_MAX_BYTES) {
-      alert('Background upload must be 25 MB or less.');
+      setMeetingOpsStatus('Background upload must be 25 MB or less.');
       event.target.value = '';
       return;
     }
@@ -1846,15 +1704,7 @@ const ConsciousMeetings: React.FC<ConsciousMeetingsProps> = ({ user }) => {
   };
 
   const handleReschedule = (meeting: Meeting) => {
-    const provider = PROVIDERS.find((entry) => entry.id === meeting.providerId) || null;
-    if (provider) {
-      setSelectedProvider(provider);
-      resetSchedulingComposer();
-      setSelectedSlot(meeting.startTime);
-      setSchedulingModalOpen(true);
-      return;
-    }
-    alert('Provider details unavailable for reschedule.');
+    setMeetingOpsStatus('Reschedule is unavailable here. Providers update scheduled CNH rooms through host controls.');
   };
 
   const downloadMeetingNotes = (meeting: Meeting) => {
@@ -1890,9 +1740,9 @@ const ConsciousMeetings: React.FC<ConsciousMeetingsProps> = ({ user }) => {
     const payload = `${meeting.title}\n${meeting.notes.summary}`;
     try {
       await navigator.clipboard.writeText(payload);
-      alert('Meeting synthesis copied for participant sync.');
+      setMeetingOpsStatus('Meeting synthesis copied for participant sync.');
     } catch {
-      alert('Unable to access clipboard. Please copy notes manually.');
+      setMeetingOpsStatus('Unable to access clipboard. Please copy notes manually.');
     }
   };
 
@@ -2441,6 +2291,23 @@ const ConsciousMeetings: React.FC<ConsciousMeetingsProps> = ({ user }) => {
   const activeMeeting = meetings[0] || null;
   const hasActiveMeetingNotes = Boolean(activeMeeting?.notes?.summary);
   const canSaveRecording = Boolean(user?.id && activeMeeting && user.id === activeMeeting.hostUserId);
+  const canUseHostConsole = user?.role === 'provider' || user?.role === 'admin';
+
+  if (!canUseHostConsole) {
+    return (
+      <div className="glass-panel rounded-2xl border-amber-300/20 bg-amber-300/[0.04] p-6 sm:p-8">
+        <div className="flex items-start gap-4">
+          <ShieldCheck className="mt-1 h-6 w-6 text-amber-200" />
+          <div>
+            <h3 className="text-sm font-black uppercase tracking-widest text-white">Provider Host Console Restricted</h3>
+            <p className="mt-2 text-sm leading-6 text-slate-300">
+              Host controls are reserved for approved providers and the solo admin operator. Members can join only authorized sessions from the upcoming board or signed room links.
+            </p>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-0 flex flex-col gap-4 sm:gap-6 md:gap-8 animate-in fade-in duration-700 relative">
@@ -2473,9 +2340,9 @@ const ConsciousMeetings: React.FC<ConsciousMeetingsProps> = ({ user }) => {
       {/* Tabs (scrollable on mobile) */}
       <div className="flex gap-2 p-1 bg-white/5 border border-white/10 rounded-xl sm:rounded-2xl w-full sm:w-fit overflow-x-auto custom-scrollbar scrollable-x">
         {[
-          { id: 'schedule', label: 'Schedule', icon: <Calendar className="w-3 h-3 sm:w-4 sm:h-4" /> },
+          { id: 'schedule', label: 'Host Path', icon: <Calendar className="w-3 h-3 sm:w-4 sm:h-4" /> },
           { id: 'lobby', label: 'Live Lobby', icon: <Play className="w-3 h-3 sm:w-4 sm:h-4" /> },
-          { id: 'calendar', label: 'My Calendar', icon: <Clock className="w-3 h-3 sm:w-4 sm:h-4" /> }
+          { id: 'calendar', label: 'Session Ledger', icon: <Clock className="w-3 h-3 sm:w-4 sm:h-4" /> }
         ].map(tab => (
           <button
             key={tab.id}
@@ -2492,105 +2359,51 @@ const ConsciousMeetings: React.FC<ConsciousMeetingsProps> = ({ user }) => {
 
       <div className="flex-1 min-h-0">
         {activeTab === 'schedule' && (
-          <div className="space-y-4 sm:space-y-6 md:space-y-8 animate-in slide-in-from-bottom-4">
-            {/* Search & Filter */}
-            <div className="flex flex-col sm:flex-row gap-3 sm:gap-4">
-              <div className="relative flex-1">
-                <Search className="absolute left-4 sm:left-5 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-600" />
-                <input
-                  type="text"
-                  placeholder="Find a provider..."
-                  value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
-                  className="w-full pl-12 sm:pl-14 pr-4 sm:pr-6 py-3 sm:py-4 bg-white/5 border border-white/10 rounded-lg sm:rounded-2xl text-xs outline-none focus:ring-2 focus:ring-blue-500/30 transition-all font-medium"
-                />
+          <div className="grid grid-cols-1 gap-4 sm:gap-6 md:grid-cols-3 animate-in slide-in-from-bottom-4">
+            <div className="glass-panel md:col-span-2 p-5 sm:p-6 md:p-8 rounded-2xl border-white/10 space-y-5">
+              <div className="flex items-start gap-4">
+                <div className="rounded-2xl bg-blue-500/10 p-3 text-blue-200">
+                  <ShieldCheck className="h-6 w-6" />
+                </div>
+                <div>
+                  <h3 className="text-base sm:text-lg font-black uppercase tracking-widest text-white">
+                    Real Provider Publishing Path
+                  </h3>
+                  <p className="mt-2 text-xs sm:text-sm leading-6 text-slate-400">
+                    Demo provider cards and local bookings are removed. Use Live Lobby host controls to create real CNH rooms, invite users or groups, and share signed internal meeting links.
+                  </p>
+                </div>
+              </div>
+              <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+                <div className="rounded-xl border border-white/10 bg-white/[0.03] p-4">
+                  <p className="text-[9px] font-black uppercase tracking-widest text-slate-500">Hosted Rooms</p>
+                  <p className="mt-1 text-2xl font-black text-white">{hostedMeetingSessions.length}</p>
+                </div>
+                <div className="rounded-xl border border-white/10 bg-white/[0.03] p-4">
+                  <p className="text-[9px] font-black uppercase tracking-widest text-slate-500">Joinable</p>
+                  <p className="mt-1 text-2xl font-black text-white">{joinableMeetingSessions.length}</p>
+                </div>
+                <div className="rounded-xl border border-white/10 bg-white/[0.03] p-4">
+                  <p className="text-[9px] font-black uppercase tracking-widest text-slate-500">Host Access</p>
+                  <p className="mt-1 text-sm font-black uppercase text-white">
+                    {providerSessionToken.trim() ? 'Active' : 'Locked'}
+                  </p>
+                </div>
               </div>
               <button
-                onClick={() => setShowFilterPanel((prev) => !prev)}
-                className="px-4 sm:px-6 py-3 sm:py-4 bg-white/5 border border-white/10 rounded-lg sm:rounded-2xl text-slate-500 hover:text-white transition-all flex items-center justify-center gap-2"
+                type="button"
+                onClick={() => setActiveTab('lobby')}
+                className="w-full sm:w-auto px-5 py-3 bg-blue-600 hover:bg-blue-500 text-white rounded-xl text-[10px] font-black uppercase tracking-widest transition-all"
               >
-                <Filter className="w-4 h-4" /> <span className="text-[9px] sm:text-[10px] font-black uppercase tracking-widest hidden xs:inline">Filter</span>
+                Open Host Controls
               </button>
             </div>
 
-            {showFilterPanel && (
-              <div className="glass-panel p-4 sm:p-5 rounded-xl border border-white/10 flex flex-col sm:flex-row sm:items-center gap-4">
-                <label className="flex items-center gap-3 text-xs text-slate-300">
-                  <input
-                    type="checkbox"
-                    checked={showIncludedOnly}
-                    onChange={(e) => setShowIncludedOnly(e.target.checked)}
-                    className="w-4 h-4 accent-blue-500"
-                  />
-                  Show only providers with open availability
-                </label>
-                <button
-                  onClick={() => {
-                    setShowIncludedOnly(false);
-                    setShowFilterPanel(false);
-                  }}
-                  className="sm:ml-auto px-4 py-2 bg-white/5 hover:bg-white/10 border border-white/10 rounded-lg text-[10px] font-black uppercase tracking-widest text-slate-300 transition-colors"
-                >
-                  Reset Filters
-                </button>
-              </div>
-            )}
-
-            {/* Providers Grid */}
-            <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4 sm:gap-6 md:gap-8 pb-10 sm:pb-16 md:pb-20">
-              {filteredProviders.map(provider => {
-                return (
-                  <div
-                    key={provider.id}
-                    className="glass-panel group rounded-2xl sm:rounded-[1.5rem] md:rounded-[2.25rem] lg:rounded-[2.5rem] overflow-hidden flex flex-col border-white/5 hover:border-blue-500/30 transition-all duration-500 shadow-2xl relative"
-                  >
-                    <div className="p-4 sm:p-6 md:p-8 space-y-4 sm:space-y-5 md:space-y-6">
-                      <div className="flex items-center gap-3 sm:gap-4 md:gap-5">
-                        <img
-                          src={provider.avatar}
-                          className="w-12 h-12 sm:w-14 sm:h-14 md:w-16 md:h-16 rounded-lg sm:rounded-xl md:rounded-2xl object-cover ring-4 ring-white/5 shadow-2xl"
-                        />
-                        <div>
-                          <h4 className="text-base sm:text-lg md:text-xl font-black text-white uppercase tracking-tighter leading-none">
-                            {provider.name}
-                          </h4>
-                          <p className="text-[9px] sm:text-[10px] text-blue-400 font-black uppercase tracking-widest mt-1 sm:mt-2">
-                            {provider.specialty}
-                          </p>
-                        </div>
-                      </div>
-
-                      <div className="space-y-3 sm:space-y-4">
-                        <div className="flex flex-col xs:flex-row xs:justify-between xs:items-center gap-2 xs:gap-3 text-[9px] sm:text-[10px] font-black uppercase tracking-widest text-slate-500">
-                          <span>Next Slot: {provider.availabilitySlots?.[0]}</span>
-                          <span className="flex items-center gap-1 text-yellow-400">
-                            <CheckCircle2 className="w-3 h-3" /> {provider.rating} Rating
-                          </span>
-                        </div>
-
-                        <div className="p-3 sm:p-4 bg-white/5 rounded-lg sm:rounded-2xl border border-white/5 flex items-center justify-between gap-2 sm:gap-3 flex-wrap">
-                          <div className="flex items-center gap-2 sm:gap-3">
-                            <CreditCard className="w-3 h-3 sm:w-4 sm:h-4 text-slate-400" />
-                            <span className="text-[9px] sm:text-[10px] font-black text-white uppercase tracking-widest">
-                              Session Access
-                            </span>
-                          </div>
-                          <span className="px-2 sm:px-3 py-1 bg-teal-500/20 text-teal-400 rounded-full text-[8px] sm:text-[9px] font-black uppercase">
-                            Open To All Tiers
-                          </span>
-                        </div>
-                      </div>
-
-                      <button
-                        onClick={() => handleSchedule(provider)}
-                        className="w-full py-3 sm:py-4 md:py-5 bg-blue-600 hover:bg-blue-500 text-white rounded-lg sm:rounded-xl md:rounded-2xl font-black text-[9px] sm:text-[10px] uppercase tracking-widest shadow-xl transition-all hover:-translate-y-1 active:scale-95"
-                      >
-                        Schedule 1:1 Session
-                      </button>
-                    </div>
-                  </div>
-                );
-              })}
+            <div className="glass-panel p-5 sm:p-6 rounded-2xl border-amber-300/20 bg-amber-300/[0.04] space-y-3">
+              <h4 className="text-xs font-black uppercase tracking-widest text-white">Member Booking</h4>
+              <p className="text-xs leading-5 text-slate-300">
+                Self-service scheduling is gated for launch until provider availability is backed by real calendars and payment/membership rules.
+              </p>
             </div>
           </div>
         )}
@@ -2626,11 +2439,11 @@ const ConsciousMeetings: React.FC<ConsciousMeetingsProps> = ({ user }) => {
 
                     <div>
                       <h3 className="text-xl sm:text-2xl md:text-3xl lg:text-4xl font-black text-white uppercase tracking-tighter leading-none mb-3 sm:mb-4">
-                        {meetings[0].title}
+                        {activeMeeting?.title || 'No Real Session Selected'}
                       </h3>
                       <div className="flex flex-wrap items-center gap-3 sm:gap-4 md:gap-6 text-slate-400 text-xs sm:text-sm font-medium">
-                        <span className="flex items-center gap-2"><Clock className="w-3 h-3 sm:w-4 sm:h-4" /> {meetings[0].startTime}</span>
-                        <span className="flex items-center gap-2"><Users className="w-3 h-3 sm:w-4 sm:h-4" /> {meetings[0].participants.length} Participants</span>
+                        <span className="flex items-center gap-2"><Clock className="w-3 h-3 sm:w-4 sm:h-4" /> {activeMeeting?.startTime || 'Create or join a CNH room'}</span>
+                        <span className="flex items-center gap-2"><Users className="w-3 h-3 sm:w-4 sm:h-4" /> {activeMeeting?.participants.length || 0} Participants</span>
                       </div>
                     </div>
 
@@ -3011,7 +2824,7 @@ const ConsciousMeetings: React.FC<ConsciousMeetingsProps> = ({ user }) => {
                   </div>
                   <div>
                     <h4 className="text-xs sm:text-sm font-black text-white uppercase tracking-widest">AI Synthesis Notetaker</h4>
-                    <p className="text-[8px] sm:text-[9px] text-slate-500 uppercase tracking-widest mt-1">Real-time transcription & action extraction</p>
+                    <p className="text-[8px] sm:text-[9px] text-slate-500 uppercase tracking-widest mt-1">Transcript capture gated for launch</p>
                   </div>
                 </div>
                 <button
@@ -3027,7 +2840,7 @@ const ConsciousMeetings: React.FC<ConsciousMeetingsProps> = ({ user }) => {
               </div>
 
               <p className="text-[9px] sm:text-[10px] text-slate-400 uppercase tracking-widest">
-                Synthesis notes are generated in-session only, can be downloaded by all participants, and are auto-cleared when the meeting ends.
+                Synthesis does not display mock transcripts. Notes unlock only after real captured transcript support is connected.
               </p>
 
               {isNoteTakerOn && (
@@ -3581,6 +3394,16 @@ const ConsciousMeetings: React.FC<ConsciousMeetingsProps> = ({ user }) => {
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 sm:gap-8 md:gap-10">
               {/* Upcoming List */}
               <div className="lg:col-span-2 space-y-4 sm:space-y-5 md:space-y-6">
+                {meetings.length === 0 && (
+                  <div className="glass-panel rounded-2xl p-6 sm:p-8 border-white/10">
+                    <h4 className="text-sm font-black uppercase tracking-widest text-white">
+                      No real meeting sessions loaded
+                    </h4>
+                    <p className="mt-3 text-sm leading-6 text-slate-400">
+                      The ledger only shows backend-created CNH rooms. Create a hosted session or refresh invited platform sessions to populate this view.
+                    </p>
+                  </div>
+                )}
                 {meetings.map((meeting) => (
                   <div key={meeting.id} className="glass-panel rounded-lg sm:rounded-[1.5rem] md:rounded-[2.25rem] lg:rounded-[2.5rem] p-4 sm:p-6 md:p-8 border-white/5 hover:border-blue-500/20 transition-all shadow-xl group">
                     <div className="relative mb-5 aspect-[16/6] overflow-hidden rounded-xl border border-blue-300/20 bg-black/40">
@@ -3704,15 +3527,17 @@ const ConsciousMeetings: React.FC<ConsciousMeetingsProps> = ({ user }) => {
                   <div className="space-y-3 sm:space-y-4">
                     <div className="flex justify-between items-center p-3 sm:p-4 bg-white/5 rounded-lg sm:rounded-xl border border-white/5">
                       <span className="text-[8px] sm:text-[9px] font-black text-slate-500 uppercase tracking-widest">Total Sessions</span>
-                      <span className="text-white font-mono font-bold text-sm sm:text-base">{meetings.length + 12}</span>
+                      <span className="text-white font-mono font-bold text-sm sm:text-base">{meetings.length}</span>
                     </div>
                     <div className="flex justify-between items-center p-3 sm:p-4 bg-white/5 rounded-lg sm:rounded-xl border border-white/5">
-                      <span className="text-[8px] sm:text-[9px] font-black text-slate-500 uppercase tracking-widest">Integrity Logs</span>
-                      <span className="text-white font-mono font-bold text-sm sm:text-base">840 Recorded</span>
+                      <span className="text-[8px] sm:text-[9px] font-black text-slate-500 uppercase tracking-widest">Meeting Source</span>
+                      <span className="text-white font-mono font-bold text-sm sm:text-base">Backend</span>
                     </div>
                     <div className="flex justify-between items-center p-3 sm:p-4 bg-white/5 rounded-lg sm:rounded-xl border border-white/5">
-                      <span className="text-[8px] sm:text-[9px] font-black text-slate-500 uppercase tracking-widest">Provider Nodes</span>
-                      <span className="text-white font-mono font-bold text-sm sm:text-base">3 Active</span>
+                      <span className="text-[8px] sm:text-[9px] font-black text-slate-500 uppercase tracking-widest">Host Controls</span>
+                      <span className="text-white font-mono font-bold text-sm sm:text-base">
+                        {providerSessionToken.trim() ? 'Active' : 'Locked'}
+                      </span>
                     </div>
                   </div>
                 </div>
@@ -3723,7 +3548,7 @@ const ConsciousMeetings: React.FC<ConsciousMeetingsProps> = ({ user }) => {
                     <h4 className="text-[9px] sm:text-[10px] font-black uppercase tracking-widest">Meeting Integrity</h4>
                   </div>
                   <p className="text-[10px] sm:text-[11px] text-slate-400 leading-relaxed font-light italic">
-                    If synthesis is enabled, notes are generated temporarily for in-meeting use, downloadable by participants, and automatically purged when the session ends.
+                    Synthesis remains gated until transcript capture is real; this portal will not surface demo notes as participant data.
                   </p>
                 </div>
               </div>
@@ -3737,11 +3562,11 @@ const ConsciousMeetings: React.FC<ConsciousMeetingsProps> = ({ user }) => {
           <div className="glass-panel w-full max-w-xl my-4 max-h-[calc(100dvh-2rem)] overflow-y-auto custom-scrollbar p-6 sm:p-8 rounded-2xl border border-blue-500/30 shadow-2xl space-y-4 sm:space-y-5">
             <h3 className="text-lg sm:text-xl font-black text-white uppercase tracking-widest">Enable AI Synthesis?</h3>
             <p className="text-[10px] sm:text-xs text-slate-300 leading-relaxed">
-              Security and usage notice: synthesis notes are generated for the live meeting only. Notes are not saved to Conscious Network Hub and are purged when the meeting ends or all participants leave.
+              Security and usage notice: synthesis notes remain gated until real transcript capture is connected. No demo transcript will be used.
             </p>
             <ul className="text-[10px] sm:text-xs text-slate-400 space-y-1">
-              <li>- Any participant can download notes during the active session.</li>
-              <li>- Transcript processing is session-scoped and not written to long-term storage.</li>
+              <li>- Transcript processing must come from a real active session.</li>
+              <li>- Session notes are not written to long-term storage by this portal.</li>
               <li>- Disable synthesis at any time to clear notes immediately.</li>
             </ul>
             <div className="flex flex-col sm:flex-row gap-3">
@@ -3790,160 +3615,6 @@ const ConsciousMeetings: React.FC<ConsciousMeetingsProps> = ({ user }) => {
               >
                 Choose File
               </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Scheduling Modal */}
-      {isSchedulingModalOpen && selectedProvider && (
-        <div className="fixed inset-0 z-[200] flex items-start sm:items-center justify-center p-3 sm:p-4 bg-black/95 backdrop-blur-3xl animate-in fade-in duration-300 overflow-y-auto custom-scrollbar">
-          <div className="glass-panel w-full max-w-2xl my-4 p-6 sm:p-8 md:p-10 rounded-2xl sm:rounded-3xl md:rounded-[2.5rem] lg:rounded-[4rem] relative animate-in zoom-in duration-300 border-blue-500/20 shadow-2xl max-h-[calc(100dvh-2rem)] overflow-y-auto custom-scrollbar scrollable">
-            <button
-              onClick={() => {
-                setSchedulingModalOpen(false);
-                resetSchedulingComposer();
-              }}
-              className="absolute top-4 sm:top-6 md:top-8 lg:top-10 right-4 sm:right-6 md:right-8 lg:right-10 p-2 sm:p-3 hover:bg-white/5 rounded-full transition-colors text-slate-500"
-            >
-              <X className="w-5 h-5 sm:w-6 sm:h-6" />
-            </button>
-
-            <div className="flex flex-col sm:flex-row items-start gap-4 sm:gap-6 md:gap-8 mb-6 sm:mb-8 md:mb-10">
-              <img src={selectedProvider.avatar} className="w-16 h-16 sm:w-20 sm:h-20 md:w-24 md:h-24 rounded-2xl sm:rounded-3xl object-cover ring-8 ring-white/5 shadow-2xl" />
-              <div className="flex-1">
-                <h3 className="text-xl sm:text-2xl md:text-3xl font-black text-white uppercase tracking-tighter leading-none">{selectedProvider.name}</h3>
-                <p className="text-xs sm:text-sm font-bold text-blue-400 uppercase tracking-widest mt-1 sm:mt-2 md:mt-3">{selectedProvider.specialty}</p>
-                <div className="flex flex-wrap items-center gap-3 sm:gap-4 text-[8px] sm:text-[9px] sm:text-[10px] font-black text-slate-500 uppercase tracking-widest pt-2 sm:pt-3 md:pt-4">
-                  <span className="flex items-center gap-1 sm:gap-2"><Clock className="w-3 h-3 sm:w-4 sm:h-4" /> 60 Minute Session</span>
-                  <span className="flex items-center gap-1 sm:gap-2"><ShieldCheck className="w-3 h-3 sm:w-4 sm:h-4" /> Verified Provider</span>
-                </div>
-              </div>
-            </div>
-
-            <div className="space-y-6 sm:space-y-8">
-              <div className="space-y-3 sm:space-y-4">
-                <h4 className="text-[9px] sm:text-[10px] font-black text-slate-500 uppercase tracking-widest ml-0.5 sm:ml-1">Select Synchronous Slot</h4>
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
-                  {selectedProvider.availabilitySlots?.map((slot, i) => (
-                    <button
-                      key={i}
-                      onClick={() => setSelectedSlot(slot)}
-                      className={`p-4 sm:p-5 rounded-lg sm:rounded-2xl border transition-all text-xs sm:text-sm font-bold uppercase tracking-widest ${
-                        selectedSlot === slot
-                          ? 'bg-blue-600 border-blue-500 text-white shadow-lg'
-                          : 'bg-white/5 border-white/10 text-slate-400 hover:bg-white/10 hover:text-white'
-                      }`}
-                    >
-                      {slot}
-                    </button>
-                  ))}
-                </div>
-              </div>
-
-              <div className="space-y-3 sm:space-y-4">
-                <h4 className="text-[9px] sm:text-[10px] font-black text-slate-500 uppercase tracking-widest ml-0.5 sm:ml-1">Invite Participants</h4>
-                <div className="flex flex-col sm:flex-row gap-3">
-                  <div className="relative flex-1">
-                    <UserPlus className="absolute left-4 sm:left-5 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-600" />
-                    <input
-                      type="text"
-                      value={inviteUsernameInput}
-                      onChange={(event) => setInviteUsernameInput(event.target.value)}
-                      onKeyDown={(event) => {
-                        if (event.key === 'Enter') {
-                          event.preventDefault();
-                          addInviteMemberByUsername(inviteUsernameInput);
-                        }
-                      }}
-                      placeholder="Add by username or handle"
-                      className="w-full pl-12 sm:pl-14 pr-4 sm:pr-6 py-3 sm:py-4 bg-white/5 border border-white/10 rounded-lg sm:rounded-2xl text-xs text-white focus:outline-none focus:ring-2 focus:ring-blue-500/30 transition-all font-medium"
-                    />
-                  </div>
-                  <button
-                    type="button"
-                    onClick={() => addInviteMemberByUsername(inviteUsernameInput)}
-                    className="px-4 sm:px-6 py-3 sm:py-4 bg-blue-600 hover:bg-blue-500 text-white rounded-lg sm:rounded-2xl text-[9px] sm:text-[10px] font-black uppercase tracking-widest transition-all"
-                  >
-                    Add
-                  </button>
-                </div>
-
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                  <div className="relative">
-                    <Layers className="absolute left-4 sm:left-5 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-600" />
-                    <input
-                      type="text"
-                      value={inviteGroupNameInput}
-                      onChange={(event) => setInviteGroupNameInput(event.target.value)}
-                      placeholder="Save current group as..."
-                      className="w-full pl-12 sm:pl-14 pr-4 sm:pr-6 py-3 sm:py-4 bg-white/5 border border-white/10 rounded-lg sm:rounded-2xl text-xs text-white focus:outline-none focus:ring-2 focus:ring-blue-500/30 transition-all font-medium"
-                    />
-                  </div>
-                  <button
-                    type="button"
-                    onClick={saveInviteGroupTemplate}
-                    disabled={pendingInviteMembers.length === 0 || !inviteGroupNameInput.trim()}
-                    className="px-4 sm:px-6 py-3 sm:py-4 bg-teal-600 hover:bg-teal-500 disabled:bg-slate-700 disabled:text-slate-500 text-white rounded-lg sm:rounded-2xl text-[9px] sm:text-[10px] font-black uppercase tracking-widest transition-all"
-                  >
-                    Save Group
-                  </button>
-                </div>
-
-                {inviteGroupTemplates.length > 0 && (
-                  <select
-                    value={selectedInviteGroupId}
-                    onChange={(event) => applyInviteGroupTemplate(event.target.value)}
-                    className="w-full px-4 sm:px-5 py-3 sm:py-4 bg-white/5 border border-white/10 rounded-lg sm:rounded-2xl text-xs text-white focus:outline-none focus:ring-2 focus:ring-blue-500/30 transition-all font-medium"
-                  >
-                    <option value="">Load saved participant group</option>
-                    {inviteGroupTemplates.map((group) => (
-                      <option key={group.id} value={group.id}>
-                        {group.name} ({group.usernames.length})
-                      </option>
-                    ))}
-                  </select>
-                )}
-
-                <div className="flex flex-wrap gap-2">
-                  {pendingInviteMembers.map((member) => (
-                    <button
-                      key={member.username}
-                      type="button"
-                      onClick={() => removeInviteMember(member.username)}
-                      className="px-3 py-1.5 bg-white/10 hover:bg-white/15 border border-white/10 rounded-full text-[8px] sm:text-[9px] text-white font-bold uppercase tracking-widest"
-                    >
-                      {member.displayName} @{member.username} <span className="text-slate-400">x</span>
-                    </button>
-                  ))}
-                  {pendingInviteMembers.length === 0 && (
-                    <span className="text-[9px] sm:text-[10px] text-slate-500 uppercase tracking-widest">
-                      Add usernames to build provider groups quickly.
-                    </span>
-                  )}
-                </div>
-
-                {isDirectoryLoading && (
-                  <p className="text-[9px] sm:text-[10px] text-slate-500 uppercase tracking-widest">
-                    Syncing user directory...
-                  </p>
-                )}
-              </div>
-
-              <div className="p-4 sm:p-6 bg-blue-600/10 border border-blue-500/20 rounded-lg sm:rounded-xl md:rounded-[1.5rem] lg:rounded-[2rem] flex flex-col sm:flex-row items-center justify-between gap-4 sm:gap-6">
-                <div className="text-center sm:text-left w-full sm:w-auto">
-                  <h5 className="text-[9px] sm:text-[10px] font-black text-blue-400 uppercase tracking-widest mb-1">Access Protocol</h5>
-                  <p className="text-white font-bold text-sm sm:text-base md:text-lg uppercase tracking-tighter">
-                    Open To All Tiers
-                  </p>
-                </div>
-                <button
-                  onClick={confirmBooking}
-                  className="w-full sm:w-auto px-6 sm:px-10 py-4 sm:py-5 bg-blue-600 hover:bg-blue-500 text-white rounded-lg sm:rounded-xl md:rounded-2xl font-black text-xs sm:text-sm uppercase tracking-[0.2em] transition-all shadow-xl hover:-translate-y-1 active:scale-95 flex items-center justify-center gap-2"
-                >
-                  Confirm Anchor Session <ChevronRight className="w-4 h-4 sm:w-5 sm:h-5" />
-                </button>
-              </div>
             </div>
           </div>
         </div>

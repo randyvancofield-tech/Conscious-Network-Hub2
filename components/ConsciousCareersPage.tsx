@@ -220,19 +220,19 @@ const ConsciousCareersPage: React.FC<ConsciousCareersPageProps> = ({
               <div className="mb-2 flex items-start justify-between gap-3">
                 <h3 className="min-w-0 text-xl xl:text-2xl font-black text-white leading-tight uppercase tracking-tighter">Entrepreneurship Support</h3>
                 <span className="cnh-status-badge shrink-0 rounded-full bg-teal-500/20 px-3 py-1 text-[9px] font-black tracking-widest text-teal-300 sm:px-4 sm:py-1.5 sm:text-[10px]">
-                  Soon
+                  Portal
                 </span>
               </div>
               <p className="mb-6 text-blue-400/60 text-[8px] sm:text-[9px] font-black uppercase tracking-[0.3em] sm:mb-8">Conscious Careers Option</p>
               <div className="space-y-5">
                 <Rocket className="h-8 w-8 text-teal-300" />
                 <p className="text-sm leading-7 text-slate-300">
-                  Mentorship, planning support, and guided entrepreneurial development are being prepared for future release.
+                  A guided pathway for readiness, alignment, regional entrepreneurship resources, and future external-resource opportunities.
                 </p>
               </div>
             </div>
             <span className="cnh-action-label mt-7 flex w-full items-center justify-center rounded-xl border border-white/5 bg-white/5 py-4 text-center text-[10px] font-black uppercase tracking-[0.18em] text-slate-300 shadow-xl transition-all group-hover:border-teal-500/40 group-hover:bg-teal-600/20 group-hover:text-white sm:mt-10 sm:rounded-2xl sm:py-5 sm:text-xs">
-              Coming Soon
+              Open Pathway Portal
             </span>
           </button>
         </div>

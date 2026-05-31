@@ -14,6 +14,7 @@ import {
 } from '../providerMiddleware';
 import { resolveAuthTokenSecret } from '../requiredEnv';
 import { getPrisma } from '../services/prismaClient';
+import { isProviderCrmSoleAdmin } from '../services/providerCrm';
 
 type SessionMode = 'virtual' | 'solo' | 'immersive-5d';
 type SessionStatus = 'scheduled' | 'live' | 'ended';
@@ -244,6 +245,14 @@ const listProviderMeetingSessions = async (providerDid: string): Promise<Meeting
   const db = getPrisma() as any;
   const rows = await db.meetingSession.findMany({
     where: { providerId: providerDid },
+    orderBy: { scheduledAt: 'desc' },
+  });
+  return rows.map(sessionFromRow);
+};
+
+const listAllMeetingSessions = async (): Promise<MeetingSessionRecord[]> => {
+  const db = getPrisma() as any;
+  const rows = await db.meetingSession.findMany({
     orderBy: { scheduledAt: 'desc' },
   });
   return rows.map(sessionFromRow);
@@ -505,11 +514,14 @@ const findProviderSessionOrDeny = async (
   const providerUserId = String(providerReq.providerUserId || '').trim();
   const sessionId = String(req.params.sessionId || '').trim();
   const session = await getMeetingSession(sessionId);
-  if (!providerDid || !providerUserId || !session || session.providerDid !== providerDid) {
+  const providerUser = providerUserId ? await localStore.getUserById(providerUserId) : null;
+  const canAdminIntervene =
+    providerReq.providerRole === 'admin' && isProviderCrmSoleAdmin(providerUser);
+  if (!providerDid || !providerUserId || !session || (session.providerDid !== providerDid && !canAdminIntervene)) {
     res.status(404).json({ error: 'Meeting session not found' });
     return null;
   }
-  return { providerDid, providerUserId, session };
+  return { providerDid: session.providerDid, providerUserId, session };
 };
 
 const ensureSessionCapacity = (session: MeetingSessionRecord): boolean =>
@@ -520,7 +532,6 @@ const maybeFinalizeSession = async (session: MeetingSessionRecord): Promise<void
   session.status = 'ended';
   session.endedAtMs = Date.now();
   session.updatedAtMs = session.endedAtMs;
-  session.vodPath = session.vodPath || `/vod/conscious-meetings/${session.id}.mp4`;
   await saveMeetingSession(session);
 };
 
@@ -575,7 +586,7 @@ const isUserInvited = (session: MeetingSessionRecord, user: any): boolean => {
 };
 
 const canUserAccessSession = (session: MeetingSessionRecord, user: any): boolean =>
-  String(user?.role || '').toLowerCase() === 'admin' ||
+  isProviderCrmSoleAdmin(user) ||
   String(user?.id || '').trim() === session.providerUserId ||
   session.publicStream ||
   isUserInvited(session, user);
@@ -583,7 +594,7 @@ const canUserAccessSession = (session: MeetingSessionRecord, user: any): boolean
 const getParticipantIdForUser = (session: MeetingSessionRecord, user: any): string => {
   const userId = String(user?.id || '').trim();
   if (userId && userId === session.providerUserId) return `provider:${session.providerDid}`;
-  if (String(user?.role || '').toLowerCase() === 'admin' && userId) return `admin:${userId}`;
+  if (isProviderCrmSoleAdmin(user) && userId) return `admin:${userId}`;
   return `user:${userId}`;
 };
 
@@ -643,7 +654,13 @@ const roomConfigToResponse = (session: MeetingSessionRecord, viewer: any, req: R
 providerRouter.get('/sessions', requireProviderScope('provider:read'), async (req: Request, res: Response): Promise<void> => {
   const providerReq = req as ProviderAuthenticatedRequest;
   const providerDid = String(providerReq.providerDid || '').trim();
-  const sessions = (await listProviderMeetingSessions(providerDid))
+  const providerUserId = String(providerReq.providerUserId || '').trim();
+  const providerUser = providerUserId ? await localStore.getUserById(providerUserId) : null;
+  const adminOversight = providerReq.providerRole === 'admin' && isProviderCrmSoleAdmin(providerUser);
+  const sourceSessions = adminOversight
+    ? await listAllMeetingSessions()
+    : await listProviderMeetingSessions(providerDid);
+  const sessions = sourceSessions
     .sort((a, b) => b.createdAtMs - a.createdAtMs)
     .map((session) => sessionToResponse(session, req));
   recordAuditEvent(req, {
@@ -656,6 +673,7 @@ providerRouter.get('/sessions', requireProviderScope('provider:read'), async (re
     metadata: {
       providerSessionId: providerReq.providerSessionId || null,
       sessionCount: sessions.length,
+      adminOversight,
     },
   });
   res.json({ success: true, sessions });
@@ -795,7 +813,6 @@ providerRouter.post('/sessions/:sessionId/end', requireProviderScope('provider:h
   session.status = 'ended';
   session.endedAtMs = Date.now();
   session.updatedAtMs = session.endedAtMs;
-  session.vodPath = session.vodPath || `/vod/conscious-meetings/${session.id}.mp4`;
   session.participants.clear();
   session.invitedMembers.clear();
   session.externalLinks.clear();
@@ -1062,8 +1079,12 @@ userRouter.get('/sessions/:sessionId', async (req: Request, res: Response): Prom
 
   const sessionId = String(req.params.sessionId || '').trim();
   const session = await getMeetingSessionByEndpoint(sessionId);
-  if (!session || !canUserAccessSession(session, viewer)) {
+  if (!session) {
     res.status(404).json({ error: 'Meeting session not found' });
+    return;
+  }
+  if (!canUserAccessSession(session, viewer)) {
+    res.status(403).json({ error: 'Meeting access required for this session' });
     return;
   }
 
@@ -1085,8 +1106,12 @@ userRouter.get('/sessions/:sessionId/room-config', async (req: Request, res: Res
 
   const sessionId = String(req.params.sessionId || '').trim();
   const session = await getMeetingSessionByEndpoint(sessionId);
-  if (!session || !canUserAccessSession(session, viewer)) {
+  if (!session) {
     res.status(404).json({ error: 'Meeting session not found' });
+    return;
+  }
+  if (!canUserAccessSession(session, viewer)) {
+    res.status(403).json({ error: 'Meeting access required for this session' });
     return;
   }
 
@@ -1108,8 +1133,12 @@ userRouter.get('/sessions/:sessionId/signals', async (req: Request, res: Respons
 
   const sessionId = String(req.params.sessionId || '').trim();
   const session = await getMeetingSessionByEndpoint(sessionId);
-  if (!session || !canUserAccessSession(session, viewer)) {
+  if (!session) {
     res.status(404).json({ error: 'Meeting session not found' });
+    return;
+  }
+  if (!canUserAccessSession(session, viewer)) {
+    res.status(403).json({ error: 'Meeting access required for this session' });
     return;
   }
 
@@ -1144,8 +1173,12 @@ userRouter.post('/sessions/:sessionId/signals', async (req: Request, res: Respon
 
   const sessionId = String(req.params.sessionId || '').trim();
   const session = await getMeetingSessionByEndpoint(sessionId);
-  if (!session || !canUserAccessSession(session, viewer)) {
+  if (!session) {
     res.status(404).json({ error: 'Meeting session not found' });
+    return;
+  }
+  if (!canUserAccessSession(session, viewer)) {
+    res.status(403).json({ error: 'Meeting access required for this session' });
     return;
   }
 

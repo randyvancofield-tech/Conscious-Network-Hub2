@@ -98,7 +98,7 @@ const PLATFORM_SEARCH_CATALOG: PlatformSearchResult[] = [
   { id: 'providers', title: 'Providers Market', description: 'Approved public provider profiles.', view: AppView.PROVIDERS, keywords: ['provider', 'services', 'market'] },
   { id: 'careers', title: 'Conscious Careers', description: 'Grant and entrepreneurship readiness pathways.', view: AppView.CONSCIOUS_CAREERS, keywords: ['grant', 'career', 'entrepreneurship'] },
   { id: 'grant', title: 'Grant Application', description: 'Conscious Careers grant application.', view: AppView.GRANT_APPLICATION, keywords: ['funding', 'application', 'careers'] },
-  { id: 'entrepreneurship', title: 'Entrepreneurship Support', description: 'Readiness and external resource pathway.', view: AppView.ENTREPRENEURSHIP_SUPPORT, keywords: ['business', 'sbdc', 'readiness'] },
+  { id: 'entrepreneurship', title: 'Entrepreneurship Support', description: 'Conscious Careers pathway portal for readiness and regional entrepreneurship resources.', view: AppView.ENTREPRENEURSHIP_SUPPORT, keywords: ['business', 'sbdc', 'readiness'] },
   { id: 'provider-access', title: 'Provider Access', description: 'Approved provider sign-in, application, and applicant status.', view: AppView.PROVIDER_ACCESS, keywords: ['provider sign in', 'apply', 'applicant'] },
   { id: 'provider-apply', title: 'Provider Application', description: 'Apply to become a CNH provider.', view: AppView.PROVIDER_APPLY, keywords: ['provider apply', 'application'] },
   { id: 'provider-status', title: 'Provider Applicant Status', description: 'Returning applicant sign-in and review status.', view: AppView.PROVIDER_APPLICANT_SIGN_IN, keywords: ['candidate', 'applicant', 'status'] },
@@ -3641,7 +3641,13 @@ const App: React.FC = () => {
       case AppView.ENTREPRENEURSHIP_SUPPORT:
         return (
           <EntrepreneurshipSupportPage
+            user={user}
             onBack={() => setCurrentView(AppView.CONSCIOUS_CAREERS)}
+            onSignInPrompt={() => {
+              resetSignInChallengeInputs();
+              setSigninModalOpen(true);
+            }}
+            onApplyAsProvider={() => setCurrentView(AppView.PROVIDER_APPLY)}
           />
         );
       case AppView.DASHBOARD:

@@ -21,6 +21,9 @@ router.post(
     const subject = normalizeText(req.body?.subject || 'Platform contact request', 200);
     const message = normalizeText(req.body?.message, 5000);
     const route = normalizeText(req.body?.route, 512);
+    const isExecutiveInquiry =
+      route.includes('/conscious-careers/entrepreneurship-support#executive-inquiry') ||
+      subject.toLowerCase().includes('high executive contact');
 
     if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
       recordAuditEvent(req, {
@@ -39,14 +42,16 @@ router.post(
         type: 'contact',
         subject: subject || `Contact request from ${name}`,
         message,
+        priority: isExecutiveInquiry ? 'high' : 'normal',
         submitterName: name,
         submitterEmail: email,
         route: route || null,
-        category: 'contact',
-        source: 'contact_modal',
+        category: isExecutiveInquiry ? 'executive_inquiry' : 'contact',
+        source: isExecutiveInquiry ? 'conscious_careers_executive_inquiry' : 'contact_modal',
         metadata: {
           delivery: 'admin_console',
           originalRoute: route || null,
+          intakeType: isExecutiveInquiry ? 'high_executive_contact_general_inquiry' : 'contact',
         },
       });
 

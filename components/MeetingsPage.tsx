@@ -163,9 +163,9 @@ export const MeetingDetail: React.FC<{
         <div className="aspect-video rounded-2xl border border-white/10 bg-gradient-to-br from-blue-950/60 via-slate-950 to-teal-950/50 p-6">
           <div className="flex h-full flex-col items-center justify-center text-center">
             <Video className="mb-4 h-12 w-12 text-blue-300" />
-            <h2 className="text-xl font-black uppercase text-white">Session Room UI Ready</h2>
+            <h2 className="text-xl font-black uppercase text-white">Legacy Meeting Surface Disabled</h2>
             <p className="mt-2 max-w-md text-sm leading-6 text-slate-400">
-              Live video, replay playback, and provider room controls are being prepared.
+              Live rooms now open through backend CNH room links and the Conscious Meetings upcoming board.
             </p>
           </div>
         </div>
@@ -219,8 +219,8 @@ const MeetingsPage: React.FC<MeetingsPageProps> = ({ meetingId, onOpenMeeting, o
       <PageShell>
         <EmptyState
           icon={<Video className="h-7 w-7" />}
-          title="Meeting not found"
-          description="No active or archived meeting matches the requested link."
+          title="Meeting access unavailable"
+          description="No real backend meeting is available for this legacy surface. Use the upcoming board or a signed CNH room link."
           action={
             <ActionButton type="button" onClick={onBackToList} icon={<ArrowLeft className="h-4 w-4" />}>
               Back to Meetings

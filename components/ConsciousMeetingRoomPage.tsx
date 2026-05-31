@@ -284,8 +284,8 @@ const ConsciousMeetingRoomPage: React.FC<ConsciousMeetingRoomPageProps> = ({ ses
       <PageShell>
         <EmptyState
           icon={<Video className="h-7 w-7" />}
-          title="Meeting room not found"
-          description="This meeting link is valid, but no active or archived Conscious Meeting matches it."
+          title="Meeting access unavailable"
+          description="This room may not exist, may have ended, or may require an invitation, membership, provider approval, or admin assistance."
           action={
             <ActionButton type="button" variant="secondary" onClick={onBack} icon={<ArrowLeft className="h-4 w-4" />}>
               Upcoming Sessions

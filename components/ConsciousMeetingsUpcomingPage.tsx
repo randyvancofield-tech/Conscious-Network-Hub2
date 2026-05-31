@@ -37,7 +37,7 @@ type ArchiveEntry = {
   providerName: string;
   focusArea: string;
   startTimeMs: number;
-  vodPath: string;
+  vodPath: string | null;
   source: 'cloud' | 'surface';
 };
 
@@ -124,11 +124,11 @@ const ConsciousMeetingsUpcomingPage: React.FC<ConsciousMeetingsUpcomingPageProps
     const backendArchive = archivedSessions.map((session) => ({
       id: session.routeKey || session.id,
       title: session.title,
-      description: session.description || 'Completed provider live stream archived for replay access.',
+      description: session.description || 'Completed provider live stream record.',
       providerName: getProviderName(session),
       focusArea: getFocusArea(session),
       startTimeMs: session.endedAtMs || getSessionStartMs(session),
-      vodPath: session.vodPath || `/vod/conscious-meetings/${session.id}.mp4`,
+      vodPath: session.vodPath || null,
       source: 'cloud' as const,
     }));
     const search = archiveSearch.trim().toLowerCase();
@@ -362,7 +362,7 @@ const ConsciousMeetingsUpcomingPage: React.FC<ConsciousMeetingsUpcomingPageProps
           <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
             <div>
               <h2 className="text-sm font-black uppercase tracking-widest text-white">Archived Wisdom Vault</h2>
-              <p className="mt-1 text-xs leading-5 text-slate-500">Completed streams point to immutable VOD paths on the cloud file network.</p>
+              <p className="mt-1 text-xs leading-5 text-slate-500">Completed sessions appear here. Replay links only show when a real recording path exists.</p>
             </div>
             <label className="flex items-center gap-2 rounded-xl border border-white/10 bg-black/20 px-3 py-2">
               <Search className="h-4 w-4 text-slate-400" />
@@ -390,10 +390,12 @@ const ConsciousMeetingsUpcomingPage: React.FC<ConsciousMeetingsUpcomingPageProps
                   </div>
                   <span className="inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/5 px-3 py-1 text-[8px] font-black uppercase tracking-widest text-slate-300">
                     <Archive className="h-3 w-3" />
-                    VOD
+                    {entry.vodPath ? 'Replay' : 'Metadata'}
                   </span>
                 </div>
-                <p className="mt-3 break-all rounded-lg bg-black/20 px-3 py-2 text-[10px] text-slate-500">{entry.vodPath}</p>
+                <p className="mt-3 break-all rounded-lg bg-black/20 px-3 py-2 text-[10px] text-slate-500">
+                  {entry.vodPath || 'Replay unavailable. No server recording path has been attached to this session.'}
+                </p>
               </div>
             ))}
           </div>
