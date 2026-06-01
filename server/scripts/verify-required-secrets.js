@@ -14,6 +14,8 @@ const PROD_DATABASE_URL_MISMATCH_PATTERN =
   /Production requires DATABASE_URL to use postgres:\/\/ or postgresql:\/\/|Shared DB persistence requires DATABASE_URL to use postgres:\/\/ or postgresql:\/\/|AUTH_PERSISTENCE_BACKEND=shared_db requires DATABASE_URL to use postgres:\/\/ or postgresql:\/\//i;
 const PROD_DATABASE_POOLER_MISMATCH_PATTERN =
   /DATABASE_URL must use the pooled Neon connection string/i;
+const UPLOAD_OBJECT_KEY_SECRET_MISSING_PATTERN =
+  /Missing required UPLOAD_OBJECT_KEY_SECRET for production\/shared upload object keys/i;
 
 const BASE_REQUIRED_ENV = {
   STRIPE_SECRET_KEY: 'sk_test_required_secret_check',
@@ -25,6 +27,11 @@ const BASE_REQUIRED_ENV = {
   STRIPE_SUCCESS_URL: 'http://localhost:3000/verify-session?session_id={CHECKOUT_SESSION_ID}',
   STRIPE_CANCEL_URL: 'http://localhost:3000/membership-access',
   FRONTEND_BASE_URL: 'http://localhost:3000',
+};
+
+const SHARED_DB_REQUIRED_ENV = {
+  SENSITIVE_DATA_KEY: 'integration-test-sensitive-key',
+  UPLOAD_OBJECT_KEY_SECRET: 'integration-test-upload-object-key-secret',
 };
 
 const PROD_RETURN_URL_ENV = {
@@ -153,12 +160,12 @@ const runExpectFailureSharedDbMisconfig = () =>
     const env = buildEnv({
       set: {
         ...BASE_REQUIRED_ENV,
+        ...SHARED_DB_REQUIRED_ENV,
         NODE_ENV: 'test',
         PORT: '3983',
         AUTH_TOKEN_SECRET: 'integration-test-auth-secret',
         DATABASE_URL: 'file:./prisma/dev.db',
         AUTH_PERSISTENCE_BACKEND: 'shared_db',
-        SENSITIVE_DATA_KEY: 'integration-test-sensitive-key',
       },
     });
 
@@ -200,6 +207,60 @@ const runExpectFailureSharedDbMisconfig = () =>
     });
   });
 
+const runExpectFailureSharedDbMissingUploadSecret = () =>
+  new Promise((resolve, reject) => {
+    const env = buildEnv({
+      unset: ['UPLOAD_OBJECT_KEY_SECRET'],
+      set: {
+        ...BASE_REQUIRED_ENV,
+        NODE_ENV: 'test',
+        PORT: '3987',
+        AUTH_TOKEN_SECRET: 'integration-test-auth-secret',
+        DATABASE_URL: 'postgresql://user:pass@example.com/app',
+        AUTH_PERSISTENCE_BACKEND: 'shared_db',
+        SENSITIVE_DATA_KEY: 'integration-test-sensitive-key',
+        UPLOAD_OBJECT_KEY_SECRET: '',
+      },
+    });
+
+    const proc = spawn(process.execPath, [ENTRY], { cwd: SERVER_DIR, env });
+    let output = '';
+    const timeout = setTimeout(() => {
+      stopProcess(proc);
+      reject(new Error('Timeout waiting for missing UPLOAD_OBJECT_KEY_SECRET failure.'));
+    }, 12000);
+
+    proc.stdout.on('data', (chunk) => {
+      output += chunk.toString();
+    });
+    proc.stderr.on('data', (chunk) => {
+      output += chunk.toString();
+    });
+
+    proc.on('exit', (code) => {
+      clearTimeout(timeout);
+      if (code === 0) {
+        reject(
+          new Error(
+            'Expected startup to fail for shared_db without UPLOAD_OBJECT_KEY_SECRET, but it exited with code 0.'
+          )
+        );
+        return;
+      }
+
+      if (!UPLOAD_OBJECT_KEY_SECRET_MISSING_PATTERN.test(output)) {
+        reject(
+          new Error(
+            `Startup failed, but UPLOAD_OBJECT_KEY_SECRET validation message was not clear enough.\nOutput:\n${output}`
+          )
+        );
+        return;
+      }
+
+      resolve();
+    });
+  });
+
 const runExpectFailureProdBackendMisconfig = () =>
   new Promise((resolve, reject) => {
     const env = buildEnv({
@@ -213,7 +274,8 @@ const runExpectFailureProdBackendMisconfig = () =>
         AUTH_TOKEN_SECRET: 'integration-test-auth-secret',
         DATABASE_URL: 'postgres://example.com/app',
         AUTH_PERSISTENCE_BACKEND: 'local_file',
-        SENSITIVE_DATA_KEY: 'integration-test-sensitive-key',
+        ...SHARED_DB_REQUIRED_ENV,
+        TRUST_PROXY: '1',
       },
     });
 
@@ -268,7 +330,8 @@ const runExpectFailureProdDatabaseUrlMisconfig = () =>
         AUTH_TOKEN_SECRET: 'integration-test-auth-secret',
         DATABASE_URL: 'file:./prisma/dev.db',
         AUTH_PERSISTENCE_BACKEND: 'shared_db',
-        SENSITIVE_DATA_KEY: 'integration-test-sensitive-key',
+        ...SHARED_DB_REQUIRED_ENV,
+        TRUST_PROXY: '1',
       },
     });
 
@@ -324,7 +387,8 @@ const runExpectFailureProdDatabasePoolerMisconfig = () =>
         DATABASE_URL: 'postgresql://user:pass@ep-example.us-east-1.aws.neon.tech/neondb?sslmode=require',
         DATABASE_POOL_MODE: 'transaction',
         AUTH_PERSISTENCE_BACKEND: 'shared_db',
-        SENSITIVE_DATA_KEY: 'integration-test-sensitive-key',
+        ...SHARED_DB_REQUIRED_ENV,
+        TRUST_PROXY: '1',
       },
     });
 
@@ -368,6 +432,7 @@ const runExpectFailureProdDatabasePoolerMisconfig = () =>
 
 const main = async () => {
   await runExpectFailure();
+  await runExpectFailureSharedDbMissingUploadSecret();
   await runExpectFailureSharedDbMisconfig();
   await runExpectFailureProdBackendMisconfig();
   await runExpectFailureProdDatabaseUrlMisconfig();

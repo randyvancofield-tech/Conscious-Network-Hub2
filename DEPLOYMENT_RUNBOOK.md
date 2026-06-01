@@ -32,6 +32,11 @@ Render should also ensure:
    - `DATABASE_URL` is the Neon pooled Postgres URL, usually a `-pooler` host (not `file:`)
    - `DATABASE_POOL_MODE=transaction` or `session`, matching the Neon pooler mode
    - `SENSITIVE_DATA_KEY` is set for sensitive-field encryption
+   - `UPLOAD_OBJECT_KEY_SECRET` is set as a dedicated upload-object key secret
+   - `TRUST_PROXY=1` for Render proxy-aware request handling
+   - `PUBLIC_BASE_URL=https://conscious-network-backend.onrender.com` or the final API custom domain
+   - `SERVER_ALLOWED_HOSTS=conscious-network-backend.onrender.com` plus any final API custom domain
+   - `UPLOAD_LEGACY_OBJECT_KEY_SECRET` only during a planned migration window for old v2 upload keys
    - `AUTH_PERSISTENCE_BACKEND=shared_db`
    - `DATABASE_PROVIDER=postgresql`
    - `HSTS_ALLOWED_HOSTS` contains only the final production API/custom domain host when it differs from `FRONTEND_BASE_URL`
@@ -44,6 +49,7 @@ The backend now fails startup if any required secret is missing.
 - `AUTH_TOKEN_SECRET` (preferred; `SESSION_SECRET` is accepted as a legacy alias)
 - `DATABASE_URL`
 - `SENSITIVE_DATA_KEY`
+- `UPLOAD_OBJECT_KEY_SECRET`
 - `STRIPE_SECRET_KEY`
 - `STRIPE_WEBHOOK_SECRET`
 - `STRIPE_PRICE_FREE`
@@ -53,6 +59,7 @@ The backend now fails startup if any required secret is missing.
 - `STRIPE_SUCCESS_URL`
 - `STRIPE_CANCEL_URL`
 - `FRONTEND_BASE_URL`
+- `TRUST_PROXY` in production
 
 Optional for AI routes only:
 

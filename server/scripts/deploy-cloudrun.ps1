@@ -8,6 +8,11 @@ param(
   [string]$AuthTokenSecret = "",
   [string]$DatabaseUrl = "",
   [string]$SensitiveDataKey = "",
+  [string]$UploadObjectKeySecret = "",
+  [string]$UploadLegacyObjectKeySecret = "",
+  [string]$PublicBaseUrl = "",
+  [string]$ServerAllowedHosts = "",
+  [string]$TrustProxy = "1",
   [string]$VertexAiModel = "gemini-2.0-flash-001",
   [string]$AdminDiagnosticsKey = "",
   [switch]$SkipChecks
@@ -78,6 +83,26 @@ if (-not $SensitiveDataKey) {
   throw "SENSITIVE_DATA_KEY is required for production/shared_db sensitive field protection. Set -SensitiveDataKey, SENSITIVE_DATA_KEY env var, or server/.env.local."
 }
 
+if (-not $UploadObjectKeySecret) {
+  $UploadObjectKeySecret = $env:UPLOAD_OBJECT_KEY_SECRET
+}
+
+if (-not $UploadObjectKeySecret) {
+  $UploadObjectKeySecret = Get-ValueFromLocalEnv -Name "UPLOAD_OBJECT_KEY_SECRET"
+}
+
+if (-not $UploadObjectKeySecret) {
+  throw "UPLOAD_OBJECT_KEY_SECRET is required for production/shared_db upload object keys. Set -UploadObjectKeySecret, UPLOAD_OBJECT_KEY_SECRET env var, or server/.env.local."
+}
+
+if (-not $UploadLegacyObjectKeySecret) {
+  $UploadLegacyObjectKeySecret = $env:UPLOAD_LEGACY_OBJECT_KEY_SECRET
+}
+
+if (-not $UploadLegacyObjectKeySecret) {
+  $UploadLegacyObjectKeySecret = Get-ValueFromLocalEnv -Name "UPLOAD_LEGACY_OBJECT_KEY_SECRET"
+}
+
 if (-not $AdminDiagnosticsKey) {
   $AdminDiagnosticsKey = $env:ADMIN_DIAGNOSTICS_KEY
 }
@@ -92,6 +117,38 @@ if (-not $FrontendBaseUrl) {
 
 if (-not $FrontendBaseUrl) {
   throw "FRONTEND_BASE_URL is required for email links and Stripe redirects. Set -FrontendBaseUrl, FRONTEND_BASE_URL env var, or server/.env.local."
+}
+
+if (-not $PublicBaseUrl) {
+  $PublicBaseUrl = $env:PUBLIC_BASE_URL
+}
+
+if (-not $PublicBaseUrl) {
+  $PublicBaseUrl = Get-ValueFromLocalEnv -Name "PUBLIC_BASE_URL"
+}
+
+if (-not $PublicBaseUrl) {
+  $PublicBaseUrl = $FrontendBaseUrl
+}
+
+if (-not $ServerAllowedHosts) {
+  $ServerAllowedHosts = $env:SERVER_ALLOWED_HOSTS
+}
+
+if (-not $ServerAllowedHosts) {
+  $ServerAllowedHosts = Get-ValueFromLocalEnv -Name "SERVER_ALLOWED_HOSTS"
+}
+
+if (-not $TrustProxy) {
+  $TrustProxy = $env:TRUST_PROXY
+}
+
+if (-not $TrustProxy) {
+  $TrustProxy = Get-ValueFromLocalEnv -Name "TRUST_PROXY"
+}
+
+if (-not $TrustProxy) {
+  throw "TRUST_PROXY is required for production proxy handling. Set -TrustProxy, TRUST_PROXY env var, or server/.env.local."
 }
 
 if ($DatabaseUrl -match "^\s*file:") {
@@ -119,13 +176,22 @@ $envUpdates = @(
   "AUTH_TOKEN_SECRET=$AuthTokenSecret",
   "DATABASE_URL=$DatabaseUrl",
   "SENSITIVE_DATA_KEY=$SensitiveDataKey",
+  "UPLOAD_OBJECT_KEY_SECRET=$UploadObjectKeySecret",
   "GOOGLE_CLOUD_PROJECT=$ProjectId",
   "GOOGLE_CLOUD_REGION=$Region",
   "VERTEX_AI_MODEL=$VertexAiModel",
   "FRONTEND_BASE_URL=$FrontendBaseUrl",
+  "PUBLIC_BASE_URL=$PublicBaseUrl",
+  "TRUST_PROXY=$TrustProxy",
   "AUTH_PERSISTENCE_BACKEND=shared_db",
   "DATABASE_PROVIDER=postgresql"
 )
+if ($ServerAllowedHosts) {
+  $envUpdates += "SERVER_ALLOWED_HOSTS=$ServerAllowedHosts"
+}
+if ($UploadLegacyObjectKeySecret) {
+  $envUpdates += "UPLOAD_LEGACY_OBJECT_KEY_SECRET=$UploadLegacyObjectKeySecret"
+}
 if ($OpenAIApiKey) {
   $envUpdates += "OPENAI_API_KEY=$OpenAIApiKey"
 }
