@@ -146,7 +146,7 @@ export const verifyPassword = (password: string, storedPassword: string): boolea
   }
 
   const legacyHash = legacySha256(password);
-  return storedPassword === legacyHash || storedPassword === password;
+  return storedPassword === legacyHash;
 };
 
 export const needsPasswordRehash = (storedPassword: string): boolean => {

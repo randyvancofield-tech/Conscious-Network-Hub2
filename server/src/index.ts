@@ -108,6 +108,44 @@ const isProductionRuntime = String(process.env.NODE_ENV || '').trim().toLowerCas
 const hstsMaxAgeSeconds = Number(process.env.HSTS_MAX_AGE_SECONDS || 31536000);
 const hstsHeaderValue = `max-age=${Number.isFinite(hstsMaxAgeSeconds) && hstsMaxAgeSeconds > 0 ? Math.floor(hstsMaxAgeSeconds) : 31536000}; includeSubDomains`;
 
+const parseBooleanValue = (value: string): boolean | null => {
+  const normalized = value.trim().toLowerCase();
+  if (['true', '1', 'yes', 'on'].includes(normalized)) return true;
+  if (['false', '0', 'no', 'off'].includes(normalized)) return false;
+  return null;
+};
+
+const resolveTrustProxySetting = (): boolean | number | string => {
+  const configured = String(process.env.TRUST_PROXY || '').trim();
+  if (!configured) return false;
+  const asBoolean = parseBooleanValue(configured);
+  if (asBoolean !== null) return asBoolean;
+  const asNumber = Number(configured);
+  if (Number.isFinite(asNumber) && asNumber >= 0) return Math.floor(asNumber);
+  return configured;
+};
+
+const splitConfiguredHostnames = (value: unknown): string[] =>
+  String(value || '')
+    .split(',')
+    .map((entry) => entry.trim())
+    .filter(Boolean)
+    .map((entry) => hostnameFromUrl(entry) || normalizeHostname(entry))
+    .filter(Boolean);
+
+const productionAllowedRequestHosts = Array.from(
+  new Set(
+    [
+      hostnameFromUrl(process.env.PUBLIC_BASE_URL),
+      hostnameFromUrl(process.env.FRONTEND_BASE_URL),
+      hostnameFromUrl(process.env.BACKEND_PUBLIC_BASE_URL),
+      ...splitConfiguredHostnames(process.env.SERVER_ALLOWED_HOSTS),
+      ...splitConfiguredHostnames(process.env.CORS_ORIGINS),
+      normalizeHostname(process.env.RENDER_EXTERNAL_HOSTNAME),
+    ].filter((host): host is string => Boolean(host))
+  )
+);
+
 const isHttpsRequest = (req: Request): boolean => {
   const forwardedProto = String(req.headers['x-forwarded-proto'] || '')
     .split(',')[0]
@@ -154,8 +192,28 @@ app.use((req: Request, res: Response, next: NextFunction) => {
   next();
 });
 
-// Trust proxy for rate limiting (safe for local dev)
-app.set('trust proxy', 1);
+app.set('trust proxy', resolveTrustProxySetting());
+
+app.use((req: Request, res: Response, next: NextFunction) => {
+  if (!isProductionRuntime) {
+    next();
+    return;
+  }
+
+  const requestHost = normalizeHostname(req.headers.host);
+  if (!requestHost) {
+    res.status(400).json({ error: 'Host header is required' });
+    return;
+  }
+
+  if (!productionAllowedRequestHosts.includes(requestHost)) {
+    console.error('[SECURITY] Rejected request with unapproved Host header:', requestHost);
+    res.status(421).json({ error: 'Unapproved request host' });
+    return;
+  }
+
+  next();
+});
 
 const configuredCorsOrigins = String(process.env.CORS_ORIGINS || '')
   .split(',')

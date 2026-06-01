@@ -171,7 +171,7 @@ Frontend deployment builds `dist/` from the repo root:
 npm run build
 ```
 
-Confirm `.env.production` points `VITE_BACKEND_URL` at the production backend before releasing frontend assets.
+Confirm Cloudflare Pages production environment variables, or an untracked local `.env.production.local`, point `VITE_BACKEND_URL` at the production backend before releasing frontend assets.
 
 ## Contracts
 

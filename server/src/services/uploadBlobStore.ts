@@ -7,10 +7,10 @@ type UploadStorageProvider = 'postgres_large_object';
 export type UploadObjectAccess = 'public' | 'private';
 
 interface PostgresUploadKeyPayload {
-  v: 1 | 2;
+  v: 1 | 2 | 3;
   oid: number;
   mimeType: string;
-  originalName: string;
+  originalName?: string;
   userId?: string;
   access?: UploadObjectAccess;
   category?: string;
@@ -68,16 +68,33 @@ const normalizeUploadAccess = (input: unknown): UploadObjectAccess | null => {
   return null;
 };
 
+const isProductionLikeRuntime = (): boolean => {
+  const nodeEnv = String(process.env.NODE_ENV || '').trim().toLowerCase();
+  const persistenceBackend = String(process.env.AUTH_PERSISTENCE_BACKEND || '').trim().toLowerCase();
+  return nodeEnv === 'production' || persistenceBackend === 'shared_db';
+};
+
 const resolveUploadKeySecret = (): string => {
-  const secret =
-    String(process.env.UPLOAD_OBJECT_KEY_SECRET || '').trim() ||
+  const dedicatedSecret = String(process.env.UPLOAD_OBJECT_KEY_SECRET || '').trim();
+  if (dedicatedSecret) return dedicatedSecret;
+
+  if (isProductionLikeRuntime()) {
+    throw toStoreError(
+      '[UPLOAD][FATAL] UPLOAD_OBJECT_KEY_SECRET is required for production/shared upload object keys'
+    );
+  }
+
+  const devFallback =
     String(process.env.SENSITIVE_DATA_KEY || '').trim() ||
     String(process.env.AUTH_TOKEN_SECRET || process.env.SESSION_SECRET || '').trim();
-  if (!secret) {
-    throw toStoreError('[UPLOAD][FATAL] Upload object key signing secret is not configured');
+  if (!devFallback) {
+    throw toStoreError('[UPLOAD][FATAL] Upload object key secret is not configured');
   }
-  return secret;
+  return devFallback;
 };
+
+const deriveUploadEncryptionKey = (): Buffer =>
+  crypto.createHash('sha256').update(`hcn-upload-object-key:${resolveUploadKeySecret()}`, 'utf8').digest();
 
 const timingSafeEqualText = (left: string, right: string): boolean => {
   const leftBuffer = Buffer.from(left);
@@ -98,32 +115,120 @@ const buildUploadKeySignaturePayload = (
     category: payload.category || null,
   });
 
-const signUploadKeyPayload = (payload: Omit<PostgresUploadKeyPayload, 'sig' | 'signed'>): string =>
+const signUploadKeyPayloadWithSecret = (
+  payload: Omit<PostgresUploadKeyPayload, 'sig' | 'signed'>,
+  secret: string
+): string =>
   crypto
-    .createHmac('sha256', resolveUploadKeySecret())
+    .createHmac('sha256', secret)
     .update(buildUploadKeySignaturePayload(payload), 'utf8')
     .digest('base64url');
 
+const signUploadKeyPayload = (payload: Omit<PostgresUploadKeyPayload, 'sig' | 'signed'>): string =>
+  signUploadKeyPayloadWithSecret(payload, resolveUploadKeySecret());
+
+const resolveLegacyUploadKeySecrets = (): string[] =>
+  String(process.env.UPLOAD_LEGACY_OBJECT_KEY_SECRET || '')
+    .split(',')
+    .map((secret) => secret.trim())
+    .filter(Boolean);
+
+const UPLOAD_KEY_V3_PREFIX = 'pglo3';
+
+const encodeEncryptedUploadKey = (
+  payload: Omit<PostgresUploadKeyPayload, 'sig' | 'signed' | 'originalName'>
+): string => {
+  const iv = crypto.randomBytes(12);
+  const cipher = crypto.createCipheriv('aes-256-gcm', deriveUploadEncryptionKey(), iv);
+  const encrypted = Buffer.concat([
+    cipher.update(
+      JSON.stringify({
+        v: 3,
+        oid: Math.floor(Number(payload.oid)),
+        mimeType: String(payload.mimeType || '').trim(),
+        userId: sanitizeOptionalText(payload.userId),
+        access: normalizeUploadAccess(payload.access) || undefined,
+        category: sanitizeOptionalText(payload.category),
+      }),
+      'utf8'
+    ),
+    cipher.final(),
+  ]);
+  const authTag = cipher.getAuthTag();
+  return [
+    UPLOAD_KEY_V3_PREFIX,
+    iv.toString('base64url'),
+    encrypted.toString('base64url'),
+    authTag.toString('base64url'),
+  ].join('.');
+};
+
+const decodeEncryptedUploadKey = (objectKey: string): PostgresUploadKeyPayload | null => {
+  const parts = String(objectKey || '').split('.');
+  if (parts.length !== 4 || parts[0] !== UPLOAD_KEY_V3_PREFIX) return null;
+
+  try {
+    const [, ivRaw, encryptedRaw, authTagRaw] = parts;
+    const decipher = crypto.createDecipheriv(
+      'aes-256-gcm',
+      deriveUploadEncryptionKey(),
+      Buffer.from(ivRaw, 'base64url')
+    );
+    decipher.setAuthTag(Buffer.from(authTagRaw, 'base64url'));
+    const decrypted = Buffer.concat([
+      decipher.update(Buffer.from(encryptedRaw, 'base64url')),
+      decipher.final(),
+    ]);
+    const parsed = JSON.parse(decrypted.toString('utf8')) as Partial<PostgresUploadKeyPayload>;
+    if (
+      parsed?.v !== 3 ||
+      !Number.isFinite(parsed.oid) ||
+      Number(parsed.oid) <= 0 ||
+      typeof parsed.mimeType !== 'string' ||
+      parsed.mimeType.trim().length === 0
+    ) {
+      return null;
+    }
+    return {
+      v: 3,
+      oid: Math.floor(Number(parsed.oid)),
+      mimeType: parsed.mimeType.trim(),
+      originalName: 'upload.bin',
+      userId: sanitizeOptionalText(parsed.userId),
+      access: normalizeUploadAccess(parsed.access) || undefined,
+      category: sanitizeOptionalText(parsed.category),
+      signed: true,
+    };
+  } catch {
+    return null;
+  }
+};
+
 const encodePostgresUploadKey = (payload: PostgresUploadKeyPayload): string => {
   const normalizedPayload: Omit<PostgresUploadKeyPayload, 'sig' | 'signed'> = {
-    v: 2,
+    v: 3,
     oid: Math.floor(Number(payload.oid)),
     mimeType: String(payload.mimeType || '').trim(),
-    originalName: sanitizeOriginalName(payload.originalName),
+    originalName: sanitizeOriginalName(payload.originalName || ''),
     userId: sanitizeOptionalText(payload.userId),
     access: normalizeUploadAccess(payload.access) || undefined,
     category: sanitizeOptionalText(payload.category),
   };
-  return Buffer.from(
-    JSON.stringify({
-      ...normalizedPayload,
-      sig: signUploadKeyPayload(normalizedPayload),
-    }),
-    'utf8'
-  ).toString('base64url');
+  return encodeEncryptedUploadKey({
+    v: 3,
+    oid: normalizedPayload.oid,
+    mimeType: normalizedPayload.mimeType,
+    userId: normalizedPayload.userId,
+    access: normalizedPayload.access,
+    category: normalizedPayload.category,
+  });
 };
 
 const decodePostgresUploadKey = (objectKey: string): PostgresUploadKeyPayload | null => {
+  if (String(objectKey || '').startsWith(`${UPLOAD_KEY_V3_PREFIX}.`)) {
+    return decodeEncryptedUploadKey(objectKey);
+  }
+
   try {
     const decoded = Buffer.from(objectKey, 'base64url').toString('utf8');
     const parsed = JSON.parse(decoded) as Partial<PostgresUploadKeyPayload>;
@@ -151,8 +256,11 @@ const decodePostgresUploadKey = (objectKey: string): PostgresUploadKeyPayload | 
     if (normalized.v === 2) {
       const signature = String(parsed.sig || '').trim();
       if (!signature) return null;
-      const expected = signUploadKeyPayload(normalized);
-      if (!timingSafeEqualText(signature, expected)) return null;
+      const currentExpected = signUploadKeyPayload(normalized);
+      const legacyMatch = resolveLegacyUploadKeySecrets().some((secret) =>
+        timingSafeEqualText(signature, signUploadKeyPayloadWithSecret(normalized, secret))
+      );
+      if (!timingSafeEqualText(signature, currentExpected) && !legacyMatch) return null;
       return {
         ...normalized,
         sig: signature,

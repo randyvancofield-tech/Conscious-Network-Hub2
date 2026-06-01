@@ -114,7 +114,7 @@ npm run build
 
 Confirm production backend target before deployment:
 
-- `.env.production` must contain:
+- Cloudflare Pages production environment variables, or an untracked local `.env.production.local`, must contain:
   - `VITE_BACKEND_URL=https://conscious-network-backend.onrender.com`
 
 Deploy `dist/` to the current frontend host for `https://conscious-network.org` using that provider's release workflow.

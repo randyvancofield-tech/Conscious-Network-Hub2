@@ -35,7 +35,7 @@ Residual risk: `npm audit` only covers known advisories available to npm and doe
 ## Secret Scan Findings
 
 - No hardcoded high-confidence backend secrets were found in the scanned source tree.
-- `.env.production` is tracked. Current keys are `VITE_*` public frontend configuration values, not backend secrets. Because Vite exposes `VITE_*` values to the browser bundle, this is acceptable only if those values are intentionally public.
+- `.env.production` should not be tracked. Use Cloudflare Pages production environment variables or an untracked `.env.production.local`; keep `.env.production.example` as the committed template.
 - `.gitignore` now ignores future `.env.*` files while preserving `.env.example` style templates.
 
 Required launch discipline:

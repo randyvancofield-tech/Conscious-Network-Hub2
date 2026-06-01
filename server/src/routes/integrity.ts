@@ -4,6 +4,11 @@ import { ethers } from 'ethers';
 import { getAuthenticatedUserId, requireCanonicalIdentity } from '../middleware';
 import { localStore } from '../services/persistenceStore';
 import { recordAuditEvent } from '../services/auditTelemetry';
+import {
+  normalizeInterests,
+  normalizePrivacySettings,
+  normalizeProfileMedia,
+} from '../services/profileNormalization';
 
 const router = Router();
 const protectedRouter = Router();
@@ -405,6 +410,55 @@ const hasProviderTrustRole = (user: any): boolean => {
   return role === 'provider' || role === 'admin';
 };
 
+const normalizeCanonicalString = (value: unknown): string | null => {
+  const normalized = String(value || '').trim();
+  return normalized || null;
+};
+
+const toIsoOrNull = (value: unknown): string | null => {
+  if (!value) return null;
+  const date = value instanceof Date ? value : new Date(String(value));
+  return Number.isNaN(date.getTime()) ? null : date.toISOString();
+};
+
+const buildCanonicalProfileSnapshot = (user: any) => {
+  const privacy = normalizePrivacySettings(user?.privacySettings);
+  const media = normalizeProfileMedia(
+    user?.profileMedia,
+    normalizeCanonicalString(user?.avatarUrl),
+    normalizeCanonicalString(user?.bannerUrl)
+  );
+
+  return {
+    schema: 'hcn.profile.server-snapshot.v1',
+    userId: String(user?.id || ''),
+    role: normalizeCanonicalString(user?.role) || 'user',
+    tier: normalizeCanonicalString(user?.tier),
+    subscriptionStatus: normalizeCanonicalString(user?.subscriptionStatus),
+    providerApproved: user?.providerApproved === true,
+    providerApprovalStatus: normalizeCanonicalString(user?.providerApprovalStatus),
+    name: normalizeCanonicalString(user?.name),
+    handle: normalizeCanonicalString(user?.handle),
+    bio: normalizeCanonicalString(user?.bio),
+    location: normalizeCanonicalString(user?.location),
+    interests: normalizeInterests(user?.interests),
+    privacy: {
+      profileVisibility: privacy.profileVisibility,
+      showEmail: privacy.showEmail,
+      allowMessages: privacy.allowMessages,
+      blockedUserCount: privacy.blockedUsers.length,
+    },
+    profileMedia: {
+      avatarPresent: Boolean(media.avatar.url || media.avatar.objectKey),
+      coverPresent: Boolean(media.cover.url || media.cover.objectKey),
+      avatarStorageProvider: normalizeCanonicalString(media.avatar.storageProvider),
+      coverStorageProvider: normalizeCanonicalString(media.cover.storageProvider),
+    },
+    createdAt: toIsoOrNull(user?.createdAt),
+    updatedAt: toIsoOrNull(user?.updatedAt),
+  };
+};
+
 const isIntegrityConfigurationError = (error: unknown): boolean => {
   const message = error instanceof Error ? error.message : String(error || '');
   return (
@@ -453,21 +507,23 @@ protectedRouter.post('/profile/verify', async (req: Request, res: Response): Pro
     return;
   }
 
-  const profilePayload = req.body?.profilePayload;
-  if (!profilePayload || typeof profilePayload !== 'object' || Array.isArray(profilePayload)) {
-    res.status(400).json({ error: 'profilePayload object is required' });
-    return;
-  }
-
   try {
     const capturedAt = new Date().toISOString();
+    const canonicalProfile = buildCanonicalProfileSnapshot(user);
+    const profileFieldHash = toProfileIntegrityHash({
+      schema: 'hcn.profile.canonical-fields.v1',
+      userId: authUserId,
+      profile: canonicalProfile,
+    });
     const integrityPayload = {
-      schema: 'hcn.profile.integrity.v1',
+      schema: 'hcn.profile.integrity.v2',
+      canonicalSource: 'server:persistence-store',
       userId: authUserId,
       did,
       addressBinding: didPkh.address,
       capturedAt,
-      profile: profilePayload,
+      profileFieldHash,
+      profile: canonicalProfile,
     };
     const profileIntegrityHash = toProfileIntegrityHash(integrityPayload);
     const encryptedPayload = encryptPayload({
@@ -506,6 +562,8 @@ protectedRouter.post('/profile/verify', async (req: Request, res: Response): Pro
       metadata: {
         verificationRecord,
         addressBinding: didPkh.address,
+        profileFieldHash,
+        schema: integrityPayload.schema,
       },
     });
 

@@ -518,15 +518,65 @@ router.post('/posts/:postId/like', async (req: Request, res: Response): Promise<
   }
 
   try {
+    const [viewerUser, post] = await Promise.all([
+      localStore.getUserById(authUserId),
+      socialStore.getPostById(postId),
+    ]);
+    if (!viewerUser) {
+      recordAuditEvent(req, {
+        domain: 'social',
+        action: 'post_like_toggle',
+        outcome: 'deny',
+        actorUserId: authUserId,
+        targetUserId: postId,
+        statusCode: 401,
+        metadata: { reason: 'viewer_session_invalid' },
+      });
+      return res.status(401).json({ error: 'Viewer session is invalid' });
+    }
+    if (!post) {
+      recordAuditEvent(req, {
+        domain: 'social',
+        action: 'post_like_toggle',
+        outcome: 'deny',
+        actorUserId: authUserId,
+        targetUserId: postId,
+        statusCode: 404,
+        metadata: { reason: 'post_not_found' },
+      });
+      return res.status(404).json({ error: 'Post not found' });
+    }
+
+    const author = await localStore.getUserById(post.authorId);
+    const visible = author ? await canViewPostForViewer(viewerUser, post, author) : false;
+    if (!visible) {
+      recordAuditEvent(req, {
+        domain: 'social',
+        action: 'post_like_toggle',
+        outcome: 'deny',
+        actorUserId: authUserId,
+        targetUserId: post.authorId,
+        statusCode: 403,
+        metadata: {
+          reason: author ? 'post_not_visible_to_viewer' : 'post_author_not_found',
+          postId,
+        },
+      });
+      return res.status(author ? 403 : 404).json({
+        error: author ? 'Post is unavailable' : 'Post author not found',
+      });
+    }
+
     const likeState = await socialStore.toggleLike(postId, authUserId);
     recordAuditEvent(req, {
       domain: 'social',
       action: 'post_like_toggle',
       outcome: 'success',
       actorUserId: authUserId,
-      targetUserId: postId,
+      targetUserId: post.authorId,
       statusCode: 200,
       metadata: {
+        postId,
         liked: likeState.liked,
         likeCount: likeState.likeCount,
       },

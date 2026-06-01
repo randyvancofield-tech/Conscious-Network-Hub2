@@ -4,6 +4,7 @@ const setProductionBaseline = () => {
   process.env.NODE_ENV = 'production';
   process.env.AUTH_TOKEN_SECRET = 'phase4r-required-env-secret';
   process.env.SENSITIVE_DATA_KEY = 'phase4r-sensitive-key';
+  process.env.UPLOAD_OBJECT_KEY_SECRET = 'phase4r-upload-key-secret';
   process.env.AUTH_PERSISTENCE_BACKEND = 'shared_db';
   process.env.DATABASE_URL = 'postgresql://user:password@ep-test-pooler.neon.tech/app?sslmode=require';
   process.env.DATABASE_POOL_MODE = 'session';
@@ -16,6 +17,7 @@ const setProductionBaseline = () => {
   process.env.STRIPE_SUCCESS_URL = 'https://conscious-network.org/membership/success';
   process.env.STRIPE_CANCEL_URL = 'https://conscious-network.org/membership/cancel';
   process.env.FRONTEND_BASE_URL = 'https://conscious-network.org';
+  process.env.TRUST_PROXY = '1';
   delete process.env.EMAIL_USER;
   delete process.env.EMAIL_PASSWORD;
   delete process.env.SMTP_HOST;

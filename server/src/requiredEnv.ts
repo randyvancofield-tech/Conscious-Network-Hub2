@@ -73,10 +73,12 @@ const LAUNCH_STRIPE_PRICE_IDS = {
 // - AUTH_TOKEN_SECRET (or legacy SESSION_SECRET alias)
 // - DATABASE_URL
 // - SENSITIVE_DATA_KEY (required for production/shared_db)
+// - UPLOAD_OBJECT_KEY_SECRET (required for production/shared_db upload object keys)
 export const REQUIRED_SECRETS = [
   'AUTH_TOKEN_SECRET (or SESSION_SECRET)',
   'DATABASE_URL',
   'SENSITIVE_DATA_KEY (production/shared_db)',
+  'UPLOAD_OBJECT_KEY_SECRET (production/shared_db)',
   'STRIPE_SECRET_KEY',
   'STRIPE_WEBHOOK_SECRET',
   'STRIPE_PRICE_FREE',
@@ -98,6 +100,7 @@ const parseBooleanEnv = (name: string): boolean | null => {
 };
 
 const hasSensitiveDataKey = (): boolean => hasNonEmptyEnv('SENSITIVE_DATA_KEY');
+const hasUploadObjectKeySecret = (): boolean => hasNonEmptyEnv('UPLOAD_OBJECT_KEY_SECRET');
 export const hasEmailDeliveryConfig = (): boolean =>
   (hasNonEmptyEnv('EMAIL_USER') && hasNonEmptyEnv('EMAIL_PASSWORD')) ||
   (hasNonEmptyEnv('SMTP_HOST') && hasNonEmptyEnv('SMTP_PORT'));
@@ -193,6 +196,18 @@ export const validateRequiredEnv = (): void => {
   if (requiresSensitiveFieldEncryption && !hasSensitiveDataKey()) {
     throw new Error(
       '[STARTUP][FATAL] Missing required SENSITIVE_DATA_KEY for production/shared_db sensitive-field encryption.'
+    );
+  }
+
+  if (requiresSensitiveFieldEncryption && !hasUploadObjectKeySecret()) {
+    throw new Error(
+      '[STARTUP][FATAL] Missing required UPLOAD_OBJECT_KEY_SECRET for production/shared upload object keys.'
+    );
+  }
+
+  if (isProduction && !hasNonEmptyEnv('TRUST_PROXY')) {
+    throw new Error(
+      '[STARTUP][FATAL] TRUST_PROXY must be explicitly configured in production so proxy headers are trusted only by design.'
     );
   }
 

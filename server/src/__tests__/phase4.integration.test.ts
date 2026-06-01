@@ -492,6 +492,50 @@ describe('Phase 4 integration boundaries', () => {
     expect(afterFollow.body?.profile?.id).toBe('target');
   });
 
+  it('prevents likes on private posts until the viewer can see the post', async () => {
+    const viewerToken = tokenFor('viewer');
+    const targetToken = tokenFor('target');
+
+    const createdPost = await requestJson({
+      method: 'POST',
+      path: '/api/social/posts',
+      token: targetToken,
+      body: {
+        text: 'Private note',
+        visibility: 'private',
+      },
+    });
+    expect(createdPost.status).toBe(200);
+    const postId = String(createdPost.body?.post?.id || '');
+    expect(postId).toBeTruthy();
+
+    const deniedLike = await requestJson({
+      method: 'POST',
+      path: `/api/social/posts/${postId}/like`,
+      token: viewerToken,
+    });
+    expect(deniedLike.status).toBe(403);
+    expect(deniedLike.body?.error).toBe('Post is unavailable');
+    expect(likes.size).toBe(0);
+
+    const followResult = await requestJson({
+      method: 'POST',
+      path: '/api/social/users/target/follow',
+      token: viewerToken,
+      body: { follow: true },
+    });
+    expect(followResult.status).toBe(200);
+
+    const allowedLike = await requestJson({
+      method: 'POST',
+      path: `/api/social/posts/${postId}/like`,
+      token: viewerToken,
+    });
+    expect(allowedLike.status).toBe(200);
+    expect(allowedLike.body?.liked).toBe(true);
+    expect(allowedLike.body?.likeCount).toBe(1);
+  });
+
   it('prevents follow while blocked and allows follow after unblock', async () => {
     const targetToken = tokenFor('target');
     const viewerToken = tokenFor('viewer');

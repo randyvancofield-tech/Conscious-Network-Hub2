@@ -10,7 +10,7 @@ const rootDir = path.resolve(__dirname, '..', '..');
 
 const profileContractPath = path.join(rootDir, 'contracts', 'HCNProfileAnchor.sol');
 const frontendEnvLocalPath = path.join(rootDir, '.env.local');
-const frontendEnvProdPath = path.join(rootDir, '.env.production');
+const frontendEnvProdPath = path.join(rootDir, '.env.production.local');
 const backendEnvLocalPath = path.join(rootDir, 'server', '.env.local');
 
 const readSource = (sourcePath) => {
@@ -179,7 +179,7 @@ const main = async () => {
   upsertEnvValue(backendEnvLocalPath, 'HCN_PROFILE_ANCHOR_CONTRACT_ADDRESS', profileAddress);
   upsertEnvValue(backendEnvLocalPath, 'HCN_PROFILE_ANCHOR_CHAIN_ID', String(chainId));
 
-  console.log('[DEPLOY] Updated .env.local, .env.production, and server/.env.local');
+  console.log('[DEPLOY] Updated .env.local, .env.production.local, and server/.env.local');
 };
 
 main().catch((error) => {

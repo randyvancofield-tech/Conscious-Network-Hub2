@@ -4,6 +4,7 @@ import {
   getAuthenticatedRole,
   getAuthenticatedUserId,
   validateChatInput,
+  requireAdminElevation,
   requireCanonicalIdentity,
 } from '../middleware';
 import { getVertexAIService } from '../services/vertexAiService';
@@ -26,6 +27,12 @@ import {
   hasRuntimeAiProvider,
   type RuntimeAiProvider,
 } from '../services/aiProviderService';
+import { recordAuditEvent } from '../services/auditTelemetry';
+import { localStore } from '../services/persistenceStore';
+import {
+  PROVIDER_CRM_SOLE_ADMIN_EMAIL,
+  isProviderCrmSoleAdmin,
+} from '../services/providerCrm';
 
 const router = Router();
 router.use(requireCanonicalIdentity);
@@ -297,11 +304,33 @@ const enforceCanonicalBodyUser = (req: Request, res: Response): boolean => {
   return true;
 };
 
-const requireAdminAiOperations = (req: Request, res: Response): boolean => {
+const requireAdminAiOperations = async (req: Request, res: Response): Promise<boolean> => {
   if (getAuthenticatedRole(req) !== 'admin') {
     res.status(403).json({ error: 'Administrative access is required' });
     return false;
   }
+
+  const actorUserId = getAuthenticatedUserId(req);
+  const actor = actorUserId ? await localStore.getUserById(actorUserId) : null;
+  if (!isProviderCrmSoleAdmin(actor)) {
+    recordAuditEvent(req, {
+      domain: 'ai',
+      action: 'admin_ai_operation',
+      outcome: 'deny',
+      actorUserId,
+      statusCode: 403,
+      metadata: {
+        reason: 'sole_founder_admin_required',
+        requiredAdminEmail: PROVIDER_CRM_SOLE_ADMIN_EMAIL,
+      },
+    });
+    res.status(403).json({
+      error: 'Solo founder admin access required',
+      requiredAdminEmail: PROVIDER_CRM_SOLE_ADMIN_EMAIL,
+    });
+    return false;
+  }
+
   return true;
 };
 
@@ -708,10 +737,17 @@ router.get('/trending', async (_req: Request, res: Response): Promise<void> => {
  * GET /api/ai/status
  * Operational diagnostics for AI provider and crawler health.
  */
-router.get('/status', async (req: Request, res: Response): Promise<void> => {
-  if (!requireAdminAiOperations(req, res)) {
+router.get('/status', requireAdminElevation, async (req: Request, res: Response): Promise<void> => {
+  if (!(await requireAdminAiOperations(req, res))) {
     return;
   }
+  recordAuditEvent(req, {
+    domain: 'ai',
+    action: 'admin_ai_status',
+    outcome: 'success',
+    actorUserId: getAuthenticatedUserId(req),
+    statusCode: 200,
+  });
   res.json({
     success: true,
     userId: getAuthenticatedUserId(req),
@@ -728,11 +764,22 @@ router.get('/status', async (req: Request, res: Response): Promise<void> => {
  * POST /api/ai/reindex
  * Refresh the public-only AI context index.
  */
-router.post('/reindex', async (req: Request, res: Response): Promise<void> => {
-  if (!requireAdminAiOperations(req, res)) {
+router.post('/reindex', requireAdminElevation, async (req: Request, res: Response): Promise<void> => {
+  if (!(await requireAdminAiOperations(req, res))) {
     return;
   }
   const status = await triggerAiContextCrawl('api');
+  recordAuditEvent(req, {
+    domain: 'ai',
+    action: 'admin_ai_reindex',
+    outcome: 'success',
+    actorUserId: getAuthenticatedUserId(req),
+    statusCode: 200,
+    metadata: {
+      lastCrawledAt: status.lastCrawledAt,
+      documentCount: status.documentCount,
+    },
+  });
   res.json({
     success: true,
     index: status,
