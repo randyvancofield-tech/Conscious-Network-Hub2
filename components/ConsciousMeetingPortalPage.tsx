@@ -55,8 +55,13 @@ const ConsciousMeetingPortalPageContent: React.FC<ConsciousMeetingPortalPageProp
   const [history, setHistory] = useState<DeviceCheck[]>([]);
   const [isChecking, setIsChecking] = useState(false);
   const historyKey = user?.id ? `hcn.meetingDeviceHistory.${user.id}` : 'hcn.meetingDeviceHistory.guest';
+  const isApprovedProvider =
+    user?.role === 'provider' &&
+    user.providerApproved === true &&
+    String(user.providerApprovalStatus || '').trim().toLowerCase() === 'approved' &&
+    !user.providerRevokedAt;
   const canOpenHostConsole =
-    operationsEnabled || user?.role === 'provider' || user?.role === 'admin';
+    operationsEnabled || user?.role === 'admin' || isApprovedProvider;
 
   useEffect(() => {
     try {

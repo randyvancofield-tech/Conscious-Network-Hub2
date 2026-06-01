@@ -66,12 +66,16 @@ const toList = (value: unknown): string[] => {
   return raw ? [raw] : [];
 };
 
-const FileLink: React.FC<{ label: string; file?: ApplicantFileRef }> = ({ label, file }) => {
+const FileLink: React.FC<{ label: string; file?: ApplicantFileRef; onError?: (message: string) => void }> = ({
+  label,
+  file,
+  onError,
+}) => {
   if (!file) return null;
   const name = file.originalName || label;
   const openFile = () => {
     void openPrivateUpload(file).catch((error) => {
-      window.alert(error instanceof Error ? error.message : 'Unable to open private file.');
+      onError?.(error instanceof Error ? error.message : 'Unable to open private file.');
     });
   };
   return (
@@ -350,8 +354,8 @@ const ProviderApplicationStatusPage: React.FC<ProviderApplicationStatusPageProps
               <div className="rounded-3xl border border-white/10 bg-white/[0.04] p-6">
                 <h2 className="text-lg font-black uppercase tracking-tight text-white">Documents</h2>
                 <div className="mt-4 grid gap-3">
-                  <FileLink label="Resume" file={applicant.resumeFile} />
-                  <FileLink label="Cover Letter" file={applicant.coverLetterFile} />
+                  <FileLink label="Resume" file={applicant.resumeFile} onError={setError} />
+                  <FileLink label="Cover Letter" file={applicant.coverLetterFile} onError={setError} />
                 </div>
               </div>
 

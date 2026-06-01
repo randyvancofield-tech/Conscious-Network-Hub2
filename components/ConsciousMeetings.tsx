@@ -177,6 +177,14 @@ const BACKGROUND_PRESETS: MeetingBackgroundPreset[] = [
   },
 ];
 
+const isApprovedProviderUser = (user: UserProfile | null): boolean =>
+  Boolean(
+    user?.role === 'provider' &&
+      user.providerApproved === true &&
+      String(user.providerApprovalStatus || '').trim().toLowerCase() === 'approved' &&
+      !user.providerRevokedAt
+  );
+
 const ConsciousMeetings: React.FC<ConsciousMeetingsProps> = ({ user }) => {
   const [meetings, setMeetings] = useState<Meeting[]>([]);
 
@@ -451,7 +459,7 @@ const ConsciousMeetings: React.FC<ConsciousMeetingsProps> = ({ user }) => {
     setIsSynthesizingNotes(true);
     try {
       setMeetingOpsStatus(
-        `${agentMode.replace('-', ' ')} is gated until real transcript capture is connected. No mock transcript or generated notes were used.`
+        `${agentMode.replace('-', ' ')} is gated until real transcript capture is connected. No synthetic transcript or generated notes were used.`
       );
     } finally {
       setIsSynthesizingNotes(false);
@@ -1829,7 +1837,7 @@ const ConsciousMeetings: React.FC<ConsciousMeetingsProps> = ({ user }) => {
   }, []);
 
   useEffect(() => {
-    if (user?.role !== 'provider' && user?.role !== 'admin') return;
+    if (user?.role !== 'admin' && !isApprovedProviderUser(user)) return;
     if (providerSessionToken.trim()) return;
 
     let cancelled = false;
@@ -1849,7 +1857,7 @@ const ConsciousMeetings: React.FC<ConsciousMeetingsProps> = ({ user }) => {
     return () => {
       cancelled = true;
     };
-  }, [providerSessionToken, user?.id, user?.role]);
+  }, [providerSessionToken, user?.id, user?.role, user?.providerApproved, user?.providerApprovalStatus, user?.providerRevokedAt]);
 
   useEffect(() => {
     void refreshJoinableSessions();
@@ -2291,7 +2299,7 @@ const ConsciousMeetings: React.FC<ConsciousMeetingsProps> = ({ user }) => {
   const activeMeeting = meetings[0] || null;
   const hasActiveMeetingNotes = Boolean(activeMeeting?.notes?.summary);
   const canSaveRecording = Boolean(user?.id && activeMeeting && user.id === activeMeeting.hostUserId);
-  const canUseHostConsole = user?.role === 'provider' || user?.role === 'admin';
+  const canUseHostConsole = user?.role === 'admin' || isApprovedProviderUser(user);
 
   if (!canUseHostConsole) {
     return (
@@ -2370,7 +2378,7 @@ const ConsciousMeetings: React.FC<ConsciousMeetingsProps> = ({ user }) => {
                     Real Provider Publishing Path
                   </h3>
                   <p className="mt-2 text-xs sm:text-sm leading-6 text-slate-400">
-                    Demo provider cards and local bookings are removed. Use Live Lobby host controls to create real CNH rooms, invite users or groups, and share signed internal meeting links.
+                    Local booking cards are disabled for launch. Use Live Lobby host controls to create real CNH rooms, invite users or groups, and share signed internal meeting links.
                   </p>
                 </div>
               </div>
@@ -2840,7 +2848,7 @@ const ConsciousMeetings: React.FC<ConsciousMeetingsProps> = ({ user }) => {
               </div>
 
               <p className="text-[9px] sm:text-[10px] text-slate-400 uppercase tracking-widest">
-                Synthesis does not display mock transcripts. Notes unlock only after real captured transcript support is connected.
+                Synthesis does not display synthetic transcripts. Notes unlock only after real captured transcript support is connected.
               </p>
 
               {isNoteTakerOn && (
@@ -3548,7 +3556,7 @@ const ConsciousMeetings: React.FC<ConsciousMeetingsProps> = ({ user }) => {
                     <h4 className="text-[9px] sm:text-[10px] font-black uppercase tracking-widest">Meeting Integrity</h4>
                   </div>
                   <p className="text-[10px] sm:text-[11px] text-slate-400 leading-relaxed font-light italic">
-                    Synthesis remains gated until transcript capture is real; this portal will not surface demo notes as participant data.
+                    Synthesis remains gated until transcript capture is real; this portal will not surface synthetic notes as participant data.
                   </p>
                 </div>
               </div>
@@ -3562,7 +3570,7 @@ const ConsciousMeetings: React.FC<ConsciousMeetingsProps> = ({ user }) => {
           <div className="glass-panel w-full max-w-xl my-4 max-h-[calc(100dvh-2rem)] overflow-y-auto custom-scrollbar p-6 sm:p-8 rounded-2xl border border-blue-500/30 shadow-2xl space-y-4 sm:space-y-5">
             <h3 className="text-lg sm:text-xl font-black text-white uppercase tracking-widest">Enable AI Synthesis?</h3>
             <p className="text-[10px] sm:text-xs text-slate-300 leading-relaxed">
-              Security and usage notice: synthesis notes remain gated until real transcript capture is connected. No demo transcript will be used.
+              Security and usage notice: synthesis notes remain gated until real transcript capture is connected. No synthetic transcript will be used.
             </p>
             <ul className="text-[10px] sm:text-xs text-slate-400 space-y-1">
               <li>- Transcript processing must come from a real active session.</li>

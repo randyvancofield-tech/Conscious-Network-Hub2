@@ -10,7 +10,6 @@ import SocialLearningHub from './components/SocialLearningHub';
 import ConsciousMeetingsUpcomingPage from './components/ConsciousMeetingsUpcomingPage';
 import MembershipPage from './components/MembershipPage';
 import NotFoundPage from './components/NotFoundPage';
-import MusicBox from './components/MusicBox';
 import NotificationsCenter from './components/NotificationsCenter';
 import AdminDashboard from './components/AdminDashboard';
 import AdministrativeAccessPage from './components/AdministrativeAccessPage';
@@ -3698,11 +3697,7 @@ const App: React.FC = () => {
             onOpenProviderAccess={() => setCurrentView(AppView.PROVIDER_ACCESS)}
           />
         ) : (
-          <NotFoundPage
-            path={activePath}
-            onGoHome={() => setCurrentView(AppView.ENTRY)}
-            onGoDashboard={() => setCurrentView(AppView.DASHBOARD)}
-          />
+          renderProviderCrmAccessGate()
         );
       case AppView.CONSCIOUS_MEETINGS_PORTAL:
         return (
@@ -3987,7 +3982,6 @@ const App: React.FC = () => {
           <LazyThreeScene />
         </React.Suspense>
       )}
-      <MusicBox />
 
       {currentView === AppView.ENTRY && (
         <>

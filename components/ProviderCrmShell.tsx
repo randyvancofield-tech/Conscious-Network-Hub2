@@ -340,6 +340,11 @@ const ProviderCrmShellContent: React.FC<ProviderCrmShellProps> = ({
   const [roundtableTitleInput, setRoundtableTitleInput] = useState('Conscious Roundtable');
 
   const isAdmin = user?.role === 'admin';
+  const isApprovedProvider =
+    user?.role === 'provider' &&
+    user.providerApproved === true &&
+    String(user.providerApprovalStatus || '').trim().toLowerCase() === 'approved' &&
+    !user.providerRevokedAt;
   const localTimezone = useMemo(() => getLocalTimezone(), []);
   const activeTool = useMemo(
     () => tools.find((tool) => tool.id === activeToolId) || tools[0] || null,
@@ -1399,7 +1404,7 @@ const ProviderCrmShellContent: React.FC<ProviderCrmShellProps> = ({
     return renderFallbackPanel();
   };
 
-  if (!user || (user.role !== 'provider' && user.role !== 'admin')) {
+  if (!user || (!isAdmin && !isApprovedProvider)) {
     return (
       <div className="mx-auto max-w-3xl p-4 sm:p-8">
         <div className="rounded-3xl border border-red-400/20 bg-red-400/[0.04] p-6 sm:p-8">

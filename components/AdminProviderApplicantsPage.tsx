@@ -422,7 +422,7 @@ const AdminProviderApplicantsPage: React.FC = () => {
                         onClick={() => {
                           if (!ref) return;
                           void openPrivateUpload(ref).catch((error) => {
-                            window.alert(error instanceof Error ? error.message : 'Unable to open private file.');
+                            setError(error instanceof Error ? error.message : 'Unable to open private file.');
                           });
                         }}
                         disabled={!ref}

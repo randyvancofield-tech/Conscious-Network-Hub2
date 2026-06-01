@@ -24,7 +24,7 @@ Runtime dependencies:
 
 - `@mediapipe/selfie_segmentation`: used by `components/ConsciousMeetings.tsx`.
 - `@react-three/drei`, `@react-three/fiber`, `three`: used by `components/ThreeScene.tsx`; `three` also used by `components/ConsciousMeetings.tsx`.
-- `axios`: used by `components/Profile.tsx`.
+- `axios`: removed in launch cleanup after active frontend code no longer imported it.
 - `ethers`: used by `components/IdentitySecurityPanel.tsx`.
 - `lucide-react`: used broadly across `App.tsx`, `constants.tsx`, and components.
 - `react`, `react-dom`: frontend runtime.

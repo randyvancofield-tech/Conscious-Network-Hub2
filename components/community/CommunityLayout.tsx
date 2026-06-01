@@ -942,7 +942,7 @@ export const ConsciousIdentity: React.FC<ConsciousIdentityProps> = ({
                             url: r.fileUrl || '',
                             originalName: r.fileType === 'video' ? 'reflection-video' : 'reflection-document',
                           }).catch((error) => {
-                            window.alert(error instanceof Error ? error.message : 'Unable to open private reflection.');
+                            setReflectionNotice(error instanceof Error ? error.message : 'Unable to open private reflection.');
                           });
                         }}
                         className="text-[10px] text-blue-300 hover:text-blue-100 font-bold uppercase tracking-widest transition-colors"

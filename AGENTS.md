@@ -4,7 +4,7 @@
 
 Conscious Network Hub is a full-stack TypeScript application with a React + Vite frontend and an Express backend. Authentication and user persistence are implemented in the backend with signed session tokens, persisted session records, Prisma, and PostgreSQL.
 
-This checkout is not the Base44-style `entities/` + `src/App.jsx` layout. The active app uses root-level `App.tsx`/`index.tsx`, root `components/` and `services/`, and a separate `server/` package.
+This checkout uses root-level `App.tsx`/`index.tsx`, root `components/` and `services/`, and a separate `server/` package.
 
 ## Tech Stack
 
@@ -16,7 +16,7 @@ This checkout is not the Base44-style `entities/` + `src/App.jsx` layout. The ac
 - Testing: Jest (integration tests for core persistence/auth loops)
 - Deployment: Render backend currently; legacy Google Cloud Run scripts/docs may still exist
 - Contracts: Solidity contract package under `contracts/`
-- Provider launch support: native CNH provider applicant/auth/admin routes; Base44 launch material is deprecated and not part of active flows
+- Provider launch support: native CNH provider applicant/auth/admin routes are authoritative for active flows
 
 ## Architecture
 
@@ -67,7 +67,7 @@ This checkout is not the Base44-style `entities/` + `src/App.jsx` layout. The ac
 - `src/knowledge/`: packaged knowledge data used by the app
 - `server/`: Express API package, Prisma schema/migrations, tests, deployment scripts, backend services, and routes
 - `contracts/`: Solidity contract package and deployment/compile tooling
-- Base44 provider launch scaffolds have been removed from the active workspace; native CNH provider application and review routes are authoritative
+- Legacy generated provider launch scaffolds have been removed from the active workspace; native CNH provider application and review routes are authoritative
 - `docs/`: architecture, privacy, compliance, cleanup, backend mapping, and archived implementation notes
 - `public/`: public images and video assets
 - `.agents/`: local Codex skills/plugins and agent configuration

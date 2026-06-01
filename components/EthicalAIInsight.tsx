@@ -246,14 +246,14 @@ const EthicalAIInsight: React.FC<EthicalAIInsightProps> = ({ userEmail, userId =
 
     const rateLimitCheck = securityService.checkRateLimit(userId);
     if (!rateLimitCheck.allowed) {
-      alert(`Rate limited. Wait ${Math.ceil(rateLimitCheck.resetIn / 1000)}s`);
+      setInsightError(`Rate limited. Wait ${Math.ceil(rateLimitCheck.resetIn / 1000)}s before asking again.`);
       return;
     }
 
     const sanitized = securityService.sanitizeInput(qaInput, 5000);
     const suspicious = securityService.detectSuspiciousInput(sanitized);
     if (suspicious.suspicious) {
-      alert('Suspicious input detected. Please rephrase.');
+      setInsightError('Suspicious input detected. Please rephrase.');
       return;
     }
 
@@ -318,7 +318,7 @@ const EthicalAIInsight: React.FC<EthicalAIInsightProps> = ({ userEmail, userId =
 
   const handleVoiceInput = () => {
     if (!voiceSupported) {
-      alert('Voice not supported');
+      setInsightError('Voice input is not supported in this browser.');
       return;
     }
 
@@ -377,7 +377,7 @@ const EthicalAIInsight: React.FC<EthicalAIInsightProps> = ({ userEmail, userId =
     }, ['title', 'description']);
 
     if (!validation.valid) {
-      alert(validation.errors.join('\n'));
+      setReportError(validation.errors.join(' '));
       return;
     }
 

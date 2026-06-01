@@ -268,7 +268,7 @@ You must cite sources whenever possible and avoid fabricating sources.`;
     relevance?: number;
   }> {
     // Vertex AI responses may include citations in certain models
-    // This is a placeholder for future citation extraction
+    // Citation extraction can be added when provider metadata is available.
     const citations: Array<{ title: string; url?: string; relevance?: number }> =
       [];
 

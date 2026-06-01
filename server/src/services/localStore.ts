@@ -1235,7 +1235,7 @@ export const localStore = {
       currency: input.currency || 'USD',
       tier: input.tier,
       status: input.status || 'completed',
-      paymentMethod: input.paymentMethod || 'mock',
+      paymentMethod: input.paymentMethod || 'unspecified',
       description: input.description || null,
       createdAt: nowIso(),
     };

@@ -23,7 +23,7 @@ Purpose: preserve launch readiness state, known risks, exact stop/resume context
 | Area | Files |
 |---|---|
 | Global shell/sidebar | `App.tsx` |
-| Meeting brand asset deployment blocker | `components/ui/MeetingBrandLoop.tsx`, `public/brand/conscious-meetings-loop.jpg`, `src/assets/brand/conscious-meetings-loop.jpg` |
+| Meeting brand asset deployment blocker | `components/ui/MeetingBrandLoop.tsx`, `public/brand/conscious-meetings-loop.jpg` |
 | Provider CRM public status labels | `server/src/services/providerCrm.ts` |
 | Database verification/reconcile | `server/scripts/verify-launch-data-paths.js`, `server/scripts/reconcile-launch-schema.js`, Neon schema |
 | Continuity register | `docs/launch/PHASE_CONTINUITY_REGISTER.md` |
@@ -59,7 +59,7 @@ Purpose: preserve launch readiness state, known risks, exact stop/resume context
 | Cloudflare dashboard settings not fully machine-verifiable here | Edge cache/routing/security settings could still differ from repo expectations. | Manually confirm Pages project, production branch, build command, output directory, custom domains, cache rules, redirects, WAF, and TLS mode. |
 | Mobile wallet/provider verification not fully automated | Provider/admin wallet flows may behave differently on mobile wallets. | Test wallet nonce/signature/bind/verify on desktop browser, mobile browser, and mobile wallet in-app browser. |
 | Email delivery may be disabled by launch policy | Users may rely on in-app notification/recovery-code fallback unless SMTP/Gmail is enabled. | Decide whether production email is required; if yes, configure email credentials and run a real provider/application/password-recovery email smoke test. |
-| Alert-based error messages remain in some UI paths | Not fake data, but user experience is less polished. | Replace remaining `window.alert`/`alert` notices with toast/modal patterns in a polish pass. |
+| Alert-only UI notices were converted in active app paths | Remaining risk is visual polish, not unsupported browser alerts. | Continue replacing local status banners with the final toast/modal pattern in a polish pass. |
 | Full authenticated visual regression was not completed in this pass | Headless guest checks cannot prove every role-specific screen after wallet/admin elevation. | Founder/admin manual walkthrough required before inviting external users. |
 
 ## Deferred Features

@@ -396,7 +396,7 @@ model PaymentHistory {
   currency      String   @default("USD")
   tier          String
   status        String   @default("completed")
-  paymentMethod String   @default("mock")
+  paymentMethod String   @default("unspecified")
   description   String?
   createdAt     DateTime @default(now())
 

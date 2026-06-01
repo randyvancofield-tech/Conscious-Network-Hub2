@@ -359,7 +359,7 @@ const Profile: React.FC<ProfileProps> = ({ user, onUserUpdate }) => {
                 type="button"
                 onClick={() => {
                   void openPrivateUpload({ url: ref.fileUrl, originalName: 'reflection-video' }).catch((error) => {
-                    window.alert(error instanceof Error ? error.message : 'Unable to open private reflection.');
+                    setError(error instanceof Error ? error.message : 'Unable to open private reflection.');
                   });
                 }}
               >
@@ -370,7 +370,7 @@ const Profile: React.FC<ProfileProps> = ({ user, onUserUpdate }) => {
                 type="button"
                 onClick={() => {
                   void openPrivateUpload({ url: ref.fileUrl, originalName: 'reflection-document' }).catch((error) => {
-                    window.alert(error instanceof Error ? error.message : 'Unable to open private reflection.');
+                    setError(error instanceof Error ? error.message : 'Unable to open private reflection.');
                   });
                 }}
               >

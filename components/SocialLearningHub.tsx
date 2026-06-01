@@ -511,9 +511,9 @@ const SocialLearningHubContent: React.FC<SocialLearningHubProps> = ({
         return;
       }
       await navigator.clipboard.writeText(shareUrl);
-      alert('Share link copied to clipboard.');
+      setPostActionError('Share link copied to clipboard.');
     } catch {
-      // no-op if share is canceled
+      setPostActionError('');
     }
   };
   const isProfileViewOpen = profileViewLoading || Boolean(profileViewError) || Boolean(selectedProfileView);
