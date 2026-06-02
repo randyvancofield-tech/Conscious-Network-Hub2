@@ -19,7 +19,6 @@ import ProviderApplicantSignInPage from './components/ProviderApplicantSignInPag
 import ProviderApplicationStatusPage from './components/ProviderApplicationStatusPage';
 import AdminProviderApplicantsPage from './components/AdminProviderApplicantsPage';
 import ProviderCrmShell from './components/ProviderCrmShell';
-import ConsciousCareersPage from './components/ConsciousCareersPage';
 import GrantApplicationPage from './components/GrantApplicationPage';
 import EntrepreneurshipSupportPage from './components/EntrepreneurshipSupportPage';
 import { ConsciousIdentity } from './components/community/CommunityLayout';
@@ -95,8 +94,7 @@ const PLATFORM_SEARCH_CATALOG: PlatformSearchResult[] = [
   { id: 'community', title: 'Community', description: 'Member directory and profiles.', view: AppView.COMMUNITY, keywords: ['members', 'directory', 'profiles'] },
   { id: 'meetings', title: 'Conscious Meetings', description: 'Upcoming provider-created meeting sessions.', view: AppView.CONSCIOUS_MEETINGS_UPCOMING, keywords: ['sessions', 'events', 'video'] },
   { id: 'providers', title: 'Providers Market', description: 'Approved public provider profiles.', view: AppView.PROVIDERS, keywords: ['provider', 'services', 'market'] },
-  { id: 'careers', title: 'Conscious Careers', description: 'Grant and entrepreneurship readiness pathways.', view: AppView.CONSCIOUS_CAREERS, keywords: ['grant', 'career', 'entrepreneurship'] },
-  { id: 'grant', title: 'Grant Application', description: 'Conscious Careers grant application.', view: AppView.GRANT_APPLICATION, keywords: ['funding', 'application', 'careers'] },
+  { id: 'careers', title: 'Conscious Careers', description: 'Entrepreneurship readiness, Conscious Plan, guidance, and grant pathway.', view: AppView.ENTREPRENEURSHIP_SUPPORT, keywords: ['grant', 'career', 'entrepreneurship'] },
   { id: 'entrepreneurship', title: 'Entrepreneurship Support', description: 'Conscious Careers pathway portal for readiness and regional entrepreneurship resources.', view: AppView.ENTREPRENEURSHIP_SUPPORT, keywords: ['business', 'sbdc', 'readiness'] },
   { id: 'provider-access', title: 'Provider Access', description: 'Approved provider sign-in, application, and applicant status.', view: AppView.PROVIDER_ACCESS, keywords: ['provider sign in', 'apply', 'applicant'] },
   { id: 'provider-apply', title: 'Provider Application', description: 'Apply to become a CNH provider.', view: AppView.PROVIDER_APPLY, keywords: ['provider apply', 'application'] },
@@ -219,7 +217,7 @@ const routePathForView = (view: AppView, params: Record<string, string> = {}): s
     case AppView.PROVIDER_CRM:
       return '/provider/crm';
     case AppView.CONSCIOUS_CAREERS:
-      return '/conscious-careers';
+      return '/conscious-careers/entrepreneurship-support';
     case AppView.GRANT_APPLICATION:
       return '/conscious-careers/grant-application';
     case AppView.ENTREPRENEURSHIP_SUPPORT:
@@ -303,8 +301,8 @@ const resolveRoute = (pathname: string, search = ''): RouteState => {
     '/provider/applicant-sign-in': AppView.PROVIDER_APPLICANT_SIGN_IN,
     '/provider/application-status': AppView.PROVIDER_APPLICATION_STATUS,
     '/provider/crm': AppView.PROVIDER_CRM,
-    '/conscious-careers': AppView.CONSCIOUS_CAREERS,
-    '/careers': AppView.CONSCIOUS_CAREERS,
+    '/conscious-careers': AppView.ENTREPRENEURSHIP_SUPPORT,
+    '/careers': AppView.ENTREPRENEURSHIP_SUPPORT,
     '/conscious-careers/grant-application': AppView.GRANT_APPLICATION,
     '/careers/grant-application': AppView.GRANT_APPLICATION,
     '/conscious-careers/entrepreneurship-support': AppView.ENTREPRENEURSHIP_SUPPORT,
@@ -657,13 +655,6 @@ const App: React.FC = () => {
   const [routeParams, setRouteParams] = useState<Record<string, string>>(initialRoute.params);
   const [activePath, setActivePath] = useState(initialRoute.path);
   const [isSidebarOpen, setSidebarOpen] = useState(false);
-  const [isCareersMenuOpen, setCareersMenuOpen] = useState(
-    [
-      AppView.CONSCIOUS_CAREERS,
-      AppView.GRANT_APPLICATION,
-      AppView.ENTREPRENEURSHIP_SUPPORT,
-    ].includes(initialRoute.view)
-  );
   const [isMeetingsMenuOpen, setMeetingsMenuOpen] = useState(
     [
       AppView.CONSCIOUS_MEETINGS,
@@ -1387,7 +1378,7 @@ const App: React.FC = () => {
   };
 
   const handleEnterConsciousCareers = () => {
-    setCurrentView(AppView.CONSCIOUS_CAREERS);
+    setCurrentView(AppView.ENTREPRENEURSHIP_SUPPORT);
   };
   
   const handleGoHome = () => setCurrentView(AppView.ENTRY);
@@ -2589,7 +2580,7 @@ const App: React.FC = () => {
     'my-courses': AppView.MY_COURSES,
     courses: AppView.KNOWLEDGE_PATHWAYS,
     providers: AppView.PROVIDERS,
-    careers: AppView.CONSCIOUS_CAREERS,
+    careers: AppView.ENTREPRENEURSHIP_SUPPORT,
     profile: AppView.MY_CONSCIOUS_IDENTITY,
     membership: AppView.MEMBERSHIP,
     admin: AppView.ADMIN_DASHBOARD,
@@ -3621,32 +3612,22 @@ const App: React.FC = () => {
           />
         );
       case AppView.CONSCIOUS_CAREERS:
+      case AppView.ENTREPRENEURSHIP_SUPPORT:
         return (
-          <ConsciousCareersPage
-            onGoHome={() => setCurrentView(user ? AppView.DASHBOARD : AppView.ENTRY)}
+          <EntrepreneurshipSupportPage
+            user={user}
+            onBack={() => setCurrentView(user ? AppView.DASHBOARD : AppView.ENTRY)}
+            onMembershipAccess={() => setCurrentView(AppView.MEMBERSHIP_ACCESS)}
             onGrantApplication={() => setCurrentView(AppView.GRANT_APPLICATION)}
-            onEntrepreneurshipSupport={() => setCurrentView(AppView.ENTREPRENEURSHIP_SUPPORT)}
-            embedded={Boolean(user)}
+            onReturnToPortal={() => setCurrentView(user ? AppView.DASHBOARD : AppView.ENTRY)}
           />
         );
       case AppView.GRANT_APPLICATION:
         return (
           <GrantApplicationPage
             user={user}
-            onBack={() => setCurrentView(AppView.CONSCIOUS_CAREERS)}
+            onBack={() => setCurrentView(AppView.ENTREPRENEURSHIP_SUPPORT)}
             onSubmit={handleGrantApplicationSubmit}
-          />
-        );
-      case AppView.ENTREPRENEURSHIP_SUPPORT:
-        return (
-          <EntrepreneurshipSupportPage
-            user={user}
-            onBack={() => setCurrentView(AppView.CONSCIOUS_CAREERS)}
-            onSignInPrompt={() => {
-              resetSignInChallengeInputs();
-              setSigninModalOpen(true);
-            }}
-            onReturnToPortal={() => setCurrentView(user ? AppView.DASHBOARD : AppView.ENTRY)}
           />
         );
       case AppView.DASHBOARD:
@@ -4613,72 +4594,26 @@ const App: React.FC = () => {
                       );
                     }
                     if (item.id === 'careers') {
-                      const careersSubItems = [
-                        {
-                          id: 'grant-application',
-                          label: 'Grant Application',
-                          view: AppView.GRANT_APPLICATION,
-                          badge: 'Apply',
-                        },
-                        {
-                          id: 'entrepreneurship-support',
-                          label: 'Entrepreneurship Support',
-                          view: AppView.ENTREPRENEURSHIP_SUPPORT,
-                          badge: 'Soon',
-                        },
-                      ];
+                      const isCareersActive = [
+                        AppView.CONSCIOUS_CAREERS,
+                        AppView.GRANT_APPLICATION,
+                        AppView.ENTREPRENEURSHIP_SUPPORT,
+                      ].includes(currentView);
 
                       return (
-                        <div key={item.id} className="space-y-2">
-                          <button
-                            type="button"
-                            onClick={() => {
-                              setCareersMenuOpen((open) => !open);
-                              setCurrentView(AppView.CONSCIOUS_CAREERS);
-                            }}
-                            aria-expanded={isCareersMenuOpen}
-                            className={`w-full flex items-center gap-5 px-6 py-4 rounded-2xl transition-all group ${isActive ? 'bg-blue-600/15 text-blue-400 border border-blue-500/20 shadow-lg' : 'text-slate-500 hover:bg-white/5 hover:text-white'}`}
-                          >
-                            <span className={`${isActive ? 'text-blue-400' : 'text-slate-600 group-hover:text-blue-400'} transition-colors`}>{item.icon}</span>
-                            <span className="min-w-0 flex-1 text-left text-[10px] font-black tracking-[0.3em] uppercase">{item.label}</span>
-                            <ChevronRight className={`h-4 w-4 transition-transform ${isCareersMenuOpen ? 'rotate-90 text-blue-300' : 'text-slate-600'}`} />
-                          </button>
-
-                          {isCareersMenuOpen && (
-                            <div className="ml-8 space-y-2 border-l border-white/10 pl-4">
-                              {careersSubItems.map((subItem) => {
-                                const isSubActive = currentView === subItem.view;
-                                return (
-                                  <button
-                                    key={subItem.id}
-                                    type="button"
-                                    onClick={() => {
-                                      setCurrentView(subItem.view);
-                                      setCareersMenuOpen(true);
-                                      closeSidebarOnMobile();
-                                    }}
-                                    className={`w-full rounded-xl border px-4 py-3 text-left transition-all ${
-                                      isSubActive
-                                        ? 'border-cyan-300/30 bg-cyan-400/10 text-white'
-                                        : 'border-white/5 bg-white/[0.03] text-slate-500 hover:bg-white/5 hover:text-white'
-                                    }`}
-                                  >
-                                    <span className="flex items-center justify-between gap-3">
-                                      <span className="text-[9px] font-black uppercase tracking-[0.22em]">{subItem.label}</span>
-                                      <span className={`rounded-full px-2 py-1 text-[7px] font-black uppercase tracking-widest ${
-                                        subItem.badge === 'Soon'
-                                          ? 'bg-teal-400/10 text-teal-200'
-                                          : 'bg-blue-400/10 text-blue-200'
-                                      }`}>
-                                        {subItem.badge}
-                                      </span>
-                                    </span>
-                                  </button>
-                                );
-                              })}
-                            </div>
-                          )}
-                        </div>
+                        <button
+                          key={item.id}
+                          type="button"
+                          onClick={() => {
+                            setCurrentView(AppView.ENTREPRENEURSHIP_SUPPORT);
+                            closeSidebarOnMobile();
+                          }}
+                          className={`w-full flex items-center gap-5 px-6 py-4 rounded-2xl transition-all group ${isCareersActive ? 'bg-blue-600/15 text-blue-400 border border-blue-500/20 shadow-lg' : 'text-slate-500 hover:bg-white/5 hover:text-white'}`}
+                        >
+                          <span className={`${isCareersActive ? 'text-blue-400' : 'text-slate-600 group-hover:text-blue-400'} transition-colors`}>{item.icon}</span>
+                          <span className="min-w-0 flex-1 text-left text-[10px] font-black tracking-[0.3em] uppercase">{item.label}</span>
+                          <ChevronRight className="h-4 w-4 text-slate-600 transition-transform group-hover:translate-x-1 group-hover:text-blue-300" />
+                        </button>
                       );
                     }
                     return (

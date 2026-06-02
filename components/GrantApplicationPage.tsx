@@ -362,7 +362,7 @@ const GrantApplicationPage: React.FC<GrantApplicationPageProps> = ({
               onClick={onBack}
               className="mt-8 rounded-2xl border border-white/10 bg-white/5 px-5 py-4 text-xs font-black uppercase tracking-widest text-white transition hover:bg-white/10"
             >
-              Back to Conscious Careers
+              Back to Entrepreneurship Support
             </button>
           </div>
         </div>
@@ -379,7 +379,7 @@ const GrantApplicationPage: React.FC<GrantApplicationPageProps> = ({
           className="mb-6 flex items-center gap-2 text-[10px] font-black uppercase tracking-widest text-emerald-100/60 transition-colors hover:text-white"
         >
           <ChevronRight className="h-4 w-4 rotate-180" />
-          Conscious Careers
+          Entrepreneurship Support
         </button>
 
         <div className="mb-8 space-y-5">
@@ -397,7 +397,7 @@ const GrantApplicationPage: React.FC<GrantApplicationPageProps> = ({
                 </h1>
               </div>
               <p className="max-w-xl text-sm leading-7 text-slate-300">
-                Apply for faith-driven entrepreneurial support up to $12,000. Applicants must be current Conscious Network Hub users and describe what they have learned.
+                Apply for faith-driven entrepreneurial support up to $12,000. Grant applicants must be current Conscious Network Hub users and describe what they have learned.
               </p>
             </div>
           </div>

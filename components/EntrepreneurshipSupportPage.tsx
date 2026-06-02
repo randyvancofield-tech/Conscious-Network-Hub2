@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import {
   ArrowLeft,
   ArrowRight,
@@ -19,7 +19,8 @@ import careersLogo from '../src/assets/brand/conscious-careers-logo.png';
 interface EntrepreneurshipSupportPageProps {
   user: UserProfile | null;
   onBack: () => void;
-  onSignInPrompt: () => void;
+  onMembershipAccess: () => void;
+  onGrantApplication: () => void;
   onReturnToPortal: () => void;
 }
 
@@ -107,6 +108,10 @@ const supportNeedOptions: SupportNeed[] = [
 const regionOptions: RegionOption[] = ['San Diego / Imperial', 'Greater New Orleans / Louisiana', 'Other'];
 const alignmentOptions: AlignmentOption[] = ['Yes', 'Somewhat', 'Not sure', 'No'];
 const calendlyBuildingConnectionsUrl = 'https://calendly.com/randycofield/buildingconnections';
+const grantApplicationPath = '/conscious-careers/grant-application';
+const foundationRedirectDelaySeconds = 15;
+const foundationRedirectMessage =
+  'To build a foundation, we must first become conscious of what we consume. We direct everyone beginning their journey to the Conscious Network Hub because true alignment starts with absolute autonomy over the content you ingest. Think of this Hub as a space to clear the mind, body, and soul. Immersing your mind in high-vibrational content expands your vision. By intentionally shifting what you take in, you naturally elevate your emotional state, which refines your actions, and ultimately aligns your awareness far above the ego. The Hub is where your clarity begins.';
 
 const imagery = {
   hero: 'https://images.unsplash.com/photo-1556761175-b413da4baf72?auto=format&fit=crop&w=1600&q=80',
@@ -249,7 +254,8 @@ const hasAdvisoryCaution = (needs: SupportNeed[]): boolean =>
 const EntrepreneurshipSupportPage: React.FC<EntrepreneurshipSupportPageProps> = ({
   user,
   onBack,
-  onSignInPrompt,
+  onMembershipAccess,
+  onGrantApplication,
   onReturnToPortal,
 }) => {
   const [portalMode, setPortalMode] = useState<PortalMode>('overview');
@@ -260,6 +266,153 @@ const EntrepreneurshipSupportPage: React.FC<EntrepreneurshipSupportPageProps> = 
   const [emotionalIntelligenceAnswers, setEmotionalIntelligenceAnswers] = useState<Record<number, number>>({});
   const [planScoreRevealed, setPlanScoreRevealed] = useState(false);
   const [planStatus, setPlanStatus] = useState('');
+  const [isFoundationRedirectOpen, setFoundationRedirectOpen] = useState(false);
+  const [foundationRedirectSeconds, setFoundationRedirectSeconds] = useState(foundationRedirectDelaySeconds);
+  const foundationAudioCleanupRef = useRef<(() => void) | null>(null);
+  const foundationIntervalRef = useRef<number | null>(null);
+  const foundationRedirectedRef = useRef(false);
+
+  const stopFoundationAudio = () => {
+    foundationAudioCleanupRef.current?.();
+    foundationAudioCleanupRef.current = null;
+  };
+
+  const startFoundationAudio = () => {
+    if (typeof window === 'undefined') return;
+    const AudioContextConstructor =
+      window.AudioContext ||
+      (window as typeof window & { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
+    if (!AudioContextConstructor) return;
+
+    try {
+      const context = new AudioContextConstructor();
+      const master = context.createGain();
+      master.gain.setValueAtTime(0.0001, context.currentTime);
+      master.gain.exponentialRampToValueAtTime(0.04, context.currentTime + 1.2);
+      master.connect(context.destination);
+
+      const oscillators = [216, 432, 528].map((frequency, index) => {
+        const oscillator = context.createOscillator();
+        const gain = context.createGain();
+        oscillator.type = index === 2 ? 'sine' : 'triangle';
+        oscillator.frequency.setValueAtTime(frequency, context.currentTime);
+        gain.gain.setValueAtTime(index === 2 ? 0.018 : 0.012, context.currentTime);
+        oscillator.connect(gain);
+        gain.connect(master);
+        oscillator.start();
+        return oscillator;
+      });
+
+      const pulseTimer = window.setInterval(() => {
+        const now = context.currentTime;
+        master.gain.cancelScheduledValues(now);
+        master.gain.setValueAtTime(Math.max(master.gain.value, 0.01), now);
+        master.gain.linearRampToValueAtTime(0.055, now + 0.4);
+        master.gain.linearRampToValueAtTime(0.03, now + 1.4);
+      }, 2400);
+
+      foundationAudioCleanupRef.current = () => {
+        window.clearInterval(pulseTimer);
+        const now = context.currentTime;
+        master.gain.cancelScheduledValues(now);
+        master.gain.setValueAtTime(Math.max(master.gain.value, 0.001), now);
+        master.gain.exponentialRampToValueAtTime(0.0001, now + 0.5);
+        window.setTimeout(() => {
+          oscillators.forEach((oscillator) => oscillator.stop());
+          context.close().catch(() => undefined);
+        }, 650);
+      };
+    } catch {
+      foundationAudioCleanupRef.current = null;
+    }
+  };
+
+  const completeFoundationRedirect = () => {
+    if (foundationRedirectedRef.current) return;
+    foundationRedirectedRef.current = true;
+    if (foundationIntervalRef.current !== null) {
+      window.clearInterval(foundationIntervalRef.current);
+      foundationIntervalRef.current = null;
+    }
+    stopFoundationAudio();
+    if (typeof window !== 'undefined' && 'speechSynthesis' in window) {
+      window.speechSynthesis.cancel();
+    }
+    onMembershipAccess();
+  };
+
+  const beginFoundationRedirect = () => {
+    foundationRedirectedRef.current = false;
+    setFoundationRedirectSeconds(foundationRedirectDelaySeconds);
+    setFoundationRedirectOpen(true);
+    stopFoundationAudio();
+    startFoundationAudio();
+
+    let timerComplete = false;
+    let narrationComplete = false;
+    const maybeRedirect = () => {
+      if (timerComplete && narrationComplete) {
+        completeFoundationRedirect();
+      }
+    };
+
+    if (foundationIntervalRef.current !== null) {
+      window.clearInterval(foundationIntervalRef.current);
+      foundationIntervalRef.current = null;
+    }
+
+    const intervalId = window.setInterval(() => {
+      setFoundationRedirectSeconds((seconds) => {
+        if (seconds <= 1) {
+          window.clearInterval(intervalId);
+          foundationIntervalRef.current = null;
+          timerComplete = true;
+          maybeRedirect();
+          return 0;
+        }
+        return seconds - 1;
+      });
+    }, 1000);
+    foundationIntervalRef.current = intervalId;
+
+    if (typeof window !== 'undefined' && 'speechSynthesis' in window) {
+      try {
+        window.speechSynthesis.cancel();
+        const utterance = new SpeechSynthesisUtterance(foundationRedirectMessage);
+        utterance.rate = 1.35;
+        utterance.pitch = 1.03;
+        utterance.volume = 0.92;
+        utterance.onend = () => {
+          narrationComplete = true;
+          maybeRedirect();
+        };
+        utterance.onerror = () => {
+          narrationComplete = true;
+          maybeRedirect();
+        };
+        window.speechSynthesis.speak(utterance);
+      } catch {
+        narrationComplete = true;
+        maybeRedirect();
+      }
+    } else {
+      narrationComplete = true;
+      maybeRedirect();
+    }
+  };
+
+  useEffect(() => {
+    return () => {
+      if (foundationIntervalRef.current !== null) {
+        window.clearInterval(foundationIntervalRef.current);
+        foundationIntervalRef.current = null;
+      }
+      stopFoundationAudio();
+      if (typeof window !== 'undefined' && 'speechSynthesis' in window) {
+        window.speechSynthesis.cancel();
+      }
+    };
+  }, []);
 
   const selectedResource = useMemo(
     () => getResourceForRegion(assessment.region),
@@ -485,6 +638,54 @@ const EntrepreneurshipSupportPage: React.FC<EntrepreneurshipSupportPageProps> = 
   if (portalMode === 'assessment') {
     return (
       <div className="min-h-[100dvh] w-full bg-slate-950 px-4 pb-14 pt-20 text-slate-100 sm:px-6 sm:pt-24 lg:px-10">
+        {isFoundationRedirectOpen && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/90 px-4 py-6 backdrop-blur-2xl">
+            <div className="relative w-full max-w-5xl overflow-hidden rounded-[2rem] border border-teal-200/20 bg-[#07110f] shadow-2xl shadow-teal-950/30">
+              <div className="absolute inset-0 bg-[radial-gradient(circle_at_20%_20%,rgba(94,234,212,0.18),transparent_32%),radial-gradient(circle_at_78%_24%,rgba(251,191,36,0.12),transparent_30%),linear-gradient(135deg,rgba(15,23,42,0.2),rgba(6,78,59,0.1))]" />
+              <div className="relative grid gap-0 lg:grid-cols-[0.42fr_0.58fr]">
+                <div className="flex min-h-80 items-center justify-center border-b border-white/10 bg-black/20 p-8 lg:border-b-0 lg:border-r">
+                  <div className="relative h-64 w-64">
+                    <div className="absolute inset-0 rounded-full border border-teal-100/20 bg-teal-300/10 blur-sm" />
+                    <div className="absolute left-1/2 top-8 h-20 w-20 -translate-x-1/2 rounded-full border border-teal-100/30 bg-gradient-to-br from-teal-100 to-slate-700 shadow-2xl shadow-teal-400/20" />
+                    <div className="absolute bottom-12 left-1/2 h-36 w-28 -translate-x-1/2 rounded-[3rem] border border-teal-100/25 bg-gradient-to-b from-teal-200/30 to-blue-950/80 shadow-2xl" />
+                    <div className="absolute bottom-2 left-1/2 h-12 w-44 -translate-x-1/2 rounded-full bg-teal-200/10 blur-xl" />
+                    <div className="absolute left-7 top-28 h-3 w-3 animate-ping rounded-full bg-teal-200" />
+                    <div className="absolute right-10 top-20 h-2 w-2 animate-pulse rounded-full bg-amber-100" />
+                    <div className="absolute bottom-24 right-7 h-2.5 w-2.5 animate-ping rounded-full bg-blue-200" />
+                  </div>
+                </div>
+                <div className="p-6 sm:p-8 lg:p-10">
+                  <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+                    <div>
+                      <p className="text-xs font-black uppercase tracking-[0.24em] text-teal-200">Foundation Redirect</p>
+                      <h2 className="mt-3 text-2xl font-black uppercase leading-tight tracking-tight text-white sm:text-4xl">
+                        Your clarity begins inside the Hub.
+                      </h2>
+                    </div>
+                    <div className="rounded-2xl border border-teal-200/20 bg-teal-300/10 px-4 py-3 text-center">
+                      <p className="text-[9px] font-black uppercase tracking-[0.2em] text-teal-100/70">Redirect</p>
+                      <p className="mt-1 text-2xl font-black text-white">{foundationRedirectSeconds}s</p>
+                    </div>
+                  </div>
+                  <p className="mt-6 text-base leading-8 text-slate-200">
+                    {foundationRedirectMessage}
+                  </p>
+                  <div className="mt-7 grid gap-3 sm:grid-cols-3">
+                    {['Listen', 'Breathe', 'Enter The Hub'].map((label, index) => (
+                      <div key={label} className="rounded-2xl border border-white/10 bg-white/[0.04] p-4">
+                        <p className="text-xs font-black uppercase tracking-[0.18em] text-teal-100">0{index + 1}</p>
+                        <p className="mt-2 text-sm font-black uppercase tracking-[0.12em] text-white">{label}</p>
+                      </div>
+                    ))}
+                  </div>
+                  <p className="mt-5 text-xs leading-6 text-slate-500">
+                    Voice guidance and ambient tone begin when the browser permits audio after your click. If a device blocks speech or sound, the visual redirect continues safely.
+                  </p>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
         <div className="mx-auto flex max-w-6xl flex-col gap-6">
           <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
             <button
@@ -515,7 +716,7 @@ const EntrepreneurshipSupportPage: React.FC<EntrepreneurshipSupportPageProps> = 
                 <div className="mt-7 flex flex-col gap-3 sm:flex-row">
                   <button
                     type="button"
-                    onClick={onSignInPrompt}
+                    onClick={beginFoundationRedirect}
                     className="inline-flex items-center justify-center gap-2 rounded-xl bg-amber-300 px-5 py-3 text-xs font-black uppercase tracking-[0.16em] text-slate-950 transition-colors hover:bg-amber-200 focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-100"
                   >
                     Sign In As Member <ArrowRight className="h-4 w-4" />
@@ -915,7 +1116,7 @@ const EntrepreneurshipSupportPage: React.FC<EntrepreneurshipSupportPageProps> = 
                     </button>
                     <button
                       type="button"
-                      onClick={user ? onReturnToPortal : onSignInPrompt}
+                      onClick={user ? onReturnToPortal : onMembershipAccess}
                       className="inline-flex items-center justify-center gap-2 rounded-xl border border-white/10 bg-white/[0.08] px-4 py-3 text-xs font-black uppercase tracking-[0.14em] text-white transition-colors hover:bg-white/[0.14] focus:outline-none focus-visible:ring-2 focus-visible:ring-white/30"
                     >
                       {user ? 'Return To CNH Portal' : 'Sign In To CNH Portal'}
@@ -984,7 +1185,7 @@ const EntrepreneurshipSupportPage: React.FC<EntrepreneurshipSupportPageProps> = 
           </div>
 
           <div className="border-t border-white/10 bg-white/[0.025] p-5 sm:p-6 lg:col-span-2">
-            <div className="mx-auto grid max-w-5xl items-stretch gap-3 md:grid-cols-[1fr_auto_1fr_auto_1fr] md:gap-4">
+            <div className="mx-auto grid max-w-6xl items-stretch gap-3 md:grid-cols-2 xl:grid-cols-[1fr_auto_1fr_auto_1fr_auto_1fr] xl:gap-4">
               <button
                 type="button"
                 onClick={openAssessment}
@@ -995,7 +1196,7 @@ const EntrepreneurshipSupportPage: React.FC<EntrepreneurshipSupportPageProps> = 
                   Begin With Conscious Network Hub <ArrowRight className="h-4 w-4 shrink-0" />
                 </span>
               </button>
-              <div className="hidden items-center justify-center text-teal-100/70 md:flex">
+              <div className="hidden items-center justify-center text-teal-100/70 xl:flex">
                 <ArrowRight className="h-6 w-6" />
               </div>
               <button
@@ -1008,7 +1209,7 @@ const EntrepreneurshipSupportPage: React.FC<EntrepreneurshipSupportPageProps> = 
                   Create Conscious Plan <ArrowRight className="h-4 w-4 shrink-0" />
                 </span>
               </button>
-              <div className="hidden items-center justify-center text-teal-100/70 md:flex">
+              <div className="hidden items-center justify-center text-teal-100/70 xl:flex">
                 <ArrowRight className="h-6 w-6" />
               </div>
               <a
@@ -1022,9 +1223,28 @@ const EntrepreneurshipSupportPage: React.FC<EntrepreneurshipSupportPageProps> = 
                   Brainstorm With A Leader <ArrowUpRight className="h-4 w-4 shrink-0" />
                 </span>
               </a>
+              <div className="hidden items-center justify-center text-teal-100/70 xl:flex">
+                <ArrowRight className="h-6 w-6" />
+              </div>
+              <a
+                href={grantApplicationPath}
+                onClick={(event) => {
+                  event.preventDefault();
+                  onGrantApplication();
+                }}
+                className="group relative overflow-hidden rounded-2xl border border-blue-200/20 bg-blue-400/[0.09] px-4 py-4 text-left shadow-[0_18px_45px_rgba(0,0,0,0.22)] transition duration-300 hover:-translate-y-1 hover:bg-blue-300/[0.14] focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-100"
+              >
+                <span className="block text-xs font-black uppercase tracking-[0.18em] text-blue-100">Step 4</span>
+                <span className="mt-2 flex items-center justify-between gap-3 text-sm font-black uppercase tracking-[0.12em] text-white">
+                  Start Application <ArrowRight className="h-4 w-4 shrink-0" />
+                </span>
+                <span className="mt-3 block text-[11px] font-semibold leading-5 text-blue-100/75">
+                  Grant applicants must be current Conscious Network Hub users.
+                </span>
+              </a>
             </div>
             <p className="mx-auto mt-4 max-w-5xl text-sm leading-6 text-slate-500">
-              Step 1 is for signed-in CNH members. Step 2 calculates a page-based readiness score. Step 3 uses the active scheduling link.
+              Step 1 is for signed-in CNH members. Step 2 calculates a page-based readiness score. Step 3 uses the active scheduling link. Step 4 opens the grant application for current CNH users.
             </p>
           </div>
         </section>
