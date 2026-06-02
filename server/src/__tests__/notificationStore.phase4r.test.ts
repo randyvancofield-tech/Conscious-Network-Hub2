@@ -69,3 +69,5 @@ describe('notificationStore role visibility', () => {
     ]);
   });
 });
+
+export {};

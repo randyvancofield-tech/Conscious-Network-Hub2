@@ -45,8 +45,14 @@ import {
 } from '../services/userProfilePatch';
 import {
   absolutizeBackendUrl,
+  buildBackendUploadObjectUrl,
+  extractUploadObjectKeyFromUrl,
   getBackendPublicBaseUrl,
 } from '../services/publicUrl';
+import {
+  getUploadObjectAccessMetadata,
+  isUploadObjectPubliclyReadable,
+} from '../services/uploadBlobStore';
 import { normalizeTier } from '../tierPolicy';
 import { socialStore } from '../services/socialStore';
 import { validateJsonBody } from '../validation/jsonSchema';
@@ -233,6 +239,34 @@ function absolutizeUrl(req: Request, url?: string | null): string | null | undef
   return absolutizeBackendUrl(req, url);
 }
 
+function canonicalUploadObjectUrl(req: Request, objectKey?: string | null): string | null {
+  const resolvedObjectKey = extractUploadObjectKeyFromUrl(objectKey || null);
+  if (!resolvedObjectKey) return null;
+  const metadata = getUploadObjectAccessMetadata(resolvedObjectKey);
+  if (!metadata) return null;
+  if (metadata.access === 'public') {
+    return buildBackendUploadObjectUrl(req, resolvedObjectKey, 'public');
+  }
+  if (metadata.access === 'private') {
+    return buildBackendUploadObjectUrl(req, resolvedObjectKey, 'private');
+  }
+  if (metadata.access === 'legacy' && isUploadObjectPubliclyReadable(resolvedObjectKey)) {
+    return buildBackendUploadObjectUrl(req, resolvedObjectKey, 'public');
+  }
+  return null;
+}
+
+function absolutizeUploadAwareUrl(
+  req: Request,
+  url?: string | null,
+  objectKey?: string | null
+): string | null | undefined {
+  const resolvedObjectKey =
+    extractUploadObjectKeyFromUrl(objectKey || null) ||
+    extractUploadObjectKeyFromUrl(url || null);
+  return canonicalUploadObjectUrl(req, resolvedObjectKey) || absolutizeUrl(req, url);
+}
+
 const toIdentityName = (email: string): string =>
   email.split('@')[0]?.trim() || 'Node';
 
@@ -346,11 +380,11 @@ const absolutizeProfileMedia = (
   return {
     avatar: {
       ...normalized.avatar,
-      url: absolutizeUrl(req, normalized.avatar.url) || null,
+      url: absolutizeUploadAwareUrl(req, normalized.avatar.url, normalized.avatar.objectKey) || null,
     },
     cover: {
       ...normalized.cover,
-      url: absolutizeUrl(req, normalized.cover.url) || null,
+      url: absolutizeUploadAwareUrl(req, normalized.cover.url, normalized.cover.objectKey) || null,
     },
   };
 };
@@ -399,8 +433,8 @@ const toPublicUser = (req: Request, user: any) => ({
   bio: user.bio || null,
   location: user.location || null,
   dateOfBirth: user.dateOfBirth || null,
-  avatarUrl: absolutizeUrl(req, user.avatarUrl),
-  bannerUrl: absolutizeUrl(req, user.bannerUrl),
+  avatarUrl: absolutizeUploadAwareUrl(req, user.avatarUrl, user.profileMedia?.avatar?.objectKey),
+  bannerUrl: absolutizeUploadAwareUrl(req, user.bannerUrl, user.profileMedia?.cover?.objectKey),
   profileMedia: absolutizeProfileMedia(req, user.profileMedia, user.avatarUrl, user.bannerUrl),
   interests: Array.isArray(user.interests) ? user.interests : [],
   twitterUrl: user.twitterUrl || null,
@@ -1373,7 +1407,7 @@ protectedRouter.get('/directory', async (req: Request, res: Response): Promise<a
         id: u.id,
         name: u.name || 'Node',
         handle: u.handle || null,
-        avatarUrl: absolutizeUrl(req, u.avatarUrl),
+        avatarUrl: absolutizeUploadAwareUrl(req, u.avatarUrl, u.profileMedia?.avatar?.objectKey),
         profileMedia: absolutizeProfileMedia(req, u.profileMedia, u.avatarUrl, u.bannerUrl),
         location: u.location || null,
         bio: u.bio || null,

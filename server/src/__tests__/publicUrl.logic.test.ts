@@ -1,4 +1,9 @@
-import { absolutizeBackendUrl, getBackendPublicBaseUrl } from '../services/publicUrl';
+import {
+  absolutizeBackendUrl,
+  buildBackendUploadObjectUrl,
+  extractUploadObjectKeyFromUrl,
+  getBackendPublicBaseUrl,
+} from '../services/publicUrl';
 
 const mockRequest = (origin: string): any => {
   const parsed = new URL(origin);
@@ -48,6 +53,24 @@ describe('public backend URL resolution', () => {
     const req = mockRequest('https://conscious-network-backend.onrender.com');
 
     expect(absolutizeBackendUrl(req, 'https://conscious-network.org/uploads/object/opaque-key')).toBe(
+      'https://conscious-network-backend.onrender.com/uploads/object/opaque-key'
+    );
+  });
+
+  it('extracts upload object keys from public and protected upload routes', () => {
+    expect(extractUploadObjectKeyFromUrl('opaque-key')).toBe('opaque-key');
+    expect(extractUploadObjectKeyFromUrl('/uploads/object/opaque-key')).toBe('opaque-key');
+    expect(extractUploadObjectKeyFromUrl('/api/upload/object/opaque-key')).toBe('opaque-key');
+    expect(extractUploadObjectKeyFromUrl('https://conscious-network.org/uploads/object/opaque-key')).toBe(
+      'opaque-key'
+    );
+  });
+
+  it('builds backend public upload URLs from the backend request origin', () => {
+    process.env.PUBLIC_BASE_URL = 'https://conscious-network.org';
+    const req = mockRequest('https://conscious-network-backend.onrender.com');
+
+    expect(buildBackendUploadObjectUrl(req, 'opaque-key', 'public')).toBe(
       'https://conscious-network-backend.onrender.com/uploads/object/opaque-key'
     );
   });

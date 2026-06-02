@@ -78,3 +78,28 @@ export const absolutizeBackendUrl = (
     return `${getBackendPublicBaseUrl(req)}${path}`;
   }
 };
+
+export const extractUploadObjectKeyFromUrl = (value?: string | null): string | null => {
+  const raw = String(value || '').trim();
+  if (!raw) return null;
+  if (!raw.includes('/') && !raw.includes(':')) return raw;
+
+  try {
+    const parsed = /^[a-z][a-z0-9+.-]*:/i.test(raw)
+      ? new URL(raw)
+      : new URL(raw.startsWith('/') ? raw : `/${raw}`, 'http://localhost');
+    const match = /^\/(?:api\/upload|uploads)\/object\/([^/?#]+)/i.exec(parsed.pathname);
+    return match?.[1] ? decodeURIComponent(match[1]) : null;
+  } catch {
+    return null;
+  }
+};
+
+export const buildBackendUploadObjectUrl = (
+  req: Request,
+  objectKey: string,
+  access: 'public' | 'private'
+): string => {
+  const route = access === 'public' ? '/uploads/object' : '/api/upload/object';
+  return `${getBackendPublicBaseUrl(req)}${route}/${encodeURIComponent(objectKey)}`;
+};

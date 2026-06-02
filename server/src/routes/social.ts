@@ -16,13 +16,19 @@ import {
   SocialPostRecord,
   socialStore,
 } from '../services/socialStore';
-import { deleteUploadObjectByKey, getUploadObjectAccessMetadata } from '../services/uploadBlobStore';
+import {
+  deleteUploadObjectByKey,
+  getUploadObjectAccessMetadata,
+  isUploadObjectPubliclyReadable,
+} from '../services/uploadBlobStore';
 import {
   parseUserProfilePatch,
   SOCIAL_PROFILE_PATCH_FIELDS,
 } from '../services/userProfilePatch';
 import {
   absolutizeBackendUrl,
+  buildBackendUploadObjectUrl,
+  extractUploadObjectKeyFromUrl,
   getBackendPublicBaseUrl,
 } from '../services/publicUrl';
 import { validateJsonBody } from '../validation/jsonSchema';
@@ -42,6 +48,41 @@ const getPublicBaseUrl = (req: Request): string => {
 const absolutizeUrl = (req: Request, value: unknown): string | null => {
   return absolutizeBackendUrl(req, typeof value === 'string' ? value : null) || null;
 };
+
+const canonicalUploadObjectUrl = (req: Request, objectKey: string | null): string | null => {
+  if (!objectKey) return null;
+  const metadata = getUploadObjectAccessMetadata(objectKey);
+  if (!metadata) return null;
+  if (metadata.access === 'public') {
+    return buildBackendUploadObjectUrl(req, objectKey, 'public');
+  }
+  if (metadata.access === 'private') {
+    return buildBackendUploadObjectUrl(req, objectKey, 'private');
+  }
+  if (metadata.access === 'legacy' && isUploadObjectPubliclyReadable(objectKey)) {
+    return buildBackendUploadObjectUrl(req, objectKey, 'public');
+  }
+  return null;
+};
+
+const absolutizeUploadAwareUrl = (
+  req: Request,
+  value: unknown,
+  objectKey?: unknown
+): string | null => {
+  const resolvedObjectKey =
+    extractUploadObjectKeyFromUrl(typeof objectKey === 'string' ? objectKey : null) ||
+    extractUploadObjectKeyFromUrl(typeof value === 'string' ? value : null);
+  return canonicalUploadObjectUrl(req, resolvedObjectKey) || absolutizeUrl(req, value);
+};
+
+const enrichPostMediaForResponse = (req: Request, media: unknown) =>
+  Array.isArray(media)
+    ? media.map((entry) => ({
+        ...(entry && typeof entry === 'object' ? (entry as Record<string, unknown>) : {}),
+        url: absolutizeUploadAwareUrl(req, (entry as any)?.url, (entry as any)?.objectKey),
+      }))
+    : [];
 
 const normalizePostVisibility = (value: unknown): SocialPostVisibility =>
   String(value || '').trim().toLowerCase() === 'private' ? 'private' : 'public';
@@ -68,23 +109,6 @@ const normalizePostMedia = (value: unknown): SocialPostMediaInput[] => {
   return normalized;
 };
 
-const extractUploadObjectKey = (value: unknown): string | null => {
-  const raw = typeof value === 'string' ? value.trim() : '';
-  if (!raw) return null;
-  if (!raw.includes('/') && !raw.includes(':')) {
-    return raw;
-  }
-  try {
-    const parsed = /^https?:\/\//i.test(raw)
-      ? new URL(raw)
-      : new URL(raw.startsWith('/') ? raw : `/${raw}`, 'http://localhost');
-    const match = /^\/(?:api\/upload|uploads)\/object\/([^/?#]+)/i.exec(parsed.pathname);
-    return match?.[1] ? decodeURIComponent(match[1]) : null;
-  } catch {
-    return null;
-  }
-};
-
 const validatePostMediaAccess = (
   media: SocialPostMediaInput[],
   visibility: SocialPostVisibility
@@ -96,8 +120,8 @@ const validatePostMediaAccess = (
 
   for (const entry of media) {
     const objectKey =
-      extractUploadObjectKey(entry.objectKey) ||
-      extractUploadObjectKey(entry.url);
+      extractUploadObjectKeyFromUrl(entry.objectKey) ||
+      extractUploadObjectKeyFromUrl(entry.url);
     if (!objectKey) continue;
 
     const metadata = getUploadObjectAccessMetadata(objectKey);
@@ -117,14 +141,9 @@ const validatePostMediaAccess = (
 
 const enrichPostForResponse = (req: Request, post: SocialPostRecord, author: any) => ({
   ...post,
-  media: Array.isArray(post.media)
-    ? post.media.map((entry) => ({
-        ...entry,
-        url: absolutizeUrl(req, (entry as any)?.url),
-      }))
-    : [],
+  media: enrichPostMediaForResponse(req, post.media),
   authorName: author?.name || 'Node',
-  authorAvatarUrl: absolutizeUrl(req, author?.avatarUrl),
+  authorAvatarUrl: absolutizeUploadAwareUrl(req, author?.avatarUrl, author?.profileMedia?.avatar?.objectKey),
 });
 
 const canViewPostForViewer = async (
@@ -150,7 +169,11 @@ const toPublicProfile = (req: Request, user: any, viewerId: string) => {
   const profileMedia = user?.profileMedia && typeof user.profileMedia === 'object'
     ? {
         avatar: {
-          url: absolutizeUrl(req, user.profileMedia?.avatar?.url),
+          url: absolutizeUploadAwareUrl(
+            req,
+            user.profileMedia?.avatar?.url,
+            user.profileMedia?.avatar?.objectKey
+          ),
           storageProvider:
             typeof user.profileMedia?.avatar?.storageProvider === 'string'
               ? user.profileMedia.avatar.storageProvider.trim() || null
@@ -165,7 +188,11 @@ const toPublicProfile = (req: Request, user: any, viewerId: string) => {
               : null,
         },
         cover: {
-          url: absolutizeUrl(req, user.profileMedia?.cover?.url),
+          url: absolutizeUploadAwareUrl(
+            req,
+            user.profileMedia?.cover?.url,
+            user.profileMedia?.cover?.objectKey
+          ),
           storageProvider:
             typeof user.profileMedia?.cover?.storageProvider === 'string'
               ? user.profileMedia.cover.storageProvider.trim() || null
@@ -190,8 +217,8 @@ const toPublicProfile = (req: Request, user: any, viewerId: string) => {
     bio: user.bio || null,
     location: user.location || null,
     dateOfBirth: user.dateOfBirth || null,
-    avatarUrl: absolutizeUrl(req, user.avatarUrl),
-    bannerUrl: absolutizeUrl(req, user.bannerUrl),
+    avatarUrl: absolutizeUploadAwareUrl(req, user.avatarUrl, user.profileMedia?.avatar?.objectKey),
+    bannerUrl: absolutizeUploadAwareUrl(req, user.bannerUrl, user.profileMedia?.cover?.objectKey),
     profileBackgroundVideo: absolutizeUrl(req, user.profileBackgroundVideo),
     profileMedia,
     interests: Array.isArray(user.interests) ? user.interests : [],
@@ -263,14 +290,13 @@ router.get('/profile/:userId', async (req: Request, res: Response): Promise<any>
   );
   const enrichedPosts = visiblePosts.map((post) => ({
     ...post,
-    media: Array.isArray(post.media)
-      ? post.media.map((entry) => ({
-          ...entry,
-          url: absolutizeUrl(req, (entry as any)?.url),
-        }))
-      : [],
+    media: enrichPostMediaForResponse(req, post.media),
     authorName: targetUser.name || 'Node',
-    authorAvatarUrl: absolutizeUrl(req, targetUser.avatarUrl),
+    authorAvatarUrl: absolutizeUploadAwareUrl(
+      req,
+      targetUser.avatarUrl,
+      targetUser.profileMedia?.avatar?.objectKey
+    ),
   }));
 
   return res.json({
@@ -369,7 +395,10 @@ router.post('/posts', validateJsonBody(socialCreatePostSchema), async (req: Requ
 
   const text = String(req.body?.text || '').trim();
   const visibility = normalizePostVisibility(req.body?.visibility);
-  const media = normalizePostMedia(req.body?.media);
+  const media = normalizePostMedia(req.body?.media).map((entry) => ({
+    ...entry,
+    url: absolutizeUploadAwareUrl(req, entry.url, entry.objectKey) || entry.url,
+  }));
   const mediaAccessError = validatePostMediaAccess(media, visibility);
 
   if (!text && media.length === 0) {
@@ -407,14 +436,13 @@ router.post('/posts', validateJsonBody(socialCreatePostSchema), async (req: Requ
     const author = await localStore.getUserById(authUserId);
     const enrichedPost = {
       ...post,
-      media: Array.isArray(post.media)
-        ? post.media.map((entry) => ({
-            ...entry,
-            url: absolutizeUrl(req, entry.url),
-          }))
-        : [],
+      media: enrichPostMediaForResponse(req, post.media),
       authorName: author?.name || 'Node',
-      authorAvatarUrl: absolutizeUrl(req, author?.avatarUrl),
+      authorAvatarUrl: absolutizeUploadAwareUrl(
+        req,
+        author?.avatarUrl,
+        author?.profileMedia?.avatar?.objectKey
+      ),
     };
     recordAuditEvent(req, {
       domain: 'social',
@@ -660,14 +688,13 @@ router.patch('/posts/:postId', async (req: Request, res: Response): Promise<any>
     success: true,
     post: {
       ...updated,
-      media: Array.isArray(updated.media)
-        ? updated.media.map((entry) => ({
-            ...entry,
-            url: absolutizeUrl(req, entry.url),
-          }))
-        : [],
+      media: enrichPostMediaForResponse(req, updated.media),
       authorName: author?.name || 'Node',
-      authorAvatarUrl: absolutizeUrl(req, author?.avatarUrl),
+      authorAvatarUrl: absolutizeUploadAwareUrl(
+        req,
+        author?.avatarUrl,
+        author?.profileMedia?.avatar?.objectKey
+      ),
     },
   });
 });
@@ -710,8 +737,8 @@ router.delete('/posts/:postId', async (req: Request, res: Response): Promise<any
   const cleanupKeys = new Set<string>();
   for (const media of deleted.media || []) {
     const objectKey =
-      extractUploadObjectKey((media as any)?.objectKey) ||
-      extractUploadObjectKey((media as any)?.url);
+      extractUploadObjectKeyFromUrl((media as any)?.objectKey) ||
+      extractUploadObjectKeyFromUrl((media as any)?.url);
     if (objectKey) cleanupKeys.add(objectKey);
   }
 
@@ -911,14 +938,13 @@ router.get('/newsfeed', async (req: Request, res: Response): Promise<any> => {
     const author = usersById.get(post.authorId);
     return {
       ...post,
-      media: Array.isArray(post.media)
-        ? post.media.map((entry) => ({
-            ...entry,
-            url: absolutizeUrl(req, (entry as any)?.url),
-          }))
-        : [],
+      media: enrichPostMediaForResponse(req, post.media),
       authorName: author?.name || 'Node',
-      authorAvatarUrl: absolutizeUrl(req, author?.avatarUrl),
+      authorAvatarUrl: absolutizeUploadAwareUrl(
+        req,
+        author?.avatarUrl,
+        author?.profileMedia?.avatar?.objectKey
+      ),
     };
   });
   return res.json({

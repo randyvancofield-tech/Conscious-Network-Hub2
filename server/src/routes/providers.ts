@@ -12,8 +12,14 @@ import { isProviderAccessActive } from '../services/providerAccess';
 import { normalizeProfileMedia } from '../services/profileNormalization';
 import {
   absolutizeBackendUrl,
+  buildBackendUploadObjectUrl,
+  extractUploadObjectKeyFromUrl,
   getBackendPublicBaseUrl,
 } from '../services/publicUrl';
+import {
+  getUploadObjectAccessMetadata,
+  isUploadObjectPubliclyReadable,
+} from '../services/uploadBlobStore';
 import { hasTierAccess, TIER_VALUES } from '../tierPolicy';
 
 const providersRouter = Router();
@@ -47,6 +53,34 @@ const absolutizeUrl = (req: Request, value: unknown): string | null => {
   return absolutizeBackendUrl(req, typeof value === 'string' ? value : null) || null;
 };
 
+const canonicalUploadObjectUrl = (req: Request, objectKey?: string | null): string | null => {
+  const resolvedObjectKey = extractUploadObjectKeyFromUrl(objectKey || null);
+  if (!resolvedObjectKey) return null;
+  const metadata = getUploadObjectAccessMetadata(resolvedObjectKey);
+  if (!metadata) return null;
+  if (metadata.access === 'public') {
+    return buildBackendUploadObjectUrl(req, resolvedObjectKey, 'public');
+  }
+  if (metadata.access === 'private') {
+    return buildBackendUploadObjectUrl(req, resolvedObjectKey, 'private');
+  }
+  if (metadata.access === 'legacy' && isUploadObjectPubliclyReadable(resolvedObjectKey)) {
+    return buildBackendUploadObjectUrl(req, resolvedObjectKey, 'public');
+  }
+  return null;
+};
+
+const absolutizeUploadAwareUrl = (
+  req: Request,
+  value: unknown,
+  objectKey?: unknown
+): string | null => {
+  const resolvedObjectKey =
+    extractUploadObjectKeyFromUrl(typeof objectKey === 'string' ? objectKey : null) ||
+    extractUploadObjectKeyFromUrl(typeof value === 'string' ? value : null);
+  return canonicalUploadObjectUrl(req, resolvedObjectKey) || absolutizeUrl(req, value);
+};
+
 const absolutizeProfileMedia = (req: Request, user: any) => {
   const normalized = normalizeProfileMedia(
     user?.profileMedia,
@@ -56,11 +90,11 @@ const absolutizeProfileMedia = (req: Request, user: any) => {
   return {
     avatar: {
       ...normalized.avatar,
-      url: absolutizeUrl(req, normalized.avatar.url),
+      url: absolutizeUploadAwareUrl(req, normalized.avatar.url, normalized.avatar.objectKey),
     },
     cover: {
       ...normalized.cover,
-      url: absolutizeUrl(req, normalized.cover.url),
+      url: absolutizeUploadAwareUrl(req, normalized.cover.url, normalized.cover.objectKey),
     },
   };
 };
@@ -72,8 +106,8 @@ const toProviderResponse = (req: Request, user: any) => ({
   handle: user.handle || null,
   bio: user.bio || '',
   location: user.location || '',
-  avatarUrl: absolutizeUrl(req, user.avatarUrl) || '',
-  bannerUrl: absolutizeUrl(req, user.bannerUrl) || '',
+  avatarUrl: absolutizeUploadAwareUrl(req, user.avatarUrl, user.profileMedia?.avatar?.objectKey) || '',
+  bannerUrl: absolutizeUploadAwareUrl(req, user.bannerUrl, user.profileMedia?.cover?.objectKey) || '',
   profileMedia: absolutizeProfileMedia(req, user),
   profileBackgroundVideo: absolutizeUrl(req, user.profileBackgroundVideo) || '',
   interests: Array.isArray(user.interests) ? user.interests : [],

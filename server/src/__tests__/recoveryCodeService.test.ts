@@ -66,3 +66,5 @@ describe('recoveryCodeService', () => {
     expect(second).toBeNull();
   });
 });
+
+export {};

@@ -814,11 +814,15 @@ describe('Core user persistence loop', () => {
     expect(privateReflectionResponse.status).toBe(200);
     expect(await privateReflectionResponse.text()).toBe('durable-upload-content');
 
+    const pngBytes = Buffer.from(
+      'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+/p9sAAAAASUVORK5CYII=',
+      'base64'
+    );
     const socialForm = new FormData();
     socialForm.set(
       'file',
-      new Blob(['public-social-upload-content'], { type: 'text/plain' }),
-      'social.txt'
+      new Blob([pngBytes], { type: 'image/png' }),
+      'social.png'
     );
     const socialUpload = await requestMultipart({
       method: 'POST',
@@ -835,7 +839,13 @@ describe('Core user persistence loop', () => {
       `${baseUrl}/uploads/object/${encodeURIComponent(socialUploadObjectKey)}`
     );
     expect(publicSocialResponse.status).toBe(200);
-    expect(await publicSocialResponse.text()).toBe('public-social-upload-content');
+    expect(publicSocialResponse.headers.get('content-type')).toContain('image/png');
+    expect(Buffer.from(await publicSocialResponse.arrayBuffer()).equals(pngBytes)).toBe(true);
+
+    const staleFrontendProtectedSocialUrl =
+      `https://conscious-network.org/api/upload/object/${encodeURIComponent(socialUploadObjectKey)}`;
+    const expectedCanonicalSocialUrl =
+      `${baseUrl}/uploads/object/${encodeURIComponent(socialUploadObjectKey)}`;
 
     const createPost = await requestJson({
       method: 'POST',
@@ -846,8 +856,8 @@ describe('Core user persistence loop', () => {
         visibility: 'public',
         media: [
           {
-            mediaType: 'file',
-            url: socialUploadUrl,
+            mediaType: 'image',
+            url: staleFrontendProtectedSocialUrl,
             storageProvider: socialUpload.body?.media?.storageProvider,
             objectKey: socialUploadObjectKey,
           },
@@ -857,6 +867,9 @@ describe('Core user persistence loop', () => {
     expect(createPost.status).toBe(200);
     const postId = String(createPost.body?.post?.id || '');
     expect(postId).toBeTruthy();
+    expect(createPost.body?.post?.media?.[0]?.url).toBe(expectedCanonicalSocialUrl);
+    expect(createPost.body?.post?.media?.[0]?.url).not.toContain('conscious-network.org/uploads/object/');
+    expect(createPost.body?.post?.media?.[0]?.url).not.toContain('/api/upload/object/');
 
     const logout = await requestJson({
       method: 'POST',
@@ -896,6 +909,7 @@ describe('Core user persistence loop', () => {
     expect(alphaProfileAfterRelogin.body?.posts?.length).toBeGreaterThan(0);
     expect(alphaProfileAfterRelogin.body?.posts?.[0]?.id).toBe(postId);
     expect(alphaProfileAfterRelogin.body?.posts?.[0]?.media?.[0]?.objectKey).toBe(socialUploadObjectKey);
+    expect(alphaProfileAfterRelogin.body?.posts?.[0]?.media?.[0]?.url).toBe(expectedCanonicalSocialUrl);
 
     const deepLinkedPost = await requestJson({
       method: 'GET',
@@ -905,6 +919,7 @@ describe('Core user persistence loop', () => {
     expect(deepLinkedPost.status).toBe(200);
     expect(deepLinkedPost.body?.post?.id).toBe(postId);
     expect(deepLinkedPost.body?.post?.media?.[0]?.objectKey).toBe(socialUploadObjectKey);
+    expect(deepLinkedPost.body?.post?.media?.[0]?.url).toBe(expectedCanonicalSocialUrl);
 
     const betaBlocksAlpha = await requestJson({
       method: 'POST',
