@@ -8,7 +8,7 @@ import {
   Twitter, Github, Globe
 } from 'lucide-react';
 import { UserProfile, Course } from '../../types';
-import { api } from '../../services/apiClient';
+import { api, backendAssetUrl } from '../../services/apiClient';
 import { openPrivateUpload } from '../../services/privateUploadService';
 import ProfileIntegrityVerificationPanel from '../ProfileIntegrityVerificationPanel';
 
@@ -56,6 +56,9 @@ const isVideoMediaAsset = (url?: string | null, mimeType?: string | null): boole
   if (String(mimeType || '').toLowerCase().startsWith('video/')) return true;
   return isLikelyVideoUrl(url);
 };
+
+const normalizeMediaUrl = (value: unknown): string =>
+  backendAssetUrl(value) || (typeof value === 'string' ? value.trim() : '');
 
 export const ConsciousIdentity: React.FC<ConsciousIdentityProps> = ({ 
   user, 
@@ -117,18 +120,20 @@ export const ConsciousIdentity: React.FC<ConsciousIdentityProps> = ({
     location: user.location || '',
     dateOfBirth: user.dateOfBirth || '',
     interests: user.interests || [] as string[],
-    avatarUrl: user.avatarUrl || '',
-    bannerUrl: user.bannerUrl || '',
-    profileMedia: user.profileMedia || {
+    avatarUrl: normalizeMediaUrl(user.avatarUrl),
+    bannerUrl: normalizeMediaUrl(user.bannerUrl),
+    profileMedia: {
       avatar: {
-        url: user.avatarUrl || null,
-        storageProvider: null,
-        objectKey: null,
+        url: normalizeMediaUrl(user.profileMedia?.avatar?.url || user.avatarUrl) || null,
+        storageProvider: user.profileMedia?.avatar?.storageProvider || null,
+        objectKey: user.profileMedia?.avatar?.objectKey || null,
+        mimeType: user.profileMedia?.avatar?.mimeType || null,
       },
       cover: {
-        url: user.bannerUrl || null,
-        storageProvider: null,
-        objectKey: null,
+        url: normalizeMediaUrl(user.profileMedia?.cover?.url || user.bannerUrl) || null,
+        storageProvider: user.profileMedia?.cover?.storageProvider || null,
+        objectKey: user.profileMedia?.cover?.objectKey || null,
+        mimeType: user.profileMedia?.cover?.mimeType || null,
       },
     },
     twitterUrl: user.twitterUrl || '',
@@ -158,8 +163,12 @@ export const ConsciousIdentity: React.FC<ConsciousIdentityProps> = ({
     return {};
   }, []);
 
-  const bannerMimeType = decodeUploadObjectKeyMimeType(formData.profileMedia?.cover?.objectKey);
-  const avatarMimeType = decodeUploadObjectKeyMimeType(formData.profileMedia?.avatar?.objectKey);
+  const bannerMimeType =
+    formData.profileMedia?.cover?.mimeType ||
+    decodeUploadObjectKeyMimeType(formData.profileMedia?.cover?.objectKey);
+  const avatarMimeType =
+    formData.profileMedia?.avatar?.mimeType ||
+    decodeUploadObjectKeyMimeType(formData.profileMedia?.avatar?.objectKey);
   const bannerIsVideo = isVideoMediaAsset(formData.bannerUrl, bannerMimeType);
   const avatarIsVideo = isVideoMediaAsset(formData.avatarUrl, avatarMimeType);
   const hasVerifiedIdentitySignal = Boolean(
@@ -204,12 +213,13 @@ export const ConsciousIdentity: React.FC<ConsciousIdentityProps> = ({
         body: payload,
       });
 
-      const fileUrl = String(data?.fileUrl || '').trim();
+      const fileUrl = normalizeMediaUrl(data?.fileUrl);
       if (!fileUrl) {
         throw new Error('Upload succeeded without a file URL');
       }
 
       const media = data?.media || {};
+      const mediaUrl = normalizeMediaUrl(media?.url) || fileUrl;
       setFormData((prev) => ({
         ...prev,
         [field]: fileUrl,
@@ -218,16 +228,18 @@ export const ConsciousIdentity: React.FC<ConsciousIdentityProps> = ({
           ...(field === 'avatarUrl'
             ? {
                 avatar: {
-                  url: fileUrl,
+                  url: mediaUrl,
                   storageProvider: media.storageProvider || prev.profileMedia.avatar.storageProvider,
                   objectKey: media.objectKey || prev.profileMedia.avatar.objectKey,
+                  mimeType: media.mimeType || file.type || prev.profileMedia.avatar.mimeType || null,
                 },
               }
             : {
                 cover: {
-                  url: fileUrl,
+                  url: mediaUrl,
                   storageProvider: media.storageProvider || prev.profileMedia.cover.storageProvider,
                   objectKey: media.objectKey || prev.profileMedia.cover.objectKey,
+                  mimeType: media.mimeType || file.type || prev.profileMedia.cover.mimeType || null,
                 },
               }),
         },
@@ -278,7 +290,7 @@ export const ConsciousIdentity: React.FC<ConsciousIdentityProps> = ({
         method: 'POST',
         body: payload,
       });
-      const fileUrl = String(upload?.fileUrl || '').trim();
+      const fileUrl = normalizeMediaUrl(upload?.fileUrl);
       if (!fileUrl) {
         throw new Error('Private reflection upload did not return a file URL.');
       }

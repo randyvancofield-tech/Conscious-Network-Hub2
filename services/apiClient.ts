@@ -21,6 +21,34 @@ const shouldIgnoreRemoteDevBackend =
 export const BASE_URL = shouldIgnoreRemoteDevBackend ? '' : resolvedBaseUrl;
 
 const normalizedBaseUrl = String(BASE_URL).replace(/\/+$/, '');
+const uploadObjectPathPattern = /^\/(?:api\/upload|uploads)\/object\//i;
+
+const shouldRewriteFrontendHostedUploadUrl = (raw: string): string | null => {
+  if (!normalizedBaseUrl) return null;
+
+  try {
+    const parsed = new URL(raw);
+    if (!uploadObjectPathPattern.test(parsed.pathname)) return null;
+
+    const backendOrigin = new URL(normalizedBaseUrl).origin;
+    if (parsed.origin === backendOrigin) return null;
+
+    const currentOrigin =
+      typeof window !== 'undefined' && window.location.origin
+        ? window.location.origin
+        : '';
+    const knownFrontendHost =
+      parsed.hostname === 'conscious-network.org' ||
+      parsed.hostname === 'www.conscious-network.org';
+    if (!knownFrontendHost && (!currentOrigin || parsed.origin !== currentOrigin)) {
+      return null;
+    }
+
+    return `${backendOrigin}${parsed.pathname}${parsed.search}${parsed.hash}`;
+  } catch {
+    return null;
+  }
+};
 
 export class ApiError extends Error {
   readonly status: number;
@@ -151,7 +179,9 @@ export async function apiHealth<T = unknown>(options: ApiOptions = {}): Promise<
 export const backendAssetUrl = (value: unknown): string | undefined => {
   const raw = typeof value === 'string' ? value.trim() : '';
   if (!raw) return undefined;
-  if (/^[a-z][a-z0-9+.-]*:/i.test(raw)) return raw;
+  if (/^[a-z][a-z0-9+.-]*:/i.test(raw)) {
+    return shouldRewriteFrontendHostedUploadUrl(raw) || raw;
+  }
   const normalizedPath = raw.startsWith('/') ? raw : `/${raw}`;
   return `${normalizedBaseUrl}${normalizedPath}`;
 };

@@ -43,6 +43,10 @@ import {
   parseUserProfilePatch,
   USER_PROFILE_PATCH_FIELDS,
 } from '../services/userProfilePatch';
+import {
+  absolutizeBackendUrl,
+  getBackendPublicBaseUrl,
+} from '../services/publicUrl';
 import { normalizeTier } from '../tierPolicy';
 import { socialStore } from '../services/socialStore';
 import { validateJsonBody } from '../validation/jsonSchema';
@@ -222,23 +226,11 @@ const enforceDiagnosticsAdminAccess = (req: Request, res: Response): boolean => 
 };
 
 function getPublicBaseUrl(req: Request): string {
-  const configured = process.env.PUBLIC_BASE_URL?.trim();
-  if (configured) {
-    return configured.replace(/\/+$/, '');
-  }
-  const forwardedProto = (req.headers['x-forwarded-proto'] as string | undefined)
-    ?.split(',')[0]
-    ?.trim();
-  const proto = forwardedProto || req.protocol || 'https';
-  const host = req.get('host');
-  return `${proto}://${host}`;
+  return getBackendPublicBaseUrl(req);
 }
 
 function absolutizeUrl(req: Request, url?: string | null): string | null | undefined {
-  if (!url) return url;
-  if (/^[a-z][a-z0-9+.-]*:/i.test(url)) return url;
-  const path = url.startsWith('/') ? url : `/${url}`;
-  return `${getPublicBaseUrl(req)}${path}`;
+  return absolutizeBackendUrl(req, url);
 }
 
 const toIdentityName = (email: string): string =>

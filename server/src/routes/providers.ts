@@ -10,6 +10,10 @@ import { recordAuditEvent } from '../services/auditTelemetry';
 import { localStore } from '../services/persistenceStore';
 import { isProviderAccessActive } from '../services/providerAccess';
 import { normalizeProfileMedia } from '../services/profileNormalization';
+import {
+  absolutizeBackendUrl,
+  getBackendPublicBaseUrl,
+} from '../services/publicUrl';
 import { hasTierAccess, TIER_VALUES } from '../tierPolicy';
 
 const providersRouter = Router();
@@ -36,22 +40,11 @@ const enforceProviderMarketplaceAccess = (req: Request, res: Response): boolean 
 };
 
 const getPublicBaseUrl = (req: Request): string => {
-  const configured = String(process.env.PUBLIC_BASE_URL || '').trim();
-  if (configured) return configured.replace(/\/+$/, '');
-  const forwardedProto = (req.headers['x-forwarded-proto'] as string | undefined)
-    ?.split(',')[0]
-    ?.trim();
-  const proto = forwardedProto || req.protocol || 'https';
-  const host = req.get('host');
-  return `${proto}://${host}`;
+  return getBackendPublicBaseUrl(req);
 };
 
 const absolutizeUrl = (req: Request, value: unknown): string | null => {
-  const raw = typeof value === 'string' ? value.trim() : '';
-  if (!raw) return null;
-  if (/^[a-z][a-z0-9+.-]*:/i.test(raw)) return raw;
-  const path = raw.startsWith('/') ? raw : `/${raw}`;
-  return `${getPublicBaseUrl(req)}${path}`;
+  return absolutizeBackendUrl(req, typeof value === 'string' ? value : null) || null;
 };
 
 const absolutizeProfileMedia = (req: Request, user: any) => {

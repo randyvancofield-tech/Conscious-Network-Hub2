@@ -2,6 +2,11 @@ import React, { useState, useEffect, ChangeEvent } from 'react';
 import { UserProfile } from '../types';
 import { api, backendAssetUrl } from '../services/apiClient';
 import { openPrivateUpload } from '../services/privateUploadService';
+import {
+  getProfileAvatarMedia,
+  getProfileCoverMedia,
+  getProfileBackgroundMedia,
+} from '../services/mediaAssets';
 
 interface Reflection {
   id: string;
@@ -27,14 +32,20 @@ const Profile: React.FC<ProfileProps> = ({ user, onUserUpdate }) => {
   const toAssetUrl = (url?: string) => {
     return backendAssetUrl(url);
   };
+  const normalizeUploadUrl = (url?: unknown) =>
+    backendAssetUrl(url) || (typeof url === 'string' ? url.trim() : '');
+  const getAvatarUrl = (profile: UserProfile) => getProfileAvatarMedia(profile).url || toAssetUrl(profile.avatarUrl);
+  const getCoverUrl = (profile: UserProfile) => getProfileCoverMedia(profile).url || toAssetUrl(profile.bannerUrl);
+  const getBackgroundUrl = (profile: UserProfile) =>
+    getProfileBackgroundMedia(profile).url || toAssetUrl(profile.profileBackgroundVideo);
 
   const [editData, setEditData] = useState<Partial<UserProfile>>({ ...user });
   const [bgVideo, setBgVideo] = useState<File | null>(null);
-  const [bgVideoUrl, setBgVideoUrl] = useState<string | undefined>(toAssetUrl(user.profileBackgroundVideo));
+  const [bgVideoUrl, setBgVideoUrl] = useState<string | undefined>(getBackgroundUrl(user) || undefined);
   const [avatarImage, setAvatarImage] = useState<File | null>(null);
   const [coverImage, setCoverImage] = useState<File | null>(null);
-  const [avatarPreviewUrl, setAvatarPreviewUrl] = useState<string | undefined>(toAssetUrl(user.avatarUrl));
-  const [coverPreviewUrl, setCoverPreviewUrl] = useState<string | undefined>(toAssetUrl(user.bannerUrl));
+  const [avatarPreviewUrl, setAvatarPreviewUrl] = useState<string | undefined>(getAvatarUrl(user) || undefined);
+  const [coverPreviewUrl, setCoverPreviewUrl] = useState<string | undefined>(getCoverUrl(user) || undefined);
   const [reflections, setReflections] = useState<Reflection[]>([]);
   const [reflectionFile, setReflectionFile] = useState<File | null>(null);
   const [reflectionContent, setReflectionContent] = useState('');
@@ -43,8 +54,18 @@ const Profile: React.FC<ProfileProps> = ({ user, onUserUpdate }) => {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
 
-  const avatarPreviewIsVideo = (avatarImage ? avatarImage.type : '').startsWith('video/') || isLikelyVideoUrl(avatarPreviewUrl);
-  const coverPreviewIsVideo = (coverImage ? coverImage.type : '').startsWith('video/') || isLikelyVideoUrl(coverPreviewUrl);
+  const avatarPreviewMimeType =
+    avatarImage?.type ||
+    editData.profileMedia?.avatar?.mimeType ||
+    user.profileMedia?.avatar?.mimeType ||
+    '';
+  const coverPreviewMimeType =
+    coverImage?.type ||
+    editData.profileMedia?.cover?.mimeType ||
+    user.profileMedia?.cover?.mimeType ||
+    '';
+  const avatarPreviewIsVideo = avatarPreviewMimeType.startsWith('video/') || isLikelyVideoUrl(avatarPreviewUrl);
+  const coverPreviewIsVideo = coverPreviewMimeType.startsWith('video/') || isLikelyVideoUrl(coverPreviewUrl);
 
   useEffect(() => {
     fetchReflections();
@@ -52,10 +73,10 @@ const Profile: React.FC<ProfileProps> = ({ user, onUserUpdate }) => {
 
   useEffect(() => {
     setEditData({ ...user });
-    setBgVideoUrl(toAssetUrl(user.profileBackgroundVideo));
-    setAvatarPreviewUrl(toAssetUrl(user.avatarUrl));
-    setCoverPreviewUrl(toAssetUrl(user.bannerUrl));
-  }, [user.id, user.name, user.profileBackgroundVideo, user.avatarUrl, user.bannerUrl]);
+    setBgVideoUrl(getBackgroundUrl(user) || undefined);
+    setAvatarPreviewUrl(getAvatarUrl(user) || undefined);
+    setCoverPreviewUrl(getCoverUrl(user) || undefined);
+  }, [user.id, user.name, user.profileBackgroundVideo, user.avatarUrl, user.bannerUrl, user.profileMedia]);
 
   const fetchReflections = async () => {
     try {
@@ -116,7 +137,7 @@ const Profile: React.FC<ProfileProps> = ({ user, onUserUpdate }) => {
           method: 'POST',
           body: formData,
         });
-        videoUrl = uploadData.fileUrl;
+        videoUrl = normalizeUploadUrl(uploadData.fileUrl);
         setBgVideoUrl(videoUrl);
       }
 
@@ -127,14 +148,15 @@ const Profile: React.FC<ProfileProps> = ({ user, onUserUpdate }) => {
           method: 'POST',
           body: formData,
         });
-        avatarUrl = uploadData.fileUrl;
+        avatarUrl = normalizeUploadUrl(uploadData.fileUrl);
         setAvatarPreviewUrl(avatarUrl || undefined);
         profileMedia = {
           ...profileMedia,
           avatar: {
-            url: avatarUrl,
+            url: normalizeUploadUrl(uploadData?.media?.url) || avatarUrl,
             storageProvider: uploadData?.media?.storageProvider || 'local',
             objectKey: uploadData?.media?.objectKey || null,
+            mimeType: uploadData?.media?.mimeType || avatarImage.type || null,
           },
         };
       }
@@ -146,14 +168,15 @@ const Profile: React.FC<ProfileProps> = ({ user, onUserUpdate }) => {
           method: 'POST',
           body: formData,
         });
-        bannerUrl = uploadData.fileUrl;
+        bannerUrl = normalizeUploadUrl(uploadData.fileUrl);
         setCoverPreviewUrl(bannerUrl || undefined);
         profileMedia = {
           ...profileMedia,
           cover: {
-            url: bannerUrl,
+            url: normalizeUploadUrl(uploadData?.media?.url) || bannerUrl,
             storageProvider: uploadData?.media?.storageProvider || 'local',
             objectKey: uploadData?.media?.objectKey || null,
+            mimeType: uploadData?.media?.mimeType || coverImage.type || null,
           },
         };
       }
@@ -194,7 +217,7 @@ const Profile: React.FC<ProfileProps> = ({ user, onUserUpdate }) => {
         method: 'POST',
         body: formData,
       });
-      const fileUrl = uploadData.fileUrl;
+      const fileUrl = normalizeUploadUrl(uploadData.fileUrl);
       const fileType = reflectionFile.type.startsWith('video') ? 'video' : 'document';
       await api('/reflection', {
         method: 'POST',

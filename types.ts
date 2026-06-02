@@ -132,11 +132,13 @@ export interface UserProfile {
       url: string | null;
       storageProvider: string | null;
       objectKey: string | null;
+      mimeType?: string | null;
     };
     cover: {
       url: string | null;
       storageProvider: string | null;
       objectKey: string | null;
+      mimeType?: string | null;
     };
   };
   profileBackgroundVideo?: string | null;

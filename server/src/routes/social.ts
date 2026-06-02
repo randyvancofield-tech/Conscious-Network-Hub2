@@ -21,6 +21,10 @@ import {
   parseUserProfilePatch,
   SOCIAL_PROFILE_PATCH_FIELDS,
 } from '../services/userProfilePatch';
+import {
+  absolutizeBackendUrl,
+  getBackendPublicBaseUrl,
+} from '../services/publicUrl';
 import { validateJsonBody } from '../validation/jsonSchema';
 import {
   socialCreatePostSchema,
@@ -32,22 +36,11 @@ const router = Router();
 router.use(requireCanonicalIdentity);
 
 const getPublicBaseUrl = (req: Request): string => {
-  const configured = String(process.env.PUBLIC_BASE_URL || '').trim();
-  if (configured) return configured.replace(/\/+$/, '');
-  const forwardedProto = (req.headers['x-forwarded-proto'] as string | undefined)
-    ?.split(',')[0]
-    ?.trim();
-  const proto = forwardedProto || req.protocol || 'https';
-  const host = req.get('host');
-  return `${proto}://${host}`;
+  return getBackendPublicBaseUrl(req);
 };
 
 const absolutizeUrl = (req: Request, value: unknown): string | null => {
-  const raw = typeof value === 'string' ? value.trim() : '';
-  if (!raw) return null;
-  if (/^[a-z][a-z0-9+.-]*:/i.test(raw)) return raw;
-  const path = raw.startsWith('/') ? raw : `/${raw}`;
-  return `${getPublicBaseUrl(req)}${path}`;
+  return absolutizeBackendUrl(req, typeof value === 'string' ? value : null) || null;
 };
 
 const normalizePostVisibility = (value: unknown): SocialPostVisibility =>
@@ -166,6 +159,10 @@ const toPublicProfile = (req: Request, user: any, viewerId: string) => {
             typeof user.profileMedia?.avatar?.objectKey === 'string'
               ? user.profileMedia.avatar.objectKey.trim() || null
               : null,
+          mimeType:
+            typeof user.profileMedia?.avatar?.mimeType === 'string'
+              ? user.profileMedia.avatar.mimeType.trim().toLowerCase() || null
+              : null,
         },
         cover: {
           url: absolutizeUrl(req, user.profileMedia?.cover?.url),
@@ -176,6 +173,10 @@ const toPublicProfile = (req: Request, user: any, viewerId: string) => {
           objectKey:
             typeof user.profileMedia?.cover?.objectKey === 'string'
               ? user.profileMedia.cover.objectKey.trim() || null
+              : null,
+          mimeType:
+            typeof user.profileMedia?.cover?.mimeType === 'string'
+              ? user.profileMedia.cover.mimeType.trim().toLowerCase() || null
               : null,
         },
       }

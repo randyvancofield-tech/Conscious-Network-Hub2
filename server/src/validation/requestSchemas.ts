@@ -32,6 +32,7 @@ const userMediaAssetSchema: JsonSchema = {
     url: nullableString(4096),
     storageProvider: nullableString(128),
     objectKey: nullableString(1024),
+    mimeType: nullableString(128),
   },
 };
 

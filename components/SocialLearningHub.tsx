@@ -108,6 +108,7 @@ const renderAvatarMedia = (media: NormalizedMediaAsset, name: string, className:
 
 const mapSocialPostToNode = (post: any): NodeContent => {
   const media = Array.isArray(post?.media) ? post.media[0] : null;
+  const mediaAsset = media ? normalizeMediaAsset(media, media?.url) : null;
   const type = media?.mediaType === 'video' ? 'video' : media?.mediaType === 'file' ? 'file' : media ? 'image' : 'text';
   const fallbackAvatar = defaultAvatarUrl(String(post?.authorId || 'node'));
   const authorAvatarMedia = normalizeMediaAsset({ url: post?.authorAvatarUrl }, fallbackAvatar);
@@ -119,7 +120,7 @@ const mapSocialPostToNode = (post: any): NodeContent => {
     avatarMedia: authorAvatarMedia,
     type,
     title: type === 'text' ? 'Knowledge Node' : `${type.toUpperCase()} Node`,
-    content: media?.url || String(post?.text || ''),
+    content: mediaAsset?.url || String(post?.text || ''),
     timestamp: toRelativeTimestamp(String(post?.createdAt || '')),
     resonances: Number(post?.likeCount || 0),
     links: 0,
@@ -318,7 +319,7 @@ const SocialLearningHubContent: React.FC<SocialLearningHubProps> = ({
           body: uploadPayload,
         });
 
-        const uploadedUrl = String(uploadData?.fileUrl || '').trim();
+        const uploadedUrl = normalizeMediaAsset({ url: uploadData?.fileUrl }).url || '';
         if (!uploadedUrl) {
           throw new Error('Media upload completed without a file URL');
         }

@@ -14,6 +14,7 @@ import { recordAuditEvent } from '../services/auditTelemetry';
 import { localStore } from '../services/persistenceStore';
 import { createUserSession } from '../services/userSessionStore';
 import { persistUploadObject } from '../services/uploadBlobStore';
+import { getBackendPublicBaseUrl } from '../services/publicUrl';
 import emailService from '../services/emailService';
 import {
   buildProviderApplicationAdminEmail,
@@ -59,13 +60,7 @@ type ApplicantApplyRequest = Request & {
 };
 
 const getPublicBaseUrl = (req: Request): string => {
-  const configured = process.env.PUBLIC_BASE_URL?.trim();
-  if (configured) return configured.replace(/\/+$/, '');
-  const forwardedProto = String(req.headers['x-forwarded-proto'] || '')
-    .split(',')[0]
-    .trim();
-  const proto = forwardedProto || req.protocol || 'https';
-  return `${proto}://${req.get('host')}`;
+  return getBackendPublicBaseUrl(req);
 };
 
 const resolveFrontendBaseUrl = (req: Request): string => {

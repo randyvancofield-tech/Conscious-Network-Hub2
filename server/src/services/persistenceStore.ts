@@ -81,15 +81,17 @@ const normalizePrivacySettings = (
 const normalizeUserMediaAsset = (
   value: unknown,
   fallbackUrl: string | null
-): { url: string | null; storageProvider: string | null; objectKey: string | null } => {
+): { url: string | null; storageProvider: string | null; objectKey: string | null; mimeType: string | null } => {
   const input = value && typeof value === 'object' ? (value as Record<string, unknown>) : {};
   const rawUrl = String(input.url ?? '').trim();
   const rawStorageProvider = String(input.storageProvider ?? '').trim();
   const rawObjectKey = String(input.objectKey ?? '').trim();
+  const rawMimeType = String(input.mimeType ?? '').trim().toLowerCase();
   return {
     url: rawUrl || fallbackUrl || null,
     storageProvider: rawStorageProvider || null,
     objectKey: rawObjectKey || null,
+    mimeType: rawMimeType || null,
   };
 };
 

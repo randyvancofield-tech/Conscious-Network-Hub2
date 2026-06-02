@@ -966,11 +966,13 @@ const App: React.FC = () => {
               url: toAbsoluteAssetUrl(rawUser.profileMedia?.avatar?.url) || null,
               storageProvider: toNullableTrimmedString(rawUser.profileMedia?.avatar?.storageProvider),
               objectKey: toNullableTrimmedString(rawUser.profileMedia?.avatar?.objectKey),
+              mimeType: toNullableTrimmedString(rawUser.profileMedia?.avatar?.mimeType),
             },
             cover: {
               url: toAbsoluteAssetUrl(rawUser.profileMedia?.cover?.url) || null,
               storageProvider: toNullableTrimmedString(rawUser.profileMedia?.cover?.storageProvider),
               objectKey: toNullableTrimmedString(rawUser.profileMedia?.cover?.objectKey),
+              mimeType: toNullableTrimmedString(rawUser.profileMedia?.cover?.mimeType),
             },
           }
         : undefined;
@@ -4790,7 +4792,7 @@ const App: React.FC = () => {
                         (() => {
                           const avatarMimeType = decodeUploadObjectKeyMimeType(
                             user.profileMedia?.avatar?.objectKey
-                          );
+                          ) || toNullableTrimmedString(user.profileMedia?.avatar?.mimeType);
                           const avatarIsVideo =
                             String(avatarMimeType || '').startsWith('video/') ||
                             isLikelyVideoUrl(user.avatarUrl);

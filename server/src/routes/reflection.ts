@@ -9,6 +9,10 @@ import {
   deleteUploadObjectByKey,
   getUploadObjectAccessMetadata,
 } from '../services/uploadBlobStore';
+import {
+  absolutizeBackendUrl,
+  getBackendPublicBaseUrl,
+} from '../services/publicUrl';
 
 const router = Router();
 router.use(requireCanonicalIdentity);
@@ -16,23 +20,11 @@ const MAX_REFLECTION_CONTENT_LENGTH = 10_000;
 const REFLECTION_FILE_TYPES = new Set(['video', 'document']);
 
 function getPublicBaseUrl(req: Request): string {
-  const configured = process.env.PUBLIC_BASE_URL?.trim();
-  if (configured) {
-    return configured.replace(/\/+$/, '');
-  }
-  const forwardedProto = (req.headers['x-forwarded-proto'] as string | undefined)
-    ?.split(',')[0]
-    ?.trim();
-  const proto = forwardedProto || req.protocol || 'https';
-  const host = req.get('host');
-  return `${proto}://${host}`;
+  return getBackendPublicBaseUrl(req);
 }
 
 function absolutizeUrl(req: Request, url?: string | null): string | null | undefined {
-  if (!url) return url;
-  if (/^https?:\/\//i.test(url)) return url;
-  const path = url.startsWith('/') ? url : `/${url}`;
-  return `${getPublicBaseUrl(req)}${path}`;
+  return absolutizeBackendUrl(req, url);
 }
 
 function extractUploadObjectKey(fileUrl?: string | null): string | null {

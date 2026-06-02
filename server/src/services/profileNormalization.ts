@@ -9,6 +9,7 @@ export type UserMediaAsset = {
   url: string | null;
   storageProvider: string | null;
   objectKey: string | null;
+  mimeType: string | null;
 };
 
 export type UserProfileMedia = {
@@ -73,10 +74,12 @@ const normalizeUserMediaAsset = (
   const rawUrl = String(input.url ?? '').trim();
   const rawStorageProvider = String(input.storageProvider ?? '').trim();
   const rawObjectKey = String(input.objectKey ?? '').trim();
+  const rawMimeType = String(input.mimeType ?? '').trim().toLowerCase();
   return {
     url: rawUrl || fallbackUrl || null,
     storageProvider: rawStorageProvider || null,
     objectKey: rawObjectKey || null,
+    mimeType: rawMimeType || null,
   };
 };
 

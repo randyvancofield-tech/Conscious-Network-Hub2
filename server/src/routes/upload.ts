@@ -12,20 +12,14 @@ import {
   resolveUploadObjectByKey,
   UploadObjectAccess,
 } from '../services/uploadBlobStore';
+import { getBackendPublicBaseUrl } from '../services/publicUrl';
 
 const publicRouter = Router();
 const protectedRouter = Router();
 protectedRouter.use(requireCanonicalIdentity);
 
 function getPublicBaseUrl(req: Request): string {
-  const configured = process.env.PUBLIC_BASE_URL?.trim();
-  if (configured) {
-    return configured.replace(/\/+$/, '');
-  }
-  const forwardedProto = (req.headers['x-forwarded-proto'] as string | undefined)?.split(',')[0]?.trim();
-  const proto = forwardedProto || req.protocol || 'https';
-  const host = req.get('host');
-  return `${proto}://${host}`;
+  return getBackendPublicBaseUrl(req);
 }
 
 const DEFAULT_MAX_UPLOAD_BYTES = 25 * 1024 * 1024;
