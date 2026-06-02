@@ -171,13 +171,6 @@ const createInitialExecutiveInquiry = (user: UserProfile | null): ExecutiveInqui
   message: '',
 });
 
-const portalSteps = [
-  ['01', 'Discern', 'Clarify the call, problem, person, and purpose.'],
-  ['02', 'Prepare', 'Identify business stage, support needs, and capacity.'],
-  ['03', 'Connect', 'Move toward appropriate external or provider support.'],
-  ['04', 'Build', 'Take the next responsible action with clearer structure.'],
-];
-
 const getResourceForRegion = (region: RegionOption | ''): ResourceLane =>
   resourceLanes.find((lane) => lane.id === region) || resourceLanes[2];
 
@@ -619,9 +612,9 @@ const EntrepreneurshipSupportPage: React.FC<EntrepreneurshipSupportPageProps> = 
           Conscious Careers
         </button>
 
-        <section className="grid min-h-[70dvh] overflow-hidden rounded-[2rem] border border-white/10 bg-slate-950 shadow-2xl shadow-black/35 lg:grid-cols-[0.52fr_0.48fr]">
-          <div className="flex flex-col justify-center p-6 sm:p-10 lg:p-12">
-            <div className="mb-8 flex items-center gap-4">
+        <section className="grid overflow-hidden rounded-[2rem] border border-white/10 bg-slate-950 shadow-2xl shadow-black/35 lg:grid-cols-[0.52fr_0.48fr]">
+          <div className="flex flex-col justify-center p-6 sm:p-8 lg:p-10">
+            <div className="mb-6 flex items-center gap-4">
               <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-white p-2 shadow-xl">
                 <img src={careersLogo} alt="Conscious Careers" className="h-full w-full rounded-xl object-contain" />
               </div>
@@ -631,7 +624,7 @@ const EntrepreneurshipSupportPage: React.FC<EntrepreneurshipSupportPageProps> = 
               </div>
             </div>
 
-            <h1 className="mt-5 max-w-3xl text-4xl font-black uppercase leading-[0.95] tracking-tight text-white sm:text-6xl xl:text-7xl">
+            <h1 className="mt-4 max-w-3xl text-3xl font-black uppercase leading-tight tracking-tight text-white sm:text-4xl lg:text-5xl">
               For members who want to build, stabilize, or grow professionally that can serve livelihood, family and community without moving alone.
             </h1>
 
@@ -650,39 +643,27 @@ const EntrepreneurshipSupportPage: React.FC<EntrepreneurshipSupportPageProps> = 
             </p>
           </div>
 
-          <div className="relative min-h-[420px] overflow-hidden bg-slate-900">
+          <div className="relative min-h-80 overflow-hidden bg-slate-900 lg:min-h-[360px]">
             <div
               className="absolute inset-0 bg-cover bg-center"
               style={{ backgroundImage: `linear-gradient(180deg, rgba(2,6,23,0.05), rgba(2,6,23,0.82)), url(${imagery.hero})` }}
               aria-label="Entrepreneurs and advisors in a professional planning conversation"
             />
-            <div className="absolute bottom-6 left-6 right-6 rounded-3xl border border-white/15 bg-slate-950/75 p-5 shadow-2xl backdrop-blur">
-              <p className="text-xs font-black uppercase tracking-[0.22em] text-teal-100">Portal Flow</p>
-              <div className="mt-4 grid gap-3 sm:grid-cols-2">
-                {portalSteps.map(([number, title, body]) => (
-                  <div key={title} className="rounded-2xl border border-white/10 bg-white/[0.05] p-4">
-                    <p className="text-xs font-black text-teal-200">{number}</p>
-                    <p className="mt-2 text-sm font-black uppercase tracking-tight text-white">{title}</p>
-                    <p className="mt-1 text-xs leading-5 text-slate-300">{body}</p>
-                  </div>
-                ))}
-              </div>
-            </div>
           </div>
         </section>
 
-        <section className="grid gap-5 lg:grid-cols-[0.4fr_0.6fr]">
-          <div className="rounded-[2rem] border border-white/10 bg-white/[0.04] p-6 sm:p-8">
-            <p className="text-xs font-black uppercase tracking-[0.22em] text-amber-100/80">Platform Message</p>
-            <h2 className="mt-4 text-3xl font-black uppercase leading-tight tracking-tight text-white">
-              This page should help a person slow down enough to choose well, then move with structure. The work is economic, but it is also human: calling, readiness, dignity, discipline, and community responsibility belong in the same conversation.
-            </h2>
-          </div>
+        <section className="grid gap-5 lg:grid-cols-[0.48fr_0.52fr]">
           <div
             className="min-h-80 overflow-hidden rounded-[2rem] border border-white/10 bg-cover bg-center"
             style={{ backgroundImage: `linear-gradient(90deg, rgba(7,17,15,0.2), rgba(7,17,15,0.72)), url(${imagery.founder})` }}
             aria-label="Professional entrepreneur working with strategic materials"
           />
+          <div className="rounded-[2rem] border border-white/10 bg-white/[0.04] p-6 sm:p-8">
+            <p className="text-xs font-black uppercase tracking-[0.22em] text-amber-100/80">Conscious Message</p>
+            <p className="mt-4 text-base leading-8 text-slate-200 sm:text-lg">
+              True professional growth starts from within. Conscious Careers connects emerging leaders and entrepreneurs with the tools to transcend traditional career limits. We help you move past the friction of self-doubt and ego into a space of authentic authority. Step into full alignment, build your business, and drive the future of conscious leadership.
+            </p>
+          </div>
         </section>
 
         <section id="resource-gateways" className="scroll-mt-28 space-y-5">
