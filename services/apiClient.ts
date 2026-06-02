@@ -1,16 +1,24 @@
 import { getAuthToken } from './sessionService';
 
+const PRODUCTION_BACKEND_FALLBACK_URL = 'https://conscious-network-backend.onrender.com';
 const configuredBaseUrl = String(import.meta.env.VITE_BACKEND_URL || '').trim();
+const currentBrowserHostname =
+  typeof window !== 'undefined' ? String(window.location.hostname || '').trim().toLowerCase() : '';
+const shouldUseKnownProductionBackend =
+  !configuredBaseUrl &&
+  import.meta.env.PROD &&
+  ['conscious-network.org', 'www.conscious-network.org'].includes(currentBrowserHostname);
+const resolvedBaseUrl = shouldUseKnownProductionBackend ? PRODUCTION_BACKEND_FALLBACK_URL : configuredBaseUrl;
 const allowRemoteBackendInDev =
   String(import.meta.env.VITE_ALLOW_REMOTE_BACKEND_IN_DEV || '').trim().toLowerCase() === 'true';
-const isRemoteHttpUrl = /^https?:\/\//i.test(configuredBaseUrl);
+const isRemoteHttpUrl = /^https?:\/\//i.test(resolvedBaseUrl);
 const isLocalBackendUrl = /^https?:\/\/(?:localhost|127\.0\.0\.1|\[::1\])(?::\d+)?(?:\/|$)/i.test(
-  configuredBaseUrl
+  resolvedBaseUrl
 );
 const shouldIgnoreRemoteDevBackend =
   import.meta.env.DEV && isRemoteHttpUrl && !isLocalBackendUrl && !allowRemoteBackendInDev;
 
-export const BASE_URL = shouldIgnoreRemoteDevBackend ? '' : configuredBaseUrl;
+export const BASE_URL = shouldIgnoreRemoteDevBackend ? '' : resolvedBaseUrl;
 
 const normalizedBaseUrl = String(BASE_URL).replace(/\/+$/, '');
 
@@ -98,12 +106,27 @@ const request = async <T>(url: string, options: ApiOptions = {}): Promise<T> => 
     }
   }
 
-  const response = await fetch(url, {
-    ...rest,
-    credentials,
-    headers,
-    body: shouldSerializeJson ? JSON.stringify(body) : (body as BodyInit | null | undefined),
-  });
+  let response: Response;
+  try {
+    response = await fetch(url, {
+      ...rest,
+      credentials,
+      headers,
+      body: shouldSerializeJson ? JSON.stringify(body) : (body as BodyInit | null | undefined),
+    });
+  } catch (error) {
+    const target = (() => {
+      try {
+        return new URL(url, typeof window !== 'undefined' ? window.location.origin : undefined).origin;
+      } catch {
+        return normalizedBaseUrl || 'same-origin backend';
+      }
+    })();
+    const cause = error instanceof Error ? error.message : 'network request was blocked or unavailable';
+    throw new Error(
+      `Backend connection failed for ${target}. Confirm Cloudflare Pages sets VITE_BACKEND_URL=${PRODUCTION_BACKEND_FALLBACK_URL}, the Render backend is running, and Render CORS_ORIGINS includes https://conscious-network.org. Cause: ${cause}`
+    );
+  }
   const data = await parseResponseBody(response);
 
   if (!response.ok) {
