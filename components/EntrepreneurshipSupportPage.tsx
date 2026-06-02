@@ -4,23 +4,25 @@ import {
   ArrowRight,
   ArrowUpRight,
   BadgeCheck,
-  FileText,
+  Brain,
+  CalendarClock,
+  Download,
   Landmark,
   LockKeyhole,
   MapPin,
   Network,
+  Route,
   Scale,
   Sparkles,
 } from 'lucide-react';
 import { UserProfile } from '../types';
-import { api } from '../services/apiClient';
 import careersLogo from '../src/assets/brand/conscious-careers-logo.png';
 
 interface EntrepreneurshipSupportPageProps {
   user: UserProfile | null;
   onBack: () => void;
   onSignInPrompt: () => void;
-  onApplyAsProvider: () => void;
+  onReturnToPortal: () => void;
 }
 
 type StageOption =
@@ -45,7 +47,7 @@ type SupportNeed =
 
 type RegionOption = 'San Diego / Imperial' | 'Greater New Orleans / Louisiana' | 'Other';
 type AlignmentOption = 'Yes' | 'Somewhat' | 'Not sure' | 'No';
-type PortalMode = 'overview' | 'assessment';
+type PortalMode = 'overview' | 'assessment' | 'plan';
 
 interface ResourceLane {
   id: RegionOption;
@@ -67,15 +69,20 @@ interface AssessmentState {
   readiness: string;
 }
 
-interface ExecutiveInquiryState {
-  name: string;
-  email: string;
-  organization: string;
-  role: string;
-  inquiryType: string;
-  region: string;
-  message: string;
-}
+type ConsciousPlanField =
+  | 'lifeSeason'
+  | 'trustedStrengths'
+  | 'growthPattern'
+  | 'professionalLane'
+  | 'professionalOutcome'
+  | 'supportGap'
+  | 'educationNeed'
+  | 'learningStyle'
+  | 'completionBarrier'
+  | 'businessProblem'
+  | 'servedAudience'
+  | 'firstOffer'
+  | 'neededResource';
 
 const stageOptions: StageOption[] = [
   'I have an idea',
@@ -101,13 +108,6 @@ const supportNeedOptions: SupportNeed[] = [
 
 const regionOptions: RegionOption[] = ['San Diego / Imperial', 'Greater New Orleans / Louisiana', 'Other'];
 const alignmentOptions: AlignmentOption[] = ['Yes', 'Somewhat', 'Not sure', 'No'];
-const executiveInquiryTypes = [
-  'Potential formal partnership pathway',
-  'Executive introduction',
-  'Regional resource collaboration',
-  'Institutional or philanthropic inquiry',
-  'General entrepreneurship pathway inquiry',
-];
 const calendlyBuildingConnectionsUrl = 'https://calendly.com/randycofield/buildingconnections';
 
 const imagery = {
@@ -161,15 +161,86 @@ const initialAssessment: AssessmentState = {
   readiness: '',
 };
 
-const createInitialExecutiveInquiry = (user: UserProfile | null): ExecutiveInquiryState => ({
-  name: user?.name || '',
-  email: user?.email || '',
-  organization: '',
-  role: '',
-  inquiryType: executiveInquiryTypes[0],
-  region: '',
-  message: '',
-});
+const consciousPlanSections: Array<{
+  title: string;
+  eyebrow: string;
+  questions: Array<{ field: ConsciousPlanField; label: string }>;
+}> = [
+  {
+    title: 'Personal Foundation',
+    eyebrow: 'Self-awareness',
+    questions: [
+      { field: 'lifeSeason', label: 'What season of life, work, or leadership are you currently navigating?' },
+      { field: 'trustedStrengths', label: 'What strengths do you most trust in yourself right now?' },
+      { field: 'growthPattern', label: 'What pattern, fear, or habit most often interrupts your progress?' },
+    ],
+  },
+  {
+    title: 'Professional Direction',
+    eyebrow: 'Career clarity',
+    questions: [
+      { field: 'professionalLane', label: 'What professional lane, craft, role, or leadership path do you want to strengthen?' },
+      { field: 'professionalOutcome', label: 'What professional outcome matters most in the next 12 months?' },
+      { field: 'supportGap', label: 'What support, accountability, or structure is missing?' },
+    ],
+  },
+  {
+    title: 'Educational Growth',
+    eyebrow: 'Learning readiness',
+    questions: [
+      { field: 'educationNeed', label: 'What knowledge, credential, or skill would increase your readiness?' },
+      { field: 'learningStyle', label: 'How do you learn best when pressure is high?' },
+      { field: 'completionBarrier', label: 'What has prevented you from completing learning goals in the past?' },
+    ],
+  },
+  {
+    title: 'Business Development',
+    eyebrow: 'Opportunity design',
+    questions: [
+      { field: 'businessProblem', label: 'What problem could your work or business help solve?' },
+      { field: 'servedAudience', label: 'Who would be served by this idea, offer, or business?' },
+      { field: 'firstOffer', label: 'What could your first practical offer, service, or pilot look like?' },
+      { field: 'neededResource', label: 'What resource, relationship, or decision would make the next step possible?' },
+    ],
+  },
+];
+
+const emotionalIntelligenceQuestions = [
+  'I can name what I am feeling before reacting under pressure.',
+  'I can receive feedback without immediately defending myself.',
+  'I notice when ego, fear, or comparison begins shaping a decision.',
+  'I can pause before responding when a professional conversation becomes tense.',
+  'I understand how my emotional state affects my leadership and communication.',
+  'I can stay accountable without collapsing into shame.',
+  'I can recognize when another person needs clarity, empathy, or boundaries.',
+  'I can communicate a hard truth without losing respect for the other person.',
+  'I can separate temporary discomfort from long-term misalignment.',
+  'I can ask for help before frustration becomes withdrawal or control.',
+  'I can make decisions from values instead of impulse.',
+  'I can repair professional conflict when repair is appropriate.',
+  'I can hold ambition without becoming disconnected from purpose.',
+  'I can identify environments that strengthen or weaken my emotional clarity.',
+  'I can lead myself consistently when no one is watching.',
+];
+
+const initialPlanFields: Record<ConsciousPlanField, string> = {
+  lifeSeason: '',
+  trustedStrengths: '',
+  growthPattern: '',
+  professionalLane: '',
+  professionalOutcome: '',
+  supportGap: '',
+  educationNeed: '',
+  learningStyle: '',
+  completionBarrier: '',
+  businessProblem: '',
+  servedAudience: '',
+  firstOffer: '',
+  neededResource: '',
+};
+
+const consciousPlanExecutiveNote =
+  'This Conscious Plan is a professional readiness brief. Bring it into your Conscious Network Hub guidance session, founder conversation, or external resource meeting as a concise record of your current clarity, emotional readiness, leadership questions, and next development priorities. It is designed to help you enter support conversations prepared, accountable, and aligned.';
 
 const getResourceForRegion = (region: RegionOption | ''): ResourceLane =>
   resourceLanes.find((lane) => lane.id === region) || resourceLanes[2];
@@ -181,17 +252,16 @@ const EntrepreneurshipSupportPage: React.FC<EntrepreneurshipSupportPageProps> = 
   user,
   onBack,
   onSignInPrompt,
+  onReturnToPortal,
 }) => {
   const [portalMode, setPortalMode] = useState<PortalMode>('overview');
-  const [showInquiryForm, setShowInquiryForm] = useState(false);
   const [assessment, setAssessment] = useState<AssessmentState>(initialAssessment);
   const [hasSubmitted, setHasSubmitted] = useState(false);
   const [assessmentStatus, setAssessmentStatus] = useState('');
-  const [executiveInquiry, setExecutiveInquiry] = useState<ExecutiveInquiryState>(() =>
-    createInitialExecutiveInquiry(user)
-  );
-  const [executiveInquiryStatus, setExecutiveInquiryStatus] = useState('');
-  const [isExecutiveInquirySubmitting, setExecutiveInquirySubmitting] = useState(false);
+  const [planFields, setPlanFields] = useState<Record<ConsciousPlanField, string>>(initialPlanFields);
+  const [emotionalIntelligenceAnswers, setEmotionalIntelligenceAnswers] = useState<Record<number, number>>({});
+  const [planScoreRevealed, setPlanScoreRevealed] = useState(false);
+  const [planStatus, setPlanStatus] = useState('');
 
   const selectedResource = useMemo(
     () => getResourceForRegion(assessment.region),
@@ -232,16 +302,32 @@ const EntrepreneurshipSupportPage: React.FC<EntrepreneurshipSupportPageProps> = 
     };
   }, [assessment.stage, assessment.supportNeeds, needsAlignmentPreparation, needsFundingSupport, selectedResource]);
 
+  const emotionalIntelligenceTotal = emotionalIntelligenceQuestions.reduce(
+    (total, _question, index) => total + (emotionalIntelligenceAnswers[index] || 0),
+    0
+  );
+  const emotionalIntelligenceMax = emotionalIntelligenceQuestions.length * 5;
+  const emotionalIntelligencePercent = Math.round((emotionalIntelligenceTotal / emotionalIntelligenceMax) * 100);
+  const emotionalIntelligenceComplete = emotionalIntelligenceQuestions.every(
+    (_question, index) => Boolean(emotionalIntelligenceAnswers[index])
+  );
+  const emotionalIntelligenceLevel =
+    emotionalIntelligencePercent >= 85
+      ? 'Integrated emotional leadership'
+      : emotionalIntelligencePercent >= 70
+        ? 'Strong developing awareness'
+        : emotionalIntelligencePercent >= 55
+          ? 'Active growth opportunity'
+          : 'Foundation-building recommended';
+
   const openAssessment = () => {
     setPortalMode('assessment');
     window.setTimeout(() => window.scrollTo({ top: 0, behavior: 'smooth' }), 0);
   };
 
-  const showExecutiveInquiry = () => {
-    setShowInquiryForm(true);
-    window.setTimeout(() => {
-      document.getElementById('executive-inquiry')?.scrollIntoView({ behavior: 'smooth' });
-    }, 0);
+  const openPlan = () => {
+    setPortalMode('plan');
+    window.setTimeout(() => window.scrollTo({ top: 0, behavior: 'smooth' }), 0);
   };
 
   const toggleSupportNeed = (need: SupportNeed) => {
@@ -262,12 +348,8 @@ const EntrepreneurshipSupportPage: React.FC<EntrepreneurshipSupportPageProps> = 
     setHasSubmitted(false);
   };
 
-  const updateExecutiveInquiryField = <K extends keyof ExecutiveInquiryState>(
-    field: K,
-    value: ExecutiveInquiryState[K]
-  ) => {
-    setExecutiveInquiry((current) => ({ ...current, [field]: value }));
-    setExecutiveInquiryStatus('');
+  const updatePlanField = (field: ConsciousPlanField, value: string) => {
+    setPlanFields((current) => ({ ...current, [field]: value }));
   };
 
   const completeAssessment = () => {
@@ -285,55 +367,121 @@ const EntrepreneurshipSupportPage: React.FC<EntrepreneurshipSupportPageProps> = 
     setAssessmentStatus('Recommended pathway generated locally for this session.');
   };
 
-  const submitExecutiveInquiry = async (event: React.FormEvent) => {
-    event.preventDefault();
-    const name = executiveInquiry.name.trim();
-    const email = executiveInquiry.email.trim();
-    const message = executiveInquiry.message.trim();
-
-    if (!name || !email || message.length < 10) {
-      setExecutiveInquiryStatus('Name, email, and a message of at least 10 characters are required.');
+  const calculatePlanScore = () => {
+    if (!emotionalIntelligenceComplete) {
+      setPlanStatus('Complete all emotional intelligence questions to calculate your score.');
+      setPlanScoreRevealed(false);
       return;
     }
+    setPlanStatus('');
+    setPlanScoreRevealed(true);
+  };
 
-    setExecutiveInquirySubmitting(true);
-    setExecutiveInquiryStatus('');
+  const escapeReportHtml = (value: string): string =>
+    value
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;')
+      .replace(/'/g, '&#39;');
 
-    try {
-      const structuredMessage = [
-        'High Executive Contact and General Inquiry',
-        '',
-        `Inquiry type: ${executiveInquiry.inquiryType}`,
-        `Name: ${name}`,
-        `Email: ${email}`,
-        `Organization: ${executiveInquiry.organization.trim() || 'Not provided'}`,
-        `Role/title: ${executiveInquiry.role.trim() || 'Not provided'}`,
-        `Region: ${executiveInquiry.region.trim() || 'Not provided'}`,
-        '',
-        'Message:',
-        message,
-        '',
-        'Boundary: This submission is for executive contact, general inquiry, or potential future formal pathway review. It does not create a formal partnership, referral guarantee, funding guarantee, or professional advice relationship.',
-      ].join('\n');
+  const downloadConsciousPlan = () => {
+    const generatedAt = new Date();
+    const planResponses = consciousPlanSections
+      .map((section) => `
+        <section>
+          <p class="eyebrow">${escapeReportHtml(section.eyebrow)}</p>
+          <h2>${escapeReportHtml(section.title)}</h2>
+          ${section.questions.map((question) => `
+            <div class="answer">
+              <h3>${escapeReportHtml(question.label)}</h3>
+              <p>${escapeReportHtml(planFields[question.field].trim() || 'Not provided')}</p>
+            </div>
+          `).join('')}
+        </section>
+      `)
+      .join('');
 
-      const data = await api<{ ticketId?: string }>('/support/contact', {
-        method: 'POST',
-        body: {
-          name,
-          email,
-          subject: `High Executive Contact / General Inquiry - ${executiveInquiry.inquiryType}`,
-          message: structuredMessage,
-          route: '/conscious-careers/entrepreneurship-support#executive-inquiry',
-        },
-      });
+    const emotionalIntelligenceRows = emotionalIntelligenceQuestions
+      .map((question, index) => `
+        <tr>
+          <td>${index + 1}</td>
+          <td>${escapeReportHtml(question)}</td>
+          <td>${emotionalIntelligenceAnswers[index] || '-'}</td>
+        </tr>
+      `)
+      .join('');
 
-      setExecutiveInquiryStatus(`Executive inquiry received${data.ticketId ? `: ${data.ticketId}` : ''}.`);
-      setExecutiveInquiry((current) => ({ ...current, message: '' }));
-    } catch (error) {
-      setExecutiveInquiryStatus(error instanceof Error ? error.message : 'Executive inquiry could not be recorded.');
-    } finally {
-      setExecutiveInquirySubmitting(false);
-    }
+    const reportHtml = `<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Conscious Plan Readiness Brief</title>
+  <style>
+    body { margin: 0; background: #f8fafc; color: #0f172a; font-family: Arial, Helvetica, sans-serif; line-height: 1.6; }
+    main { max-width: 920px; margin: 0 auto; padding: 48px 24px; }
+    header, section { background: #ffffff; border: 1px solid #e2e8f0; border-radius: 18px; margin-bottom: 18px; padding: 26px; }
+    h1 { margin: 0; font-size: 34px; line-height: 1.1; letter-spacing: 0.01em; }
+    h2 { margin: 6px 0 18px; font-size: 22px; }
+    h3 { margin: 0 0 6px; font-size: 14px; color: #334155; text-transform: uppercase; letter-spacing: 0.06em; }
+    p { margin: 0; }
+    .eyebrow { margin-bottom: 8px; color: #0f766e; font-size: 12px; font-weight: 800; text-transform: uppercase; letter-spacing: 0.14em; }
+    .note { background: #ecfeff; border-color: #99f6e4; }
+    .score { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; }
+    .metric { background: #f1f5f9; border-radius: 14px; padding: 16px; }
+    .metric strong { display: block; font-size: 26px; }
+    .answer { border-top: 1px solid #e2e8f0; padding-top: 14px; margin-top: 14px; }
+    table { width: 100%; border-collapse: collapse; font-size: 14px; }
+    th, td { border-bottom: 1px solid #e2e8f0; padding: 10px; text-align: left; vertical-align: top; }
+    th { color: #334155; font-size: 12px; text-transform: uppercase; letter-spacing: 0.08em; }
+    footer { color: #64748b; font-size: 12px; padding: 8px 2px; }
+    @media print { body { background: white; } main { padding: 0; } header, section { break-inside: avoid; } }
+  </style>
+</head>
+<body>
+  <main>
+    <header>
+      <p class="eyebrow">Conscious Careers</p>
+      <h1>Conscious Plan Readiness Brief</h1>
+      <p>Prepared ${escapeReportHtml(generatedAt.toLocaleString())}${user?.email ? ` for ${escapeReportHtml(user.email)}` : ''}.</p>
+    </header>
+    <section class="note">
+      <p class="eyebrow">Executive Guidance</p>
+      <p>${escapeReportHtml(consciousPlanExecutiveNote)}</p>
+    </section>
+    <section>
+      <p class="eyebrow">Emotional Intelligence Score</p>
+      <div class="score">
+        <div class="metric"><span>Score</span><strong>${emotionalIntelligencePercent}%</strong></div>
+        <div class="metric"><span>Level</span><strong>${escapeReportHtml(emotionalIntelligenceLevel)}</strong></div>
+        <div class="metric"><span>Raw</span><strong>${emotionalIntelligenceTotal}/${emotionalIntelligenceMax}</strong></div>
+      </div>
+    </section>
+    ${planResponses}
+    <section>
+      <p class="eyebrow">Emotional Intelligence Responses</p>
+      <table>
+        <thead><tr><th>#</th><th>Statement</th><th>Score</th></tr></thead>
+        <tbody>${emotionalIntelligenceRows}</tbody>
+      </table>
+    </section>
+    <footer>
+      This brief is educational and reflective. It is not medical, mental health, legal, financial, accounting, lending, or guaranteed business advice.
+    </footer>
+  </main>
+</body>
+</html>`;
+
+    const blob = new Blob([reportHtml], { type: 'text/html;charset=utf-8' });
+    const objectUrl = URL.createObjectURL(blob);
+    const anchor = document.createElement('a');
+    anchor.href = objectUrl;
+    anchor.download = `conscious-plan-${generatedAt.toISOString().slice(0, 10)}.html`;
+    document.body.appendChild(anchor);
+    anchor.click();
+    anchor.remove();
+    window.setTimeout(() => URL.revokeObjectURL(objectUrl), 0);
   };
 
   if (portalMode === 'assessment') {
@@ -600,6 +748,206 @@ const EntrepreneurshipSupportPage: React.FC<EntrepreneurshipSupportPageProps> = 
     );
   }
 
+  if (portalMode === 'plan') {
+    return (
+      <div className="min-h-[100dvh] w-full bg-slate-950 px-4 pb-14 pt-20 text-slate-100 sm:px-6 sm:pt-24 lg:px-10">
+        <div className="mx-auto flex max-w-6xl flex-col gap-6">
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+            <button
+              type="button"
+              onClick={() => setPortalMode('overview')}
+              className="inline-flex w-fit items-center gap-3 rounded-full border border-white/10 bg-white/[0.04] px-4 py-2 text-xs font-black uppercase tracking-[0.16em] text-slate-300 transition-colors hover:bg-white/[0.08] hover:text-white focus:outline-none focus-visible:ring-2 focus-visible:ring-teal-300/50"
+            >
+              <ArrowLeft className="h-4 w-4" />
+              Back To Entrepreneurship Support
+            </button>
+            <div className="flex items-center gap-3 rounded-full border border-white/10 bg-white/[0.04] px-4 py-2">
+              <img src={careersLogo} alt="Conscious Careers" className="h-7 w-7 rounded-full bg-white object-contain" />
+              <span className="text-xs font-black uppercase tracking-[0.16em] text-teal-100">Conscious Plan</span>
+            </div>
+          </div>
+
+          <section className="overflow-hidden rounded-[2rem] border border-white/10 bg-white/[0.035]">
+            <div className="grid gap-0 lg:grid-cols-[0.58fr_0.42fr]">
+              <div className="p-6 sm:p-8 lg:p-10">
+                <p className="text-xs font-black uppercase tracking-[0.22em] text-teal-200">Step 2</p>
+                <h1 className="mt-4 text-3xl font-black uppercase tracking-tight text-white sm:text-4xl">
+                  Create Conscious Plan
+                </h1>
+                <p className="mt-4 max-w-3xl text-base leading-8 text-slate-300">
+                  Answer personal, professional, educational, and business-development questions, then complete the emotional intelligence check before choosing your next step.
+                </p>
+              </div>
+              <div
+                className="min-h-72 bg-cover bg-center"
+                style={{ backgroundImage: `linear-gradient(180deg, rgba(2,6,23,0.05), rgba(2,6,23,0.82)), url(${imagery.founder})` }}
+                aria-label="Professional planning and leadership development workspace"
+              />
+            </div>
+          </section>
+
+          <section className="grid gap-5 xl:grid-cols-[minmax(0,0.66fr)_minmax(320px,0.34fr)]">
+            <div className="space-y-5">
+              {consciousPlanSections.map((section) => (
+                <section key={section.title} className="rounded-[1.5rem] border border-white/10 bg-white/[0.035] p-5 sm:p-6">
+                  <p className="text-xs font-black uppercase tracking-[0.18em] text-teal-200/80">{section.eyebrow}</p>
+                  <h2 className="mt-2 text-xl font-black uppercase tracking-tight text-white">{section.title}</h2>
+                  <div className="mt-5 grid gap-4">
+                    {section.questions.map((question) => (
+                      <label key={question.field} className="block">
+                        <span className="mb-2 block text-sm font-black uppercase tracking-[0.12em] text-slate-300">
+                          {question.label}
+                        </span>
+                        <textarea
+                          value={planFields[question.field]}
+                          onChange={(event) => updatePlanField(question.field, event.target.value)}
+                          rows={3}
+                          className="w-full rounded-2xl border border-white/10 bg-white/[0.04] px-4 py-3 text-sm leading-6 text-white outline-none transition-all placeholder:text-slate-600 focus:border-teal-300/40 focus:ring-2 focus:ring-teal-300/20"
+                          placeholder="Write a grounded response..."
+                        />
+                      </label>
+                    ))}
+                  </div>
+                </section>
+              ))}
+
+              <section className="rounded-[1.5rem] border border-teal-300/20 bg-teal-300/[0.05] p-5 sm:p-6">
+                <div className="flex items-start gap-4">
+                  <Brain className="mt-1 h-6 w-6 shrink-0 text-teal-100" />
+                  <div>
+                    <p className="text-xs font-black uppercase tracking-[0.18em] text-teal-100/80">Emotional Intelligence Check</p>
+                    <h2 className="mt-2 text-xl font-black uppercase tracking-tight text-white">
+                      Score Before Moving Forward
+                    </h2>
+                    <p className="mt-3 text-sm leading-7 text-teal-50/75">
+                      Rate each statement from 1 to 5. This is a reflective readiness score, not a diagnosis or clinical assessment.
+                    </p>
+                  </div>
+                </div>
+
+                <div className="mt-6 space-y-4">
+                  {emotionalIntelligenceQuestions.map((question, index) => (
+                    <fieldset key={question} className="rounded-2xl border border-white/10 bg-black/20 p-4">
+                      <legend className="mb-3 text-sm font-semibold leading-6 text-white">
+                        {index + 1}. {question}
+                      </legend>
+                      <div className="grid grid-cols-5 gap-2">
+                        {[1, 2, 3, 4, 5].map((value) => (
+                          <button
+                            key={value}
+                            type="button"
+                            onClick={() => {
+                              setEmotionalIntelligenceAnswers((current) => ({ ...current, [index]: value }));
+                              setPlanScoreRevealed(false);
+                            }}
+                            className={`rounded-xl border px-3 py-3 text-sm font-black transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-teal-200 ${
+                              emotionalIntelligenceAnswers[index] === value
+                                ? 'border-teal-200 bg-teal-300 text-slate-950'
+                                : 'border-white/10 bg-white/[0.04] text-slate-300 hover:bg-white/[0.08]'
+                            }`}
+                            aria-label={`${question}: ${value}`}
+                          >
+                            {value}
+                          </button>
+                        ))}
+                      </div>
+                    </fieldset>
+                  ))}
+                </div>
+              </section>
+            </div>
+
+            <aside className="h-fit rounded-[1.5rem] border border-white/10 bg-slate-950/85 p-5 shadow-2xl shadow-black/30 sm:p-6 xl:sticky xl:top-24">
+              <div className="flex items-center gap-3">
+                <Route className="h-6 w-6 text-teal-100" />
+                <p className="text-xs font-black uppercase tracking-[0.18em] text-teal-100/80">Plan Score</p>
+              </div>
+              <div className="mt-5 rounded-2xl border border-white/10 bg-white/[0.04] p-5">
+                <p className="text-sm font-bold text-slate-300">Emotional intelligence completion</p>
+                <div className="mt-3 h-3 overflow-hidden rounded-full bg-white/10">
+                  <div
+                    className="h-full rounded-full bg-teal-300 transition-all duration-500"
+                    style={{ width: `${(Object.keys(emotionalIntelligenceAnswers).length / emotionalIntelligenceQuestions.length) * 100}%` }}
+                  />
+                </div>
+                <p className="mt-3 text-xs font-black uppercase tracking-[0.14em] text-slate-500">
+                  {Object.keys(emotionalIntelligenceAnswers).length} of {emotionalIntelligenceQuestions.length} answered
+                </p>
+              </div>
+
+              {planStatus && (
+                <p className="mt-4 rounded-2xl border border-amber-300/20 bg-amber-300/[0.08] p-4 text-sm leading-6 text-amber-50">
+                  {planStatus}
+                </p>
+              )}
+
+              <button
+                type="button"
+                onClick={calculatePlanScore}
+                className="mt-5 inline-flex w-full items-center justify-center gap-2 rounded-xl bg-teal-300 px-5 py-4 text-xs font-black uppercase tracking-[0.16em] text-slate-950 transition-colors hover:bg-teal-200 focus:outline-none focus-visible:ring-2 focus-visible:ring-teal-100"
+              >
+                Calculate Score <Sparkles className="h-4 w-4" />
+              </button>
+
+              {planScoreRevealed && (
+                <div className="mt-5 space-y-4">
+                  <div className="rounded-2xl border border-teal-300/25 bg-teal-300/[0.08] p-5">
+                    <p className="text-xs font-black uppercase tracking-[0.18em] text-teal-100/80">Your Score</p>
+                    <p className="mt-2 text-4xl font-black text-white">{emotionalIntelligencePercent}%</p>
+                    <p className="mt-2 text-sm font-bold text-teal-50">{emotionalIntelligenceLevel}</p>
+                    <p className="mt-3 text-sm leading-6 text-teal-50/75">
+                      Score: {emotionalIntelligenceTotal} of {emotionalIntelligenceMax}. Use this as a reflection point before a guidance conversation.
+                    </p>
+                  </div>
+
+                  <div className="rounded-2xl border border-white/10 bg-white/[0.04] p-5">
+                    <p className="text-xs font-black uppercase tracking-[0.18em] text-slate-400">Professional Use</p>
+                    <p className="mt-3 text-sm leading-6 text-slate-300">
+                      {consciousPlanExecutiveNote}
+                    </p>
+                  </div>
+
+                  <div className="grid gap-3">
+                    <button
+                      type="button"
+                      onClick={downloadConsciousPlan}
+                      className="inline-flex items-center justify-center gap-2 rounded-xl border border-teal-200/30 bg-teal-300/[0.12] px-4 py-3 text-xs font-black uppercase tracking-[0.14em] text-teal-50 transition-colors hover:bg-teal-300/[0.2] focus:outline-none focus-visible:ring-2 focus-visible:ring-teal-200"
+                    >
+                      Download Conscious Plan <Download className="h-4 w-4" />
+                    </button>
+                    <button
+                      type="button"
+                      onClick={user ? onReturnToPortal : onSignInPrompt}
+                      className="inline-flex items-center justify-center gap-2 rounded-xl border border-white/10 bg-white/[0.08] px-4 py-3 text-xs font-black uppercase tracking-[0.14em] text-white transition-colors hover:bg-white/[0.14] focus:outline-none focus-visible:ring-2 focus-visible:ring-white/30"
+                    >
+                      {user ? 'Return To CNH Portal' : 'Sign In To CNH Portal'}
+                    </button>
+                    <a
+                      href={calendlyBuildingConnectionsUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="inline-flex items-center justify-center gap-2 rounded-xl bg-blue-500 px-4 py-3 text-center text-xs font-black uppercase tracking-[0.14em] text-white transition-colors hover:bg-blue-400 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-200"
+                    >
+                      Schedule Founder Guidance <CalendarClock className="h-4 w-4" />
+                    </a>
+                    <a
+                      href={calendlyBuildingConnectionsUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="inline-flex items-center justify-center gap-2 rounded-xl bg-teal-300 px-4 py-3 text-center text-xs font-black uppercase tracking-[0.14em] text-slate-950 transition-colors hover:bg-teal-200 focus:outline-none focus-visible:ring-2 focus-visible:ring-teal-100"
+                    >
+                      Brainstorm With A Leader <ArrowUpRight className="h-4 w-4" />
+                    </a>
+                  </div>
+                </div>
+              )}
+            </aside>
+          </section>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="min-h-[100dvh] w-full bg-[#07110f] px-4 pb-16 pt-20 text-slate-100 sm:px-6 sm:pt-24 lg:px-10">
       <div className="mx-auto flex max-w-7xl flex-col gap-10">
@@ -624,23 +972,9 @@ const EntrepreneurshipSupportPage: React.FC<EntrepreneurshipSupportPageProps> = 
               </div>
             </div>
 
-            <h1 className="mt-4 max-w-3xl text-3xl font-black uppercase leading-tight tracking-tight text-white sm:text-4xl lg:text-5xl">
+            <h1 className="mt-4 max-w-3xl text-2xl font-black uppercase leading-tight tracking-tight text-white sm:text-3xl lg:text-4xl">
               For members who want to build, stabilize, or grow professionally that can serve livelihood, family and community without moving alone.
             </h1>
-
-            <div className="mt-8 grid gap-3 sm:max-w-sm">
-              <button
-                type="button"
-                onClick={openAssessment}
-                className="inline-flex items-center justify-center gap-2 rounded-xl bg-teal-300 px-5 py-4 text-xs font-black uppercase tracking-[0.16em] text-slate-950 transition-colors hover:bg-teal-200 focus:outline-none focus-visible:ring-2 focus-visible:ring-teal-100"
-              >
-                Start Readiness Pathway <ArrowRight className="h-4 w-4" />
-              </button>
-            </div>
-
-            <p className="mt-5 text-sm leading-6 text-slate-500">
-              Readiness is for signed-in CNH members. Guests can review the portal and open public resource gateways.
-            </p>
           </div>
 
           <div className="relative min-h-80 overflow-hidden bg-slate-900 lg:min-h-[360px]">
@@ -649,6 +983,51 @@ const EntrepreneurshipSupportPage: React.FC<EntrepreneurshipSupportPageProps> = 
               style={{ backgroundImage: `linear-gradient(180deg, rgba(2,6,23,0.05), rgba(2,6,23,0.82)), url(${imagery.hero})` }}
               aria-label="Entrepreneurs and advisors in a professional planning conversation"
             />
+          </div>
+
+          <div className="border-t border-white/10 bg-white/[0.025] p-5 sm:p-6 lg:col-span-2">
+            <div className="mx-auto grid max-w-5xl items-stretch gap-3 md:grid-cols-[1fr_auto_1fr_auto_1fr] md:gap-4">
+              <button
+                type="button"
+                onClick={openAssessment}
+                className="group relative overflow-hidden rounded-2xl border border-teal-200/30 bg-teal-300 px-4 py-4 text-left shadow-[0_18px_45px_rgba(20,184,166,0.18)] transition duration-300 hover:-translate-y-1 hover:bg-teal-200 focus:outline-none focus-visible:ring-2 focus-visible:ring-teal-100"
+              >
+                <span className="block text-xs font-black uppercase tracking-[0.18em] text-slate-800">Step 1</span>
+                <span className="mt-2 flex items-center justify-between gap-3 text-sm font-black uppercase tracking-[0.12em] text-slate-950">
+                  Begin With Conscious Network Hub <ArrowRight className="h-4 w-4 shrink-0" />
+                </span>
+              </button>
+              <div className="hidden items-center justify-center text-teal-100/70 md:flex">
+                <ArrowRight className="h-6 w-6" />
+              </div>
+              <button
+                type="button"
+                onClick={openPlan}
+                className="group relative overflow-hidden rounded-2xl border border-white/10 bg-slate-900 px-4 py-4 text-left shadow-[0_18px_45px_rgba(0,0,0,0.22)] transition duration-300 hover:-translate-y-1 hover:border-blue-200/40 hover:bg-slate-800 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-200"
+              >
+                <span className="block text-xs font-black uppercase tracking-[0.18em] text-blue-200">Step 2</span>
+                <span className="mt-2 flex items-center justify-between gap-3 text-sm font-black uppercase tracking-[0.12em] text-white">
+                  Create Conscious Plan <ArrowRight className="h-4 w-4 shrink-0" />
+                </span>
+              </button>
+              <div className="hidden items-center justify-center text-teal-100/70 md:flex">
+                <ArrowRight className="h-6 w-6" />
+              </div>
+              <a
+                href={calendlyBuildingConnectionsUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="group relative overflow-hidden rounded-2xl border border-amber-200/20 bg-amber-200/[0.08] px-4 py-4 text-left shadow-[0_18px_45px_rgba(0,0,0,0.22)] transition duration-300 hover:-translate-y-1 hover:bg-amber-200/[0.14] focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-100"
+              >
+                <span className="block text-xs font-black uppercase tracking-[0.18em] text-amber-100">Step 3</span>
+                <span className="mt-2 flex items-center justify-between gap-3 text-sm font-black uppercase tracking-[0.12em] text-white">
+                  Brainstorm With A Leader <ArrowUpRight className="h-4 w-4 shrink-0" />
+                </span>
+              </a>
+            </div>
+            <p className="mx-auto mt-4 max-w-5xl text-sm leading-6 text-slate-500">
+              Step 1 is for signed-in CNH members. Step 2 calculates a page-based readiness score. Step 3 uses the active scheduling link.
+            </p>
           </div>
         </section>
 
@@ -709,138 +1088,6 @@ const EntrepreneurshipSupportPage: React.FC<EntrepreneurshipSupportPageProps> = 
             </p>
         </section>
 
-        <section id="executive-inquiry" className="scroll-mt-28 rounded-[2rem] border border-white/10 bg-slate-950/80 p-6 sm:p-8">
-          <div className="flex flex-col gap-5 lg:flex-row lg:items-center lg:justify-between">
-            <div className="max-w-3xl">
-              <p className="text-xs font-black uppercase tracking-[0.22em] text-teal-200">Contact And Scheduling</p>
-              <h2 className="mt-3 text-3xl font-black uppercase tracking-tight text-white">Executive Contact</h2>
-              <p className="mt-4 text-sm leading-7 text-slate-400">
-                Use the form for executive introductions, institutional conversations, or regional resource discussions. For time-sensitive alignment, scheduling is available.
-              </p>
-            </div>
-            <div className="flex flex-col gap-3 sm:flex-row">
-              <button
-                type="button"
-                onClick={() => setShowInquiryForm((current) => !current)}
-                className="inline-flex items-center justify-center gap-2 rounded-xl bg-teal-300 px-5 py-3 text-xs font-black uppercase tracking-[0.16em] text-slate-950 transition-colors hover:bg-teal-200 focus:outline-none focus-visible:ring-2 focus-visible:ring-teal-100"
-              >
-                {showInquiryForm ? 'Close Form' : 'Open Inquiry Form'}
-              </button>
-              <a
-                href={calendlyBuildingConnectionsUrl}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="inline-flex items-center justify-center gap-2 rounded-xl border border-white/10 bg-white/[0.07] px-5 py-3 text-xs font-black uppercase tracking-[0.16em] text-white transition-colors hover:bg-white/[0.12] focus:outline-none focus-visible:ring-2 focus-visible:ring-white/30"
-              >
-                Schedule <ArrowUpRight className="h-4 w-4" />
-              </a>
-            </div>
-          </div>
-
-          {showInquiryForm && (
-            <form onSubmit={submitExecutiveInquiry} className="mt-8 border-t border-white/10 pt-8">
-              <div className="mb-6 flex items-center gap-3">
-                <FileText className="h-6 w-6 text-teal-100" />
-                <p className="text-sm font-black uppercase tracking-[0.18em] text-white">General Inquiry Form</p>
-              </div>
-              <div className="grid gap-4 md:grid-cols-2">
-                <label className="block">
-                  <span className="mb-2 block text-sm font-black uppercase tracking-[0.16em] text-slate-300">Name</span>
-                  <input
-                    type="text"
-                    value={executiveInquiry.name}
-                    onChange={(event) => updateExecutiveInquiryField('name', event.target.value)}
-                    className="w-full rounded-2xl border border-white/10 bg-white/[0.04] px-4 py-3 text-sm text-white outline-none transition-all placeholder:text-slate-600 focus:border-teal-300/40 focus:ring-2 focus:ring-teal-300/20"
-                    required
-                  />
-                </label>
-                <label className="block">
-                  <span className="mb-2 block text-sm font-black uppercase tracking-[0.16em] text-slate-300">Email</span>
-                  <input
-                    type="email"
-                    value={executiveInquiry.email}
-                    onChange={(event) => updateExecutiveInquiryField('email', event.target.value)}
-                    className="w-full rounded-2xl border border-white/10 bg-white/[0.04] px-4 py-3 text-sm text-white outline-none transition-all placeholder:text-slate-600 focus:border-teal-300/40 focus:ring-2 focus:ring-teal-300/20"
-                    required
-                  />
-                </label>
-                <label className="block">
-                  <span className="mb-2 block text-sm font-black uppercase tracking-[0.16em] text-slate-300">Organization</span>
-                  <input
-                    type="text"
-                    value={executiveInquiry.organization}
-                    onChange={(event) => updateExecutiveInquiryField('organization', event.target.value)}
-                    className="w-full rounded-2xl border border-white/10 bg-white/[0.04] px-4 py-3 text-sm text-white outline-none transition-all placeholder:text-slate-600 focus:border-teal-300/40 focus:ring-2 focus:ring-teal-300/20"
-                    placeholder="Optional"
-                  />
-                </label>
-                <label className="block">
-                  <span className="mb-2 block text-sm font-black uppercase tracking-[0.16em] text-slate-300">Role Or Title</span>
-                  <input
-                    type="text"
-                    value={executiveInquiry.role}
-                    onChange={(event) => updateExecutiveInquiryField('role', event.target.value)}
-                    className="w-full rounded-2xl border border-white/10 bg-white/[0.04] px-4 py-3 text-sm text-white outline-none transition-all placeholder:text-slate-600 focus:border-teal-300/40 focus:ring-2 focus:ring-teal-300/20"
-                    placeholder="Optional"
-                  />
-                </label>
-                <label className="block">
-                  <span className="mb-2 block text-sm font-black uppercase tracking-[0.16em] text-slate-300">Inquiry Type</span>
-                  <select
-                    value={executiveInquiry.inquiryType}
-                    onChange={(event) => updateExecutiveInquiryField('inquiryType', event.target.value)}
-                    className="w-full rounded-2xl border border-white/10 bg-slate-950 px-4 py-3 text-sm text-white outline-none transition-all focus:border-teal-300/40 focus:ring-2 focus:ring-teal-300/20"
-                  >
-                    {executiveInquiryTypes.map((type) => (
-                      <option key={type} value={type}>{type}</option>
-                    ))}
-                  </select>
-                </label>
-                <label className="block">
-                  <span className="mb-2 block text-sm font-black uppercase tracking-[0.16em] text-slate-300">Region</span>
-                  <input
-                    type="text"
-                    value={executiveInquiry.region}
-                    onChange={(event) => updateExecutiveInquiryField('region', event.target.value)}
-                    className="w-full rounded-2xl border border-white/10 bg-white/[0.04] px-4 py-3 text-sm text-white outline-none transition-all placeholder:text-slate-600 focus:border-teal-300/40 focus:ring-2 focus:ring-teal-300/20"
-                    placeholder="City, state, region, or national"
-                  />
-                </label>
-              </div>
-
-              <label className="mt-4 block">
-                <span className="mb-2 block text-sm font-black uppercase tracking-[0.16em] text-slate-300">Inquiry</span>
-                <textarea
-                  value={executiveInquiry.message}
-                  onChange={(event) => updateExecutiveInquiryField('message', event.target.value)}
-                  rows={5}
-                  minLength={10}
-                  className="w-full rounded-2xl border border-white/10 bg-white/[0.04] px-4 py-3 text-sm leading-6 text-white outline-none transition-all placeholder:text-slate-600 focus:border-teal-300/40 focus:ring-2 focus:ring-teal-300/20"
-                  placeholder="Share the executive contact, general inquiry, or potential future pathway context..."
-                  required
-                />
-              </label>
-
-              {executiveInquiryStatus && (
-                <p className="mt-4 rounded-2xl border border-white/10 bg-white/[0.04] px-4 py-3 text-sm leading-6 text-slate-300">
-                  {executiveInquiryStatus}
-                </p>
-              )}
-
-              <button
-                type="submit"
-                disabled={isExecutiveInquirySubmitting}
-                className="mt-5 inline-flex w-full items-center justify-center gap-2 rounded-xl bg-teal-300 px-5 py-4 text-xs font-black uppercase tracking-[0.16em] text-slate-950 transition-colors hover:bg-teal-200 focus:outline-none focus-visible:ring-2 focus-visible:ring-teal-100 disabled:opacity-60"
-              >
-                {isExecutiveInquirySubmitting ? 'Submitting...' : 'Submit Executive Inquiry'}
-              </button>
-            </form>
-          )}
-
-          <p className="mt-5 text-sm leading-6 text-slate-500">
-            Inquiry and scheduling do not create a formal partnership, advisory relationship, funding relationship, or guaranteed platform outcome.
-          </p>
-        </section>
       </div>
     </div>
   );

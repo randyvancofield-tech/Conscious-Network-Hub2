@@ -3646,7 +3646,7 @@ const App: React.FC = () => {
               resetSignInChallengeInputs();
               setSigninModalOpen(true);
             }}
-            onApplyAsProvider={() => setCurrentView(AppView.PROVIDER_APPLY)}
+            onReturnToPortal={() => setCurrentView(user ? AppView.DASHBOARD : AppView.ENTRY)}
           />
         );
       case AppView.DASHBOARD:
