@@ -4,19 +4,12 @@ import {
   ArrowRight,
   ArrowUpRight,
   BadgeCheck,
-  BookOpenCheck,
-  Building2,
-  ClipboardCheck,
-  Compass,
   FileText,
-  HeartHandshake,
   Landmark,
-  Lightbulb,
   LockKeyhole,
   MapPin,
   Network,
   Scale,
-  ShieldCheck,
   Sparkles,
 } from 'lucide-react';
 import { UserProfile } from '../types';
@@ -84,16 +77,6 @@ interface ExecutiveInquiryState {
   message: string;
 }
 
-interface PortalPathway {
-  id: 'begin' | 'stabilize' | 'resources' | 'institutional';
-  title: string;
-  eyebrow: string;
-  summary: string;
-  image: string;
-  imageAlt: string;
-  icon: React.ReactNode;
-}
-
 const stageOptions: StageOption[] = [
   'I have an idea',
   'I am exploring entrepreneurship',
@@ -130,10 +113,6 @@ const calendlyBuildingConnectionsUrl = 'https://calendly.com/randycofield/buildi
 const imagery = {
   hero: 'https://images.unsplash.com/photo-1556761175-b413da4baf72?auto=format&fit=crop&w=1600&q=80',
   founder: 'https://images.unsplash.com/photo-1573164713988-8665fc963095?auto=format&fit=crop&w=1200&q=80',
-  begin: 'https://images.unsplash.com/photo-1551836022-d5d88e9218df?auto=format&fit=crop&w=900&q=80',
-  stabilize: 'https://images.unsplash.com/photo-1556745757-8d76bdb6984b?auto=format&fit=crop&w=900&q=80',
-  resources: 'https://images.unsplash.com/photo-1552664730-d307ca884978?auto=format&fit=crop&w=900&q=80',
-  institutional: 'https://images.unsplash.com/photo-1556761175-4b46a572b786?auto=format&fit=crop&w=900&q=80',
 };
 
 const resourceLanes: ResourceLane[] = [
@@ -199,70 +178,6 @@ const portalSteps = [
   ['04', 'Build', 'Take the next responsible action with clearer structure.'],
 ];
 
-const portalPathways: PortalPathway[] = [
-  {
-    id: 'begin',
-    eyebrow: 'For Emerging Founders',
-    title: 'Start With Direction',
-    summary: 'For members who sense a business calling, community solution, or new career path but need discernment before execution.',
-    image: imagery.begin,
-    imageAlt: 'Entrepreneur planning with a laptop and notebook',
-    icon: <Lightbulb className="h-5 w-5" />,
-  },
-  {
-    id: 'stabilize',
-    eyebrow: 'For Early Operators',
-    title: 'Stabilize The Work',
-    summary: 'For builders who have started but need structure around operations, accountability, sales, delivery, or support.',
-    image: imagery.stabilize,
-    imageAlt: 'Small business team reviewing customer support work',
-    icon: <ShieldCheck className="h-5 w-5" />,
-  },
-  {
-    id: 'resources',
-    eyebrow: 'For Resource Navigation',
-    title: 'Prepare For Outside Help',
-    summary: 'For members who may be ready to approach an SBDC or public entrepreneurship resource with better questions.',
-    image: imagery.resources,
-    imageAlt: 'Business workshop with people collaborating',
-    icon: <Compass className="h-5 w-5" />,
-  },
-  {
-    id: 'institutional',
-    eyebrow: 'For Providers And Institutions',
-    title: 'Support The Ecosystem',
-    summary: 'For approved providers, organizations, or regional partners exploring responsible ways to support CNH entrepreneurs.',
-    image: imagery.institutional,
-    imageAlt: 'Professional meeting between organizational leaders',
-    icon: <Building2 className="h-5 w-5" />,
-  },
-];
-
-const readinessStages = [
-  ['Identity', 'Who are you becoming through this work?'],
-  ['Offer', 'What problem, service, or value is becoming clear?'],
-  ['Capacity', 'What structure, time, money, and support are realistic?'],
-  ['Resource', 'What outside help is appropriate, and what question will you bring?'],
-];
-
-const supportTiles = [
-  {
-    title: 'Learning',
-    body: 'Use CNH reflection and learning spaces to clarify identity, values, and direction.',
-    icon: <BookOpenCheck className="h-5 w-5" />,
-  },
-  {
-    title: 'Readiness',
-    body: 'Use the member pathway to sort stage, need, region, and next action.',
-    icon: <ClipboardCheck className="h-5 w-5" />,
-  },
-  {
-    title: 'Provider Review',
-    body: 'Providers must be reviewed before supporting members inside CNH pathways.',
-    icon: <HeartHandshake className="h-5 w-5" />,
-  },
-];
-
 const getResourceForRegion = (region: RegionOption | ''): ResourceLane =>
   resourceLanes.find((lane) => lane.id === region) || resourceLanes[2];
 
@@ -273,7 +188,6 @@ const EntrepreneurshipSupportPage: React.FC<EntrepreneurshipSupportPageProps> = 
   user,
   onBack,
   onSignInPrompt,
-  onApplyAsProvider,
 }) => {
   const [portalMode, setPortalMode] = useState<PortalMode>('overview');
   const [showInquiryForm, setShowInquiryForm] = useState(false);
@@ -717,28 +631,17 @@ const EntrepreneurshipSupportPage: React.FC<EntrepreneurshipSupportPageProps> = 
               </div>
             </div>
 
-            <p className="text-xs font-black uppercase tracking-[0.24em] text-amber-100/80">Direction, readiness, and responsible resource connection</p>
             <h1 className="mt-5 max-w-3xl text-4xl font-black uppercase leading-[0.95] tracking-tight text-white sm:text-6xl xl:text-7xl">
-              A Pathway For Work That Carries Purpose
+              For members who want to build, stabilize, or grow professionally that can serve livelihood, family and community without moving alone.
             </h1>
-            <p className="mt-6 max-w-2xl text-base leading-8 text-slate-300 sm:text-lg">
-              For members who feel called to build, stabilize, or grow work that can serve livelihood, family, community, and stewardship without moving blindly or alone.
-            </p>
 
-            <div className="mt-8 grid gap-3 sm:grid-cols-2">
+            <div className="mt-8 grid gap-3 sm:max-w-sm">
               <button
                 type="button"
                 onClick={openAssessment}
                 className="inline-flex items-center justify-center gap-2 rounded-xl bg-teal-300 px-5 py-4 text-xs font-black uppercase tracking-[0.16em] text-slate-950 transition-colors hover:bg-teal-200 focus:outline-none focus-visible:ring-2 focus-visible:ring-teal-100"
               >
                 Start Readiness Pathway <ArrowRight className="h-4 w-4" />
-              </button>
-              <button
-                type="button"
-                onClick={() => document.getElementById('choose-pathway')?.scrollIntoView({ behavior: 'smooth' })}
-                className="inline-flex items-center justify-center gap-2 rounded-xl border border-white/10 bg-white/[0.06] px-5 py-4 text-xs font-black uppercase tracking-[0.16em] text-white transition-colors hover:bg-white/[0.1] focus:outline-none focus-visible:ring-2 focus-visible:ring-white/30"
-              >
-                Choose A Direction
               </button>
             </div>
 
@@ -772,72 +675,14 @@ const EntrepreneurshipSupportPage: React.FC<EntrepreneurshipSupportPageProps> = 
           <div className="rounded-[2rem] border border-white/10 bg-white/[0.04] p-6 sm:p-8">
             <p className="text-xs font-black uppercase tracking-[0.22em] text-amber-100/80">Platform Message</p>
             <h2 className="mt-4 text-3xl font-black uppercase leading-tight tracking-tight text-white">
-              Serious Support For Sacred Direction
-            </h2>
-            <p className="mt-5 text-sm leading-7 text-slate-300">
               This page should help a person slow down enough to choose well, then move with structure. The work is economic, but it is also human: calling, readiness, dignity, discipline, and community responsibility belong in the same conversation.
-            </p>
+            </h2>
           </div>
           <div
             className="min-h-80 overflow-hidden rounded-[2rem] border border-white/10 bg-cover bg-center"
             style={{ backgroundImage: `linear-gradient(90deg, rgba(7,17,15,0.2), rgba(7,17,15,0.72)), url(${imagery.founder})` }}
             aria-label="Professional entrepreneur working with strategic materials"
           />
-        </section>
-
-        <section id="choose-pathway" className="scroll-mt-28 space-y-5">
-          <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
-            <div className="max-w-3xl">
-              <p className="text-xs font-black uppercase tracking-[0.22em] text-slate-500">Choose Your Direction</p>
-              <h2 className="mt-3 text-3xl font-black uppercase tracking-tight text-white sm:text-4xl">
-                Four Real Pathways, One Clear Next Step
-              </h2>
-            </div>
-            <p className="max-w-md text-sm leading-7 text-slate-400">
-              The portal stays simple on purpose. Each lane clarifies who the pathway is for without forcing another decision layer on the page.
-            </p>
-          </div>
-
-          <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-            {portalPathways.map((pathway) => (
-              <article
-                key={pathway.id}
-                className="group overflow-hidden rounded-[1.5rem] border border-white/10 bg-white/[0.035] shadow-xl shadow-black/20 transition duration-300 hover:-translate-y-1 hover:border-white/20"
-              >
-                <div
-                  className="h-36 bg-cover bg-center"
-                  style={{ backgroundImage: `linear-gradient(180deg, rgba(2,6,23,0.02), rgba(2,6,23,0.76)), url(${pathway.image})` }}
-                  aria-label={pathway.imageAlt}
-                />
-                <div className="p-5">
-                  <div className="mb-4 flex h-11 w-11 items-center justify-center rounded-2xl bg-white/10 text-teal-100">
-                    {pathway.icon}
-                  </div>
-                  <p className="text-xs font-black uppercase tracking-[0.16em] text-teal-100/80">{pathway.eyebrow}</p>
-                  <h3 className="mt-3 text-xl font-black uppercase leading-tight text-white">{pathway.title}</h3>
-                  <p className="mt-3 text-sm leading-6 text-slate-400">{pathway.summary}</p>
-                </div>
-              </article>
-            ))}
-          </div>
-        </section>
-
-        <section className="space-y-5">
-          <div className="max-w-3xl">
-            <p className="text-xs font-black uppercase tracking-[0.22em] text-slate-500">Readiness Map</p>
-            <h2 className="mt-3 text-3xl font-black uppercase tracking-tight text-white">
-              What We Help Clarify Before Referral
-            </h2>
-          </div>
-          <div className="grid gap-3 md:grid-cols-4">
-            {readinessStages.map(([title, body], index) => (
-              <article key={title} className="rounded-[1.5rem] border border-white/10 bg-white/[0.035] p-5">
-                <p className="text-xs font-black uppercase tracking-[0.18em] text-teal-200">0{index + 1}</p>
-                <h3 className="mt-4 text-lg font-black uppercase tracking-tight text-white">{title}</h3>
-                <p className="mt-3 text-sm leading-7 text-slate-400">{body}</p>
-              </article>
-            ))}
-          </div>
         </section>
 
         <section id="resource-gateways" className="scroll-mt-28 space-y-5">
@@ -872,44 +717,7 @@ const EntrepreneurshipSupportPage: React.FC<EntrepreneurshipSupportPageProps> = 
           </div>
         </section>
 
-        <section className="grid gap-4 lg:grid-cols-3">
-          {supportTiles.map((tile) => (
-            <article key={tile.title} className="rounded-[1.5rem] border border-white/10 bg-white/[0.035] p-6">
-              <div className="mb-5 flex h-12 w-12 items-center justify-center rounded-2xl bg-blue-300/10 text-blue-100">
-                {tile.icon}
-              </div>
-              <h3 className="text-xl font-black uppercase tracking-tight text-white">{tile.title}</h3>
-              <p className="mt-3 text-sm leading-7 text-slate-400">{tile.body}</p>
-            </article>
-          ))}
-        </section>
-
-        <section className="grid gap-4 lg:grid-cols-[0.55fr_0.45fr]">
-          <div className="rounded-[2rem] border border-blue-300/20 bg-blue-300/[0.055] p-6 sm:p-8">
-            <Building2 className="mb-5 h-8 w-8 text-blue-100" />
-            <h2 className="text-2xl font-black uppercase tracking-tight text-white">Provider And Institutional Paths</h2>
-            <p className="mt-4 text-sm leading-7 text-blue-50/80">
-              Providers can apply for review before supporting CNH entrepreneurs. Institutions can use the inquiry path for regional resource discussions or future formal pathway exploration.
-            </p>
-            <div className="mt-6 grid gap-3 sm:grid-cols-2">
-              <button
-                type="button"
-                onClick={onApplyAsProvider}
-                className="inline-flex items-center justify-center gap-2 rounded-xl bg-blue-500 px-5 py-3 text-xs font-black uppercase tracking-[0.16em] text-white transition-colors hover:bg-blue-400 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-200"
-              >
-                Provider Review Path
-              </button>
-              <button
-                type="button"
-                onClick={showExecutiveInquiry}
-                className="inline-flex items-center justify-center gap-2 rounded-xl border border-white/10 bg-white/[0.08] px-5 py-3 text-xs font-black uppercase tracking-[0.16em] text-white transition-colors hover:bg-white/[0.13] focus:outline-none focus-visible:ring-2 focus-visible:ring-white/30"
-              >
-                Executive Inquiry
-              </button>
-            </div>
-          </div>
-
-          <div className="rounded-[2rem] border border-rose-300/20 bg-rose-300/[0.05] p-6 sm:p-8">
+        <section className="rounded-[2rem] border border-rose-300/20 bg-rose-300/[0.05] p-6 sm:p-8">
             <div className="flex items-center gap-3">
               <BadgeCheck className="h-7 w-7 text-rose-100" />
               <Scale className="h-7 w-7 text-rose-100" />
@@ -918,7 +726,6 @@ const EntrepreneurshipSupportPage: React.FC<EntrepreneurshipSupportPageProps> = 
             <p className="mt-4 text-sm leading-7 text-rose-50/85">
               CNH provides educational, reflective, and social-learning support. External organizations may provide business advising or technical assistance. CNH does not provide legal, tax, financial, accounting, lending, or guaranteed funding advice through this page.
             </p>
-          </div>
         </section>
 
         <section id="executive-inquiry" className="scroll-mt-28 rounded-[2rem] border border-white/10 bg-slate-950/80 p-6 sm:p-8">
