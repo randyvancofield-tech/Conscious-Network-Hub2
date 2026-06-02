@@ -4005,7 +4005,7 @@ const App: React.FC = () => {
 
         {currentView === AppView.ENTRY && (
           <div className="flex flex-col items-center justify-center min-h-screen p-4 sm:p-6 md:p-8 pb-28 sm:pb-8 text-center animate-in fade-in zoom-in duration-1000 overflow-y-auto custom-scrollbar">
-            <div className="portal-entry-card w-full max-w-[calc(100vw-2rem)] sm:max-w-5xl space-y-6 sm:space-y-8 md:space-y-10 overflow-hidden backdrop-blur-[4px] p-6 sm:p-8 md:p-12 lg:p-14 rounded-2xl sm:rounded-3xl md:rounded-[2.5rem] lg:rounded-[4rem] border border-white/5 bg-white/[0.01] shadow-[0_0_100px_rgba(0,0,0,0.6)]">
+            <div className="portal-entry-card w-full max-w-[calc(100vw-2rem)] sm:max-w-5xl xl:max-w-6xl 2xl:max-w-7xl space-y-6 sm:space-y-8 md:space-y-10 overflow-hidden backdrop-blur-[4px] p-6 sm:p-8 md:p-12 lg:p-14 rounded-2xl sm:rounded-3xl md:rounded-[2.5rem] lg:rounded-[4rem] border border-white/5 bg-white/[0.01] shadow-[0_0_100px_rgba(0,0,0,0.6)]">
               <div className="flex justify-center">
                 <div className="p-4 sm:p-6 bg-blue-600/10 rounded-2xl sm:rounded-3xl md:rounded-[2.5rem] border border-blue-500/20 backdrop-blur-3xl shadow-[0_0_30px_rgba(37,99,235,0.2)] animate-pulse">
                   <img src={cnhLogo} alt="Conscious Network Hub Logo" className="w-12 h-12 sm:w-14 sm:h-14 md:w-16 md:h-16" />
@@ -4024,7 +4024,7 @@ const App: React.FC = () => {
                 </p>
               </div>
 
-              <div className="grid grid-cols-1 gap-4 pt-2 sm:grid-cols-2 sm:gap-5 sm:pt-4 xl:grid-cols-4 max-w-6xl mx-auto">
+              <div className="grid grid-cols-1 gap-4 pt-2 sm:grid-cols-2 sm:gap-5 sm:pt-4 2xl:grid-cols-4 max-w-6xl 2xl:max-w-7xl mx-auto">
                 <button
                   onClick={handleEnterHub}
                   className="portal-entry-primary group relative flex min-h-[8.75rem] w-full flex-col justify-between overflow-hidden rounded-2xl border border-blue-500/20 bg-white/[0.03] p-5 text-left shadow-[0_0_30px_rgba(37,99,235,0.12)] transition-all hover:-translate-y-1 hover:border-blue-400/40 hover:bg-blue-500/10 active:scale-[0.98] sm:min-h-[9.5rem] sm:p-6"
@@ -4032,8 +4032,8 @@ const App: React.FC = () => {
                   <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/10 to-transparent -translate-x-full group-hover:translate-x-full transition-transform duration-1000" />
                   <div className="relative z-10 flex items-start justify-between gap-4">
                     <div className="min-w-0">
-                      <h2 className="text-sm sm:text-base font-black uppercase tracking-[0.16em] text-white leading-snug">
-                      Conscious Network Hub
+                      <h2 className="whitespace-normal break-normal text-[clamp(0.875rem,1.1vw,1rem)] font-black uppercase leading-snug tracking-[0.12em] text-white [overflow-wrap:normal] [word-break:normal] sm:tracking-[0.14em] xl:tracking-[0.16em]">
+                        Conscious Network Hub
                       </h2>
                       <p className="mt-3 text-xs sm:text-sm leading-relaxed text-blue-100/65">
                         Enter the live community platform
@@ -4051,7 +4051,7 @@ const App: React.FC = () => {
                   <div className="absolute inset-0 bg-gradient-to-r from-transparent via-emerald-100/10 to-transparent -translate-x-full group-hover:translate-x-full transition-transform duration-1000" />
                   <div className="flex items-start justify-between gap-4">
                     <div className="min-w-0">
-                      <h2 className="text-sm sm:text-base font-black uppercase tracking-[0.16em] text-white leading-snug">
+                      <h2 className="whitespace-normal break-normal text-[clamp(0.875rem,1.1vw,1rem)] font-black uppercase leading-snug tracking-[0.12em] text-white [overflow-wrap:normal] [word-break:normal] sm:tracking-[0.14em] xl:tracking-[0.16em]">
                         Provider Access
                       </h2>
                       <p className="mt-3 text-xs sm:text-sm leading-relaxed text-blue-100/65">
@@ -4060,7 +4060,7 @@ const App: React.FC = () => {
                     </div>
                     <Building2 className="w-5 h-5 text-emerald-200 flex-shrink-0 group-hover:text-white transition-colors" />
                   </div>
-                  <span className="mt-4 inline-flex w-fit rounded-full border border-emerald-300/20 bg-emerald-500/10 px-3 py-1 text-[9px] font-black uppercase tracking-[0.25em] text-emerald-100/70">
+                  <span className="mt-4 inline-flex w-fit whitespace-nowrap rounded-full border border-emerald-300/20 bg-emerald-500/10 px-3 py-1 text-[9px] font-black uppercase tracking-[0.25em] text-emerald-100/70">
                     Provider Access
                   </span>
                 </button>
@@ -4073,7 +4073,7 @@ const App: React.FC = () => {
                   <div className="absolute inset-0 bg-gradient-to-r from-transparent via-blue-100/10 to-transparent -translate-x-full group-hover:translate-x-full transition-transform duration-1000" />
                   <div className="flex items-start justify-between gap-4">
                     <div className="min-w-0">
-                      <h2 className="text-sm sm:text-base font-black uppercase tracking-[0.16em] text-white leading-snug">
+                      <h2 className="whitespace-normal break-normal text-[clamp(0.875rem,1.1vw,1rem)] font-black uppercase leading-snug tracking-[0.12em] text-white [overflow-wrap:normal] [word-break:normal] sm:tracking-[0.14em] xl:tracking-[0.16em]">
                         Conscious Careers
                       </h2>
                       <p className="mt-3 text-xs sm:text-sm leading-relaxed text-blue-100/65">
@@ -4086,7 +4086,7 @@ const App: React.FC = () => {
                       className="h-11 w-11 flex-shrink-0 rounded-xl bg-white/95 object-contain p-1 shadow-lg shadow-blue-950/20 transition-transform group-hover:scale-105"
                     />
                   </div>
-                  <span className="mt-4 inline-flex w-fit rounded-full border border-blue-400/20 bg-blue-500/10 px-3 py-1 text-[9px] font-black uppercase tracking-[0.25em] text-blue-100/70">
+                  <span className="mt-4 inline-flex w-fit whitespace-nowrap rounded-full border border-blue-400/20 bg-blue-500/10 px-3 py-1 text-[9px] font-black uppercase tracking-[0.25em] text-blue-100/70">
                     Conscious Careers
                   </span>
                 </button>
@@ -4099,7 +4099,7 @@ const App: React.FC = () => {
                   <div className="absolute inset-0 bg-gradient-to-r from-transparent via-amber-100/10 to-transparent -translate-x-full group-hover:translate-x-full transition-transform duration-1000" />
                   <div className="flex items-start justify-between gap-4">
                     <div className="min-w-0">
-                      <h2 className="text-sm sm:text-base font-black uppercase tracking-[0.16em] text-white leading-snug">
+                      <h2 className="whitespace-normal break-normal text-[clamp(0.875rem,1.1vw,1rem)] font-black uppercase leading-snug tracking-[0.12em] text-white [overflow-wrap:normal] [word-break:normal] sm:tracking-[0.14em] xl:tracking-[0.16em]">
                         Administrative Access
                       </h2>
                       <p className="mt-3 text-xs sm:text-sm leading-relaxed text-blue-100/65">
@@ -4108,7 +4108,7 @@ const App: React.FC = () => {
                     </div>
                     <LockKeyhole className="w-5 h-5 text-amber-200 flex-shrink-0 group-hover:text-white transition-colors" />
                   </div>
-                  <span className="mt-4 inline-flex w-fit rounded-full border border-amber-300/20 bg-amber-500/10 px-3 py-1 text-[9px] font-black uppercase tracking-[0.25em] text-amber-100/70">
+                  <span className="mt-4 inline-flex w-fit whitespace-nowrap rounded-full border border-amber-300/20 bg-amber-500/10 px-3 py-1 text-[9px] font-black uppercase tracking-[0.25em] text-amber-100/70">
                     Admin Access
                   </span>
                 </button>
