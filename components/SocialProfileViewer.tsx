@@ -1,4 +1,4 @@
-import React, { useEffect } from 'react';
+import React, { useEffect, useState } from 'react';
 import { ExternalLink, Loader2, X } from 'lucide-react';
 import {
   getProfileAvatarMedia,
@@ -94,8 +94,30 @@ const renderAvatarMedia = (media: NormalizedMediaAsset, name: string, className:
   );
 };
 
-const renderWideMedia = (media: NormalizedMediaAsset, alt: string, className: string) => {
-  if (!media.url) return null;
+const WideMediaFrame: React.FC<{ media: NormalizedMediaAsset; alt: string; className: string }> = ({
+  media,
+  alt,
+  className,
+}) => {
+  const [failed, setFailed] = useState(false);
+
+  useEffect(() => {
+    setFailed(false);
+  }, [media.url]);
+
+  if (!media.url || failed) {
+    return (
+      <div
+        className={`${className} flex items-center justify-center bg-[radial-gradient(circle_at_28%_22%,rgba(59,130,246,0.2),transparent_34%),radial-gradient(circle_at_78%_70%,rgba(45,212,191,0.16),transparent_36%),linear-gradient(135deg,rgba(15,23,42,0.92),rgba(2,6,23,0.98))]`}
+      >
+        <div className="px-5 text-center">
+          <p className="text-[10px] font-black uppercase tracking-widest text-blue-200/70">Conscious Network Hub</p>
+          <p className="mt-2 text-sm leading-6 text-slate-300">{alt}</p>
+        </div>
+      </div>
+    );
+  }
+
   if (isVideoMediaAsset(media)) {
     return (
       <video
@@ -103,10 +125,12 @@ const renderWideMedia = (media: NormalizedMediaAsset, alt: string, className: st
         className={className}
         controls
         playsInline
+        onError={() => setFailed(true)}
       />
     );
   }
-  return <img src={media.url} alt={alt} className={className} />;
+
+  return <img src={media.url} alt={alt} className={className} onError={() => setFailed(true)} />;
 };
 
 const SocialProfileViewerContent: React.FC<SocialProfileViewerProps> = ({
@@ -227,20 +251,20 @@ const SocialProfileViewerContent: React.FC<SocialProfileViewerProps> = ({
           {profileView && !loading && (
             <div className="mx-auto max-w-5xl space-y-6 pb-8">
               <section className="overflow-hidden rounded-2xl border border-white/10 bg-white/[0.04]">
-                <div className="relative h-52 bg-gradient-to-r from-blue-950/60 to-teal-950/25 sm:h-64 lg:h-72">
-                  {heroMedia.url && renderWideMedia(heroMedia, profileName, 'h-full w-full object-cover')}
+                <div className="relative h-44 bg-gradient-to-r from-blue-950/60 to-teal-950/25 sm:h-56 lg:h-64">
+                  <WideMediaFrame media={heroMedia} alt={`${profileName} profile banner`} className="h-full w-full object-cover object-center" />
                   <div className="absolute inset-0 bg-gradient-to-t from-[#05070a] via-black/15 to-transparent" />
                 </div>
-                <div className="flex flex-col gap-4 p-5 sm:flex-row sm:items-end sm:p-6 lg:p-8">
-                  <div className="-mt-14 shrink-0 sm:-mt-16">
+                <div className="grid grid-cols-1 gap-4 p-5 text-center sm:grid-cols-[auto_minmax(0,1fr)] sm:items-center sm:p-6 sm:text-left lg:p-7">
+                  <div className="-mt-10 flex justify-center sm:-mt-12 sm:block">
                     {renderAvatarMedia(
                       avatarMedia,
                       profileName,
-                      'h-24 w-24 rounded-2xl border-4 border-[#05070a] object-cover shadow-2xl sm:h-28 sm:w-28'
+                      'h-20 w-20 rounded-2xl border-4 border-[#05070a] object-cover shadow-2xl sm:h-24 sm:w-24'
                     )}
                   </div>
                   <div className="min-w-0 flex-1">
-                    <h5 className="cnh-person-name text-2xl font-black tracking-tight text-white sm:text-3xl">
+                    <h5 className="cnh-person-name text-[clamp(1.35rem,2.4vw,2rem)] font-black leading-tight tracking-tight text-white">
                       {profileName}
                     </h5>
                     <p className="cnh-profile-field mt-1 text-[11px] font-black uppercase tracking-widest text-blue-300">
@@ -252,7 +276,7 @@ const SocialProfileViewerContent: React.FC<SocialProfileViewerProps> = ({
 
               {shouldShowBackgroundMedia && (
                 <section className="overflow-hidden rounded-2xl border border-white/10 bg-white/[0.04]">
-                  {renderWideMedia(backgroundMedia, `${profileName} background`, 'h-52 w-full object-cover bg-black sm:h-64')}
+                  <WideMediaFrame media={backgroundMedia} alt={`${profileName} background`} className="h-44 w-full object-cover bg-black sm:h-56" />
                 </section>
               )}
 

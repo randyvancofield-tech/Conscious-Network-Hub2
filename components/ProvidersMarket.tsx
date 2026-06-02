@@ -407,10 +407,10 @@ const ProvidersMarketContent: React.FC<ProvidersMarketProps> = ({
       )}
 
       {!isLoading && filteredProviders.length > 0 && (
-        <section className="grid grid-cols-1 xl:grid-cols-2 2xl:grid-cols-3 gap-6 2xl:gap-8">
+        <section className="grid grid-cols-1 gap-6 xl:grid-cols-2 2xl:grid-cols-3 2xl:gap-8">
           {filteredProviders.map((provider) => (
-            <div key={provider.id} className="glass-panel group rounded-[2rem] 2xl:rounded-[2.5rem] overflow-hidden flex flex-col border-white/5 hover:border-blue-500/30 transition-all duration-500 hover:-translate-y-1 shadow-2xl">
-              <div className="h-48 relative overflow-hidden">
+            <div key={provider.id} className="glass-panel group flex min-w-0 flex-col overflow-hidden rounded-[2rem] border-white/5 shadow-2xl transition-all duration-500 hover:-translate-y-1 hover:border-blue-500/30 2xl:rounded-[2.5rem]">
+              <div className="relative h-44 overflow-hidden sm:h-48">
                 {renderProviderMedia(
                   provider.imageMedia,
                   provider.name,
@@ -430,10 +430,10 @@ const ProvidersMarketContent: React.FC<ProvidersMarketProps> = ({
                 </div>
               </div>
 
-              <div className="p-6 sm:p-8 space-y-6 flex-1 flex flex-col">
+              <div className="flex flex-1 min-w-0 flex-col space-y-6 p-5 sm:p-7">
                 <div className="space-y-1">
                   <p className="text-blue-400 text-[9px] font-black uppercase tracking-[0.3em]">{provider.category}</p>
-                  <h3 className="cnh-person-name text-2xl font-black text-white tracking-tighter uppercase leading-tight">{provider.name}</h3>
+                  <h3 className="cnh-card-title text-[clamp(1.25rem,1.9vw,1.75rem)] font-black uppercase leading-tight tracking-tight text-white">{provider.name}</h3>
                 </div>
 
                 <div className="space-y-2">

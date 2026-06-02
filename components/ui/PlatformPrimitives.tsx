@@ -50,7 +50,7 @@ export const PageHeader: React.FC<PageHeaderProps> = ({ eyebrow, title, descript
         {eyebrow && (
           <p className="text-[10px] font-black uppercase tracking-widest text-blue-300/70">{eyebrow}</p>
         )}
-        <h1 className="break-words text-3xl font-black uppercase leading-tight text-white sm:text-4xl 2xl:text-5xl">
+        <h1 className="break-normal text-[clamp(1.75rem,3vw,3rem)] font-black uppercase leading-tight text-white [overflow-wrap:normal] [word-break:normal]">
           {title}
         </h1>
         {description && <p className="max-w-2xl text-sm leading-6 text-slate-400 sm:text-base">{description}</p>}
@@ -73,7 +73,7 @@ export const EmptyState: React.FC<EmptyStateProps> = ({ icon, title, description
         {icon || <AlertCircle className="h-7 w-7" />}
       </div>
       <div className="space-y-2">
-        <h2 className="text-xl font-black uppercase text-white">{title}</h2>
+        <h2 className="break-normal text-[clamp(1.05rem,2vw,1.35rem)] font-black uppercase leading-snug text-white [overflow-wrap:normal] [word-break:normal]">{title}</h2>
         <p className="break-words text-sm leading-6 text-slate-400">{description}</p>
       </div>
       {action}

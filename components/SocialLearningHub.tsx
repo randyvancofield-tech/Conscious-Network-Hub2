@@ -903,7 +903,7 @@ const SocialLearningHubContent: React.FC<SocialLearningHubProps> = ({
                       </div>
 
                       <div className="space-y-4 sm:space-y-5">
-                        <h3 className="cnh-profile-field text-xl sm:text-4xl font-black text-white tracking-tighter uppercase leading-tight sm:leading-none group-hover:text-blue-400 transition-colors drop-shadow-2xl">
+                        <h3 className="cnh-card-title text-[clamp(1.25rem,2.5vw,2.35rem)] font-black uppercase leading-tight tracking-tight text-white drop-shadow-2xl transition-colors group-hover:text-blue-400">
                           {node.title}
                         </h3>
 

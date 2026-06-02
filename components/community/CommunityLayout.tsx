@@ -60,6 +60,90 @@ const isVideoMediaAsset = (url?: string | null, mimeType?: string | null): boole
 const normalizeMediaUrl = (value: unknown): string =>
   backendAssetUrl(value) || (typeof value === 'string' ? value.trim() : '');
 
+const toInitials = (value: string): string => {
+  const parts = String(value || '')
+    .trim()
+    .split(/\s+/)
+    .filter(Boolean);
+  if (parts.length === 0) return 'N';
+  return parts
+    .slice(0, 2)
+    .map((part) => part.charAt(0).toUpperCase())
+    .join('');
+};
+
+const MediaFallback: React.FC<{ className: string; label: string; compact?: boolean }> = ({
+  className,
+  label,
+  compact = false,
+}) => (
+  <div
+    className={`${className} flex items-center justify-center overflow-hidden bg-[radial-gradient(circle_at_30%_20%,rgba(59,130,246,0.22),transparent_34%),radial-gradient(circle_at_78%_72%,rgba(45,212,191,0.18),transparent_36%),linear-gradient(135deg,rgba(15,23,42,0.92),rgba(2,6,23,0.98))] text-blue-100`}
+    aria-label={label}
+  >
+    {compact ? (
+      <span className="text-lg font-black uppercase text-blue-200 sm:text-2xl">{toInitials(label)}</span>
+    ) : (
+      <div className="px-6 text-center">
+        <p className="text-[10px] font-black uppercase text-blue-200/70">Conscious Network Hub</p>
+        <p className="mt-2 text-sm leading-6 text-slate-300">Profile media will appear here after upload.</p>
+      </div>
+    )}
+  </div>
+);
+
+const ProfileMediaFrame: React.FC<{
+  src?: string | null;
+  isVideo?: boolean;
+  alt: string;
+  className: string;
+  compactFallback?: boolean;
+  mediaClassName?: string;
+  autoPlay?: boolean;
+}> = ({
+  src,
+  isVideo = false,
+  alt,
+  className,
+  compactFallback = false,
+  mediaClassName = 'object-cover',
+  autoPlay = true,
+}) => {
+  const [failed, setFailed] = useState(false);
+  const resolvedSrc = String(src || '').trim();
+
+  useEffect(() => {
+    setFailed(false);
+  }, [resolvedSrc]);
+
+  if (!resolvedSrc || failed) {
+    return <MediaFallback className={className} label={alt} compact={compactFallback} />;
+  }
+
+  if (isVideo) {
+    return (
+      <video
+        src={resolvedSrc}
+        className={`${className} ${mediaClassName}`}
+        muted
+        loop
+        autoPlay={autoPlay}
+        playsInline
+        onError={() => setFailed(true)}
+      />
+    );
+  }
+
+  return (
+    <img
+      src={resolvedSrc}
+      alt={alt}
+      className={`${className} ${mediaClassName}`}
+      onError={() => setFailed(true)}
+    />
+  );
+};
+
 export const ConsciousIdentity: React.FC<ConsciousIdentityProps> = ({ 
   user, 
   enrolledCourses, 
@@ -382,19 +466,14 @@ export const ConsciousIdentity: React.FC<ConsciousIdentityProps> = ({
                   <span className="text-[10px] text-blue-400 font-bold uppercase">Step 1 of 2</span>
                 </div>
                 
-                <div className="relative h-48 sm:h-56 rounded-[1.5rem] sm:rounded-[2.5rem] overflow-hidden border border-white/10 group cursor-pointer shadow-inner" onClick={() => bannerInputRef.current?.click()}>
-                  {bannerIsVideo ? (
-                    <video
-                      src={formData.bannerUrl}
-                      className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-[1.5s] ease-out"
-                      muted
-                      loop
-                      autoPlay
-                      playsInline
-                    />
-                  ) : (
-                    <img src={formData.bannerUrl} className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-[1.5s] ease-out" />
-                  )}
+                <div className="group relative h-44 cursor-pointer overflow-hidden rounded-[1.5rem] border border-white/10 shadow-inner transition-all sm:h-52 sm:rounded-[2rem]" onClick={() => bannerInputRef.current?.click()}>
+                  <ProfileMediaFrame
+                    src={formData.bannerUrl}
+                    isVideo={bannerIsVideo}
+                    alt={`${user.name} banner`}
+                    className="h-full w-full"
+                    mediaClassName="object-cover object-center transition-transform duration-[1.5s] ease-out group-hover:scale-105"
+                  />
                   <div className="absolute inset-0 bg-black/40 flex flex-col items-center justify-center opacity-0 group-hover:opacity-100 transition-all duration-300">
                     <div className="p-4 bg-white/10 backdrop-blur-md rounded-full mb-3 shadow-2xl">
                       <Upload className="w-8 h-8 text-white" />
@@ -404,21 +483,16 @@ export const ConsciousIdentity: React.FC<ConsciousIdentityProps> = ({
                   <input type="file" ref={bannerInputRef} className="hidden" accept="image/*,video/*,.gif,.mp4,.webm,.mov" onChange={(e) => handleFileUpload(e, 'bannerUrl')} />
                 </div>
 
-                <div className="flex justify-center -mt-16 sm:-mt-24 relative z-10">
+                <div className="relative z-10 flex justify-center -mt-12 sm:-mt-16">
                   <div className="relative group cursor-pointer" onClick={() => avatarInputRef.current?.click()}>
-                    <div className="w-32 h-32 sm:w-44 sm:h-44 rounded-[2.6rem] sm:rounded-[4rem] p-1.5 bg-gradient-to-br from-blue-600 to-teal-400 shadow-[0_20px_50px_rgba(0,0,0,0.6)] ring-8 ring-[#05070a] transition-transform group-hover:scale-105 duration-500">
-                      {avatarIsVideo ? (
-                        <video
-                          src={formData.avatarUrl}
-                          className="w-full h-full rounded-[2.3rem] sm:rounded-[3.7rem] object-cover border-4 border-transparent"
-                          muted
-                          loop
-                          autoPlay
-                          playsInline
-                        />
-                      ) : (
-                        <img src={formData.avatarUrl} className="w-full h-full rounded-[2.3rem] sm:rounded-[3.7rem] object-cover border-4 border-transparent" />
-                      )}
+                    <div className="h-32 w-32 rounded-[2.4rem] bg-gradient-to-br from-blue-600 to-teal-400 p-1.5 shadow-[0_20px_50px_rgba(0,0,0,0.6)] ring-8 ring-[#05070a] transition-transform duration-500 group-hover:scale-105 sm:h-40 sm:w-40 sm:rounded-[3.2rem]">
+                      <ProfileMediaFrame
+                        src={formData.avatarUrl}
+                        isVideo={avatarIsVideo}
+                        alt={user.name}
+                        compactFallback
+                        className="h-full w-full rounded-[2.1rem] border-4 border-transparent sm:rounded-[2.9rem]"
+                      />
                     </div>
                     <div className="absolute inset-0 bg-black/40 rounded-[2.6rem] sm:rounded-[4rem] flex items-center justify-center opacity-0 group-hover:opacity-100 transition-all">
                       <Camera className="w-10 h-10 text-white" />
@@ -632,20 +706,15 @@ export const ConsciousIdentity: React.FC<ConsciousIdentityProps> = ({
       style={platformContainerStyle}
     >
       <div className="relative group/header">
-        <div className="glass-panel rounded-[2rem] sm:rounded-[4rem] overflow-hidden border-white/5 shadow-[0_50px_100px_-20px_rgba(0,0,0,0.5)] relative">
-          <div className="h-[220px] sm:h-[300px] xl:h-[400px] 2xl:h-[450px] relative overflow-hidden">
-            {bannerIsVideo ? (
-              <video
-                src={formData.bannerUrl}
-                className="w-full h-full object-cover group-hover/header:scale-105 transition-transform duration-[3s]"
-                muted
-                loop
-                autoPlay
-                playsInline
-              />
-            ) : (
-              <img src={formData.bannerUrl} className="w-full h-full object-cover group-hover/header:scale-105 transition-transform duration-[3s]" />
-            )}
+        <div className="glass-panel relative overflow-hidden rounded-[2rem] border-white/5 shadow-[0_50px_100px_-20px_rgba(0,0,0,0.5)] sm:rounded-[2.75rem]">
+          <div className="relative h-[180px] overflow-hidden sm:h-[240px] lg:h-[280px] xl:h-[320px]">
+            <ProfileMediaFrame
+              src={formData.bannerUrl}
+              isVideo={bannerIsVideo}
+              alt={`${user.name} banner`}
+              className="h-full w-full"
+              mediaClassName="object-cover object-center transition-transform duration-[3s] group-hover/header:scale-105"
+            />
             <div className="absolute inset-0 bg-gradient-to-t from-[#05070a] via-black/20 to-transparent" />
             
             <div className="absolute top-4 left-4 right-4 sm:top-6 sm:left-6 sm:right-6 lg:left-auto lg:right-6 flex flex-wrap gap-2 sm:gap-3 z-20 lg:justify-end">
@@ -661,64 +730,59 @@ export const ConsciousIdentity: React.FC<ConsciousIdentityProps> = ({
             </div>
           </div>
 
-          <div className="px-4 sm:px-8 lg:px-10 xl:px-16 pb-10 sm:pb-16 relative">
-            <div className="flex flex-col sm:flex-row items-center sm:items-end justify-between gap-6 sm:gap-8 xl:gap-10 -mt-14 sm:-mt-24 xl:-mt-32">
-              <div className="flex flex-col sm:flex-row items-center sm:items-end gap-5 sm:gap-6 xl:gap-8 text-center sm:text-left min-w-0">
+          <div className="relative px-4 pb-10 sm:px-8 sm:pb-14 lg:px-10 xl:px-14">
+            <div className="-mt-12 grid grid-cols-1 items-end gap-5 sm:-mt-16 lg:-mt-20 lg:grid-cols-[auto_minmax(0,1fr)] lg:gap-7 xl:gap-9">
+              <div className="flex justify-center lg:justify-start">
                 <div className="relative group">
-                  <div className="w-36 h-36 sm:w-44 sm:h-44 lg:w-52 lg:h-52 2xl:w-64 2xl:h-64 rounded-[3rem] sm:rounded-[4rem] 2xl:rounded-[4.5rem] p-2 bg-gradient-to-br from-blue-600 to-teal-400 shadow-[0_30px_60px_rgba(0,0,0,0.6)] ring-[6px] sm:ring-[8px] 2xl:ring-[10px] ring-[#05070a] transition-transform group-hover:scale-105 duration-700">
-                    {avatarIsVideo ? (
-                      <video
-                        src={formData.avatarUrl}
-                        className="w-full h-full rounded-[2.7rem] sm:rounded-[4.2rem] object-cover border-[6px] sm:border-[10px] border-[#05070a]"
-                        muted
-                        loop
-                        autoPlay
-                        playsInline
-                      />
-                    ) : (
-                      <img src={formData.avatarUrl} className="w-full h-full rounded-[2.7rem] sm:rounded-[4.2rem] object-cover border-[6px] sm:border-[10px] border-[#05070a]" />
-                    )}
+                  <div className="h-32 w-32 rounded-[2.5rem] bg-gradient-to-br from-blue-600 to-teal-400 p-1.5 shadow-[0_30px_60px_rgba(0,0,0,0.6)] ring-[6px] ring-[#05070a] transition-transform duration-700 group-hover:scale-105 sm:h-40 sm:w-40 sm:rounded-[3.25rem] lg:h-44 lg:w-44">
+                    <ProfileMediaFrame
+                      src={formData.avatarUrl}
+                      isVideo={avatarIsVideo}
+                      alt={user.name}
+                      compactFallback
+                      className="h-full w-full rounded-[2.2rem] border-[6px] border-[#05070a] sm:rounded-[2.95rem]"
+                    />
                   </div>
                   {hasVerifiedIdentitySignal && (
-                    <div className="absolute bottom-4 sm:bottom-10 right-0 p-2.5 sm:p-3.5 bg-blue-600 rounded-[1.2rem] sm:rounded-[1.8rem] shadow-2xl ring-[6px] sm:ring-[10px] ring-[#05070a] group-hover:rotate-12 transition-transform">
-                      <ShieldCheck className="w-6 h-6 sm:w-10 sm:h-10 text-white" />
+                    <div className="absolute bottom-2 right-0 rounded-[1.2rem] bg-blue-600 p-2.5 shadow-2xl ring-[6px] ring-[#05070a] transition-transform group-hover:rotate-12 sm:bottom-3 sm:p-3">
+                      <ShieldCheck className="h-6 w-6 text-white sm:h-7 sm:w-7" />
                     </div>
                   )}
                 </div>
-                <div className="pb-4 sm:pb-10 min-w-0 max-w-full">
-                  <h1 className="cnh-person-name max-w-full text-3xl sm:text-4xl lg:text-5xl 2xl:text-6xl font-bold text-white tracking-tight leading-tight mb-4 group flex items-center justify-center sm:justify-start">
-                    <span className="min-w-0">{user.name}</span>
+              </div>
+              <div className="min-w-0 max-w-full pb-1 text-center lg:pb-5 lg:text-left">
+                  <h1 className="cnh-person-name group mb-4 flex max-w-full items-center justify-center text-[clamp(1.75rem,3vw,3.25rem)] font-bold leading-[1.05] tracking-tight text-white lg:justify-start">
+                    <span className="min-w-0 [overflow-wrap:normal] [word-break:normal]">{user.name}</span>
                     <span className="hidden shrink-0 sm:inline-block ml-4 opacity-0 group-hover:opacity-100 transition-all translate-x-4 group-hover:translate-x-0">
-                      <Sparkles className="w-7 h-7 sm:w-10 sm:h-10 text-teal-400" />
+                      <Sparkles className="h-7 w-7 text-teal-400 sm:h-8 sm:w-8" />
                     </span>
                   </h1>
                   <div className="flex flex-wrap items-center justify-center sm:justify-start gap-3 sm:gap-6 min-w-0">
-                    <span className="cnh-profile-field text-blue-400 font-bold uppercase tracking-[0.18em] sm:tracking-[0.3em] text-[11px] sm:text-sm flex items-center gap-2 min-w-0 max-w-full">
-                      <UserCircle className="w-4 h-4" /> @{formData.handle}
+                    <span className="cnh-profile-field flex max-w-full min-w-0 items-center gap-2 text-[11px] font-bold uppercase text-blue-400 sm:text-sm">
+                      <UserCircle className="h-4 w-4 shrink-0" /> <span className="min-w-0 truncate">@{formData.handle}</span>
                     </span>
                     <div className="h-6 w-px bg-white/10 hidden sm:block" />
-                    <div className="flex items-center gap-3 px-5 py-2 bg-teal-400/10 rounded-full border border-teal-400/20 shadow-inner max-w-full">
-                      <Award className="w-5 h-5 text-teal-400" />
+                    <div className="flex max-w-full items-center gap-3 rounded-full border border-teal-400/20 bg-teal-400/10 px-4 py-2 shadow-inner">
+                      <Award className="h-5 w-5 shrink-0 text-teal-400" />
                       <span className="cnh-status-badge text-[11px] text-teal-400 rounded-lg font-bold uppercase tracking-widest">{user.tier} Access</span>
                     </div>
                   </div>
-                </div>
               </div>
             </div>
             
-            <div className="mt-12 sm:mt-16 xl:mt-20 grid grid-cols-1 xl:grid-cols-3 gap-8 xl:gap-16">
-              <div className="xl:col-span-2 space-y-10 sm:space-y-16">
-                <div className="space-y-6">
+            <div className="mt-10 grid grid-cols-1 gap-7 xl:grid-cols-3 xl:gap-10">
+              <div className="space-y-8 xl:col-span-2">
+                <div className="space-y-5">
                   <h3 className="text-[10px] font-bold text-slate-500 uppercase tracking-[0.4em] flex items-center gap-3">
                     <UserCircle className="w-6 h-6 text-blue-500" /> Identity Mission Statement
                   </h3>
-                  <p className="cnh-user-content text-slate-200 leading-relaxed text-xl sm:text-3xl font-light italic opacity-95 tracking-tight max-w-4xl">
+                  <p className="cnh-user-content max-w-4xl text-[clamp(1rem,1.6vw,1.55rem)] font-light italic leading-relaxed tracking-tight text-slate-200 opacity-95">
                     "{formData.bio || "Your mission is the core of your conscious node. Define your intentions in the hub."}"
                   </p>
                 </div>
                 
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-6 sm:gap-10">
-                  <div className="p-6 sm:p-10 bg-white/5 border border-white/5 rounded-[2rem] sm:rounded-[3rem] hover:bg-white/10 transition-all group shadow-xl">
+                <div className="grid grid-cols-1 gap-5 lg:grid-cols-2">
+                  <div className="rounded-[1.5rem] border border-white/5 bg-white/5 p-5 shadow-xl transition-all hover:bg-white/10 sm:p-7">
                     <h4 className="text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-8 text-center sm:text-left">Public Links</h4>
                     <div className="flex justify-center sm:justify-start gap-6">
                       {formData.twitterUrl ? (
@@ -765,7 +829,7 @@ export const ConsciousIdentity: React.FC<ConsciousIdentityProps> = ({
                       )}
                     </div>
                   </div>
-                  <div className="p-6 sm:p-10 bg-white/5 border border-white/5 rounded-[2rem] sm:rounded-[3rem] hover:bg-white/10 transition-all flex flex-col justify-between shadow-xl group">
+                  <div className="flex flex-col justify-between rounded-[1.5rem] border border-white/5 bg-white/5 p-5 shadow-xl transition-all hover:bg-white/10 sm:p-7">
                     <h4 className="text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-6">Account Security</h4>
                     <div className="flex flex-col gap-5 sm:flex-row sm:items-end sm:justify-between">
                       <div className="flex items-center gap-4">
@@ -783,8 +847,8 @@ export const ConsciousIdentity: React.FC<ConsciousIdentityProps> = ({
                 </div>
               </div>
 
-              <div className="space-y-6 sm:space-y-10">
-                <div className="glass-panel p-6 sm:p-10 rounded-[2rem] sm:rounded-[3.5rem] border-blue-500/20 shadow-2xl space-y-8 relative overflow-hidden group">
+              <div className="space-y-6">
+                <div className="glass-panel relative overflow-hidden rounded-[1.75rem] border-blue-500/20 p-5 shadow-2xl sm:p-7">
                   <div className="absolute top-0 right-0 p-8 opacity-5 group-hover:opacity-10 transition-opacity">
                     <Lock className="w-24 h-24 text-blue-400" />
                   </div>

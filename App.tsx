@@ -4017,7 +4017,7 @@ const App: React.FC = () => {
               </div>
               
               <div className="space-y-4 sm:space-y-5 md:space-y-6">
-                <h1 className="portal-entry-title break-words text-3xl xs:text-4xl sm:text-5xl md:text-6xl xl:text-7xl font-black text-white tracking-tight leading-[0.9] drop-shadow-2xl">
+                <h1 className="portal-entry-title break-normal text-[clamp(2rem,5vw,4.25rem)] font-black leading-[0.92] tracking-tight text-white drop-shadow-2xl [overflow-wrap:normal] [word-break:normal]">
                   CONSCIOUS <br /> 
                   <span className="text-transparent bg-clip-text bg-gradient-to-r from-blue-400 via-blue-500 to-teal-400 uppercase tracking-tighter drop-shadow-sm">
                     Network Hub
