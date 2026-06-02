@@ -15,6 +15,7 @@ import {
 } from 'lucide-react';
 import { UserProfile } from '../types';
 import careersLogo from '../src/assets/brand/conscious-careers-logo.png';
+import foundationGatewayGuide from '../src/assets/brand/foundation-gateway-guide.jpg';
 
 interface EntrepreneurshipSupportPageProps {
   user: UserProfile | null;
@@ -639,48 +640,87 @@ const EntrepreneurshipSupportPage: React.FC<EntrepreneurshipSupportPageProps> = 
     return (
       <div className="min-h-[100dvh] w-full bg-slate-950 px-4 pb-14 pt-20 text-slate-100 sm:px-6 sm:pt-24 lg:px-10">
         {isFoundationRedirectOpen && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/90 px-4 py-6 backdrop-blur-2xl">
-            <div className="relative w-full max-w-5xl overflow-hidden rounded-[2rem] border border-teal-200/20 bg-[#07110f] shadow-2xl shadow-teal-950/30">
-              <div className="absolute inset-0 bg-[radial-gradient(circle_at_20%_20%,rgba(94,234,212,0.18),transparent_32%),radial-gradient(circle_at_78%_24%,rgba(251,191,36,0.12),transparent_30%),linear-gradient(135deg,rgba(15,23,42,0.2),rgba(6,78,59,0.1))]" />
-              <div className="relative grid gap-0 lg:grid-cols-[0.42fr_0.58fr]">
-                <div className="flex min-h-80 items-center justify-center border-b border-white/10 bg-black/20 p-8 lg:border-b-0 lg:border-r">
-                  <div className="relative h-64 w-64">
-                    <div className="absolute inset-0 rounded-full border border-teal-100/20 bg-teal-300/10 blur-sm" />
-                    <div className="absolute left-1/2 top-8 h-20 w-20 -translate-x-1/2 rounded-full border border-teal-100/30 bg-gradient-to-br from-teal-100 to-slate-700 shadow-2xl shadow-teal-400/20" />
-                    <div className="absolute bottom-12 left-1/2 h-36 w-28 -translate-x-1/2 rounded-[3rem] border border-teal-100/25 bg-gradient-to-b from-teal-200/30 to-blue-950/80 shadow-2xl" />
-                    <div className="absolute bottom-2 left-1/2 h-12 w-44 -translate-x-1/2 rounded-full bg-teal-200/10 blur-xl" />
-                    <div className="absolute left-7 top-28 h-3 w-3 animate-ping rounded-full bg-teal-200" />
-                    <div className="absolute right-10 top-20 h-2 w-2 animate-pulse rounded-full bg-amber-100" />
-                    <div className="absolute bottom-24 right-7 h-2.5 w-2.5 animate-ping rounded-full bg-blue-200" />
-                  </div>
-                </div>
-                <div className="p-6 sm:p-8 lg:p-10">
-                  <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
-                    <div>
-                      <p className="text-xs font-black uppercase tracking-[0.24em] text-teal-200">Foundation Redirect</p>
-                      <h2 className="mt-3 text-2xl font-black uppercase leading-tight tracking-tight text-white sm:text-4xl">
-                        Your clarity begins inside the Hub.
-                      </h2>
-                    </div>
-                    <div className="rounded-2xl border border-teal-200/20 bg-teal-300/10 px-4 py-3 text-center">
-                      <p className="text-[9px] font-black uppercase tracking-[0.2em] text-teal-100/70">Redirect</p>
-                      <p className="mt-1 text-2xl font-black text-white">{foundationRedirectSeconds}s</p>
-                    </div>
-                  </div>
-                  <p className="mt-6 text-base leading-8 text-slate-200">
-                    {foundationRedirectMessage}
-                  </p>
-                  <div className="mt-7 grid gap-3 sm:grid-cols-3">
-                    {['Listen', 'Breathe', 'Enter The Hub'].map((label, index) => (
-                      <div key={label} className="rounded-2xl border border-white/10 bg-white/[0.04] p-4">
-                        <p className="text-xs font-black uppercase tracking-[0.18em] text-teal-100">0{index + 1}</p>
-                        <p className="mt-2 text-sm font-black uppercase tracking-[0.12em] text-white">{label}</p>
+          <div className="fixed inset-0 z-50 overflow-y-auto bg-[#020706]/95 px-3 py-3 text-slate-100 backdrop-blur-2xl sm:px-5 sm:py-6">
+            <style>{`
+              @keyframes cnhGatewayPan {
+                0% { transform: scale(1.04) translate3d(-1.2%, 0, 0); }
+                50% { transform: scale(1.08) translate3d(1.4%, -0.8%, 0); }
+                100% { transform: scale(1.05) translate3d(0.4%, 0.7%, 0); }
+              }
+              @keyframes cnhVoiceRise {
+                0%, 100% { transform: scaleY(0.42); opacity: 0.55; }
+                45% { transform: scaleY(1); opacity: 1; }
+              }
+              @keyframes cnhGuideFloat {
+                0%, 100% { transform: translate3d(0, 0, 0); }
+                50% { transform: translate3d(0, -10px, 0); }
+              }
+            `}</style>
+            <div className="mx-auto flex min-h-full w-full max-w-6xl items-center">
+              <div className="relative my-auto w-full overflow-hidden rounded-[1.5rem] border border-teal-200/20 bg-[#07110f] shadow-2xl shadow-teal-950/30 sm:rounded-[2rem]">
+                <div className="absolute inset-0 bg-[radial-gradient(circle_at_14%_12%,rgba(94,234,212,0.14),transparent_32%),radial-gradient(circle_at_86%_8%,rgba(251,191,36,0.12),transparent_28%),linear-gradient(135deg,rgba(15,23,42,0.4),rgba(6,78,59,0.12))]" />
+                <div className="relative grid lg:grid-cols-[1.08fr_0.92fr]">
+                  <div className="relative min-h-[18rem] overflow-hidden border-b border-white/10 bg-black lg:min-h-[min(78dvh,42rem)] lg:border-b-0 lg:border-r">
+                    <img
+                      src={foundationGatewayGuide}
+                      alt="Conscious guide standing beside an open doorway into light"
+                      className="absolute inset-0 h-full w-full object-cover object-center"
+                      style={{ animation: 'cnhGatewayPan 16s ease-in-out infinite alternate' }}
+                    />
+                    <div className="absolute inset-0 bg-gradient-to-r from-black/20 via-transparent to-black/15" />
+                    <div className="absolute inset-x-0 bottom-0 h-32 bg-gradient-to-t from-[#07110f] to-transparent" />
+                    <div
+                      className="pointer-events-none absolute right-[13%] top-[37%] flex h-16 w-16 items-center justify-center rounded-full border border-teal-100/30 bg-teal-200/10 shadow-2xl shadow-teal-300/20 backdrop-blur-md sm:h-20 sm:w-20"
+                      style={{ animation: 'cnhGuideFloat 4.5s ease-in-out infinite' }}
+                      aria-hidden="true"
+                    >
+                      <div className="flex h-9 items-center gap-1.5">
+                        {[0, 1, 2, 3].map((bar) => (
+                          <span
+                            key={bar}
+                            className="h-8 w-1.5 origin-bottom rounded-full bg-teal-100"
+                            style={{ animation: `cnhVoiceRise ${0.72 + bar * 0.08}s ease-in-out ${bar * 0.08}s infinite` }}
+                          />
+                        ))}
                       </div>
-                    ))}
+                    </div>
+                    <div className="absolute left-4 top-4 rounded-2xl border border-white/15 bg-black/35 px-4 py-3 backdrop-blur-xl sm:left-6 sm:top-6">
+                      <p className="text-[9px] font-black uppercase tracking-[0.22em] text-teal-100/80">Guided Entry</p>
+                      <p className="mt-1 text-xs font-semibold text-white">Voice and movement active when your browser permits it.</p>
+                    </div>
                   </div>
-                  <p className="mt-5 text-xs leading-6 text-slate-500">
-                    Voice guidance and ambient tone begin when the browser permits audio after your click. If a device blocks speech or sound, the visual redirect continues safely.
-                  </p>
+                  <div className="relative flex flex-col justify-center p-5 sm:p-7 lg:p-10">
+                    <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+                      <div>
+                        <p className="text-xs font-black uppercase tracking-[0.24em] text-teal-200">Foundation Redirect</p>
+                        <h2 className="mt-3 text-2xl font-black uppercase leading-tight tracking-tight text-white sm:text-3xl lg:text-4xl">
+                          Your clarity begins inside the Hub.
+                        </h2>
+                      </div>
+                      <div className="w-fit rounded-2xl border border-teal-200/20 bg-teal-300/10 px-4 py-3 text-center">
+                        <p className="text-[9px] font-black uppercase tracking-[0.2em] text-teal-100/70">Minimum Pause</p>
+                        <p className="mt-1 text-2xl font-black text-white">
+                          {foundationRedirectSeconds > 0 ? `${foundationRedirectSeconds}s` : 'Listening'}
+                        </p>
+                      </div>
+                    </div>
+                    <p className="mt-6 text-sm leading-7 text-slate-200 sm:text-base sm:leading-8">
+                      {foundationRedirectMessage}
+                    </p>
+                    <div className="mt-6 grid gap-3 sm:grid-cols-3">
+                      {['Listen', 'Breathe', 'Enter The Hub'].map((label, index) => (
+                        <div key={label} className="rounded-2xl border border-white/10 bg-white/[0.04] p-4">
+                          <p className="text-xs font-black uppercase tracking-[0.18em] text-teal-100">0{index + 1}</p>
+                          <p className="mt-2 text-sm font-black uppercase tracking-[0.12em] text-white">{label}</p>
+                        </div>
+                      ))}
+                    </div>
+                    <div className="mt-5 rounded-2xl border border-amber-100/15 bg-amber-100/[0.07] p-4">
+                      <p className="text-xs leading-6 text-amber-50/80">
+                        Redirect begins after the voice guidance completes. If a device blocks speech or ambient audio, the visual transition continues and routes safely to Membership Access.
+                      </p>
+                    </div>
+                  </div>
                 </div>
               </div>
             </div>
