@@ -3,7 +3,6 @@ import {
   ArrowLeft,
   ArrowRight,
   ArrowUpRight,
-  BadgeCheck,
   Brain,
   CalendarClock,
   Download,
@@ -12,7 +11,6 @@ import {
   MapPin,
   Network,
   Route,
-  Scale,
   Sparkles,
 } from 'lucide-react';
 import { UserProfile } from '../types';
@@ -1049,11 +1047,15 @@ const EntrepreneurshipSupportPage: React.FC<EntrepreneurshipSupportPageProps> = 
           <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
             <div>
               <p className="text-xs font-black uppercase tracking-[0.22em] text-slate-500">Resource Gateways</p>
-              <h2 className="mt-3 text-3xl font-black uppercase tracking-tight text-white">Public Entrepreneurship Resources</h2>
+              <h2 className="mt-3 text-3xl font-black uppercase tracking-tight text-white">Public Entrepreneurship Resources:</h2>
             </div>
-            <p className="max-w-lg text-sm leading-7 text-slate-400">
-              These links open external organizations. They are not partnership claims, eligibility guarantees, or professional advice relationships.
-            </p>
+            <div className="max-w-3xl space-y-2 text-sm leading-7 text-slate-400">
+              <p><span className="font-black text-slate-200">Disclaimer and Limitation of Liability:</span> The information, content, and materials available on this page are for educational, reflective, and social-learning purposes only.</p>
+              <p><span className="font-black text-slate-200">No Professional Advice:</span> CNH does not provide legal, tax, financial, accounting, lending, or guaranteed funding advice.</p>
+              <p><span className="font-black text-slate-200">Independent External Organizations:</span> Any business advising or technical assistance is provided solely by independent, external organizations.</p>
+              <p><span className="font-black text-slate-200">No Endorsement or Guarantee:</span> Reference to these external entities does not constitute a partnership, endorsement, or guarantee of program eligibility.</p>
+              <p><span className="font-black text-slate-200">User Responsibility:</span> Users should consult with qualified professionals for specific legal, tax, or financial guidance. CNH disclaims all liability for actions taken based on this page's content.</p>
+            </div>
           </div>
           <div className="grid gap-4 lg:grid-cols-3">
             {resourceLanes.map((lane) => (
@@ -1075,17 +1077,6 @@ const EntrepreneurshipSupportPage: React.FC<EntrepreneurshipSupportPageProps> = 
               </article>
             ))}
           </div>
-        </section>
-
-        <section className="rounded-[2rem] border border-rose-300/20 bg-rose-300/[0.05] p-6 sm:p-8">
-            <div className="flex items-center gap-3">
-              <BadgeCheck className="h-7 w-7 text-rose-100" />
-              <Scale className="h-7 w-7 text-rose-100" />
-            </div>
-            <h2 className="mt-5 text-xl font-black uppercase tracking-tight text-white">Compliance Boundary</h2>
-            <p className="mt-4 text-sm leading-7 text-rose-50/85">
-              CNH provides educational, reflective, and social-learning support. External organizations may provide business advising or technical assistance. CNH does not provide legal, tax, financial, accounting, lending, or guaranteed funding advice through this page.
-            </p>
         </section>
 
       </div>
