@@ -10,6 +10,7 @@ import SocialLearningHub from './components/SocialLearningHub';
 import ConsciousMeetingsUpcomingPage from './components/ConsciousMeetingsUpcomingPage';
 import MembershipPage from './components/MembershipPage';
 import NotFoundPage from './components/NotFoundPage';
+import MusicBox from './components/MusicBox';
 import NotificationsCenter from './components/NotificationsCenter';
 import AdminDashboard from './components/AdminDashboard';
 import AdministrativeAccessPage from './components/AdministrativeAccessPage';
@@ -3982,6 +3983,7 @@ const App: React.FC = () => {
       )}
 
       <div className="relative z-10 w-full min-h-screen flex flex-col overflow-x-hidden">
+        <MusicBox />
         
         {hasApiKey === false && (
           <div className="fixed inset-0 z-[1000] flex items-start sm:items-center justify-center overflow-y-auto custom-scrollbar bg-black/90 backdrop-blur-3xl p-4 sm:p-6">
