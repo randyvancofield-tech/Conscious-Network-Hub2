@@ -89,11 +89,9 @@ interface PortalPathway {
   title: string;
   eyebrow: string;
   summary: string;
-  outcome: string;
   image: string;
   imageAlt: string;
   icon: React.ReactNode;
-  actionLabel: string;
 }
 
 const stageOptions: StageOption[] = [
@@ -207,44 +205,36 @@ const portalPathways: PortalPathway[] = [
     eyebrow: 'For Emerging Founders',
     title: 'Start With Direction',
     summary: 'For members who sense a business calling, community solution, or new career path but need discernment before execution.',
-    outcome: 'Outcome: a readiness map and first responsible next step.',
     image: imagery.begin,
     imageAlt: 'Entrepreneur planning with a laptop and notebook',
     icon: <Lightbulb className="h-5 w-5" />,
-    actionLabel: 'Begin Readiness',
   },
   {
     id: 'stabilize',
     eyebrow: 'For Early Operators',
     title: 'Stabilize The Work',
     summary: 'For builders who have started but need structure around operations, accountability, sales, delivery, or support.',
-    outcome: 'Outcome: a clearer support lane before overextending.',
     image: imagery.stabilize,
     imageAlt: 'Small business team reviewing customer support work',
     icon: <ShieldCheck className="h-5 w-5" />,
-    actionLabel: 'Map Support Needs',
   },
   {
     id: 'resources',
     eyebrow: 'For Resource Navigation',
     title: 'Prepare For Outside Help',
     summary: 'For members who may be ready to approach an SBDC or public entrepreneurship resource with better questions.',
-    outcome: 'Outcome: stronger preparation for external intake.',
     image: imagery.resources,
     imageAlt: 'Business workshop with people collaborating',
     icon: <Compass className="h-5 w-5" />,
-    actionLabel: 'View Resource Gateways',
   },
   {
     id: 'institutional',
     eyebrow: 'For Providers And Institutions',
     title: 'Support The Ecosystem',
     summary: 'For approved providers, organizations, or regional partners exploring responsible ways to support CNH entrepreneurs.',
-    outcome: 'Outcome: reviewed provider path or executive inquiry.',
     image: imagery.institutional,
     imageAlt: 'Professional meeting between organizational leaders',
     icon: <Building2 className="h-5 w-5" />,
-    actionLabel: 'Open Inquiry Path',
   },
 ];
 
@@ -286,7 +276,6 @@ const EntrepreneurshipSupportPage: React.FC<EntrepreneurshipSupportPageProps> = 
   onApplyAsProvider,
 }) => {
   const [portalMode, setPortalMode] = useState<PortalMode>('overview');
-  const [selectedPathwayId, setSelectedPathwayId] = useState<PortalPathway['id']>('begin');
   const [showInquiryForm, setShowInquiryForm] = useState(false);
   const [assessment, setAssessment] = useState<AssessmentState>(initialAssessment);
   const [hasSubmitted, setHasSubmitted] = useState(false);
@@ -296,11 +285,6 @@ const EntrepreneurshipSupportPage: React.FC<EntrepreneurshipSupportPageProps> = 
   );
   const [executiveInquiryStatus, setExecutiveInquiryStatus] = useState('');
   const [isExecutiveInquirySubmitting, setExecutiveInquirySubmitting] = useState(false);
-
-  const selectedPathway = useMemo(
-    () => portalPathways.find((pathway) => pathway.id === selectedPathwayId) || portalPathways[0],
-    [selectedPathwayId]
-  );
 
   const selectedResource = useMemo(
     () => getResourceForRegion(assessment.region),
@@ -351,19 +335,6 @@ const EntrepreneurshipSupportPage: React.FC<EntrepreneurshipSupportPageProps> = 
     window.setTimeout(() => {
       document.getElementById('executive-inquiry')?.scrollIntoView({ behavior: 'smooth' });
     }, 0);
-  };
-
-  const handlePathwayAction = (pathway: PortalPathway) => {
-    setSelectedPathwayId(pathway.id);
-    if (pathway.id === 'resources') {
-      document.getElementById('resource-gateways')?.scrollIntoView({ behavior: 'smooth' });
-      return;
-    }
-    if (pathway.id === 'institutional') {
-      showExecutiveInquiry();
-      return;
-    }
-    openAssessment();
   };
 
   const toggleSupportNeed = (need: SupportNeed) => {
@@ -823,70 +794,32 @@ const EntrepreneurshipSupportPage: React.FC<EntrepreneurshipSupportPageProps> = 
               </h2>
             </div>
             <p className="max-w-md text-sm leading-7 text-slate-400">
-              The portal stays simple on purpose. Select the lane that matches the person in front of us, then move them to one next action.
+              The portal stays simple on purpose. Each lane clarifies who the pathway is for without forcing another decision layer on the page.
             </p>
           </div>
 
           <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-            {portalPathways.map((pathway) => {
-              const selected = selectedPathway.id === pathway.id;
-              return (
-                <button
-                  key={pathway.id}
-                  type="button"
-                  onClick={() => setSelectedPathwayId(pathway.id)}
-                  className={`group overflow-hidden rounded-[1.5rem] border text-left shadow-xl shadow-black/20 transition duration-300 hover:-translate-y-1 focus:outline-none focus-visible:ring-2 focus-visible:ring-teal-200 ${
-                    selected ? 'border-teal-200/70 bg-teal-300/[0.08]' : 'border-white/10 bg-white/[0.035] hover:border-white/20'
-                  }`}
-                >
-                  <div
-                    className="h-36 bg-cover bg-center"
-                    style={{ backgroundImage: `linear-gradient(180deg, rgba(2,6,23,0.02), rgba(2,6,23,0.76)), url(${pathway.image})` }}
-                    aria-label={pathway.imageAlt}
-                  />
-                  <div className="p-5">
-                    <div className="mb-4 flex h-11 w-11 items-center justify-center rounded-2xl bg-white/10 text-teal-100">
-                      {pathway.icon}
-                    </div>
-                    <p className="text-xs font-black uppercase tracking-[0.16em] text-teal-100/80">{pathway.eyebrow}</p>
-                    <h3 className="mt-3 text-xl font-black uppercase leading-tight text-white">{pathway.title}</h3>
+            {portalPathways.map((pathway) => (
+              <article
+                key={pathway.id}
+                className="group overflow-hidden rounded-[1.5rem] border border-white/10 bg-white/[0.035] shadow-xl shadow-black/20 transition duration-300 hover:-translate-y-1 hover:border-white/20"
+              >
+                <div
+                  className="h-36 bg-cover bg-center"
+                  style={{ backgroundImage: `linear-gradient(180deg, rgba(2,6,23,0.02), rgba(2,6,23,0.76)), url(${pathway.image})` }}
+                  aria-label={pathway.imageAlt}
+                />
+                <div className="p-5">
+                  <div className="mb-4 flex h-11 w-11 items-center justify-center rounded-2xl bg-white/10 text-teal-100">
+                    {pathway.icon}
                   </div>
-                </button>
-              );
-            })}
+                  <p className="text-xs font-black uppercase tracking-[0.16em] text-teal-100/80">{pathway.eyebrow}</p>
+                  <h3 className="mt-3 text-xl font-black uppercase leading-tight text-white">{pathway.title}</h3>
+                  <p className="mt-3 text-sm leading-6 text-slate-400">{pathway.summary}</p>
+                </div>
+              </article>
+            ))}
           </div>
-
-          <article className="grid overflow-hidden rounded-[2rem] border border-white/10 bg-slate-950/85 shadow-2xl shadow-black/30 lg:grid-cols-[0.46fr_0.54fr]">
-            <div
-              className="min-h-80 bg-cover bg-center"
-              style={{ backgroundImage: `linear-gradient(180deg, rgba(2,6,23,0.04), rgba(2,6,23,0.82)), url(${selectedPathway.image})` }}
-              aria-label={selectedPathway.imageAlt}
-            />
-            <div className="flex flex-col justify-center p-6 sm:p-8 lg:p-10">
-              <p className="text-xs font-black uppercase tracking-[0.22em] text-teal-200">{selectedPathway.eyebrow}</p>
-              <h3 className="mt-4 text-3xl font-black uppercase tracking-tight text-white">{selectedPathway.title}</h3>
-              <p className="mt-4 text-base leading-8 text-slate-300">{selectedPathway.summary}</p>
-              <p className="mt-5 rounded-2xl border border-white/10 bg-white/[0.05] p-4 text-sm font-bold leading-6 text-amber-50">
-                {selectedPathway.outcome}
-              </p>
-              <div className="mt-6 flex flex-col gap-3 sm:flex-row">
-                <button
-                  type="button"
-                  onClick={() => handlePathwayAction(selectedPathway)}
-                  className="inline-flex items-center justify-center gap-2 rounded-xl bg-teal-300 px-5 py-3 text-xs font-black uppercase tracking-[0.16em] text-slate-950 transition-colors hover:bg-teal-200 focus:outline-none focus-visible:ring-2 focus-visible:ring-teal-100"
-                >
-                  {selectedPathway.actionLabel} <ArrowRight className="h-4 w-4" />
-                </button>
-                <button
-                  type="button"
-                  onClick={showExecutiveInquiry}
-                  className="inline-flex items-center justify-center gap-2 rounded-xl border border-white/10 bg-white/[0.06] px-5 py-3 text-xs font-black uppercase tracking-[0.16em] text-white transition-colors hover:bg-white/[0.1] focus:outline-none focus-visible:ring-2 focus-visible:ring-white/30"
-                >
-                  Ask About Support
-                </button>
-              </div>
-            </div>
-          </article>
         </section>
 
         <section className="space-y-5">
