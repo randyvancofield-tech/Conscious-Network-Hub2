@@ -113,6 +113,12 @@ const grantApplicationPath = '/conscious-careers/grant-application';
 const foundationRedirectDelaySeconds = 15;
 const foundationRedirectMessage =
   'To build a foundation, we must first become conscious of what we consume. We direct everyone beginning their journey to the Conscious Network Hub because true alignment starts with absolute autonomy over the content you ingest. Think of this Hub as a space to clear the mind, body, and soul. Immersing your mind in high-vibrational content expands your vision. By intentionally shifting what you take in, you naturally elevate your emotional state, which refines your actions, and ultimately aligns your awareness far above the ego. The Hub is where your clarity begins.';
+const foundationRedirectMessageSegments = [
+  'To build a foundation, we must first become conscious of what we consume.',
+  'We direct everyone beginning their journey to the Conscious Network Hub because true alignment starts with absolute autonomy over the content you ingest.',
+  'Think of this Hub as a space to clear the mind, body, and soul. Immersing your mind in high-vibrational content expands your vision.',
+  'By intentionally shifting what you take in, you naturally elevate your emotional state, which refines your actions, and ultimately aligns your awareness far above the ego. The Hub is where your clarity begins.',
+];
 
 const imagery = {
   hero: 'https://images.unsplash.com/photo-1556761175-b413da4baf72?auto=format&fit=crop&w=1600&q=80',
@@ -643,9 +649,9 @@ const EntrepreneurshipSupportPage: React.FC<EntrepreneurshipSupportPageProps> = 
           <div className="fixed inset-0 z-50 overflow-y-auto bg-[#020706]/95 px-3 py-3 text-slate-100 backdrop-blur-2xl sm:px-5 sm:py-6">
             <style>{`
               @keyframes cnhGatewayPan {
-                0% { transform: scale(1.04) translate3d(-1.2%, 0, 0); }
-                50% { transform: scale(1.08) translate3d(1.4%, -0.8%, 0); }
-                100% { transform: scale(1.05) translate3d(0.4%, 0.7%, 0); }
+                0% { transform: scale(1.015) translate3d(-0.6%, 0, 0); }
+                50% { transform: scale(1.035) translate3d(0.7%, -0.4%, 0); }
+                100% { transform: scale(1.025) translate3d(0.3%, 0.4%, 0); }
               }
               @keyframes cnhVoiceRise {
                 0%, 100% { transform: scaleY(0.42); opacity: 0.55; }
@@ -656,16 +662,16 @@ const EntrepreneurshipSupportPage: React.FC<EntrepreneurshipSupportPageProps> = 
                 50% { transform: translate3d(0, -10px, 0); }
               }
             `}</style>
-            <div className="mx-auto flex min-h-full w-full max-w-6xl items-center">
+            <div className="mx-auto flex min-h-full w-full max-w-6xl items-start py-2 sm:items-center">
               <div className="relative my-auto w-full overflow-hidden rounded-[1.5rem] border border-teal-200/20 bg-[#07110f] shadow-2xl shadow-teal-950/30 sm:rounded-[2rem]">
                 <div className="absolute inset-0 bg-[radial-gradient(circle_at_14%_12%,rgba(94,234,212,0.14),transparent_32%),radial-gradient(circle_at_86%_8%,rgba(251,191,36,0.12),transparent_28%),linear-gradient(135deg,rgba(15,23,42,0.4),rgba(6,78,59,0.12))]" />
-                <div className="relative grid lg:grid-cols-[1.08fr_0.92fr]">
-                  <div className="relative min-h-[18rem] overflow-hidden border-b border-white/10 bg-black lg:min-h-[min(78dvh,42rem)] lg:border-b-0 lg:border-r">
+                <div className="relative grid lg:grid-cols-[minmax(0,1.02fr)_minmax(24rem,0.98fr)]">
+                  <div className="relative min-h-[clamp(16rem,42dvh,28rem)] overflow-hidden border-b border-white/10 bg-black lg:min-h-[clamp(28rem,62dvh,38rem)] lg:border-b-0 lg:border-r">
                     <img
                       src={foundationGatewayGuide}
                       alt="Conscious guide standing beside an open doorway into light"
                       className="absolute inset-0 h-full w-full object-cover object-center"
-                      style={{ animation: 'cnhGatewayPan 16s ease-in-out infinite alternate' }}
+                      style={{ animation: 'cnhGatewayPan 16s ease-in-out infinite alternate', objectPosition: '62% center' }}
                     />
                     <div className="absolute inset-0 bg-gradient-to-r from-black/20 via-transparent to-black/15" />
                     <div className="absolute inset-x-0 bottom-0 h-32 bg-gradient-to-t from-[#07110f] to-transparent" />
@@ -684,30 +690,38 @@ const EntrepreneurshipSupportPage: React.FC<EntrepreneurshipSupportPageProps> = 
                         ))}
                       </div>
                     </div>
-                    <div className="absolute left-4 top-4 rounded-2xl border border-white/15 bg-black/35 px-4 py-3 backdrop-blur-xl sm:left-6 sm:top-6">
+                    <div className="absolute left-3 right-3 top-3 rounded-2xl border border-white/15 bg-black/40 px-4 py-3 backdrop-blur-xl sm:left-6 sm:right-auto sm:top-6 sm:max-w-xs">
                       <p className="text-[9px] font-black uppercase tracking-[0.22em] text-teal-100/80">Guided Entry</p>
-                      <p className="mt-1 text-xs font-semibold text-white">Voice and movement active when your browser permits it.</p>
+                      <p className="mt-1 text-xs font-semibold leading-5 text-white">Interactive guidance begins when your browser allows access.</p>
                     </div>
                   </div>
-                  <div className="relative flex flex-col justify-center p-5 sm:p-7 lg:p-10">
+                  <div className="relative flex flex-col justify-center p-5 sm:p-7 lg:p-8 xl:p-9">
                     <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
-                      <div>
+                      <div className="min-w-0">
                         <p className="text-xs font-black uppercase tracking-[0.24em] text-teal-200">Foundation Redirect</p>
-                        <h2 className="mt-3 text-2xl font-black uppercase leading-tight tracking-tight text-white sm:text-3xl lg:text-4xl">
+                        <h2 className="mt-3 max-w-xl text-[clamp(1.7rem,3vw,2.85rem)] font-black uppercase leading-[1.05] tracking-tight text-white">
                           Your clarity begins inside the Hub.
                         </h2>
                       </div>
-                      <div className="w-fit rounded-2xl border border-teal-200/20 bg-teal-300/10 px-4 py-3 text-center">
+                      <div className="w-full shrink-0 rounded-2xl border border-teal-200/20 bg-teal-300/10 px-4 py-3 text-center sm:w-auto sm:min-w-40">
                         <p className="text-[9px] font-black uppercase tracking-[0.2em] text-teal-100/70">Minimum Pause</p>
-                        <p className="mt-1 text-2xl font-black text-white">
+                        <p className="mt-1 whitespace-nowrap text-[clamp(1.1rem,2vw,1.5rem)] font-black text-white">
                           {foundationRedirectSeconds > 0 ? `${foundationRedirectSeconds}s` : 'Listening'}
                         </p>
                       </div>
                     </div>
-                    <p className="mt-6 text-sm leading-7 text-slate-200 sm:text-base sm:leading-8">
+                    <p className="sr-only">
                       {foundationRedirectMessage}
                     </p>
-                    <div className="mt-6 grid gap-3 sm:grid-cols-3">
+                    <div aria-hidden="true" className="mt-6 max-h-[clamp(13rem,32dvh,20rem)] space-y-3 overflow-y-auto rounded-[1.5rem] border border-white/10 bg-white/[0.035] p-3 pr-2 custom-scrollbar">
+                      {foundationRedirectMessageSegments.map((segment, index) => (
+                        <div key={segment} className="rounded-2xl border border-white/10 bg-slate-950/45 p-4">
+                          <p className="text-[9px] font-black uppercase tracking-[0.2em] text-teal-100/65">Message {index + 1}</p>
+                          <p className="mt-2 text-sm leading-7 text-slate-200">{segment}</p>
+                        </div>
+                      ))}
+                    </div>
+                    <div className="mt-5 grid gap-3 sm:grid-cols-3">
                       {['Listen', 'Breathe', 'Enter The Hub'].map((label, index) => (
                         <div key={label} className="rounded-2xl border border-white/10 bg-white/[0.04] p-4">
                           <p className="text-xs font-black uppercase tracking-[0.18em] text-teal-100">0{index + 1}</p>
