@@ -22,6 +22,43 @@ export const BASE_URL = shouldIgnoreRemoteDevBackend ? '' : resolvedBaseUrl;
 
 const normalizedBaseUrl = String(BASE_URL).replace(/\/+$/, '');
 const uploadObjectPathPattern = /^\/(?:api\/upload|uploads)\/object\//i;
+const encryptedUploadObjectKeyPattern = /^pglo3\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+$/;
+
+const decodeBase64UrlJson = (value: string): Record<string, unknown> | null => {
+  try {
+    const normalized = value.replace(/-/g, '+').replace(/_/g, '/');
+    const padded = normalized.padEnd(Math.ceil(normalized.length / 4) * 4, '=');
+    const decoded = atob(padded);
+    const parsed = JSON.parse(decoded);
+    return parsed && typeof parsed === 'object' && !Array.isArray(parsed)
+      ? (parsed as Record<string, unknown>)
+      : null;
+  } catch {
+    return null;
+  }
+};
+
+const looksLikeUploadObjectKey = (value: string): boolean => {
+  const raw = String(value || '').trim();
+  if (!raw || raw.includes('/') || raw.includes(':') || /\s/.test(raw)) return false;
+  if (encryptedUploadObjectKeyPattern.test(raw)) return true;
+
+  const parsed = decodeBase64UrlJson(raw);
+  const version = Number(parsed?.v);
+  const oid = Number(parsed?.oid);
+  return (
+    (version === 1 || version === 2) &&
+    Number.isFinite(oid) &&
+    oid > 0 &&
+    typeof parsed?.mimeType === 'string' &&
+    parsed.mimeType.trim().length > 0
+  );
+};
+
+const publicUploadObjectUrl = (objectKey: string): string => {
+  const path = `/uploads/object/${encodeURIComponent(objectKey)}`;
+  return normalizedBaseUrl ? `${normalizedBaseUrl}${path}` : path;
+};
 
 const shouldRewriteFrontendHostedUploadUrl = (raw: string): string | null => {
   if (!normalizedBaseUrl) return null;
@@ -181,6 +218,9 @@ export const backendAssetUrl = (value: unknown): string | undefined => {
   if (!raw) return undefined;
   if (/^[a-z][a-z0-9+.-]*:/i.test(raw)) {
     return shouldRewriteFrontendHostedUploadUrl(raw) || raw;
+  }
+  if (looksLikeUploadObjectKey(raw)) {
+    return publicUploadObjectUrl(raw);
   }
   const normalizedPath = raw.startsWith('/') ? raw : `/${raw}`;
   return `${normalizedBaseUrl}${normalizedPath}`;

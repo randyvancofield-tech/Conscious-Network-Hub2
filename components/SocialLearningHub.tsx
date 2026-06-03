@@ -106,6 +106,64 @@ const renderAvatarMedia = (media: NormalizedMediaAsset, name: string, className:
   return <img src={defaultAvatarUrl(name)} className={className} alt={name} />;
 };
 
+const SocialMediaFrame: React.FC<{
+  type: 'image' | 'video';
+  src: string;
+  title: string;
+}> = ({ type, src, title }) => {
+  const [failed, setFailed] = useState(false);
+
+  useEffect(() => {
+    setFailed(false);
+  }, [src]);
+
+  const fallback = (
+    <div className="flex min-h-52 w-full items-center justify-center bg-[radial-gradient(circle_at_30%_20%,rgba(59,130,246,0.22),transparent_34%),linear-gradient(135deg,rgba(15,23,42,0.94),rgba(2,6,23,0.98))] px-6 py-10 text-center">
+      <div>
+        {type === 'video' ? (
+          <FileVideo className="mx-auto h-8 w-8 text-blue-300" />
+        ) : (
+          <ImageIcon className="mx-auto h-8 w-8 text-blue-300" />
+        )}
+        <p className="mt-4 text-xs font-black uppercase tracking-widest text-blue-200/80">
+          Media temporarily unavailable
+        </p>
+        <p className="mt-2 text-sm leading-6 text-slate-300">
+          The post is preserved. Refresh or retry after the media service is available.
+        </p>
+      </div>
+    </div>
+  );
+
+  if (!src || failed) {
+    return (
+      <div className="overflow-hidden rounded-[2rem] border border-white/10 shadow-2xl sm:rounded-[2.5rem]">
+        {fallback}
+      </div>
+    );
+  }
+
+  if (type === 'video') {
+    return (
+      <div className="relative aspect-video overflow-hidden rounded-[2rem] border border-white/10 bg-black shadow-2xl sm:rounded-[2.5rem]">
+        <video
+          src={src}
+          className="h-full w-full object-cover"
+          controls
+          playsInline
+          onError={() => setFailed(true)}
+        />
+      </div>
+    );
+  }
+
+  return (
+    <div className="overflow-hidden rounded-[2rem] border border-white/10 shadow-2xl transition-transform duration-[2s] sm:rounded-[2.5rem]">
+      <img src={src} className="h-auto w-full object-cover" alt={title} onError={() => setFailed(true)} />
+    </div>
+  );
+};
+
 const mapSocialPostToNode = (post: any): NodeContent => {
   const media = Array.isArray(post?.media) ? post.media[0] : null;
   const mediaAsset = media ? normalizeMediaAsset(media, media?.url) : null;
@@ -910,18 +968,9 @@ const SocialLearningHubContent: React.FC<SocialLearningHubProps> = ({
                         <div className="space-y-4">
                           {/* Main Media Content */}
                           {node.type === 'image' ? (
-                            <div className="rounded-[2rem] sm:rounded-[2.5rem] overflow-hidden border border-white/10 shadow-2xl transition-transform duration-[2s]">
-                              <img src={node.content} className="w-full h-auto object-cover" alt={node.title} />
-                            </div>
+                            <SocialMediaFrame type="image" src={node.content} title={node.title} />
                           ) : node.type === 'video' ? (
-                            <div className="rounded-[2rem] sm:rounded-[2.5rem] overflow-hidden border border-white/10 shadow-2xl aspect-video bg-black relative">
-                              <video
-                                src={node.content}
-                                className="w-full h-full object-cover"
-                                controls
-                                playsInline
-                              />
-                            </div>
+                            <SocialMediaFrame type="video" src={node.content} title={node.title} />
                           ) : (
                             <div className="space-y-4">
                               <p className="cnh-user-content text-slate-300 text-sm sm:text-xl leading-relaxed font-light opacity-80 max-w-4xl">

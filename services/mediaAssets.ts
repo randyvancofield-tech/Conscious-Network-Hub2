@@ -58,18 +58,18 @@ export const normalizeMediaAsset = (
 ): NormalizedMediaAsset => {
   const sourceUrl = trimString(source?.url);
   const fallback = trimString(fallbackUrl);
-  const resolvedUrl = backendAssetUrl(sourceUrl || fallback || '') || null;
   const objectKey =
     trimString(source?.objectKey) ||
     extractUploadObjectKey(sourceUrl) ||
-    extractUploadObjectKey(fallback) ||
-    extractUploadObjectKey(resolvedUrl);
+    extractUploadObjectKey(fallback);
+  const resolvedUrl = backendAssetUrl(sourceUrl || fallback || objectKey || '') || null;
+  const resolvedObjectKey = objectKey || extractUploadObjectKey(resolvedUrl);
 
   return {
     url: resolvedUrl,
     storageProvider: trimString(source?.storageProvider),
-    objectKey,
-    mimeType: trimString(source?.mimeType)?.toLowerCase() || decodeUploadObjectKeyMimeType(objectKey),
+    objectKey: resolvedObjectKey,
+    mimeType: trimString(source?.mimeType)?.toLowerCase() || decodeUploadObjectKeyMimeType(resolvedObjectKey),
     mediaType: trimString(source?.mediaType)?.toLowerCase() || null,
   };
 };

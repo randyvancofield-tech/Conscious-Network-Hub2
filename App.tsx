@@ -921,8 +921,8 @@ const App: React.FC = () => {
       : [],
   });
 
-  const toAbsoluteAssetUrl = (value: unknown): string | undefined => {
-    return backendAssetUrl(value);
+  const toAbsoluteAssetUrl = (value: unknown, objectKey?: unknown): string | undefined => {
+    return backendAssetUrl(value) || backendAssetUrl(objectKey);
   };
 
   const decodeUploadObjectKeyMimeType = (objectKey: unknown): string | null => {
@@ -963,13 +963,19 @@ const App: React.FC = () => {
       rawUser?.profileMedia && typeof rawUser.profileMedia === 'object'
         ? {
             avatar: {
-              url: toAbsoluteAssetUrl(rawUser.profileMedia?.avatar?.url) || null,
+              url: toAbsoluteAssetUrl(
+                rawUser.profileMedia?.avatar?.url,
+                rawUser.profileMedia?.avatar?.objectKey
+              ) || null,
               storageProvider: toNullableTrimmedString(rawUser.profileMedia?.avatar?.storageProvider),
               objectKey: toNullableTrimmedString(rawUser.profileMedia?.avatar?.objectKey),
               mimeType: toNullableTrimmedString(rawUser.profileMedia?.avatar?.mimeType),
             },
             cover: {
-              url: toAbsoluteAssetUrl(rawUser.profileMedia?.cover?.url) || null,
+              url: toAbsoluteAssetUrl(
+                rawUser.profileMedia?.cover?.url,
+                rawUser.profileMedia?.cover?.objectKey
+              ) || null,
               storageProvider: toNullableTrimmedString(rawUser.profileMedia?.cover?.storageProvider),
               objectKey: toNullableTrimmedString(rawUser.profileMedia?.cover?.objectKey),
               mimeType: toNullableTrimmedString(rawUser.profileMedia?.cover?.mimeType),
@@ -1005,8 +1011,8 @@ const App: React.FC = () => {
       providerWalletAddressBound: rawUser.providerWalletAddressBound === true,
       reputationScore: rawUser.reputationScore ?? 100,
       accessKeyIndex: rawUser.accessKeyIndex ?? 200,
-      avatarUrl: toAbsoluteAssetUrl(rawUser.avatarUrl),
-      bannerUrl: toAbsoluteAssetUrl(rawUser.bannerUrl),
+      avatarUrl: toAbsoluteAssetUrl(rawUser.avatarUrl, rawUser.profileMedia?.avatar?.objectKey),
+      bannerUrl: toAbsoluteAssetUrl(rawUser.bannerUrl, rawUser.profileMedia?.cover?.objectKey),
       location: rawUser.location ?? null,
       dateOfBirth: rawUser.dateOfBirth ?? null,
       profileMedia,
