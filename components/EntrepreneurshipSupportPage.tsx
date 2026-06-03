@@ -355,14 +355,6 @@ const EntrepreneurshipSupportPage: React.FC<EntrepreneurshipSupportPageProps> = 
     stopFoundationAudio();
     startFoundationAudio();
 
-    let timerComplete = false;
-    let narrationComplete = false;
-    const maybeRedirect = () => {
-      if (timerComplete && narrationComplete) {
-        completeFoundationRedirect();
-      }
-    };
-
     if (foundationIntervalRef.current !== null) {
       window.clearInterval(foundationIntervalRef.current);
       foundationIntervalRef.current = null;
@@ -373,8 +365,7 @@ const EntrepreneurshipSupportPage: React.FC<EntrepreneurshipSupportPageProps> = 
         if (seconds <= 1) {
           window.clearInterval(intervalId);
           foundationIntervalRef.current = null;
-          timerComplete = true;
-          maybeRedirect();
+          completeFoundationRedirect();
           return 0;
         }
         return seconds - 1;
@@ -389,22 +380,12 @@ const EntrepreneurshipSupportPage: React.FC<EntrepreneurshipSupportPageProps> = 
         utterance.rate = 1.35;
         utterance.pitch = 1.03;
         utterance.volume = 0.92;
-        utterance.onend = () => {
-          narrationComplete = true;
-          maybeRedirect();
-        };
-        utterance.onerror = () => {
-          narrationComplete = true;
-          maybeRedirect();
-        };
+        utterance.onend = () => undefined;
+        utterance.onerror = () => undefined;
         window.speechSynthesis.speak(utterance);
       } catch {
-        narrationComplete = true;
-        maybeRedirect();
+        // The visual countdown still completes the redirect if speech setup fails.
       }
-    } else {
-      narrationComplete = true;
-      maybeRedirect();
     }
   };
 
