@@ -1242,7 +1242,7 @@ const EntrepreneurshipSupportPage: React.FC<EntrepreneurshipSupportPageProps> = 
             <div className="mx-auto grid max-w-6xl items-stretch gap-3 md:grid-cols-2 xl:grid-cols-[1fr_auto_1fr_auto_1fr_auto_1fr] xl:gap-4">
               <button
                 type="button"
-                onClick={openAssessment}
+                onClick={beginFoundationRedirect}
                 className="group relative overflow-hidden rounded-2xl border border-teal-200/30 bg-teal-300 px-4 py-4 text-left shadow-[0_18px_45px_rgba(20,184,166,0.18)] transition duration-300 hover:-translate-y-1 hover:bg-teal-200 focus:outline-none focus-visible:ring-2 focus-visible:ring-teal-100"
               >
                 <span className="block text-xs font-black uppercase tracking-[0.18em] text-slate-800">Step 1</span>
