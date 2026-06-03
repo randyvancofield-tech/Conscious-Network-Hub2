@@ -94,7 +94,7 @@ const PLATFORM_SEARCH_CATALOG: PlatformSearchResult[] = [
   { id: 'social', title: 'Social Learning', description: 'Member social learning feed.', view: AppView.CONSCIOUS_SOCIAL_LEARNING, keywords: ['posts', 'feed', 'community'] },
   { id: 'community', title: 'Community', description: 'Member directory and profiles.', view: AppView.COMMUNITY, keywords: ['members', 'directory', 'profiles'] },
   { id: 'meetings', title: 'Conscious Meetings', description: 'Upcoming provider-created meeting sessions.', view: AppView.CONSCIOUS_MEETINGS_UPCOMING, keywords: ['sessions', 'events', 'video'] },
-  { id: 'providers', title: 'Providers Market', description: 'Approved public provider profiles.', view: AppView.PROVIDERS, keywords: ['provider', 'services', 'market'] },
+  { id: 'providers', title: 'Available Providers', description: 'Approved public provider profiles.', view: AppView.PROVIDERS, keywords: ['provider', 'services', 'market'] },
   { id: 'careers', title: 'Conscious Careers', description: 'Entrepreneurship readiness, Conscious Plan, guidance, and grant pathway.', view: AppView.ENTREPRENEURSHIP_SUPPORT, keywords: ['grant', 'career', 'entrepreneurship'] },
   { id: 'entrepreneurship', title: 'Entrepreneurship Support', description: 'Conscious Careers pathway portal for readiness and regional entrepreneurship resources.', view: AppView.ENTREPRENEURSHIP_SUPPORT, keywords: ['business', 'sbdc', 'readiness'] },
   { id: 'provider-access', title: 'Provider Access', description: 'Approved provider sign-in, application, and applicant status.', view: AppView.PROVIDER_ACCESS, keywords: ['provider sign in', 'apply', 'applicant'] },

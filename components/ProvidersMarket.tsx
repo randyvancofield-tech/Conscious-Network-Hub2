@@ -93,7 +93,6 @@ const ProvidersMarketContent: React.FC<ProvidersMarketProps> = ({
   providerId,
   onOpenProvider,
   onBackToList,
-  onApplyAsProvider,
   onSignInRequired,
 }) => {
   const [filter, setFilter] = useState<string>('All');
@@ -491,28 +490,6 @@ const ProvidersMarketContent: React.FC<ProvidersMarketProps> = ({
           ))}
         </section>
       )}
-
-      <footer className="glass-panel p-6 lg:p-8 rounded-2xl border-l-4 border-blue-600 flex flex-col md:flex-row items-center justify-between gap-6 shadow-2xl mt-12">
-        <div className="space-y-2">
-          <h4 className="text-xl font-black text-white uppercase tracking-tighter">Apply To Become A CNH Provider</h4>
-          <p className="text-slate-400 text-sm font-light max-w-xl">
-            New applicants use the provider application. Returning applicants use Provider Access to check status, and approved providers sign in through Provider Access.
-          </p>
-        </div>
-        <button
-          type="button"
-          onClick={() => {
-            if (onApplyAsProvider) {
-              onApplyAsProvider();
-              return;
-            }
-            window.location.assign('/provider-access');
-          }}
-          className="w-full justify-center px-6 py-4 bg-gradient-to-r from-blue-600 to-teal-600 text-white rounded-2xl font-black text-xs uppercase tracking-widest shadow-xl hover:shadow-blue-500/20 transition-all flex items-center gap-2 group sm:w-auto"
-        >
-          <span className="cnh-action-label">Apply To Become A Provider</span> <ChevronRight className="w-4 h-4 shrink-0 group-hover:translate-x-1 transition-transform" />
-        </button>
-      </footer>
 
       {selectedProvider && (
         <div className="fixed inset-0 z-[180] bg-black/85 backdrop-blur-sm p-4 flex items-start sm:items-center justify-center overflow-y-auto custom-scrollbar">
