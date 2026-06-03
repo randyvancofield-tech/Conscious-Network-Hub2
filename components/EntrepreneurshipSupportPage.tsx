@@ -675,24 +675,25 @@ const EntrepreneurshipSupportPage: React.FC<EntrepreneurshipSupportPageProps> = 
                     />
                     <div className="absolute inset-0 bg-gradient-to-r from-black/20 via-transparent to-black/15" />
                     <div className="absolute inset-x-0 bottom-0 h-32 bg-gradient-to-t from-[#07110f] to-transparent" />
-                    <div
-                      className="pointer-events-none absolute right-[13%] top-[37%] flex h-16 w-16 items-center justify-center rounded-full border border-teal-100/30 bg-teal-200/10 shadow-2xl shadow-teal-300/20 backdrop-blur-md sm:h-20 sm:w-20"
-                      style={{ animation: 'cnhGuideFloat 4.5s ease-in-out infinite' }}
-                      aria-hidden="true"
-                    >
-                      <div className="flex h-9 items-center gap-1.5">
-                        {[0, 1, 2, 3].map((bar) => (
-                          <span
-                            key={bar}
-                            className="h-8 w-1.5 origin-bottom rounded-full bg-teal-100"
-                            style={{ animation: `cnhVoiceRise ${0.72 + bar * 0.08}s ease-in-out ${bar * 0.08}s infinite` }}
-                          />
-                        ))}
-                      </div>
-                    </div>
                     <div className="absolute left-3 right-3 top-3 rounded-2xl border border-white/15 bg-black/40 px-4 py-3 backdrop-blur-xl sm:left-6 sm:right-auto sm:top-6 sm:max-w-xs">
-                      <p className="text-[9px] font-black uppercase tracking-[0.22em] text-teal-100/80">Guided Entry</p>
-                      <p className="mt-1 text-xs font-semibold leading-5 text-white">Interactive guidance begins when your browser allows access.</p>
+                      <div className="flex items-start gap-3">
+                        <div className="min-w-0">
+                          <p className="text-[9px] font-black uppercase tracking-[0.22em] text-teal-100/80">Guided Entry</p>
+                          <p className="mt-1 text-xs font-semibold leading-5 text-white">Interactive guidance begins when your browser allows access.</p>
+                        </div>
+                        <div
+                          className="pointer-events-none ml-auto flex h-8 w-10 shrink-0 items-center justify-center gap-1 rounded-full border border-teal-100/25 bg-teal-100/10"
+                          aria-hidden="true"
+                        >
+                          {[0, 1, 2].map((bar) => (
+                            <span
+                              key={bar}
+                              className="h-4 w-1 origin-bottom rounded-full bg-teal-100/90"
+                              style={{ animation: `cnhVoiceRise ${0.72 + bar * 0.08}s ease-in-out ${bar * 0.08}s infinite` }}
+                            />
+                          ))}
+                        </div>
+                      </div>
                     </div>
                   </div>
                   <div className="relative flex flex-col justify-center p-5 sm:p-7 lg:p-8 xl:p-9">
