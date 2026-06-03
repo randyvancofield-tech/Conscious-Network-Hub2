@@ -111,6 +111,7 @@ const alignmentOptions: AlignmentOption[] = ['Yes', 'Somewhat', 'Not sure', 'No'
 const calendlyBuildingConnectionsUrl = 'https://calendly.com/randycofield/buildingconnections';
 const grantApplicationPath = '/conscious-careers/grant-application';
 const foundationRedirectDelaySeconds = 15;
+const foundationRedirectFallbackSeconds = 75;
 const foundationRedirectMessage =
   'To build a foundation, we must first become conscious of what we consume. We direct everyone beginning their journey to the Conscious Network Hub because true alignment starts with absolute autonomy over the content you ingest. Think of this Hub as a space to clear the mind, body, and soul. Immersing your mind in high-vibrational content expands your vision. By intentionally shifting what you take in, you naturally elevate your emotional state, which refines your actions, and ultimately aligns your awareness far above the ego. The Hub is where your clarity begins.';
 const foundationRedirectMessageSegments = [
@@ -277,6 +278,7 @@ const EntrepreneurshipSupportPage: React.FC<EntrepreneurshipSupportPageProps> = 
   const [foundationRedirectSeconds, setFoundationRedirectSeconds] = useState(foundationRedirectDelaySeconds);
   const foundationAudioCleanupRef = useRef<(() => void) | null>(null);
   const foundationIntervalRef = useRef<number | null>(null);
+  const foundationFallbackTimeoutRef = useRef<number | null>(null);
   const foundationRedirectedRef = useRef(false);
 
   const stopFoundationAudio = () => {
@@ -341,6 +343,10 @@ const EntrepreneurshipSupportPage: React.FC<EntrepreneurshipSupportPageProps> = 
       window.clearInterval(foundationIntervalRef.current);
       foundationIntervalRef.current = null;
     }
+    if (foundationFallbackTimeoutRef.current !== null) {
+      window.clearTimeout(foundationFallbackTimeoutRef.current);
+      foundationFallbackTimeoutRef.current = null;
+    }
     stopFoundationAudio();
     if (typeof window !== 'undefined' && 'speechSynthesis' in window) {
       window.speechSynthesis.cancel();
@@ -350,14 +356,27 @@ const EntrepreneurshipSupportPage: React.FC<EntrepreneurshipSupportPageProps> = 
 
   const beginFoundationRedirect = () => {
     foundationRedirectedRef.current = false;
+    setPortalMode('assessment');
     setFoundationRedirectSeconds(foundationRedirectDelaySeconds);
     setFoundationRedirectOpen(true);
     stopFoundationAudio();
     startFoundationAudio();
 
+    let timerComplete = false;
+    let narrationComplete = false;
+    const maybeRedirect = () => {
+      if (timerComplete && narrationComplete) {
+        completeFoundationRedirect();
+      }
+    };
+
     if (foundationIntervalRef.current !== null) {
       window.clearInterval(foundationIntervalRef.current);
       foundationIntervalRef.current = null;
+    }
+    if (foundationFallbackTimeoutRef.current !== null) {
+      window.clearTimeout(foundationFallbackTimeoutRef.current);
+      foundationFallbackTimeoutRef.current = null;
     }
 
     const intervalId = window.setInterval(() => {
@@ -365,7 +384,8 @@ const EntrepreneurshipSupportPage: React.FC<EntrepreneurshipSupportPageProps> = 
         if (seconds <= 1) {
           window.clearInterval(intervalId);
           foundationIntervalRef.current = null;
-          completeFoundationRedirect();
+          timerComplete = true;
+          maybeRedirect();
           return 0;
         }
         return seconds - 1;
@@ -380,13 +400,27 @@ const EntrepreneurshipSupportPage: React.FC<EntrepreneurshipSupportPageProps> = 
         utterance.rate = 1.35;
         utterance.pitch = 1.03;
         utterance.volume = 0.92;
-        utterance.onend = () => undefined;
-        utterance.onerror = () => undefined;
+        utterance.onend = () => {
+          narrationComplete = true;
+          maybeRedirect();
+        };
+        utterance.onerror = () => {
+          narrationComplete = true;
+          maybeRedirect();
+        };
         window.speechSynthesis.speak(utterance);
       } catch {
-        // The visual countdown still completes the redirect if speech setup fails.
+        narrationComplete = true;
+        maybeRedirect();
       }
+    } else {
+      narrationComplete = true;
+      maybeRedirect();
     }
+
+    foundationFallbackTimeoutRef.current = window.setTimeout(() => {
+      completeFoundationRedirect();
+    }, foundationRedirectFallbackSeconds * 1000);
   };
 
   useEffect(() => {
@@ -394,6 +428,10 @@ const EntrepreneurshipSupportPage: React.FC<EntrepreneurshipSupportPageProps> = 
       if (foundationIntervalRef.current !== null) {
         window.clearInterval(foundationIntervalRef.current);
         foundationIntervalRef.current = null;
+      }
+      if (foundationFallbackTimeoutRef.current !== null) {
+        window.clearTimeout(foundationFallbackTimeoutRef.current);
+        foundationFallbackTimeoutRef.current = null;
       }
       stopFoundationAudio();
       if (typeof window !== 'undefined' && 'speechSynthesis' in window) {
