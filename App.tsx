@@ -48,6 +48,7 @@ import {
 } from './services/sessionService';
 import { canTierAccessNavItem, canTierAccessView } from './services/tierAccess';
 import { ApiError, api, apiHealth, backendAssetUrl } from './services/apiClient';
+import { getProfileAvatarMedia, isVideoMediaAsset } from './services/mediaAssets';
 import { createNativeProviderControlSession } from './services/backendApiService';
 import {
   detectWalletProviderEnvironment,
@@ -113,6 +114,7 @@ const FREE_TIER_NAME = 'Free / Community Tier';
 const PENDING_CHECKOUT_SESSION_KEY = 'hcn.pendingCheckoutSessionId';
 const ACCOUNT_RECOVERY_UI_ENABLED = true;
 const MEMBERSHIP_RETURN_PATH_ID = 'return';
+const PROFILE_UPDATED_EVENT = 'cnh:user-profile-updated';
 const MEMBERSHIP_MOBILE_STEPS = ['Start', 'Free', 'Guided', 'Accelerated'];
 const MEMBERSHIP_RETURN_INSIGHT = 'The Return – Welcome back, Traveler. Resume your journey.';
 const MEMBERSHIP_INSIGHTS: Record<string, string> = {
@@ -734,6 +736,7 @@ const App: React.FC = () => {
   const primaryScrollRef = useRef<HTMLElement | null>(null);
   const [pendingScrollWisdom, setPendingScrollWisdom] = useState(false);
   const [healthStatus, setHealthStatus] = useState<'checking' | 'online' | 'offline'>('checking');
+  const [navAvatarFailed, setNavAvatarFailed] = useState(false);
 
   const setCurrentView = (
     view: AppView,
@@ -759,6 +762,15 @@ const App: React.FC = () => {
       }
     }
   };
+
+  useEffect(() => {
+    setNavAvatarFailed(false);
+  }, [
+    user?.id,
+    user?.avatarUrl,
+    user?.profileMedia?.avatar?.url,
+    user?.profileMedia?.avatar?.objectKey,
+  ]);
 
   useEffect(() => {
     if (typeof window === 'undefined') return;
@@ -922,29 +934,7 @@ const App: React.FC = () => {
   });
 
   const toAbsoluteAssetUrl = (value: unknown, objectKey?: unknown): string | undefined => {
-    return backendAssetUrl(value) || backendAssetUrl(objectKey);
-  };
-
-  const decodeUploadObjectKeyMimeType = (objectKey: unknown): string | null => {
-    const raw = typeof objectKey === 'string' ? objectKey.trim() : '';
-    if (!raw) return null;
-    try {
-      const normalized = raw.replace(/-/g, '+').replace(/_/g, '/');
-      const padded = normalized.padEnd(Math.ceil(normalized.length / 4) * 4, '=');
-      const decoded = atob(padded);
-      const parsed = JSON.parse(decoded) as { mimeType?: unknown } | null;
-      const mimeType = String(parsed?.mimeType || '').trim().toLowerCase();
-      return mimeType || null;
-    } catch {
-      return null;
-    }
-  };
-
-  const isLikelyVideoUrl = (url: unknown): boolean => {
-    const value = typeof url === 'string' ? url.trim().toLowerCase() : '';
-    if (!value) return false;
-    if (value.startsWith('blob:')) return false;
-    return /\.(mp4|webm|ogg|mov|m4v|avi)([?#].*)?$/.test(value);
+    return backendAssetUrl(objectKey) || backendAssetUrl(value);
   };
 
   const toNullableTrimmedString = (value: unknown): string | null => {
@@ -2542,6 +2532,9 @@ const App: React.FC = () => {
     if (token) {
       setUserAuthSession(token, canonicalUpdated);
     }
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new CustomEvent(PROFILE_UPDATED_EVENT, { detail: { user: canonicalUpdated } }));
+    }
   };
 
   const handleIdentityComplete = (profileData: Partial<UserProfile>) => {
@@ -3958,6 +3951,9 @@ const App: React.FC = () => {
   const isCareersPublicExperience = !user && isCareersPublicView(currentView);
   const shouldLoadImmersiveScene =
     currentView === AppView.CONSCIOUS_MEETINGS_PORTAL || currentView === AppView.MEETING_DETAIL;
+  const navAvatarMedia = user ? getProfileAvatarMedia(user) : null;
+  const navAvatarUrl = !navAvatarFailed ? navAvatarMedia?.url || '' : '';
+  const navAvatarIsVideo = navAvatarMedia ? isVideoMediaAsset(navAvatarMedia) : false;
 
   return (
     <div className="app-scroll-root min-h-screen bg-[#05070a] text-slate-200 selection:bg-blue-500/30 flex relative">
@@ -4794,34 +4790,25 @@ const App: React.FC = () => {
                     title={user?.name || 'Guest Node'}
                   >
                     <div className="w-9 h-9 shrink-0 rounded-xl bg-gradient-to-br from-blue-600 to-teal-400 flex items-center justify-center font-black text-sm text-white shadow-xl overflow-hidden">
-                      {user?.avatarUrl ? (
-                        (() => {
-                          const avatarMimeType = decodeUploadObjectKeyMimeType(
-                            user.profileMedia?.avatar?.objectKey
-                          ) || toNullableTrimmedString(user.profileMedia?.avatar?.mimeType);
-                          const avatarIsVideo =
-                            String(avatarMimeType || '').startsWith('video/') ||
-                            isLikelyVideoUrl(user.avatarUrl);
-                          if (avatarIsVideo) {
-                            return (
-                              <video
-                                src={user.avatarUrl}
-                                className="w-full h-full object-cover"
-                                muted
-                                autoPlay
-                                loop
-                                playsInline
-                              />
-                            );
-                          }
-                          return (
-                            <img
-                              src={user.avatarUrl}
-                              alt={user.name}
-                              className="w-full h-full object-cover"
-                            />
-                          );
-                        })()
+                      {navAvatarUrl ? (
+                        navAvatarIsVideo ? (
+                          <video
+                            src={navAvatarUrl}
+                            className="w-full h-full object-cover"
+                            muted
+                            autoPlay
+                            loop
+                            playsInline
+                            onError={() => setNavAvatarFailed(true)}
+                          />
+                        ) : (
+                          <img
+                            src={navAvatarUrl}
+                            alt={user?.name || 'Member avatar'}
+                            className="w-full h-full object-cover"
+                            onError={() => setNavAvatarFailed(true)}
+                          />
+                        )
                       ) : (
                         user ? user.name.charAt(0).toUpperCase() : 'G'
                       )}

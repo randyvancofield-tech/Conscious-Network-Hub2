@@ -38,6 +38,7 @@ interface Member {
   verified: boolean;
 }
 
+const PROFILE_UPDATED_EVENT = 'cnh:user-profile-updated';
 const AUTOMATED_PROFILE_PATTERN = /\b(bot|agent|assistant|seed|system)\b/i;
 
 const toInitials = (value: string): string => {
@@ -100,6 +101,35 @@ const renderAvatarMedia = (
   );
 };
 
+const mapProfileToMember = (profile: any, activeUser: UserProfile | null): Member => {
+  const id = String(profile?.id || '');
+  const activeUserId = String(activeUser?.id || '');
+  const mergedProfile =
+    activeUser && id === activeUserId
+      ? {
+          ...profile,
+          ...activeUser,
+          avatarUrl: activeUser.avatarUrl || profile?.avatarUrl,
+          profileMedia: activeUser.profileMedia || profile?.profileMedia,
+          tier: activeUser.tier || profile?.tier,
+        }
+      : profile;
+  const imageMedia = getProfileAvatarMedia(mergedProfile);
+
+  return {
+    id,
+    name: String(mergedProfile.name || 'Node'),
+    handle: String(mergedProfile.handle || '').trim() || null,
+    role: `${String(mergedProfile.tier || 'Free / Community Tier')} Member`,
+    location: String(mergedProfile.location || 'Decentralized Hub'),
+    bio: String(mergedProfile.bio || 'Mission statement established.'),
+    image: imageMedia.url || backendAssetUrl(mergedProfile?.avatarUrl) || null,
+    imageMedia,
+    status: id === activeUserId ? 'online' : 'offline',
+    verified: true,
+  };
+};
+
 interface CommunityMembersProps {
   user: UserProfile | null;
   onSignInPrompt?: () => void;
@@ -134,27 +164,10 @@ const CommunityMembersContent: React.FC<CommunityMembersProps> = ({ user, onSign
         const payload = await api<any>('/user/directory');
 
         const directoryUsers = Array.isArray(payload?.users) ? payload.users : [];
-        const toAssetUrl = (value: unknown): string => {
-          return backendAssetUrl(value) || '';
-        };
 
         const mapped = directoryUsers
           .filter((profile: any) => profile?.id && !isLikelyAutomatedProfile(profile))
-          .map((profile: any): Member => {
-            const imageMedia = getProfileAvatarMedia(profile);
-            return {
-              id: String(profile.id),
-              name: String(profile.name || 'Node'),
-              handle: String(profile.handle || '').trim() || null,
-              role: `${String(profile.tier || 'Free / Community Tier')} Member`,
-              location: String(profile.location || 'Decentralized Hub'),
-              bio: String(profile.bio || 'Mission statement established.'),
-              image: imageMedia.url || toAssetUrl(profile?.avatarUrl) || null,
-              imageMedia,
-              status: user?.id === profile.id ? 'online' : 'offline',
-              verified: true,
-            };
-          })
+          .map((profile: any): Member => mapProfileToMember(profile, user))
           .sort((a, b) => a.name.localeCompare(b.name));
 
         setAllMembers(mapped);
@@ -169,12 +182,42 @@ const CommunityMembersContent: React.FC<CommunityMembersProps> = ({ user, onSign
     };
 
     void loadMembers();
-    const handleStorage = () => {
+    const refreshDirectory = () => {
       void loadMembers();
     };
-    window.addEventListener('storage', handleStorage);
-    return () => window.removeEventListener('storage', handleStorage);
-  }, [user?.id]);
+    window.addEventListener('storage', refreshDirectory);
+    window.addEventListener(PROFILE_UPDATED_EVENT, refreshDirectory as EventListener);
+    return () => {
+      window.removeEventListener('storage', refreshDirectory);
+      window.removeEventListener(PROFILE_UPDATED_EVENT, refreshDirectory as EventListener);
+    };
+  }, [
+    user?.id,
+    user?.name,
+    user?.handle,
+    user?.tier,
+    user?.avatarUrl,
+    user?.profileMedia?.avatar?.url,
+    user?.profileMedia?.avatar?.objectKey,
+    user?.profileMedia?.avatar?.mimeType,
+  ]);
+
+  useEffect(() => {
+    if (!user?.id) return;
+    const mergeActiveUser = (member: Member): Member =>
+      member.id === user.id ? mapProfileToMember({ ...member, ...user, id: user.id }, user) : member;
+    setAllMembers((current) => current.map(mergeActiveUser));
+    setSelectedMember((current) => (current ? mergeActiveUser(current) : current));
+  }, [
+    user?.id,
+    user?.name,
+    user?.handle,
+    user?.tier,
+    user?.avatarUrl,
+    user?.profileMedia?.avatar?.url,
+    user?.profileMedia?.avatar?.objectKey,
+    user?.profileMedia?.avatar?.mimeType,
+  ]);
 
   const filteredMembers = useMemo(
     () =>
