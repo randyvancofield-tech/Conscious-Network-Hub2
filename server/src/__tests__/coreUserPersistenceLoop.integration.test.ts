@@ -842,6 +842,52 @@ describe('Core user persistence loop', () => {
     expect(publicSocialResponse.headers.get('content-type')).toContain('image/png');
     expect(Buffer.from(await publicSocialResponse.arrayBuffer()).equals(pngBytes)).toBe(true);
 
+    const additionalSocialMediaCases = [
+      {
+        filename: 'social.jpg',
+        mimeType: 'image/jpeg',
+        bytes: Buffer.from('/9j/4AAQSkZJRgABAQAAAQABAAD/2w==', 'base64'),
+      },
+      {
+        filename: 'social.gif',
+        mimeType: 'image/gif',
+        bytes: Buffer.from('R0lGODlhAQABAIAAAAAAAP///ywAAAAAAQABAAACAUwAOw==', 'base64'),
+      },
+      {
+        filename: 'social.mp4',
+        mimeType: 'video/mp4',
+        bytes: Buffer.from([
+          0x00, 0x00, 0x00, 0x18, 0x66, 0x74, 0x79, 0x70,
+          0x6d, 0x70, 0x34, 0x32, 0x00, 0x00, 0x00, 0x00,
+          0x6d, 0x70, 0x34, 0x32, 0x69, 0x73, 0x6f, 0x6d,
+        ]),
+      },
+    ];
+
+    for (const mediaCase of additionalSocialMediaCases) {
+      const form = new FormData();
+      form.set(
+        'file',
+        new Blob([mediaCase.bytes], { type: mediaCase.mimeType }),
+        mediaCase.filename
+      );
+      const upload = await requestMultipart({
+        method: 'POST',
+        path: '/api/upload/social',
+        token: alphaToken,
+        form,
+      });
+      expect(upload.status).toBe(200);
+      const objectKey = String(upload.body?.media?.objectKey || '');
+      expect(String(upload.body?.fileUrl || '')).toContain('/uploads/object/');
+      expect(objectKey).toBeTruthy();
+
+      const response = await fetch(`${baseUrl}/uploads/object/${encodeURIComponent(objectKey)}`);
+      expect(response.status).toBe(200);
+      expect(response.headers.get('content-type')).toContain(mediaCase.mimeType);
+      expect(Buffer.from(await response.arrayBuffer()).equals(mediaCase.bytes)).toBe(true);
+    }
+
     const staleFrontendProtectedSocialUrl =
       `https://conscious-network.org/api/upload/object/${encodeURIComponent(socialUploadObjectKey)}`;
     const expectedCanonicalSocialUrl =

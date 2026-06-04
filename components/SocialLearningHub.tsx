@@ -14,6 +14,7 @@ import {
   getProfileAvatarMedia,
   isVideoMediaAsset,
   normalizeMediaAsset,
+  type MediaAssetLike,
   type NormalizedMediaAsset,
 } from '../services/mediaAssets';
 import SocialProfileViewer, { type SocialProfileView } from './SocialProfileViewer';
@@ -43,6 +44,12 @@ interface NodeContent {
   visibility?: 'public' | 'private';
   comments: Comment[];
 }
+
+type SocialUploadMedia = MediaAssetLike & {
+  access?: unknown;
+  category?: unknown;
+  sizeBytes?: unknown;
+};
 
 interface SelectedUpload {
   file: File;
@@ -377,7 +384,17 @@ const SocialLearningHubContent: React.FC<SocialLearningHubProps> = ({
           body: uploadPayload,
         });
 
-        const uploadedUrl = normalizeMediaAsset({ url: uploadData?.fileUrl }).url || '';
+        const uploadMedia =
+          uploadData?.media && typeof uploadData.media === 'object'
+            ? (uploadData.media as SocialUploadMedia)
+            : null;
+        const uploadObjectKey =
+          typeof uploadMedia?.objectKey === 'string' ? uploadMedia.objectKey.trim() : '';
+        const uploadedMedia = normalizeMediaAsset(
+          uploadMedia ? { ...uploadMedia, url: uploadObjectKey || uploadMedia.url } : null,
+          uploadData?.fileUrl
+        );
+        const uploadedUrl = uploadedMedia.url || '';
         if (!uploadedUrl) {
           throw new Error('Media upload completed without a file URL');
         }
@@ -386,14 +403,8 @@ const SocialLearningHubContent: React.FC<SocialLearningHubProps> = ({
           {
             mediaType: selectedFile.type,
             url: uploadedUrl,
-            storageProvider:
-              typeof uploadData?.media?.storageProvider === 'string'
-                ? uploadData.media.storageProvider
-                : null,
-            objectKey:
-              typeof uploadData?.media?.objectKey === 'string'
-                ? uploadData.media.objectKey
-                : null,
+            storageProvider: uploadedMedia.storageProvider,
+            objectKey: uploadedMedia.objectKey,
           },
         ];
       }
