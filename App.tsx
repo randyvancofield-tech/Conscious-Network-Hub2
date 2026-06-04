@@ -51,6 +51,7 @@ import { ApiError, api, apiHealth, backendAssetUrl } from './services/apiClient'
 import { getProfileAvatarMedia, isVideoMediaAsset } from './services/mediaAssets';
 import { createNativeProviderControlSession } from './services/backendApiService';
 import {
+  WALLET_PROVIDER_UPDATED_EVENT,
   detectWalletProviderEnvironment,
   readWalletChainId,
   walletErrorMessage,
@@ -781,6 +782,7 @@ const App: React.FC = () => {
     refreshWalletEnvironment();
     window.addEventListener('focus', refreshWalletEnvironment);
     window.addEventListener('ethereum#initialized', refreshWalletEnvironment as EventListener);
+    window.addEventListener(WALLET_PROVIDER_UPDATED_EVENT, refreshWalletEnvironment as EventListener);
     const ethereum = (window as any).ethereum;
     ethereum?.on?.('connect', refreshWalletEnvironment);
     ethereum?.on?.('disconnect', refreshWalletEnvironment);
@@ -790,6 +792,7 @@ const App: React.FC = () => {
     return () => {
       window.removeEventListener('focus', refreshWalletEnvironment);
       window.removeEventListener('ethereum#initialized', refreshWalletEnvironment as EventListener);
+      window.removeEventListener(WALLET_PROVIDER_UPDATED_EVENT, refreshWalletEnvironment as EventListener);
       ethereum?.removeListener?.('connect', refreshWalletEnvironment);
       ethereum?.removeListener?.('disconnect', refreshWalletEnvironment);
       ethereum?.removeListener?.('accountsChanged', refreshWalletEnvironment);

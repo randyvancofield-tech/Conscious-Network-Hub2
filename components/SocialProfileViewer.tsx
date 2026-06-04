@@ -260,7 +260,7 @@ const SocialProfileViewerContent: React.FC<SocialProfileViewerProps> = ({
                     {renderAvatarMedia(
                       avatarMedia,
                       profileName,
-                      'h-20 w-20 rounded-2xl border-4 border-[#05070a] object-cover shadow-2xl sm:h-24 sm:w-24'
+                      'h-20 w-20 rounded-2xl border-4 border-[#05070a] object-cover object-top shadow-2xl sm:h-24 sm:w-24'
                     )}
                   </div>
                   <div className="min-w-0 flex-1">

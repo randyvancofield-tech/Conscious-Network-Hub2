@@ -7,6 +7,7 @@ export type WalletProviderState =
 
 export interface WalletProviderEnvironment {
   provider: any | null;
+  providerName: string | null;
   hasProvider: boolean;
   isMobile: boolean;
   isMetaMask: boolean;
@@ -21,8 +22,104 @@ const MOBILE_USER_AGENT_PATTERN =
   /android|webos|iphone|ipad|ipod|blackberry|iemobile|opera mini/i;
 
 const METAMASK_MOBILE_USER_AGENT_PATTERN = /metamaskmobile/i;
+export const WALLET_PROVIDER_UPDATED_EVENT = 'cnh:wallet-provider-updated';
+
+interface Eip6963ProviderDetail {
+  info?: {
+    name?: string;
+    rdns?: string;
+  };
+  provider?: any;
+}
+
+const announcedWalletProviders: Eip6963ProviderDetail[] = [];
+let eip6963DiscoveryInitialized = false;
 
 const canUseWindow = (): boolean => typeof window !== 'undefined';
+
+const isUsableWalletProvider = (provider: any): boolean => Boolean(provider?.request);
+
+const isMetaMaskProvider = (provider: any, detail?: Eip6963ProviderDetail | null): boolean => {
+  const name = String(detail?.info?.name || '').trim().toLowerCase();
+  const rdns = String(detail?.info?.rdns || '').trim().toLowerCase();
+  return Boolean(
+    provider?.isMetaMask ||
+      name.includes('metamask') ||
+      rdns === 'io.metamask' ||
+      rdns.includes('metamask')
+  );
+};
+
+const walletProviderName = (provider: any, detail?: Eip6963ProviderDetail | null): string | null => {
+  const announcedName = String(detail?.info?.name || '').trim();
+  if (announcedName) return announcedName;
+  if (isMetaMaskProvider(provider, detail)) return 'MetaMask';
+  return null;
+};
+
+const notifyWalletProviderUpdated = (): void => {
+  if (!canUseWindow()) return;
+  window.dispatchEvent(new Event(WALLET_PROVIDER_UPDATED_EVENT));
+};
+
+const ensureEip6963Discovery = (): void => {
+  if (!canUseWindow() || eip6963DiscoveryInitialized) return;
+  eip6963DiscoveryInitialized = true;
+
+  window.addEventListener('eip6963:announceProvider', (event: Event) => {
+    const detail = (event as CustomEvent<Eip6963ProviderDetail>).detail;
+    if (!detail?.provider) return;
+
+    const alreadyKnown = announcedWalletProviders.some(
+      (entry) =>
+        entry.provider === detail.provider ||
+        (entry.info?.rdns && detail.info?.rdns && entry.info.rdns === detail.info.rdns)
+    );
+    if (!alreadyKnown) {
+      announcedWalletProviders.push(detail);
+      notifyWalletProviderUpdated();
+    }
+  });
+};
+
+const requestEip6963Providers = (): void => {
+  if (!canUseWindow()) return;
+  ensureEip6963Discovery();
+  window.dispatchEvent(new Event('eip6963:requestProvider'));
+};
+
+const collectInjectedWalletProviders = (): Eip6963ProviderDetail[] => {
+  if (!canUseWindow()) return [];
+
+  requestEip6963Providers();
+  const ethereum = (window as any).ethereum || null;
+  const injectedProviders = Array.isArray(ethereum?.providers)
+    ? ethereum.providers
+    : ethereum
+      ? [ethereum]
+      : [];
+  const candidates: Eip6963ProviderDetail[] = [
+    ...announcedWalletProviders,
+    ...injectedProviders.map((provider: any) => ({ provider })),
+  ];
+  const seen = new Set<any>();
+
+  return candidates.filter((detail) => {
+    const provider = detail.provider;
+    if (!isUsableWalletProvider(provider) || seen.has(provider)) return false;
+    seen.add(provider);
+    return true;
+  });
+};
+
+const selectWalletProvider = (): Eip6963ProviderDetail | null => {
+  const providers = collectInjectedWalletProviders();
+  return (
+    providers.find((detail) => isMetaMaskProvider(detail.provider, detail)) ||
+    providers[0] ||
+    null
+  );
+};
 
 export const isLikelyMobileWalletDevice = (): boolean => {
   if (!canUseWindow()) return false;
@@ -52,11 +149,13 @@ export const buildMetaMaskDappDeepLink = (rawUrl?: string): string | null => {
 };
 
 export const detectWalletProviderEnvironment = (rawUrl?: string): WalletProviderEnvironment => {
-  const provider = canUseWindow() ? (window as any).ethereum || null : null;
+  const selectedProvider = selectWalletProvider();
+  const provider = selectedProvider?.provider || null;
+  const providerName = walletProviderName(provider, selectedProvider);
   const hasProvider = Boolean(provider?.request);
   const isMobile = isLikelyMobileWalletDevice();
   const userAgent = canUseWindow() ? navigator.userAgent || '' : '';
-  const isMetaMask = Boolean(provider?.isMetaMask);
+  const isMetaMask = isMetaMaskProvider(provider, selectedProvider);
   const isMetaMaskMobileBrowser =
     isMobile && (isMetaMask || METAMASK_MOBILE_USER_AGENT_PATTERN.test(userAgent));
   const deepLinkUrl = buildMetaMaskDappDeepLink(rawUrl);
@@ -64,6 +163,7 @@ export const detectWalletProviderEnvironment = (rawUrl?: string): WalletProvider
   if (hasProvider && isMetaMaskMobileBrowser) {
     return {
       provider,
+      providerName,
       hasProvider,
       isMobile,
       isMetaMask,
@@ -78,6 +178,7 @@ export const detectWalletProviderEnvironment = (rawUrl?: string): WalletProvider
   if (hasProvider && isMobile) {
     return {
       provider,
+      providerName,
       hasProvider,
       isMobile,
       isMetaMask,
@@ -92,12 +193,13 @@ export const detectWalletProviderEnvironment = (rawUrl?: string): WalletProvider
   if (hasProvider) {
     return {
       provider,
+      providerName,
       hasProvider,
       isMobile,
       isMetaMask,
       isMetaMaskMobileBrowser,
       state: 'desktop_extension_available',
-      guidance: 'Wallet extension detected. Continue with the gasless signature.',
+      guidance: `${providerName || 'Wallet extension'} detected. Continue with the gasless signature.`,
       actionLabel: null,
       deepLinkUrl,
     };
@@ -106,6 +208,7 @@ export const detectWalletProviderEnvironment = (rawUrl?: string): WalletProvider
   if (isMobile) {
     return {
       provider,
+      providerName,
       hasProvider,
       isMobile,
       isMetaMask,
@@ -121,6 +224,7 @@ export const detectWalletProviderEnvironment = (rawUrl?: string): WalletProvider
 
   return {
     provider,
+    providerName,
     hasProvider,
     isMobile,
     isMetaMask,
