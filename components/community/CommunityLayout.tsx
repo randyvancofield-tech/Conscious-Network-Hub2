@@ -57,8 +57,10 @@ const isVideoMediaAsset = (url?: string | null, mimeType?: string | null): boole
   return isLikelyVideoUrl(url);
 };
 
-const normalizeMediaUrl = (value: unknown): string =>
-  backendAssetUrl(value) || (typeof value === 'string' ? value.trim() : '');
+const normalizeMediaUrl = (value: unknown, objectKey?: unknown): string =>
+  backendAssetUrl(objectKey) ||
+  backendAssetUrl(value) ||
+  (typeof value === 'string' ? value.trim() : '');
 
 const toInitials = (value: string): string => {
   const parts = String(value || '')
@@ -204,17 +206,23 @@ export const ConsciousIdentity: React.FC<ConsciousIdentityProps> = ({
     location: user.location || '',
     dateOfBirth: user.dateOfBirth || '',
     interests: user.interests || [] as string[],
-    avatarUrl: normalizeMediaUrl(user.avatarUrl),
-    bannerUrl: normalizeMediaUrl(user.bannerUrl),
+    avatarUrl: normalizeMediaUrl(user.avatarUrl, user.profileMedia?.avatar?.objectKey),
+    bannerUrl: normalizeMediaUrl(user.bannerUrl, user.profileMedia?.cover?.objectKey),
     profileMedia: {
       avatar: {
-        url: normalizeMediaUrl(user.profileMedia?.avatar?.url || user.avatarUrl) || null,
+        url: normalizeMediaUrl(
+          user.profileMedia?.avatar?.url || user.avatarUrl,
+          user.profileMedia?.avatar?.objectKey
+        ) || null,
         storageProvider: user.profileMedia?.avatar?.storageProvider || null,
         objectKey: user.profileMedia?.avatar?.objectKey || null,
         mimeType: user.profileMedia?.avatar?.mimeType || null,
       },
       cover: {
-        url: normalizeMediaUrl(user.profileMedia?.cover?.url || user.bannerUrl) || null,
+        url: normalizeMediaUrl(
+          user.profileMedia?.cover?.url || user.bannerUrl,
+          user.profileMedia?.cover?.objectKey
+        ) || null,
         storageProvider: user.profileMedia?.cover?.storageProvider || null,
         objectKey: user.profileMedia?.cover?.objectKey || null,
         mimeType: user.profileMedia?.cover?.mimeType || null,
@@ -297,13 +305,14 @@ export const ConsciousIdentity: React.FC<ConsciousIdentityProps> = ({
         body: payload,
       });
 
-      const fileUrl = normalizeMediaUrl(data?.fileUrl);
+      const media = data?.media || {};
+      const objectKey = typeof media?.objectKey === 'string' ? media.objectKey.trim() : '';
+      const fileUrl = normalizeMediaUrl(data?.fileUrl, objectKey);
       if (!fileUrl) {
         throw new Error('Upload succeeded without a file URL');
       }
 
-      const media = data?.media || {};
-      const mediaUrl = normalizeMediaUrl(media?.url) || fileUrl;
+      const mediaUrl = normalizeMediaUrl(media?.url, objectKey) || fileUrl;
       setFormData((prev) => ({
         ...prev,
         [field]: fileUrl,

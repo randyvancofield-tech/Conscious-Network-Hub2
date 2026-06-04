@@ -32,8 +32,8 @@ const Profile: React.FC<ProfileProps> = ({ user, onUserUpdate }) => {
   const toAssetUrl = (url?: string) => {
     return backendAssetUrl(url);
   };
-  const normalizeUploadUrl = (url?: unknown) =>
-    backendAssetUrl(url) || (typeof url === 'string' ? url.trim() : '');
+  const normalizeUploadUrl = (url?: unknown, objectKey?: unknown) =>
+    backendAssetUrl(objectKey) || backendAssetUrl(url) || (typeof url === 'string' ? url.trim() : '');
   const getAvatarUrl = (profile: UserProfile) => getProfileAvatarMedia(profile).url || toAssetUrl(profile.avatarUrl);
   const getCoverUrl = (profile: UserProfile) => getProfileCoverMedia(profile).url || toAssetUrl(profile.bannerUrl);
   const getBackgroundUrl = (profile: UserProfile) =>
@@ -148,15 +148,17 @@ const Profile: React.FC<ProfileProps> = ({ user, onUserUpdate }) => {
           method: 'POST',
           body: formData,
         });
-        avatarUrl = normalizeUploadUrl(uploadData.fileUrl);
+        const avatarMedia = uploadData?.media || {};
+        const avatarObjectKey = typeof avatarMedia?.objectKey === 'string' ? avatarMedia.objectKey.trim() : '';
+        avatarUrl = normalizeUploadUrl(uploadData.fileUrl, avatarObjectKey);
         setAvatarPreviewUrl(avatarUrl || undefined);
         profileMedia = {
           ...profileMedia,
           avatar: {
-            url: normalizeUploadUrl(uploadData?.media?.url) || avatarUrl,
-            storageProvider: uploadData?.media?.storageProvider || 'local',
-            objectKey: uploadData?.media?.objectKey || null,
-            mimeType: uploadData?.media?.mimeType || avatarImage.type || null,
+            url: normalizeUploadUrl(avatarMedia?.url, avatarObjectKey) || avatarUrl,
+            storageProvider: avatarMedia?.storageProvider || 'local',
+            objectKey: avatarObjectKey || null,
+            mimeType: avatarMedia?.mimeType || avatarImage.type || null,
           },
         };
       }
@@ -168,15 +170,17 @@ const Profile: React.FC<ProfileProps> = ({ user, onUserUpdate }) => {
           method: 'POST',
           body: formData,
         });
-        bannerUrl = normalizeUploadUrl(uploadData.fileUrl);
+        const coverMedia = uploadData?.media || {};
+        const coverObjectKey = typeof coverMedia?.objectKey === 'string' ? coverMedia.objectKey.trim() : '';
+        bannerUrl = normalizeUploadUrl(uploadData.fileUrl, coverObjectKey);
         setCoverPreviewUrl(bannerUrl || undefined);
         profileMedia = {
           ...profileMedia,
           cover: {
-            url: normalizeUploadUrl(uploadData?.media?.url) || bannerUrl,
-            storageProvider: uploadData?.media?.storageProvider || 'local',
-            objectKey: uploadData?.media?.objectKey || null,
-            mimeType: uploadData?.media?.mimeType || coverImage.type || null,
+            url: normalizeUploadUrl(coverMedia?.url, coverObjectKey) || bannerUrl,
+            storageProvider: coverMedia?.storageProvider || 'local',
+            objectKey: coverObjectKey || null,
+            mimeType: coverMedia?.mimeType || coverImage.type || null,
           },
         };
       }
