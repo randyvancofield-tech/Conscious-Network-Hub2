@@ -101,19 +101,25 @@ const renderAvatarMedia = (
   );
 };
 
+const mergeActiveUserProfile = (profile: any, activeUser: UserProfile | null): any => {
+  const id = String(profile?.id || '');
+  const activeUserId = String(activeUser?.id || '');
+  if (!profile || !activeUser || id !== activeUserId) return profile;
+
+  return {
+    ...profile,
+    ...activeUser,
+    avatarUrl: activeUser.avatarUrl || profile?.avatarUrl,
+    bannerUrl: activeUser.bannerUrl || profile?.bannerUrl,
+    profileMedia: activeUser.profileMedia || profile?.profileMedia,
+    tier: activeUser.tier || profile?.tier,
+  };
+};
+
 const mapProfileToMember = (profile: any, activeUser: UserProfile | null): Member => {
   const id = String(profile?.id || '');
   const activeUserId = String(activeUser?.id || '');
-  const mergedProfile =
-    activeUser && id === activeUserId
-      ? {
-          ...profile,
-          ...activeUser,
-          avatarUrl: activeUser.avatarUrl || profile?.avatarUrl,
-          profileMedia: activeUser.profileMedia || profile?.profileMedia,
-          tier: activeUser.tier || profile?.tier,
-        }
-      : profile;
+  const mergedProfile = mergeActiveUserProfile(profile, activeUser);
   const imageMedia = getProfileAvatarMedia(mergedProfile);
 
   return {
@@ -197,9 +203,13 @@ const CommunityMembersContent: React.FC<CommunityMembersProps> = ({ user, onSign
     user?.handle,
     user?.tier,
     user?.avatarUrl,
+    user?.bannerUrl,
     user?.profileMedia?.avatar?.url,
     user?.profileMedia?.avatar?.objectKey,
     user?.profileMedia?.avatar?.mimeType,
+    user?.profileMedia?.cover?.url,
+    user?.profileMedia?.cover?.objectKey,
+    user?.profileMedia?.cover?.mimeType,
   ]);
 
   useEffect(() => {
@@ -208,15 +218,22 @@ const CommunityMembersContent: React.FC<CommunityMembersProps> = ({ user, onSign
       member.id === user.id ? mapProfileToMember({ ...member, ...user, id: user.id }, user) : member;
     setAllMembers((current) => current.map(mergeActiveUser));
     setSelectedMember((current) => (current ? mergeActiveUser(current) : current));
+    setSelectedProfileView((current) =>
+      current?.profile ? { ...current, profile: mergeActiveUserProfile(current.profile, user) } : current
+    );
   }, [
     user?.id,
     user?.name,
     user?.handle,
     user?.tier,
     user?.avatarUrl,
+    user?.bannerUrl,
     user?.profileMedia?.avatar?.url,
     user?.profileMedia?.avatar?.objectKey,
     user?.profileMedia?.avatar?.mimeType,
+    user?.profileMedia?.cover?.url,
+    user?.profileMedia?.cover?.objectKey,
+    user?.profileMedia?.cover?.mimeType,
   ]);
 
   const filteredMembers = useMemo(
@@ -250,7 +267,7 @@ const CommunityMembersContent: React.FC<CommunityMembersProps> = ({ user, onSign
         const params = new URLSearchParams({ limit: '50' });
         if (cursor) params.set('cursor', cursor);
         const data = await api<any>(`/social/profile/${memberId}?${params.toString()}`);
-        if (!profile) profile = data?.profile || null;
+        if (!profile) profile = mergeActiveUserProfile(data?.profile || null, user);
         const pagePosts = Array.isArray(data?.posts) ? data.posts : [];
         for (const post of pagePosts) {
           const id = String(post?.id || '').trim();

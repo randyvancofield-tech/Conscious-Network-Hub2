@@ -2,6 +2,7 @@ import { backendAssetUrl } from './apiClient';
 
 export interface MediaAssetLike {
   url?: unknown;
+  access?: unknown;
   storageProvider?: unknown;
   objectKey?: unknown;
   mimeType?: unknown;
@@ -52,17 +53,26 @@ export const decodeUploadObjectKeyMimeType = (objectKey?: unknown): string | nul
   }
 };
 
+const uploadObjectPath = (objectKey: string, access?: string | null): string =>
+  `${access === 'private' ? '/api/upload/object' : '/uploads/object'}/${encodeURIComponent(objectKey)}`;
+
 export const normalizeMediaAsset = (
   source?: MediaAssetLike | null,
   fallbackUrl?: unknown
 ): NormalizedMediaAsset => {
+  const access = trimString(source?.access)?.toLowerCase() || null;
   const sourceUrl = trimString(source?.url);
   const fallback = trimString(fallbackUrl);
   const objectKey =
     trimString(source?.objectKey) ||
     extractUploadObjectKey(sourceUrl) ||
     extractUploadObjectKey(fallback);
-  const resolvedUrl = backendAssetUrl(sourceUrl || fallback || objectKey || '') || null;
+  const objectKeyUrl = objectKey ? uploadObjectPath(objectKey, access) : '';
+  const resolvedUrl =
+    backendAssetUrl(objectKeyUrl) ||
+    backendAssetUrl(sourceUrl) ||
+    backendAssetUrl(fallback) ||
+    null;
   const resolvedObjectKey = objectKey || extractUploadObjectKey(resolvedUrl);
 
   return {
