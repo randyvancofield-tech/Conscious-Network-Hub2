@@ -5,7 +5,7 @@
  * Google Cloud Vertex AI directly. This ensures API keys are never exposed
  * to the frontend.
  */
-import { api, getBackendBaseUrl } from './apiClient';
+import { ApiError, api, getBackendBaseUrl } from './apiClient';
 
 export interface GroundingChunk {
   text?: string;
@@ -346,7 +346,7 @@ export interface ProviderCrmWorkspaceResult {
 }
 
 export type MeetingSessionMode = 'virtual' | 'solo' | 'immersive-5d';
-export type MeetingSessionStatus = 'scheduled' | 'live' | 'ended';
+export type MeetingSessionStatus = 'scheduled' | 'live' | 'ended' | 'archived';
 
 export interface MeetingSessionParticipant {
   id: string;
@@ -489,6 +489,59 @@ export interface ExternalMeetingJoinResult {
   guestSessionToken: string;
   session: MeetingSessionSummary;
 }
+
+export type MeetingLifecycleErrorCode = 'MEETING_SESSION_NOT_LIVE' | 'MEETING_SESSION_ENDED';
+
+export interface MeetingLifecycleErrorInfo {
+  code: MeetingLifecycleErrorCode;
+  status: number;
+  lifecycleStatus: string | null;
+  message: string;
+}
+
+const MEETING_LIFECYCLE_MESSAGES: Record<MeetingLifecycleErrorCode, string> = {
+  MEETING_SESSION_NOT_LIVE:
+    'This meeting is not live yet. The provider must start the session before users or guests can enter.',
+  MEETING_SESSION_ENDED:
+    'This meeting has ended. Active room access and signaling are closed; use the archive or session summary state instead.',
+};
+
+export const getMeetingLifecycleErrorInfo = (error: unknown): MeetingLifecycleErrorInfo | null => {
+  if (!(error instanceof ApiError) || !error.data || typeof error.data !== 'object') {
+    return null;
+  }
+
+  const payload = error.data as {
+    code?: unknown;
+    lifecycleStatus?: unknown;
+    error?: unknown;
+  };
+  const code = String(payload.code || '').trim() as MeetingLifecycleErrorCode;
+  if (code !== 'MEETING_SESSION_NOT_LIVE' && code !== 'MEETING_SESSION_ENDED') {
+    return null;
+  }
+
+  return {
+    code,
+    status: error.status,
+    lifecycleStatus: typeof payload.lifecycleStatus === 'string' ? payload.lifecycleStatus : null,
+    message:
+      typeof payload.error === 'string' && payload.error.trim()
+        ? payload.error.trim()
+        : MEETING_LIFECYCLE_MESSAGES[code],
+  };
+};
+
+export const getMeetingLifecycleMessage = (error: unknown, fallback: string): string => {
+  const lifecycle = getMeetingLifecycleErrorInfo(error);
+  return lifecycle ? MEETING_LIFECYCLE_MESSAGES[lifecycle.code] : fallback;
+};
+
+const rethrowMeetingLifecycleError = (error: unknown): void => {
+  if (getMeetingLifecycleErrorInfo(error)) {
+    throw error;
+  }
+};
 
 export interface NativeProviderSessionResult {
   token: string;
@@ -1428,7 +1481,8 @@ class BackendAPIService {
       });
       if (!data?.nativeRoom || !data?.participantId) return null;
       return data as MeetingRoomConfig;
-    } catch {
+    } catch (error) {
+      rethrowMeetingLifecycleError(error);
       return null;
     }
   }
@@ -1451,7 +1505,8 @@ class BackendAPIService {
         signals: data.signals as MeetingSignalMessage[],
         latestSignalAtMs: Number(data.latestSignalAtMs || afterMs || 0),
       };
-    } catch {
+    } catch (error) {
+      rethrowMeetingLifecycleError(error);
       return null;
     }
   }
@@ -1476,7 +1531,8 @@ class BackendAPIService {
         },
       });
       return true;
-    } catch {
+    } catch (error) {
+      rethrowMeetingLifecycleError(error);
       return false;
     }
   }
@@ -1496,7 +1552,8 @@ class BackendAPIService {
       });
       if (!data?.session) return null;
       return data.session as MeetingSessionSummary;
-    } catch {
+    } catch (error) {
+      rethrowMeetingLifecycleError(error);
       return null;
     }
   }
@@ -1525,7 +1582,8 @@ class BackendAPIService {
       });
       if (!data?.session || !data?.link) return null;
       return data as ExternalMeetingPreview;
-    } catch {
+    } catch (error) {
+      rethrowMeetingLifecycleError(error);
       return null;
     }
   }
@@ -1551,7 +1609,8 @@ class BackendAPIService {
       });
       if (!data?.guest || !data?.guestSessionToken || !data?.session) return null;
       return data as ExternalMeetingJoinResult;
-    } catch {
+    } catch (error) {
+      rethrowMeetingLifecycleError(error);
       return null;
     }
   }

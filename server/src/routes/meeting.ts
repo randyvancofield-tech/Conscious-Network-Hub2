@@ -82,6 +82,7 @@ interface MeetingSessionRecord {
   invitedMembers: Map<string, MeetingInviteRecord>;
   externalLinks: Map<string, ExternalLinkRecord>;
   signals: Map<string, MeetingSignalRecord>;
+  metadataExtras: Record<string, unknown>;
 }
 
 interface ExternalInviteTokenPayload {
@@ -125,7 +126,41 @@ const MAX_SIGNAL_PAYLOAD_BYTES = 12 * 1024;
 
 const mapToArray = <T>(value: Map<string, T>): T[] => Array.from(value.values());
 
+const RESERVED_SESSION_METADATA_KEYS = new Set([
+  'providerDid',
+  'providerUserId',
+  'providerDisplayName',
+  'description',
+  'focusArea',
+  'mode',
+  'maxViewers',
+  'scheduledAtMs',
+  'createdAtMs',
+  'updatedAtMs',
+  'publicStream',
+  'nativeRoomEnabled',
+  'immersiveEnabled',
+  'localRecordingAllowed',
+  'routeKey',
+  'vodPath',
+  'invitedMembers',
+  'externalLinks',
+  'signals',
+]);
+
+const sessionMetadataExtras = (metadata: unknown): Record<string, unknown> => {
+  if (!metadata || typeof metadata !== 'object' || Array.isArray(metadata)) {
+    return {};
+  }
+  return Object.fromEntries(
+    Object.entries(metadata as Record<string, unknown>).filter(
+      ([key]) => !RESERVED_SESSION_METADATA_KEYS.has(key)
+    )
+  );
+};
+
 const sessionMetadata = (session: MeetingSessionRecord) => ({
+  ...session.metadataExtras,
   providerDid: session.providerDid,
   providerUserId: session.providerUserId,
   providerDisplayName: session.providerDisplayName,
@@ -148,7 +183,7 @@ const sessionMetadata = (session: MeetingSessionRecord) => ({
 });
 
 const sessionFromRow = (row: any): MeetingSessionRecord => {
-  const metadata = row?.metadata && typeof row.metadata === 'object' ? row.metadata : {};
+  const metadata = row?.metadata && typeof row.metadata === 'object' && !Array.isArray(row.metadata) ? row.metadata : {};
   const participants = Array.isArray(row?.participants) ? row.participants : [];
   const invitedMembers = Array.isArray(metadata.invitedMembers) ? metadata.invitedMembers : [];
   const externalLinks = Array.isArray(metadata.externalLinks) ? metadata.externalLinks : [];
@@ -191,6 +226,7 @@ const sessionFromRow = (row: any): MeetingSessionRecord => {
         .filter((entry: MeetingSignalRecord) => entry?.id && entry?.fromParticipantId && entry?.type)
         .map((entry: MeetingSignalRecord) => [entry.id, entry])
     ),
+    metadataExtras: sessionMetadataExtras(metadata),
   };
 };
 
@@ -527,11 +563,16 @@ const findProviderSessionOrDeny = async (
 const ensureSessionCapacity = (session: MeetingSessionRecord): boolean =>
   session.participants.size < session.maxViewers;
 
+const clearActiveSessionSignals = (session: MeetingSessionRecord): void => {
+  session.signals.clear();
+};
+
 const maybeFinalizeSession = async (session: MeetingSessionRecord): Promise<void> => {
   if (session.participants.size > 0) return;
   session.status = 'ended';
   session.endedAtMs = Date.now();
   session.updatedAtMs = session.endedAtMs;
+  clearActiveSessionSignals(session);
   await saveMeetingSession(session);
 };
 
@@ -738,6 +779,7 @@ providerRouter.post('/sessions', requireProviderScope('provider:host'), async (r
     invitedMembers: new Map<string, MeetingInviteRecord>(),
     externalLinks: new Map<string, ExternalLinkRecord>(),
     signals: new Map<string, MeetingSignalRecord>(),
+    metadataExtras: {},
   };
 
   await saveMeetingSession(record);
@@ -813,9 +855,7 @@ providerRouter.post('/sessions/:sessionId/end', requireProviderScope('provider:h
   session.status = 'ended';
   session.endedAtMs = Date.now();
   session.updatedAtMs = session.endedAtMs;
-  session.participants.clear();
-  session.invitedMembers.clear();
-  session.externalLinks.clear();
+  clearActiveSessionSignals(session);
 
   recordAuditEvent(req, {
     domain: 'social',
@@ -1141,6 +1181,14 @@ userRouter.get('/sessions/:sessionId/signals', async (req: Request, res: Respons
     res.status(403).json({ error: 'Meeting access required for this session' });
     return;
   }
+  if (session.status === 'ended') {
+    res.status(410).json({
+      error: 'Meeting signal history is unavailable after the session has ended',
+      code: 'MEETING_SESSION_ENDED',
+      lifecycleStatus: session.status,
+    });
+    return;
+  }
 
   const participantId = getParticipantIdForUser(session, viewer);
   const afterMs = Number(req.query.afterMs || 0);
@@ -1224,8 +1272,16 @@ userRouter.post('/sessions/:sessionId/join', async (req: Request, res: Response)
 
   const sessionId = String(req.params.sessionId || '').trim();
   const session = await getMeetingSessionByEndpoint(sessionId);
-  if (!session || session.status === 'ended') {
+  if (!session) {
     res.status(404).json({ error: 'Meeting session not found' });
+    return;
+  }
+  if (session.status !== 'live') {
+    res.status(409).json({
+      error: 'Meeting session is not live',
+      code: 'MEETING_SESSION_NOT_LIVE',
+      lifecycleStatus: session.status,
+    });
     return;
   }
 
@@ -1302,7 +1358,7 @@ guestRouter.post('/preview', async (req: Request, res: Response): Promise<void> 
   }
 
   const session = await getMeetingSession(payload.sessionId);
-  if (!session || session.status === 'ended') {
+  if (!session) {
     res.status(404).json({ error: 'Meeting session unavailable' });
     return;
   }
@@ -1353,8 +1409,16 @@ guestRouter.post('/join', async (req: Request, res: Response): Promise<void> => 
   }
 
   const session = await getMeetingSession(payload.sessionId);
-  if (!session || session.status === 'ended') {
+  if (!session) {
     res.status(404).json({ error: 'Meeting session unavailable' });
+    return;
+  }
+  if (session.status !== 'live') {
+    res.status(409).json({
+      error: 'Meeting session is not live',
+      code: 'MEETING_SESSION_NOT_LIVE',
+      lifecycleStatus: session.status,
+    });
     return;
   }
 

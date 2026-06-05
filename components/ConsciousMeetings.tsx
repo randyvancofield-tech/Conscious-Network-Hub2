@@ -20,6 +20,7 @@ import {
   createProviderMeetingExternalLink,
   createProviderMeetingSession,
   endProviderMeetingSession,
+  getMeetingLifecycleMessage,
   getUserDirectory,
   inviteUsersToProviderMeetingSession,
   joinExternalMeetingInvite,
@@ -41,10 +42,12 @@ import {
 import type {
   ExternalMeetingPreview,
   MeetingSessionMode,
+  MeetingSessionStatus,
   MeetingSessionSummary,
   ProviderInviteGroup,
 } from '../services/backendApiService';
 import MeetingBrandLoop from './ui/MeetingBrandLoop';
+import MeetingSimulationQA from './MeetingSimulationQA';
 import cnhLogo from '../src/assets/brand/conscious-network-hub-logo.png';
 
 interface ConsciousMeetingsProps {
@@ -98,6 +101,7 @@ const toAppHostedRoomLink = (session?: MeetingSessionSummary | null): string => 
 };
 
 type SynthesisAgentMode = 'meeting-bot' | 'action-agent' | 'security-agent';
+type MeetingConsoleTab = 'schedule' | 'lobby' | 'calendar' | 'simulation';
 
 interface MeetingBackgroundPreset {
   id: string;
@@ -185,10 +189,28 @@ const isApprovedProviderUser = (user: UserProfile | null): boolean =>
       !user.providerRevokedAt
   );
 
+const getSessionStatus = (session?: Pick<MeetingSessionSummary, 'status'> | null): MeetingSessionStatus | 'unknown' =>
+  String(session?.status || 'unknown').trim().toLowerCase() as MeetingSessionStatus | 'unknown';
+
+const isLiveMeetingSession = (session?: Pick<MeetingSessionSummary, 'status'> | null): boolean =>
+  getSessionStatus(session) === 'live';
+
+const isEndedMeetingSession = (session?: Pick<MeetingSessionSummary, 'status'> | null): boolean => {
+  const status = getSessionStatus(session);
+  return status === 'ended' || status === 'archived';
+};
+
+const hasPersistedMeetingNotes = (meeting: Meeting | null | undefined): boolean =>
+  Boolean(
+    meeting?.notes?.summary &&
+      ((meeting as Meeting & { notesPersistedAt?: string; persistedNotesId?: string }).notesPersistedAt ||
+        (meeting as Meeting & { notesPersistedAt?: string; persistedNotesId?: string }).persistedNotesId)
+  );
+
 const ConsciousMeetings: React.FC<ConsciousMeetingsProps> = ({ user }) => {
   const [meetings, setMeetings] = useState<Meeting[]>([]);
 
-  const [activeTab, setActiveTab] = useState<'schedule' | 'lobby' | 'calendar'>('schedule');
+  const [activeTab, setActiveTab] = useState<MeetingConsoleTab>('schedule');
   const [isSchedulingModalOpen, setSchedulingModalOpen] = useState(false);
   const [isNoteTakerOn, setNoteTakerOn] = useState(false);
   const [showSynthesisConsentModal, setShowSynthesisConsentModal] = useState(false);
@@ -242,6 +264,10 @@ const ConsciousMeetings: React.FC<ConsciousMeetingsProps> = ({ user }) => {
   const selectedHostedSession =
     hostedMeetingSessions.find((session) => session.id === selectedHostedSessionId) || null;
   const selectedInternalRoomLink = toAppHostedRoomLink(selectedHostedSession);
+  const selectedHostedSessionCanStart = Boolean(
+    selectedHostedSession && !isLiveMeetingSession(selectedHostedSession) && !isEndedMeetingSession(selectedHostedSession)
+  );
+  const selectedHostedSessionCanEnd = Boolean(selectedHostedSession && isLiveMeetingSession(selectedHostedSession));
   const formatMeetingTime = (value?: number | null): string =>
     value ? new Date(value).toLocaleString() : 'Unscheduled';
   const mapBackendSessionToMeeting = (session: MeetingSessionSummary): Meeting => {
@@ -459,7 +485,7 @@ const ConsciousMeetings: React.FC<ConsciousMeetingsProps> = ({ user }) => {
     setIsSynthesizingNotes(true);
     try {
       setMeetingOpsStatus(
-        `${agentMode.replace('-', ' ')} is gated until real transcript capture is connected. No synthetic transcript or generated notes were used.`
+        `${agentMode.replace('-', ' ')} is unavailable until transcript capture, participant consent, session-scoped storage, and permissions are implemented. No notes were generated or stored.`
       );
     } finally {
       setIsSynthesizingNotes(false);
@@ -473,17 +499,9 @@ const ConsciousMeetings: React.FC<ConsciousMeetingsProps> = ({ user }) => {
       return;
     }
 
-    if (!isSoloSessionActive && !isJoining) {
-      setMeetingOpsStatus('Start or join a real meeting session before initiating synthesis notes.');
-      return;
-    }
-
-    if (!isNoteTakerOn) {
-      setShowSynthesisConsentModal(true);
-      return;
-    }
-
-    await generateAINotes(activeMeeting.id, synthesisAgentMode);
+    setMeetingOpsStatus(
+      'AI synthesis is unavailable for launch. It requires real transcript capture, participant consent, secure note storage, and permission checks before activation.'
+    );
   };
 
   const toggleSynthesisNotetaker = () => {
@@ -492,13 +510,16 @@ const ConsciousMeetings: React.FC<ConsciousMeetingsProps> = ({ user }) => {
       return;
     }
 
-    setShowSynthesisConsentModal(true);
+    setMeetingOpsStatus(
+      'AI synthesis controls are locked until transcript capture and secure session note persistence are implemented.'
+    );
   };
 
   const confirmSynthesisConsent = () => {
-    setNoteTakerOn(true);
     setShowSynthesisConsentModal(false);
-    setMeetingOpsStatus('Synthesis consent captured. Notes remain gated until real transcript capture is connected.');
+    setMeetingOpsStatus(
+      'AI synthesis consent cannot be activated yet because transcript capture and secure note persistence are not connected.'
+    );
   };
 
   const parseBatchUsernames = (rawValue: string): string[] => {
@@ -691,6 +712,10 @@ const ConsciousMeetings: React.FC<ConsciousMeetingsProps> = ({ user }) => {
       setMeetingOpsStatus('Select a provider-hosted session first.');
       return;
     }
+    if (!selectedHostedSessionCanStart) {
+      setMeetingOpsStatus('Only scheduled provider sessions can be started. Live or ended sessions cannot be started again.');
+      return;
+    }
 
     setIsMeetingOpsBusy(true);
     setMeetingOpsStatus('Starting hosted session...');
@@ -719,6 +744,10 @@ const ConsciousMeetings: React.FC<ConsciousMeetingsProps> = ({ user }) => {
     const sessionId = selectedHostedSessionId.trim();
     if (!token || !sessionId) {
       setMeetingOpsStatus('Select a provider-hosted session first.');
+      return;
+    }
+    if (!selectedHostedSessionCanEnd) {
+      setMeetingOpsStatus('Only live provider sessions can be ended.');
       return;
     }
 
@@ -813,6 +842,11 @@ const ConsciousMeetings: React.FC<ConsciousMeetingsProps> = ({ user }) => {
   const joinInvitedSession = async (sessionId: string) => {
     const normalizedId = String(sessionId || '').trim();
     if (!normalizedId) return;
+    const targetSession = joinableMeetingSessions.find((session) => session.id === normalizedId);
+    if (targetSession && !isLiveMeetingSession(targetSession)) {
+      setMeetingOpsStatus('This invited meeting is not live yet. Wait for the provider to start the session before joining.');
+      return;
+    }
 
     setIsMeetingOpsBusy(true);
     setMeetingOpsStatus('Joining invited meeting session...');
@@ -826,6 +860,11 @@ const ConsciousMeetings: React.FC<ConsciousMeetingsProps> = ({ user }) => {
       setIsJoining(true);
       await refreshJoinableSessions();
       setMeetingOpsStatus(`Joined session: ${joined.title}`);
+    } catch (error) {
+      setIsJoining(false);
+      setMeetingOpsStatus(
+        getMeetingLifecycleMessage(error, 'Unable to join invited session. Refresh the meeting list and try again.')
+      );
     } finally {
       setIsMeetingOpsBusy(false);
     }
@@ -866,7 +905,16 @@ const ConsciousMeetings: React.FC<ConsciousMeetingsProps> = ({ user }) => {
         return;
       }
       setExternalInvitePreview(preview);
-      setMeetingOpsStatus('External invite is valid. Complete guest sign-in to join.');
+      setMeetingOpsStatus(
+        preview.session.status === 'live'
+          ? 'External invite is valid. Complete guest sign-in to join.'
+          : 'External invite is valid, but the meeting is not live yet. Guest entry unlocks when the provider starts the session.'
+      );
+    } catch (error) {
+      setExternalInvitePreview(null);
+      setMeetingOpsStatus(
+        getMeetingLifecycleMessage(error, 'External invite token is invalid, expired, or unavailable.')
+      );
     } finally {
       setIsMeetingOpsBusy(false);
     }
@@ -880,6 +928,10 @@ const ConsciousMeetings: React.FC<ConsciousMeetingsProps> = ({ user }) => {
     }
     if (!externalGuestNameInput.trim() || !externalGuestEmailInput.trim()) {
       setMeetingOpsStatus('Guest name and email are required.');
+      return;
+    }
+    if (externalInvitePreview && externalInvitePreview.session.status !== 'live') {
+      setMeetingOpsStatus('This guest invite is valid but not joinable until the provider starts the live session.');
       return;
     }
 
@@ -921,6 +973,11 @@ const ConsciousMeetings: React.FC<ConsciousMeetingsProps> = ({ user }) => {
       setActiveJoinedSessionId(joined.session.id);
       setIsJoining(true);
       setMeetingOpsStatus('External guest joined. Platform features remain restricted.');
+    } catch (error) {
+      setIsJoining(false);
+      setMeetingOpsStatus(
+        getMeetingLifecycleMessage(error, 'Unable to join as external guest. Refresh the invite preview and try again.')
+      );
     } finally {
       setIsMeetingOpsBusy(false);
     }
@@ -1561,7 +1618,7 @@ const ConsciousMeetings: React.FC<ConsciousMeetingsProps> = ({ user }) => {
     const activeMeeting = meetings[0];
     const canSaveRecording = Boolean(user?.id && activeMeeting && user.id === activeMeeting.hostUserId);
     if (!canSaveRecording) {
-      setMeetingOpsStatus('Only the session initiator can record or download the meeting video.');
+      setMeetingOpsStatus('Only the session initiator can create or download a local browser recording. CNH server recording is not active.');
       return;
     }
 
@@ -1599,6 +1656,7 @@ const ConsciousMeetings: React.FC<ConsciousMeetingsProps> = ({ user }) => {
     setRecordingState('recording');
     setIsRecording(true);
     setRecordingDuration(0);
+    setMeetingOpsStatus('Local browser recording started. Nothing is uploaded to CNH storage or saved as replay.');
 
     recordingIntervalRef.current = setInterval(() => {
       setRecordingDuration(prev => prev + 1);
@@ -1640,11 +1698,14 @@ const ConsciousMeetings: React.FC<ConsciousMeetingsProps> = ({ user }) => {
     const activeMeeting = meetings[0];
     const canSaveRecording = Boolean(user?.id && activeMeeting && user.id === activeMeeting.hostUserId);
     if (!canSaveRecording) {
-      setMeetingOpsStatus('Only the session initiator can download the meeting video.');
+      setMeetingOpsStatus('Only the session initiator can download the local browser recording.');
       return;
     }
 
-    if (recordedChunks.length === 0) return;
+    if (recordedChunks.length === 0) {
+      setMeetingOpsStatus('No local browser recording exists for this session.');
+      return;
+    }
 
     const blob = new Blob(recordedChunks, { type: 'video/webm' });
     const url = URL.createObjectURL(blob);
@@ -1655,6 +1716,7 @@ const ConsciousMeetings: React.FC<ConsciousMeetingsProps> = ({ user }) => {
     a.click();
     document.body.removeChild(a);
     URL.revokeObjectURL(url);
+    setMeetingOpsStatus('Local browser recording downloaded. No server archive or VOD was created.');
   };
 
   const clearBackgroundEffect = () => {
@@ -1716,7 +1778,10 @@ const ConsciousMeetings: React.FC<ConsciousMeetingsProps> = ({ user }) => {
   };
 
   const downloadMeetingNotes = (meeting: Meeting) => {
-    if (!meeting.notes?.summary) return;
+    if (!hasPersistedMeetingNotes(meeting)) {
+      setMeetingOpsStatus('Notes download is unavailable until real session notes are captured and stored for this meeting.');
+      return;
+    }
     const content = [
       `Meeting: ${meeting.title}`,
       `Status: ${meeting.status}`,
@@ -1744,14 +1809,11 @@ const ConsciousMeetings: React.FC<ConsciousMeetingsProps> = ({ user }) => {
   };
 
   const syncMeetingNotes = async (meeting: Meeting) => {
-    if (!meeting.notes?.summary) return;
-    const payload = `${meeting.title}\n${meeting.notes.summary}`;
-    try {
-      await navigator.clipboard.writeText(payload);
-      setMeetingOpsStatus('Meeting synthesis copied for participant sync.');
-    } catch {
-      setMeetingOpsStatus('Unable to access clipboard. Please copy notes manually.');
+    if (!hasPersistedMeetingNotes(meeting)) {
+      setMeetingOpsStatus('Participant notes sync is unavailable until secure notes persistence and participant permissions exist.');
+      return;
     }
+    setMeetingOpsStatus('Participant notes sync is gated until the backend stores session-scoped notes.');
   };
 
   useEffect(() => {
@@ -2297,7 +2359,7 @@ const ConsciousMeetings: React.FC<ConsciousMeetingsProps> = ({ user }) => {
 
   const canEnterImmersiveView = hasCheckedImmersiveSupport && isImmersiveSupported;
   const activeMeeting = meetings[0] || null;
-  const hasActiveMeetingNotes = Boolean(activeMeeting?.notes?.summary);
+  const hasActiveMeetingNotes = hasPersistedMeetingNotes(activeMeeting);
   const canSaveRecording = Boolean(user?.id && activeMeeting && user.id === activeMeeting.hostUserId);
   const canUseHostConsole = user?.role === 'admin' || isApprovedProviderUser(user);
 
@@ -2348,13 +2410,16 @@ const ConsciousMeetings: React.FC<ConsciousMeetingsProps> = ({ user }) => {
       {/* Tabs (scrollable on mobile) */}
       <div className="flex gap-2 p-1 bg-white/5 border border-white/10 rounded-xl sm:rounded-2xl w-full sm:w-fit overflow-x-auto custom-scrollbar scrollable-x">
         {[
-          { id: 'schedule', label: 'Host Path', icon: <Calendar className="w-3 h-3 sm:w-4 sm:h-4" /> },
-          { id: 'lobby', label: 'Live Lobby', icon: <Play className="w-3 h-3 sm:w-4 sm:h-4" /> },
-          { id: 'calendar', label: 'Session Ledger', icon: <Clock className="w-3 h-3 sm:w-4 sm:h-4" /> }
+          { id: 'schedule' as const, label: 'Host Path', icon: <Calendar className="w-3 h-3 sm:w-4 sm:h-4" /> },
+          { id: 'lobby' as const, label: 'Live Lobby', icon: <Play className="w-3 h-3 sm:w-4 sm:h-4" /> },
+          { id: 'calendar' as const, label: 'Session Ledger', icon: <Clock className="w-3 h-3 sm:w-4 sm:h-4" /> },
+          ...(user?.role === 'admin'
+            ? [{ id: 'simulation' as const, label: 'Admin QA', icon: <ShieldCheck className="w-3 h-3 sm:w-4 sm:h-4" /> }]
+            : []),
         ].map(tab => (
           <button
             key={tab.id}
-            onClick={() => setActiveTab(tab.id as any)}
+            onClick={() => setActiveTab(tab.id)}
             className={`shrink-0 flex items-center gap-1 sm:gap-2 px-3 sm:px-4 md:px-6 py-2 sm:py-3 rounded-lg sm:rounded-xl text-[9px] sm:text-[10px] font-black uppercase tracking-widest transition-all ${
               activeTab === tab.id ? 'bg-blue-600 text-white shadow-lg' : 'text-slate-500 hover:text-white hover:bg-white/5'
             }`}
@@ -2510,8 +2575,11 @@ const ConsciousMeetings: React.FC<ConsciousMeetingsProps> = ({ user }) => {
                               return;
                             }
                             const liveSession =
-                              joinableMeetingSessions.find((entry) => entry.status === 'live') ||
-                              joinableMeetingSessions[0];
+                              joinableMeetingSessions.find((entry) => entry.status === 'live');
+                            if (!liveSession) {
+                              setMeetingOpsStatus('Invited sessions are present, but none are live yet. Wait for the provider to start a session.');
+                              return;
+                            }
                             await joinInvitedSession(liveSession.id);
                           }}
                           className="cnh-action-label flex-1 py-4 sm:py-5 md:py-6 bg-blue-600 hover:bg-blue-500 disabled:bg-slate-800 disabled:text-slate-600 text-white rounded-xl sm:rounded-2xl md:rounded-3xl font-black text-sm sm:text-base md:text-lg 2xl:text-xl uppercase tracking-widest shadow-2xl transition-all hover:-translate-y-1 active:scale-95 flex items-center justify-center gap-3 sm:gap-4"
@@ -2674,7 +2742,7 @@ const ConsciousMeetings: React.FC<ConsciousMeetingsProps> = ({ user }) => {
                     {!canSaveRecording && (
                       <div className="flex items-center justify-center gap-2 text-[10px] sm:text-xs text-slate-400 uppercase tracking-widest">
                         <ShieldCheck className="w-4 h-4 text-blue-400" />
-                        Only session initiator can record/download video
+                        Only session initiator can record/download local browser video
                       </div>
                     )}
 
@@ -2686,7 +2754,7 @@ const ConsciousMeetings: React.FC<ConsciousMeetingsProps> = ({ user }) => {
                           className="px-6 sm:px-8 py-3 sm:py-4 bg-red-600 hover:bg-red-500 disabled:bg-slate-700 disabled:text-slate-500 text-white rounded-lg sm:rounded-xl font-black text-sm uppercase tracking-widest flex items-center gap-2 transition-all"
                         >
                           <Play className="w-5 h-5" />
-                          Start Recording
+                          Start Local Recording
                         </button>
                       )}
 
@@ -2737,10 +2805,13 @@ const ConsciousMeetings: React.FC<ConsciousMeetingsProps> = ({ user }) => {
                           className="px-6 sm:px-8 py-3 sm:py-4 bg-blue-600 hover:bg-blue-500 disabled:bg-slate-700 disabled:text-slate-500 text-white rounded-lg sm:rounded-xl font-black text-sm uppercase tracking-widest flex items-center gap-2 transition-all"
                         >
                           <Download className="w-5 h-5" />
-                          Download ({formatDuration(recordingDuration)})
+                          Download Local ({formatDuration(recordingDuration)})
                         </button>
                       </div>
                     )}
+                    <p className="text-center text-[9px] sm:text-[10px] uppercase tracking-widest text-slate-500">
+                      Local recording stays in this browser session. No cloud recording, replay, or VOD archive is created here.
+                    </p>
                   </div>
 
                   {/* Background Selection */}
@@ -2828,28 +2899,31 @@ const ConsciousMeetings: React.FC<ConsciousMeetingsProps> = ({ user }) => {
               <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 sm:gap-6">
                 <div className="flex items-center gap-4 sm:gap-5">
                   <div className="p-3 sm:p-4 bg-blue-600/10 rounded-lg sm:rounded-2xl">
-                    <Zap className={`w-5 h-5 sm:w-6 sm:h-6 ${isNoteTakerOn ? 'text-teal-400 animate-pulse' : 'text-slate-600'}`} />
+                    <Zap className="w-5 h-5 sm:w-6 sm:h-6 text-slate-600" />
                   </div>
                   <div>
                     <h4 className="text-xs sm:text-sm font-black text-white uppercase tracking-widest">AI Synthesis Notetaker</h4>
-                    <p className="text-[8px] sm:text-[9px] text-slate-500 uppercase tracking-widest mt-1">Transcript capture gated for launch</p>
+                    <p className="text-[8px] sm:text-[9px] text-slate-500 uppercase tracking-widest mt-1">
+                      Unavailable until transcript capture and secure notes storage exist
+                    </p>
                   </div>
                 </div>
                 <button
                   onClick={toggleSynthesisNotetaker}
-                  className={`px-6 sm:px-8 py-2 sm:py-3 rounded-lg sm:rounded-xl text-[8px] sm:text-[9px] sm:text-[10px] font-black uppercase tracking-widest border transition-all shrink-0 ${
-                    isNoteTakerOn
-                      ? 'bg-teal-500/20 border-teal-500/40 text-teal-400 shadow-glow'
-                      : 'bg-white/5 border-white/10 text-slate-500 hover:text-white'
-                  }`}
+                  disabled
+                  className="px-6 sm:px-8 py-2 sm:py-3 rounded-lg sm:rounded-xl text-[8px] sm:text-[9px] sm:text-[10px] font-black uppercase tracking-widest border transition-all shrink-0 bg-slate-800/70 border-slate-700/80 text-slate-500 cursor-not-allowed"
                 >
-                  {isNoteTakerOn ? 'Disable Synthesis' : 'Enable Synthesis'}
+                  Unavailable
                 </button>
               </div>
 
               <p className="text-[9px] sm:text-[10px] text-slate-400 uppercase tracking-widest">
-                Synthesis does not display synthetic transcripts. Notes unlock only after real captured transcript support is connected.
+                AI notes are locked until real transcript capture, participant consent, session-scoped persistence, and permission checks are implemented.
               </p>
+
+              <div className="rounded-xl border border-amber-300/20 bg-amber-300/[0.06] p-4 text-[10px] leading-5 text-amber-100">
+                No synthetic transcript, generated summary, participant sync, or stored notes are active in this launch path.
+              </div>
 
               {isNoteTakerOn && (
                 <div className="space-y-4">
@@ -3046,14 +3120,14 @@ const ConsciousMeetings: React.FC<ConsciousMeetingsProps> = ({ user }) => {
                     </button>
                     <button
                       onClick={startHostedSession}
-                      disabled={isMeetingOpsBusy || !selectedHostedSessionId}
+                      disabled={isMeetingOpsBusy || !selectedHostedSessionCanStart}
                       className="px-4 py-3 bg-teal-600 hover:bg-teal-500 disabled:bg-slate-700 disabled:text-slate-500 text-white rounded-xl text-[9px] sm:text-[10px] font-black uppercase tracking-widest transition-all"
                     >
                       Start Session
                     </button>
                     <button
                       onClick={endHostedSession}
-                      disabled={isMeetingOpsBusy || !selectedHostedSessionId}
+                      disabled={isMeetingOpsBusy || !selectedHostedSessionCanEnd}
                       className="px-4 py-3 bg-red-600 hover:bg-red-500 disabled:bg-slate-700 disabled:text-slate-500 text-white rounded-xl text-[9px] sm:text-[10px] font-black uppercase tracking-widest transition-all"
                     >
                       End Session
@@ -3288,28 +3362,31 @@ const ConsciousMeetings: React.FC<ConsciousMeetingsProps> = ({ user }) => {
                 {joinableMeetingSessions.length === 0 && (
                   <p className="text-[10px] sm:text-xs text-slate-500">No joinable meeting invites found.</p>
                 )}
-                {joinableMeetingSessions.map((session) => (
-                  <div
-                    key={session.id}
-                    className="p-3 rounded-xl bg-white/5 border border-white/10 flex flex-col sm:flex-row sm:items-center justify-between gap-3"
-                  >
-                    <div>
-                      <p className="text-[10px] sm:text-xs font-black uppercase tracking-widest text-white">
-                        {session.title}
-                      </p>
-                      <p className="text-[9px] sm:text-[10px] text-slate-400 uppercase tracking-widest mt-1">
-                        {session.mode} | {session.status} | {session.participants.length}/{session.maxViewers}
-                      </p>
-                    </div>
-                    <button
-                      onClick={() => void joinInvitedSession(session.id)}
-                      disabled={isMeetingOpsBusy || session.status === 'ended'}
-                      className="px-4 py-2 bg-blue-600 hover:bg-blue-500 disabled:bg-slate-700 disabled:text-slate-500 text-white rounded-lg text-[8px] sm:text-[9px] font-black uppercase tracking-widest transition-all"
+                {joinableMeetingSessions.map((session) => {
+                  const isLive = isLiveMeetingSession(session);
+                  return (
+                    <div
+                      key={session.id}
+                      className="p-3 rounded-xl bg-white/5 border border-white/10 flex flex-col sm:flex-row sm:items-center justify-between gap-3"
                     >
-                      Join Session
-                    </button>
-                  </div>
-                ))}
+                      <div>
+                        <p className="text-[10px] sm:text-xs font-black uppercase tracking-widest text-white">
+                          {session.title}
+                        </p>
+                        <p className="text-[9px] sm:text-[10px] text-slate-400 uppercase tracking-widest mt-1">
+                          {session.mode} | {session.status} | {session.participants.length}/{session.maxViewers}
+                        </p>
+                      </div>
+                      <button
+                        onClick={() => void joinInvitedSession(session.id)}
+                        disabled={isMeetingOpsBusy || !isLive}
+                        className="px-4 py-2 bg-blue-600 hover:bg-blue-500 disabled:bg-slate-700 disabled:text-slate-500 text-white rounded-lg text-[8px] sm:text-[9px] font-black uppercase tracking-widest transition-all"
+                      >
+                        {isLive ? 'Join Session' : isEndedMeetingSession(session) ? 'Session Ended' : 'Waiting for Host'}
+                      </button>
+                    </div>
+                  );
+                })}
               </div>
               {activeJoinedSessionId && (
                 <button
@@ -3354,6 +3431,11 @@ const ConsciousMeetings: React.FC<ConsciousMeetingsProps> = ({ user }) => {
                   <p className="text-[9px] sm:text-[10px] text-slate-400 uppercase tracking-widest">
                     {externalInvitePreview.session.mode} | {externalInvitePreview.session.status} | Capacity {externalInvitePreview.session.participantCount}/{externalInvitePreview.session.maxViewers}
                   </p>
+                  {externalInvitePreview.session.status !== 'live' && (
+                    <p className="rounded-lg border border-amber-300/20 bg-amber-300/[0.06] p-3 text-[10px] leading-5 text-amber-100">
+                      This signed invite is valid but not joinable until the provider starts the live session.
+                    </p>
+                  )}
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                     <input
                       type="text"
@@ -3373,10 +3455,10 @@ const ConsciousMeetings: React.FC<ConsciousMeetingsProps> = ({ user }) => {
                   {!externalGuestSessionToken ? (
                     <button
                       onClick={() => void joinAsExternalGuest()}
-                      disabled={isMeetingOpsBusy}
+                      disabled={isMeetingOpsBusy || externalInvitePreview.session.status !== 'live'}
                       className="w-full px-4 py-3 bg-blue-600 hover:bg-blue-500 disabled:bg-slate-700 disabled:text-slate-500 text-white rounded-xl text-[9px] sm:text-[10px] font-black uppercase tracking-widest transition-all"
                     >
-                      Join as External Guest
+                      {externalInvitePreview.session.status === 'live' ? 'Join as External Guest' : 'Waiting for Host'}
                     </button>
                   ) : (
                     <button
@@ -3456,9 +3538,10 @@ const ConsciousMeetings: React.FC<ConsciousMeetingsProps> = ({ user }) => {
                       <div className="flex sm:flex-col gap-2 sm:gap-3 justify-start sm:justify-end shrink-0">
                         <button
                           onClick={() => generateAINotes(meeting.id)}
-                          className="px-4 sm:px-6 py-2 sm:py-3 bg-white/5 hover:bg-white/10 border border-white/10 rounded-lg sm:rounded-xl text-[8px] sm:text-[9px] font-black uppercase tracking-widest text-slate-400 hover:text-white transition-all flex-1 sm:flex-none"
+                          disabled
+                          className="px-4 sm:px-6 py-2 sm:py-3 bg-slate-800/70 border border-slate-700/80 rounded-lg sm:rounded-xl text-[8px] sm:text-[9px] font-black uppercase tracking-widest text-slate-500 transition-all flex-1 sm:flex-none cursor-not-allowed"
                         >
-                          View Synthesis
+                          Synthesis Locked
                         </button>
                         <button
                           onClick={() => handleReschedule(meeting)}
@@ -3469,7 +3552,7 @@ const ConsciousMeetings: React.FC<ConsciousMeetingsProps> = ({ user }) => {
                       </div>
                     </div>
 
-                    {meeting.notes && meeting.notes.summary && (
+                    {hasPersistedMeetingNotes(meeting) && (
                       <div className="mt-6 sm:mt-8 pt-6 sm:pt-8 border-t border-white/5 space-y-4 sm:space-y-6 animate-in slide-in-from-top-4">
                         <div className="bg-blue-600/5 p-4 sm:p-6 rounded-lg sm:rounded-2xl border border-blue-500/10">
                           <h5 className="text-[9px] sm:text-[10px] font-black text-blue-400 uppercase tracking-widest mb-2 sm:mb-3 flex items-center gap-2">
@@ -3562,6 +3645,10 @@ const ConsciousMeetings: React.FC<ConsciousMeetingsProps> = ({ user }) => {
               </div>
             </div>
           </div>
+        )}
+
+        {activeTab === 'simulation' && (
+          <MeetingSimulationQA user={user} />
         )}
       </div>
 

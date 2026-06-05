@@ -1,7 +1,9 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   ArrowLeft,
+  Archive,
   Camera,
+  Clock,
   Download,
   Layers,
   Loader2,
@@ -17,6 +19,7 @@ import { UserProfile } from '../types';
 import {
   getMeetingSession,
   getMeetingRoomConfig,
+  getMeetingLifecycleMessage,
   joinMeetingSession,
   leaveMeetingSession,
   MeetingRoomConfig,
@@ -46,6 +49,28 @@ const timeFormatter = new Intl.DateTimeFormat(undefined, {
   dateStyle: 'medium',
   timeStyle: 'short',
 });
+
+const getLifecyclePanelCopy = (status: string): { title: string; description: string } => {
+  if (status === 'scheduled') {
+    return {
+      title: 'Session Scheduled',
+      description:
+        'This CNH room has been created, but it is not live yet. Users and guests cannot enter until the provider starts the session.',
+    };
+  }
+  if (status === 'ended' || status === 'archived') {
+    return {
+      title: 'Session Ended',
+      description:
+        'This meeting has moved out of active room mode. Live entry, signaling, local media, and participant recording are closed for this session.',
+    };
+  }
+  return {
+    title: 'Meeting State Unavailable',
+    description:
+      'The room lifecycle state could not be confirmed. Refresh the meeting board or contact the provider before attempting entry.',
+  };
+};
 
 const ConsciousMeetingRoomPage: React.FC<ConsciousMeetingRoomPageProps> = ({ sessionId = '', user, onBack, onSignIn }) => {
   const [session, setSession] = useState<MeetingSessionSummary | null>(null);
@@ -132,7 +157,10 @@ const ConsciousMeetingRoomPage: React.FC<ConsciousMeetingRoomPageProps> = ({ ses
 
   const participantCount = session?.participants?.length || 0;
   const scheduledAtMs = session?.scheduledAtMs || session?.startedAtMs || session?.createdAtMs || Date.now();
-  const canEnter = Boolean(session && session.status === 'live' && user);
+  const sessionStatus = String(session?.status || 'unknown').trim().toLowerCase();
+  const isLiveSession = sessionStatus === 'live';
+  const isEndedSession = sessionStatus === 'ended' || sessionStatus === 'archived';
+  const canEnter = Boolean(session && isLiveSession && user);
   const canUseImmersive =
     Boolean(session?.nativeRoom?.immersiveEnabled || session?.mode === 'immersive-5d') && xrSupported;
   const canRecordLocally = Boolean(
@@ -147,8 +175,9 @@ const ConsciousMeetingRoomPage: React.FC<ConsciousMeetingRoomPageProps> = ({ ses
   const handleJoin = async (mode: RoomMode) => {
     if (!session) return;
     setRoomMode(mode);
-    if (session.status !== 'live') {
-      setJoinStatus('This room is staged. The live action unlocks when the provider starts the stream.');
+    setHasJoined(false);
+    if (sessionStatus !== 'live') {
+      setJoinStatus(getLifecyclePanelCopy(sessionStatus).description);
       return;
     }
     if (!user) {
@@ -156,25 +185,53 @@ const ConsciousMeetingRoomPage: React.FC<ConsciousMeetingRoomPageProps> = ({ ses
       return;
     }
     setJoinStatus('Joining internal CNH room...');
-    const joined = await joinMeetingSession(session.routeKey || session.id, user.name);
+    let joined: MeetingSessionSummary | null = null;
+    try {
+      joined = await joinMeetingSession(session.routeKey || session.id, user.name);
+    } catch (error) {
+      setJoinStatus(
+        getMeetingLifecycleMessage(error, 'Unable to join this room yet. Please refresh the meeting board or try again.')
+      );
+      await refreshSession();
+      return;
+    }
     if (!joined) {
       setJoinStatus('Unable to join this room yet. Please refresh the meeting board or try again.');
       return;
     }
     setSession(joined);
     setHasJoined(true);
-    const config = await getMeetingRoomConfig(session.routeKey || session.id);
+    let config: MeetingRoomConfig | null = null;
+    try {
+      config = await getMeetingRoomConfig(session.routeKey || session.id);
+    } catch (error) {
+      setHasJoined(false);
+      setJoinStatus(
+        getMeetingLifecycleMessage(error, 'Joined request completed, but live room configuration is unavailable.')
+      );
+      await refreshSession();
+      return;
+    }
     setRoomConfig(config);
     if (config) {
-      void postMeetingSignal(session.routeKey || session.id, {
-        type: 'presence',
-        payload: {
-          mode,
-          participantId: config.participantId,
-          supportsImmersive5d: xrSupported,
-          localRecordingCapable: typeof MediaRecorder !== 'undefined',
-        },
-      });
+      try {
+        await postMeetingSignal(session.routeKey || session.id, {
+          type: 'presence',
+          payload: {
+            mode,
+            participantId: config.participantId,
+            supportsImmersive5d: xrSupported,
+            localRecordingCapable: typeof MediaRecorder !== 'undefined',
+          },
+        });
+      } catch (error) {
+        setHasJoined(false);
+        setJoinStatus(
+          getMeetingLifecycleMessage(error, 'The room stopped accepting live signaling. Refresh the meeting board before re-entering.')
+        );
+        await refreshSession();
+        return;
+      }
     }
     setJoinStatus(mode === 'immersive-5d' ? 'Joined 5D gateway. Checking spatial profile...' : 'Joined Standard View.');
   };
@@ -296,6 +353,68 @@ const ConsciousMeetingRoomPage: React.FC<ConsciousMeetingRoomPageProps> = ({ ses
     );
   }
 
+  if (!isLiveSession) {
+    const lifecycleCopy = getLifecyclePanelCopy(sessionStatus);
+    return (
+      <PageShell>
+        <ActionButton type="button" variant="ghost" onClick={onBack} icon={<ArrowLeft className="h-4 w-4" />}>
+          Upcoming Sessions
+        </ActionButton>
+
+        <PageHeader
+          eyebrow={`${sessionStatus} meeting room`}
+          title={session.title}
+          description={session.description || 'Native Conscious Network Hub meeting room.'}
+          actions={
+            <>
+              <ActionButton type="button" disabled icon={isEndedSession ? <Archive className="h-4 w-4" /> : <Clock className="h-4 w-4" />}>
+                {isEndedSession ? 'Archive State' : 'Waiting for Host'}
+              </ActionButton>
+              <ActionButton type="button" variant="secondary" disabled icon={<Layers className="h-4 w-4" />}>
+                Live Room Closed
+              </ActionButton>
+            </>
+          }
+        />
+
+        <SurfacePanel className="space-y-5">
+          <div className="flex flex-col gap-4 sm:flex-row sm:items-start">
+            <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl bg-blue-600/10 text-blue-200">
+              {isEndedSession ? <Archive className="h-7 w-7" /> : <Clock className="h-7 w-7" />}
+            </div>
+            <div className="space-y-3">
+              <h2 className="text-lg font-black uppercase text-white">{lifecycleCopy.title}</h2>
+              <p className="max-w-3xl text-sm leading-6 text-slate-300">{lifecycleCopy.description}</p>
+              <p className="text-xs leading-5 text-slate-500">
+                Scheduled: {timeFormatter.format(scheduledAtMs)}
+                {session.endedAtMs ? ` | Ended: ${timeFormatter.format(session.endedAtMs)}` : ''}
+              </p>
+            </div>
+          </div>
+          <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
+            <div className="rounded-xl border border-white/10 bg-white/[0.03] p-4">
+              <p className="text-[9px] font-black uppercase tracking-widest text-slate-500">Provider</p>
+              <p className="mt-1 break-words text-sm font-bold text-white">{providerName}</p>
+            </div>
+            <div className="rounded-xl border border-white/10 bg-white/[0.03] p-4">
+              <p className="text-[9px] font-black uppercase tracking-widest text-slate-500">Participants</p>
+              <p className="mt-1 text-sm font-bold text-white">{participantCount}/{session.maxViewers}</p>
+            </div>
+            <div className="rounded-xl border border-white/10 bg-white/[0.03] p-4">
+              <p className="text-[9px] font-black uppercase tracking-widest text-slate-500">Replay</p>
+              <p className="mt-1 text-sm font-bold text-white">
+                {session.vodPath ? 'Recording path attached' : 'No server recording path'}
+              </p>
+            </div>
+          </div>
+          <div className="rounded-xl border border-amber-300/20 bg-amber-300/[0.06] p-4 text-sm leading-6 text-amber-100">
+            Local media, browser recording, AI notes, and signaling controls are intentionally unavailable outside a live session.
+          </div>
+        </SurfacePanel>
+      </PageShell>
+    );
+  }
+
   return (
     <PageShell>
       <ActionButton type="button" variant="ghost" onClick={onBack} icon={<ArrowLeft className="h-4 w-4" />}>
@@ -309,10 +428,10 @@ const ConsciousMeetingRoomPage: React.FC<ConsciousMeetingRoomPageProps> = ({ ses
         actions={
           <>
             <ActionButton type="button" onClick={() => handleJoin('standard')} disabled={!canEnter} icon={<Monitor className="h-4 w-4" />}>
-              Standard View
+              Enter Standard Room
             </ActionButton>
             <ActionButton type="button" variant="secondary" onClick={() => handleJoin('immersive-5d')} disabled={!canEnter || !canUseImmersive} icon={<Layers className="h-4 w-4" />}>
-              5D Provider Experience
+              Enter 5D View
             </ActionButton>
           </>
         }
@@ -412,7 +531,7 @@ const ConsciousMeetingRoomPage: React.FC<ConsciousMeetingRoomPageProps> = ({ ses
           <div className="rounded-xl border border-white/10 bg-white/[0.03] p-4 text-xs leading-5 text-slate-400">
             {roomConfig?.recording.localParticipantRecordingAllowed
               ? 'Provider enabled participant-side recording. Each participant records only in their own browser after opting in.'
-              : 'Server recording is off. Participant-side local recording is disabled unless the provider enables it for this session.'}
+              : 'Server recording and replay storage are off. Participant-side local recording is disabled unless the provider enables it for this browser session.'}
           </div>
         </SurfacePanel>
 

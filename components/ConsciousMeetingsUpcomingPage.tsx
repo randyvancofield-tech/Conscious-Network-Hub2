@@ -321,15 +321,16 @@ const ConsciousMeetingsUpcomingPage: React.FC<ConsciousMeetingsUpcomingPageProps
                         onClick={() => onOpenMeeting(toRoomEndpoint(session))}
                         icon={isLive ? <Radio className="h-4 w-4" /> : <Clock className="h-4 w-4" />}
                       >
-                        {isLive ? 'Enter Live Room' : 'Open Room'}
+                        {isLive ? 'Enter Live Room' : 'View Schedule'}
                       </ActionButton>
                       <ActionButton
                         type="button"
                         variant="secondary"
                         onClick={() => onOpenMeeting(toRoomEndpoint(session))}
+                        disabled={!isLive}
                         icon={<Layers className="h-4 w-4" />}
                       >
-                        5D Experience
+                        {isLive ? '5D Experience' : '5D Locked'}
                       </ActionButton>
                     </div>
                   </div>
@@ -411,21 +412,25 @@ const ConsciousMeetingsUpcomingPage: React.FC<ConsciousMeetingsUpcomingPageProps
 
           <div className="space-y-3">
             {recommendations.length > 0 ? (
-              recommendations.map((session) => (
-                <button
-                  key={session.id}
-                  type="button"
-                  onClick={() => onOpenMeeting(toRoomEndpoint(session))}
-                  className="w-full rounded-xl border border-white/10 bg-white/[0.03] p-4 text-left transition-all hover:border-blue-300/30 hover:bg-white/[0.06]"
-                >
-                  <span className="flex items-center gap-2 text-[9px] font-black uppercase tracking-widest text-blue-200">
-                    <PlayCircle className="h-4 w-4" />
-                    {session.status === 'ended' ? 'Archive' : session.status}
-                  </span>
-                  <span className="mt-2 block text-sm font-black uppercase text-white">{session.title}</span>
-                  <span className="mt-1 block text-xs leading-5 text-slate-500">{getFocusArea(session)} with {getProviderName(session)}</span>
-                </button>
-              ))
+              recommendations.map((session) => {
+                const isLive = session.status === 'live';
+                const isEnded = session.status === 'ended' || session.status === 'archived';
+                return (
+                  <button
+                    key={session.id}
+                    type="button"
+                    onClick={() => onOpenMeeting(toRoomEndpoint(session))}
+                    className="w-full rounded-xl border border-white/10 bg-white/[0.03] p-4 text-left transition-all hover:border-blue-300/30 hover:bg-white/[0.06]"
+                  >
+                    <span className="flex items-center gap-2 text-[9px] font-black uppercase tracking-widest text-blue-200">
+                      <PlayCircle className="h-4 w-4" />
+                      {isLive ? 'Live Entry' : isEnded ? 'Archive Summary' : 'Schedule Status'}
+                    </span>
+                    <span className="mt-2 block text-sm font-black uppercase text-white">{session.title}</span>
+                    <span className="mt-1 block text-xs leading-5 text-slate-500">{getFocusArea(session)} with {getProviderName(session)}</span>
+                  </button>
+                );
+              })
             ) : (
               <div className="rounded-xl border border-dashed border-white/10 bg-white/[0.02] p-5 text-sm leading-6 text-slate-500">
                 Recommendations will refine as your meeting history and profile interests grow.
