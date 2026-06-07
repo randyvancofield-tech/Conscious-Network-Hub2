@@ -2425,7 +2425,7 @@ const ConsciousMeetings: React.FC<ConsciousMeetingsProps> = ({ user }) => {
             }`}
           >
             {tab.icon}
-            <span className="hidden xs:inline">{tab.label}</span>
+            <span className={tab.id === 'simulation' ? 'inline' : 'hidden xs:inline'}>{tab.label}</span>
           </button>
         ))}
       </div>

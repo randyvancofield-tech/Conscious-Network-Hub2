@@ -3,7 +3,7 @@
 ## Entry Path
 
 - Admin path: `/conscious-meetings/portal`
-- Open the host console and select the `Admin QA` tab.
+- Open the host console and select the visible `Admin QA` tab.
 - The tab is only rendered for `user.role === 'admin'`.
 - The simulation component also denies access if it is mounted for a non-admin user.
 
@@ -12,6 +12,20 @@
 Phase 2B adds an admin-only meeting simulation harness for founder/admin QA. It helps inspect role and lifecycle truth states without needing a live team and without mutating real meeting records.
 
 This is not a real meeting implementation and does not replace production meeting flows.
+
+The corrected Phase 2B UX presents Admin QA as a guided executive workflow:
+
+1. Select role.
+2. Select lifecycle state.
+3. Review the scenario result.
+4. Review participant/session behavior.
+5. Review feature readiness grouped as Works Today, Simulation Only, and Locked / Future Build.
+6. Review next build priorities.
+
+Top-level copy must remain visible:
+
+- `Simulation only. No production session, invite, participant, recording, note, signal, archive, replay, or VOD record is created.`
+- `Use this panel to select a role and meeting state, then verify what that user should see, what works today, what is simulated, and what remains locked for future development.`
 
 ## Roles Simulated
 
@@ -38,7 +52,18 @@ This is not a real meeting implementation and does not replace production meetin
 - Notes download availability
 - Browser-local recording truth state
 - 5D entry lifecycle state
+- Participant list simulation
+- Guest access simulation
 - Waiting, ended, archive, and unknown-state messaging
+
+Each action card must show an explicit operational label:
+
+- `WORKS TODAY`
+- `SIMULATION ONLY`
+- `LOCKED / FUTURE BUILD`
+- `LOCAL ONLY`
+- `ROLE RESTRICTED`
+- `STATUS RESTRICTED`
 
 ## What Is Real
 
@@ -80,33 +105,44 @@ The simulation is frontend-local. It does not call provider session creation, in
 
 1. Sign in as founder/admin.
 2. Open `/conscious-meetings/portal`.
-3. Select `Admin QA`.
-4. Switch role views:
+3. Confirm `Admin QA` appears as a visible text label, not only an icon.
+4. Select `Admin QA`.
+5. Confirm the top explanation says simulation creates no production session, invite, participant, recording, note, signal, archive, replay, or VOD record.
+6. Follow the visible checklist:
+   - Select role
+   - Select lifecycle state
+   - Review scenario result
+   - Review participants
+   - Review feature readiness
+   - Confirm what remains locked
+   - Identify next build priority
+7. Switch role views:
    - Provider / Host
    - Admin
    - Authenticated Member
    - Signed Guest
-5. Switch lifecycle states:
+8. Switch lifecycle states:
    - Scheduled
    - Live
    - Ended
    - Archived
    - Error / Unknown
-6. Confirm scheduled state:
+9. Confirm scheduled state:
    - Join is disabled or gated.
    - Host/admin start is available only for provider/admin role view.
    - Message reads that users and signed guests cannot enter until host start.
-7. Confirm live state:
+10. Confirm live state:
    - Join is active.
    - Host/admin end is available.
    - Participant list shows host/provider, admin observer, member attendee, signed guest, late joiner, muted participant, camera-off participant, and disconnected participant.
-8. Confirm ended state:
+   - Recently departed participant is visually separated and not counted as active.
+11. Confirm ended state:
    - Active join, 5D, AI notes, notes download, and recording are closed or unavailable.
    - Message reads that active entry, signaling, AI notes, 5D entry, and recording controls are closed.
-9. Confirm archived state:
+12. Confirm archived state:
    - Archive/metadata behavior is shown.
    - No fake replay or VOD is presented.
-10. Confirm unknown/error state:
+13. Confirm unknown/error state:
     - The UI fails closed and avoids active controls.
 
 ## Expected Copy Checks
