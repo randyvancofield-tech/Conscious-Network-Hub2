@@ -418,6 +418,8 @@ const isGuestAllowedView = (view: AppView): boolean =>
     AppView.MEETING_DETAIL,
     AppView.KNOWLEDGE_PATHWAYS,
     AppView.COURSE_DETAIL,
+    AppView.PROVIDERS,
+    AppView.PROVIDER_DETAIL,
     AppView.PRIVACY_POLICY,
     AppView.TERMS_OF_SERVICE,
     AppView.AI_TRANSPARENCY_POLICY,
@@ -3957,6 +3959,22 @@ const App: React.FC = () => {
   const navAvatarMedia = user ? getProfileAvatarMedia(user) : null;
   const navAvatarUrl = !navAvatarFailed ? navAvatarMedia?.url || '' : '';
   const navAvatarIsVideo = navAvatarMedia ? isVideoMediaAsset(navAvatarMedia) : false;
+  const suppressMusicBoxViews = new Set<AppView>([
+    AppView.PROVIDER_APPLY,
+    AppView.PROVIDER_SIGN_IN,
+    AppView.PROVIDER_APPLICANT_SIGN_IN,
+    AppView.PROVIDER_APPLICATION_STATUS,
+    AppView.MEMBERSHIP_ACCESS,
+    AppView.MEMBERSHIP,
+    AppView.ADMINISTRATIVE_ACCESS,
+    AppView.ADMIN_SIGN_IN,
+    AppView.GRANT_APPLICATION,
+  ]);
+  const shouldShowMusicBox =
+    !suppressMusicBoxViews.has(currentView) &&
+    !isSignupModalOpen &&
+    !isSigninModalOpen &&
+    !isMembershipCheckoutPending;
 
   return (
     <div className="app-scroll-root min-h-screen bg-[#05070a] text-slate-200 selection:bg-blue-500/30 flex relative">
@@ -3990,7 +4008,7 @@ const App: React.FC = () => {
       )}
 
       <div className="relative z-10 w-full min-h-screen flex flex-col overflow-x-hidden">
-        <MusicBox />
+        {shouldShowMusicBox && <MusicBox />}
         
         {hasApiKey === false && (
           <div className="fixed inset-0 z-[1000] flex items-start sm:items-center justify-center overflow-y-auto custom-scrollbar bg-black/90 backdrop-blur-3xl p-4 sm:p-6">

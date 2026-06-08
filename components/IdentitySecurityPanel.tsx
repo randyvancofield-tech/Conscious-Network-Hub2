@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { X, ShieldCheck, Copy, AlertTriangle, Lock } from 'lucide-react';
 import { ethers } from 'ethers';
 import { api } from '../services/apiClient';
@@ -57,6 +57,7 @@ const normalizeChainId = (value: unknown): number => {
 };
 
 const IdentitySecurityPanel: React.FC<IdentitySecurityPanelProps> = ({ isOpen, onClose, user }) => {
+  const restoredSessionKeyRef = useRef<string | null>(null);
   const persisted = useMemo(() => {
     return safeParseJSON<{
       address?: string;
@@ -146,8 +147,14 @@ const IdentitySecurityPanel: React.FC<IdentitySecurityPanelProps> = ({ isOpen, o
   }, [connectedAddress, chainId]);
 
   useEffect(() => {
+    const userId = user?.id ? String(user.id) : '';
+    if (!userId && !isOpen) return;
+    const sessionKey = userId || 'open-panel';
+    if (restoredSessionKeyRef.current === sessionKey) return;
+
     const restoreIdentitySession = async (): Promise<void> => {
       try {
+        restoredSessionKeyRef.current = sessionKey;
         const data = await api<any>('/identity-security/session', {
           method: 'GET',
           auth: false,
@@ -164,11 +171,12 @@ const IdentitySecurityPanel: React.FC<IdentitySecurityPanelProps> = ({ isOpen, o
           setVerifiedAt(new Date(String(session.verifiedAt)).toLocaleString());
         }
       } catch {
+        restoredSessionKeyRef.current = null;
         // Ignore restoration errors so the panel stays usable.
       }
     };
     void restoreIdentitySession();
-  }, []);
+  }, [isOpen, user?.id]);
 
   const copyText = async (value: string) => {
     try {

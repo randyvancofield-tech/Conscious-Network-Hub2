@@ -52,12 +52,15 @@ const requestJson = async (options: {
   method: string;
   path: string;
   token?: string;
+  body?: unknown;
 }): Promise<{ status: number; body: any }> => {
   const headers: Record<string, string> = {};
   if (options.token) headers.Authorization = `Bearer ${options.token}`;
+  if (options.body) headers['Content-Type'] = 'application/json';
   const response = await fetch(`${baseUrl}${options.path}`, {
     method: options.method,
     headers,
+    body: options.body ? JSON.stringify(options.body) : undefined,
   });
   const text = await response.text();
   return {
@@ -77,7 +80,7 @@ const createUser = (id: string, tier: string, role: MockRole = 'user') => ({
   walletAddress: null,
 });
 
-describe('provider marketplace tier enforcement', () => {
+describe('provider marketplace public discovery and tier enforcement', () => {
   beforeAll(async () => {
     process.env.NODE_ENV = 'test';
     process.env.AUTH_TOKEN_SECRET = 'provider-marketplace-tier-secret';
@@ -115,7 +118,18 @@ describe('provider marketplace tier enforcement', () => {
     jest.clearAllMocks();
   });
 
-  it('denies provider marketplace to non-accelerated members at the backend', async () => {
+  it('allows public-safe provider discovery to guests', async () => {
+    const response = await requestJson({
+      method: 'GET',
+      path: '/api/providers',
+    });
+
+    expect(response.status).toBe(200);
+    expect(response.body?.providers).toHaveLength(1);
+    expect(response.body?.providers?.[0]?.id).toBe('provider-1');
+  });
+
+  it('allows public-safe provider discovery to non-accelerated members', async () => {
     users.set('free-user', createUser('free-user', 'Free / Community Tier'));
 
     const response = await requestJson({
@@ -124,8 +138,8 @@ describe('provider marketplace tier enforcement', () => {
       token: tokenFor('free-user'),
     });
 
-    expect(response.status).toBe(403);
-    expect(response.body?.code).toBe('TIER_ACCESS_REQUIRED');
+    expect(response.status).toBe(200);
+    expect(response.body?.providers).toHaveLength(1);
   });
 
   it('allows provider marketplace to accelerated members', async () => {
@@ -139,5 +153,19 @@ describe('provider marketplace tier enforcement', () => {
 
     expect(response.status).toBe(200);
     expect(response.body?.providers).toHaveLength(1);
+  });
+
+  it('keeps provider request actions tier-gated for non-accelerated members', async () => {
+    users.set('free-user', createUser('free-user', 'Free / Community Tier'));
+
+    const response = await requestJson({
+      method: 'POST',
+      path: '/api/providers/provider-1/request',
+      token: tokenFor('free-user'),
+      body: { note: 'I would like to connect with this provider.' },
+    });
+
+    expect(response.status).toBe(403);
+    expect(response.body?.code).toBe('TIER_ACCESS_REQUIRED');
   });
 });

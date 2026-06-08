@@ -53,7 +53,11 @@ const absolutizeUrl = (req: Request, value: unknown): string | null => {
   return absolutizeBackendUrl(req, typeof value === 'string' ? value : null) || null;
 };
 
-const canonicalUploadObjectUrl = (req: Request, objectKey?: string | null): string | null => {
+const canonicalUploadObjectUrl = (
+  req: Request,
+  objectKey?: string | null,
+  options: { publicOnly?: boolean } = {}
+): string | null => {
   const resolvedObjectKey = extractUploadObjectKeyFromUrl(objectKey || null);
   if (!resolvedObjectKey) return null;
   const metadata = getUploadObjectAccessMetadata(resolvedObjectKey);
@@ -61,6 +65,7 @@ const canonicalUploadObjectUrl = (req: Request, objectKey?: string | null): stri
   if (metadata.access === 'public') {
     return buildBackendUploadObjectUrl(req, resolvedObjectKey, 'public');
   }
+  if (options.publicOnly) return null;
   if (metadata.access === 'private') {
     return buildBackendUploadObjectUrl(req, resolvedObjectKey, 'private');
   }
@@ -73,15 +78,19 @@ const canonicalUploadObjectUrl = (req: Request, objectKey?: string | null): stri
 const absolutizeUploadAwareUrl = (
   req: Request,
   value: unknown,
-  objectKey?: unknown
+  objectKey?: unknown,
+  options: { publicOnly?: boolean } = {}
 ): string | null => {
   const resolvedObjectKey =
     extractUploadObjectKeyFromUrl(typeof objectKey === 'string' ? objectKey : null) ||
     extractUploadObjectKeyFromUrl(typeof value === 'string' ? value : null);
-  return canonicalUploadObjectUrl(req, resolvedObjectKey) || absolutizeUrl(req, value);
+  const uploadUrl = canonicalUploadObjectUrl(req, resolvedObjectKey, options);
+  if (uploadUrl) return uploadUrl;
+  if (options.publicOnly && resolvedObjectKey) return null;
+  return absolutizeUrl(req, value);
 };
 
-const absolutizeProfileMedia = (req: Request, user: any) => {
+const absolutizeProfileMedia = (req: Request, user: any, options: { publicOnly?: boolean } = {}) => {
   const normalized = normalizeProfileMedia(
     user?.profileMedia,
     user?.avatarUrl || null,
@@ -90,26 +99,26 @@ const absolutizeProfileMedia = (req: Request, user: any) => {
   return {
     avatar: {
       ...normalized.avatar,
-      url: absolutizeUploadAwareUrl(req, normalized.avatar.url, normalized.avatar.objectKey),
+      url: absolutizeUploadAwareUrl(req, normalized.avatar.url, normalized.avatar.objectKey, options),
     },
     cover: {
       ...normalized.cover,
-      url: absolutizeUploadAwareUrl(req, normalized.cover.url, normalized.cover.objectKey),
+      url: absolutizeUploadAwareUrl(req, normalized.cover.url, normalized.cover.objectKey, options),
     },
   };
 };
 
-const toProviderResponse = (req: Request, user: any) => ({
+const toProviderResponse = (req: Request, user: any, options: { publicOnly?: boolean } = {}) => ({
   id: user.id,
   name: user.name || (user.role === 'provider' ? 'Verified Provider' : 'Member'),
   role: user.role,
   handle: user.handle || null,
   bio: user.bio || '',
   location: user.location || '',
-  avatarUrl: absolutizeUploadAwareUrl(req, user.avatarUrl, user.profileMedia?.avatar?.objectKey) || '',
-  bannerUrl: absolutizeUploadAwareUrl(req, user.bannerUrl, user.profileMedia?.cover?.objectKey) || '',
-  profileMedia: absolutizeProfileMedia(req, user),
-  profileBackgroundVideo: absolutizeUrl(req, user.profileBackgroundVideo) || '',
+  avatarUrl: absolutizeUploadAwareUrl(req, user.avatarUrl, user.profileMedia?.avatar?.objectKey, options) || '',
+  bannerUrl: absolutizeUploadAwareUrl(req, user.bannerUrl, user.profileMedia?.cover?.objectKey, options) || '',
+  profileMedia: absolutizeProfileMedia(req, user, options),
+  profileBackgroundVideo: absolutizeUploadAwareUrl(req, user.profileBackgroundVideo, null, options) || '',
   interests: Array.isArray(user.interests) ? user.interests : [],
   websiteUrl: user.websiteUrl || '',
   twitterUrl: user.twitterUrl || '',
@@ -130,9 +139,7 @@ const toAnchorLinkRequestResponse = (req: Request, request: any) => ({
   provider: request.provider ? toProviderResponse(req, request.provider) : undefined,
 });
 
-providersRouter.get('/', requireCanonicalIdentity, async (req: Request, res: Response): Promise<void> => {
-  if (!enforceProviderMarketplaceAccess(req, res)) return;
-
+providersRouter.get('/', async (req: Request, res: Response): Promise<void> => {
   try {
     const db = getPrisma() as any;
     const providers = await db.user.findMany({
@@ -144,7 +151,10 @@ providersRouter.get('/', requireCanonicalIdentity, async (req: Request, res: Res
       },
       orderBy: { updatedAt: 'desc' },
     });
-    res.json({ success: true, providers: providers.map((provider: any) => toProviderResponse(req, provider)) });
+    res.json({
+      success: true,
+      providers: providers.map((provider: any) => toProviderResponse(req, provider, { publicOnly: true })),
+    });
   } catch (error) {
     console.error('[PROVIDERS][ERROR] Failed to list providers', error);
     res.status(500).json({ error: 'Failed to list providers' });
