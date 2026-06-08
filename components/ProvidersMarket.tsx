@@ -38,6 +38,8 @@ interface ProvidersMarketProps {
   onOpenProvider?: (id: string) => void;
   onBackToList?: () => void;
   onApplyAsProvider?: () => void;
+  onMembershipAccess?: () => void;
+  onExploreHub?: () => void;
   onSignInRequired?: () => void;
 }
 
@@ -93,6 +95,9 @@ const ProvidersMarketContent: React.FC<ProvidersMarketProps> = ({
   providerId,
   onOpenProvider,
   onBackToList,
+  onApplyAsProvider,
+  onMembershipAccess,
+  onExploreHub,
   onSignInRequired,
 }) => {
   const [filter, setFilter] = useState<string>('All');
@@ -399,9 +404,44 @@ const ProvidersMarketContent: React.FC<ProvidersMarketProps> = ({
       )}
 
       {!isLoading && filteredProviders.length === 0 && (
-        <div className="glass-panel p-6 sm:p-8 rounded-[2rem] border-white/10 text-center">
-          <h3 className="text-lg font-black text-white uppercase tracking-tight">No verified providers available</h3>
-          <p className="text-sm text-slate-400 mt-2">CNH-approved provider accounts will appear here once their user role is set to provider.</p>
+        <div className="glass-panel mx-auto max-w-3xl p-6 sm:p-8 rounded-[2rem] border-white/10 text-center">
+          <p className="text-blue-300/70 text-[10px] font-black uppercase tracking-[0.35em]">Provider Network</p>
+          <h3 className="mt-3 text-xl sm:text-2xl font-black text-white uppercase tracking-tight">Verified providers are being onboarded</h3>
+          <p className="mx-auto mt-3 max-w-2xl text-sm sm:text-base text-slate-400 leading-7">
+            CNH is opening provider discovery with a verified-first standard. Interested providers can apply for review,
+            and members can explore the hub while the public provider network grows.
+          </p>
+          <div className="mt-6 grid grid-cols-1 gap-3 sm:grid-cols-3">
+            {onApplyAsProvider && (
+              <button
+                type="button"
+                onClick={onApplyAsProvider}
+                className="flex items-center justify-center gap-2 rounded-xl bg-blue-600 px-4 py-3 text-[10px] font-black uppercase tracking-widest text-white transition hover:bg-blue-500 active:scale-95"
+              >
+                <UserPlus className="h-4 w-4 shrink-0" />
+                Apply as Provider
+              </button>
+            )}
+            {onMembershipAccess && (
+              <button
+                type="button"
+                onClick={onMembershipAccess}
+                className="flex items-center justify-center gap-2 rounded-xl border border-white/10 bg-white/5 px-4 py-3 text-[10px] font-black uppercase tracking-widest text-slate-200 transition hover:bg-white/10 active:scale-95"
+              >
+                Explore Membership
+              </button>
+            )}
+            {onExploreHub && (
+              <button
+                type="button"
+                onClick={onExploreHub}
+                className="flex items-center justify-center gap-2 rounded-xl border border-white/10 bg-white/5 px-4 py-3 text-[10px] font-black uppercase tracking-widest text-slate-200 transition hover:bg-white/10 active:scale-95"
+              >
+                Hub Home
+                <ChevronRight className="h-4 w-4 shrink-0" />
+              </button>
+            )}
+          </div>
         </div>
       )}
 

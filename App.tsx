@@ -3738,6 +3738,8 @@ const App: React.FC = () => {
             onOpenProvider={(id) => setCurrentView(AppView.PROVIDER_DETAIL, { id })}
             onBackToList={() => setCurrentView(AppView.PROVIDERS)}
             onApplyAsProvider={() => setCurrentView(AppView.PROVIDER_APPLY)}
+            onMembershipAccess={() => setCurrentView(AppView.MEMBERSHIP_ACCESS)}
+            onExploreHub={() => setCurrentView(AppView.ENTRY)}
             onSignInRequired={() => {
               resetSignInChallengeInputs();
               setSigninModalOpen(true);
@@ -3751,6 +3753,8 @@ const App: React.FC = () => {
             onOpenProvider={(id) => setCurrentView(AppView.PROVIDER_DETAIL, { id })}
             onBackToList={() => setCurrentView(AppView.PROVIDERS)}
             onApplyAsProvider={() => setCurrentView(AppView.PROVIDER_APPLY)}
+            onMembershipAccess={() => setCurrentView(AppView.MEMBERSHIP_ACCESS)}
+            onExploreHub={() => setCurrentView(AppView.ENTRY)}
             onSignInRequired={() => {
               resetSignInChallengeInputs();
               setSigninModalOpen(true);
