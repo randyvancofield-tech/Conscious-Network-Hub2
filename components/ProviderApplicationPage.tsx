@@ -348,8 +348,8 @@ const ProviderApplicationPage: React.FC<ProviderApplicationPageProps> = ({
   }
 
   return (
-    <div className="min-h-[100dvh] overflow-y-auto bg-[#120d05] p-4 text-white sm:p-6 lg:p-8">
-      <div className="mx-auto max-w-6xl">
+    <div className="min-h-[100dvh] overflow-x-hidden overflow-y-auto bg-[#120d05] p-4 text-white sm:p-6 lg:p-8">
+      <div className="mx-auto w-full min-w-0" style={{ maxWidth: 'min(72rem, calc(100vw - 2rem))' }}>
         <button
           type="button"
           onClick={onBack}
@@ -360,8 +360,11 @@ const ProviderApplicationPage: React.FC<ProviderApplicationPageProps> = ({
         </button>
 
         <div className="mb-8 space-y-5">
-          <div className="glass-panel rounded-3xl border border-amber-200/20 bg-amber-400/[0.04] p-5 sm:p-6 lg:p-7">
-            <div className="flex flex-col gap-5 lg:flex-row lg:items-end lg:justify-between">
+          <div
+            className="glass-panel w-full min-w-0 rounded-3xl border border-amber-200/20 bg-amber-400/[0.04] p-5 sm:p-6 lg:p-7"
+            style={{ maxWidth: 'calc(100vw - 2rem)' }}
+          >
+            <div className="flex min-w-0 flex-col gap-5 lg:flex-row lg:items-end lg:justify-between">
               <div className="min-w-0">
                 <div className="mb-4 flex h-12 w-12 items-center justify-center rounded-2xl border border-amber-200/20 bg-amber-400/10 text-amber-100">
                   <FileText className="h-5 w-5" />
@@ -369,18 +372,21 @@ const ProviderApplicationPage: React.FC<ProviderApplicationPageProps> = ({
                 <p className="text-[10px] font-black uppercase tracking-[0.35em] text-amber-100/60">
                   New Provider Applicant
                 </p>
-                <h1 className="mt-3 text-3xl font-black uppercase leading-tight tracking-tight sm:text-5xl">
+                <h1 className="mt-3 max-w-full break-words text-[clamp(2rem,8vw,3rem)] font-black uppercase leading-tight text-white [overflow-wrap:break-word] [word-break:normal] sm:text-5xl">
                   Apply to Join Conscious Network Hub
                 </h1>
               </div>
-              <p className="max-w-xl text-sm leading-7 text-slate-300">
+              <p className="min-w-0 max-w-xs break-words text-sm leading-7 text-slate-300 sm:max-w-xl lg:text-right">
                 Submit credentials and materials, then enter a restricted review path. Full provider
                 tools remain locked until approval and native CNH provider sign-in.
               </p>
             </div>
           </div>
 
-          <div className="glass-panel rounded-2xl border border-white/10 bg-white/[0.03] p-4 sm:p-5">
+          <div
+            className="glass-panel w-full min-w-0 rounded-2xl border border-white/10 bg-white/[0.03] p-4 sm:p-5"
+            style={{ maxWidth: 'calc(100vw - 2rem)' }}
+          >
             <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
               <div>
                 <p className="text-[10px] font-black uppercase tracking-[0.3em] text-slate-400">
@@ -427,7 +433,10 @@ const ProviderApplicationPage: React.FC<ProviderApplicationPageProps> = ({
           </div>
         </div>
 
-        <div className="glass-panel rounded-3xl border border-white/10 bg-white/[0.035] p-5 shadow-2xl sm:p-8">
+        <div
+          className="glass-panel w-full min-w-0 rounded-3xl border border-white/10 bg-white/[0.035] p-5 shadow-2xl sm:p-8"
+          style={{ maxWidth: 'calc(100vw - 2rem)' }}
+        >
           {step === 0 && (
             <div className="grid gap-5 md:grid-cols-2">
               <Field label="First name" value={values.firstName} onChange={(value) => update('firstName', value)} required />
@@ -520,7 +529,7 @@ const ProviderApplicationPage: React.FC<ProviderApplicationPageProps> = ({
                     type="file"
                     accept=".pdf,.doc,.docx,.rtf,.txt,application/pdf,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document"
                     onChange={(event) => setResume(event.target.files?.[0] || null)}
-                    className="mt-3 block w-full text-sm text-slate-300 file:mr-4 file:rounded-xl file:border-0 file:bg-amber-300 file:px-4 file:py-2 file:text-xs file:font-black file:uppercase file:text-slate-950"
+                    className="mt-3 block w-full min-w-0 max-w-full overflow-hidden text-xs text-slate-300 file:mb-2 file:block file:rounded-xl file:border-0 file:bg-amber-300 file:px-4 file:py-2 file:text-xs file:font-black file:uppercase file:text-slate-950 sm:text-sm sm:file:mb-0 sm:file:mr-4 sm:file:inline-flex"
                   />
                   {resume && <p className="mt-2 text-xs text-emerald-100">{resume.name}</p>}
                 </label>
@@ -532,7 +541,7 @@ const ProviderApplicationPage: React.FC<ProviderApplicationPageProps> = ({
                     type="file"
                     accept=".pdf,.doc,.docx,.rtf,.txt,application/pdf,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document"
                     onChange={(event) => setCoverLetter(event.target.files?.[0] || null)}
-                    className="mt-3 block w-full text-sm text-slate-300 file:mr-4 file:rounded-xl file:border-0 file:bg-amber-300 file:px-4 file:py-2 file:text-xs file:font-black file:uppercase file:text-slate-950"
+                    className="mt-3 block w-full min-w-0 max-w-full overflow-hidden text-xs text-slate-300 file:mb-2 file:block file:rounded-xl file:border-0 file:bg-amber-300 file:px-4 file:py-2 file:text-xs file:font-black file:uppercase file:text-slate-950 sm:text-sm sm:file:mb-0 sm:file:mr-4 sm:file:inline-flex"
                   />
                   {coverLetter && <p className="mt-2 text-xs text-emerald-100">{coverLetter.name}</p>}
                 </label>

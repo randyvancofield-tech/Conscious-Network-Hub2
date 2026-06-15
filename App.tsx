@@ -4204,7 +4204,7 @@ const App: React.FC = () => {
         )}
 
         {currentView === AppView.MEMBERSHIP_ACCESS && !isMembershipAuthGuardChecking && (
-          <div className="min-h-[100dvh] animate-in fade-in duration-700 relative z-10 p-4 pt-20 sm:p-6 sm:pt-24 md:p-8 lg:p-10 xl:p-14">
+          <div className="relative z-10 min-h-[100dvh] w-full max-w-full overflow-x-hidden animate-in fade-in duration-700 p-4 pt-20 sm:p-6 sm:pt-24 md:p-8 lg:p-10 xl:p-14">
             <svg
               className={`pointer-events-none absolute inset-0 z-0 hidden h-full w-full transition-opacity duration-500 lg:block ${
                 hoveredMembershipPath ? 'opacity-100' : 'opacity-70'
@@ -4287,7 +4287,7 @@ const App: React.FC = () => {
               onMouseLeave={() => setHoveredMembershipPath(null)}
               onFocus={() => setHoveredMembershipPath(MEMBERSHIP_RETURN_PATH_ID)}
               onBlur={() => setHoveredMembershipPath(null)}
-              className={`fixed right-4 top-4 z-30 rounded-2xl border border-cyan-200/30 bg-slate-950/80 px-4 py-3 text-[10px] font-black uppercase tracking-widest text-white shadow-2xl shadow-blue-950/40 backdrop-blur-xl transition-all hover:bg-cyan-500/20 sm:right-8 sm:top-8 sm:px-5 ${
+              className={`fixed right-4 top-4 z-30 hidden max-w-[calc(100vw-2rem)] rounded-2xl border border-cyan-200/30 bg-slate-950/80 px-4 py-3 text-[10px] font-black uppercase tracking-widest text-white shadow-2xl shadow-blue-950/40 backdrop-blur-xl transition-all hover:bg-cyan-500/20 sm:block sm:right-8 sm:top-8 sm:px-5 ${
                 hoveredMembershipPath === MEMBERSHIP_RETURN_PATH_ID
                   ? 'animate-pulse ring-2 ring-cyan-200/40 shadow-cyan-400/30'
                   : ''
@@ -4296,12 +4296,18 @@ const App: React.FC = () => {
               Member Login
             </button>
 
-            <div className="relative z-10 mx-auto max-w-7xl space-y-8 pb-6 sm:space-y-10 sm:pb-10 md:space-y-12">
+            <div
+              className="relative z-10 mx-auto w-full min-w-0 space-y-8 pb-6 sm:space-y-10 sm:pb-10 md:space-y-12"
+              style={{ maxWidth: 'min(80rem, calc(100vw - 2rem))' }}
+            >
               <button onClick={handleGoHome} className="flex items-center gap-2 sm:gap-3 text-slate-500 hover:text-white transition-colors group">
                 <Home className="w-4 h-4 sm:w-5 sm:h-5" /> <span className="font-bold uppercase tracking-[0.4em] text-[9px] sm:text-[10px]">Portal Entry</span>
               </button>
 
-              <div className="lg:hidden sticky top-16 z-20 mx-auto w-full max-w-sm rounded-2xl border border-white/10 bg-slate-950/85 p-4 shadow-2xl backdrop-blur-xl sm:top-20">
+              <div
+                className="sticky top-16 z-20 mx-auto w-full rounded-2xl border border-white/10 bg-slate-950/85 p-4 shadow-2xl backdrop-blur-xl lg:hidden sm:top-20"
+                style={{ maxWidth: 'min(24rem, calc(100vw - 2rem))' }}
+              >
                 <div className="relative space-y-3 pl-6">
                   <div className="absolute bottom-2 left-1.5 top-2 w-px bg-white/10" />
                   <div
@@ -4338,7 +4344,7 @@ const App: React.FC = () => {
                   Start Here
                 </p>
                 <h2 className="text-2xl xs:text-3xl sm:text-4xl md:text-5xl 2xl:text-6xl font-black text-white tracking-tighter leading-tight">Membership Access</h2>
-                <p className="text-slate-400 text-sm sm:text-base md:text-lg font-light px-2 sm:px-0">Sign in or choose a membership tier to enter Conscious Network Hub.</p>
+                <p className="mx-auto max-w-xs break-words px-2 text-sm font-light leading-6 text-slate-400 sm:max-w-2xl sm:px-0 sm:text-base md:text-lg">Sign in or choose a membership tier to enter Conscious Network Hub.</p>
                 <div className="flex flex-wrap items-center justify-center gap-3 sm:gap-4 pt-3">
                   <div
                     className="relative inline-flex"
@@ -4380,7 +4386,10 @@ const App: React.FC = () => {
               </div>
 
               {isMembershipHelpVisible && (
-                <div className="glass-panel relative rounded-[1.5rem] border border-blue-500/20 bg-blue-500/5 p-5 sm:p-6 shadow-2xl">
+                <div
+                  className="glass-panel relative w-full min-w-0 rounded-[1.5rem] border border-blue-500/20 bg-blue-500/5 p-5 shadow-2xl sm:p-6"
+                  style={{ maxWidth: 'calc(100vw - 2rem)' }}
+                >
                   <button
                     type="button"
                     onClick={() => setMembershipHelpVisible(false)}
@@ -4393,7 +4402,7 @@ const App: React.FC = () => {
                     <h3 className="text-sm font-black uppercase tracking-widest text-white">
                       Quick Start
                     </h3>
-                    <p className="mt-2 text-sm leading-6 text-slate-300">
+                    <p className="mt-2 max-w-xs break-words text-sm leading-6 text-slate-300 sm:max-w-3xl">
                       Existing members can sign in to continue. New users should choose a tier below to create an account and activate membership access.
                     </p>
                   </div>
@@ -4419,13 +4428,14 @@ const App: React.FC = () => {
                       onMouseLeave={() => setHoveredMembershipPath(null)}
                       onFocus={() => setHoveredMembershipPath(tier.name)}
                       onBlur={() => setHoveredMembershipPath(null)}
-                      className={`glass-panel group relative flex min-h-[22rem] flex-col justify-between overflow-hidden rounded-[1.75rem] border-white/5 border-t-4 p-5 shadow-2xl transition-all duration-300 sm:min-h-[24rem] sm:rounded-[2.5rem] sm:p-8 lg:min-h-[25rem] lg:p-7 xl:p-10 ${
+                      className={`glass-panel group relative flex w-full min-h-[22rem] min-w-0 flex-col justify-between overflow-hidden rounded-[1.75rem] border-white/5 border-t-4 p-5 shadow-2xl transition-all duration-300 sm:min-h-[24rem] sm:rounded-[2.5rem] sm:p-8 lg:min-h-[25rem] lg:p-7 xl:p-10 ${
                         tierClasses.cardBorder
                       } ${
                         isFocused ? `scale-[1.02] ring-2 ${tierClasses.glow}` : ''
                       } ${
                         shouldDim ? 'scale-[0.98] opacity-45 blur-[1px]' : 'opacity-100'
                       }`}
+                      style={{ maxWidth: 'calc(100vw - 2rem)' }}
                     >
                       <div
                         className={`pointer-events-none absolute left-4 right-4 top-4 z-20 hidden origin-top rounded-2xl border p-4 text-left shadow-2xl backdrop-blur-xl transition-all duration-300 lg:block ${
@@ -4440,7 +4450,7 @@ const App: React.FC = () => {
                       </div>
                       <div>
                         <div className="flex justify-between items-start gap-3 mb-2">
-                          <h3 className="min-w-0 text-xl xl:text-2xl font-black text-white leading-tight uppercase tracking-tighter">{tier.name}</h3>
+                          <h3 className="min-w-0 break-words text-xl font-black uppercase leading-tight text-white xl:text-2xl">{tier.name}</h3>
                           <span className={`cnh-status-badge shrink-0 px-3 sm:px-4 py-1 sm:py-1.5 rounded-full text-[9px] sm:text-[10px] font-black tracking-widest ${tierClasses.price}`}>{tier.price}</span>
                         </div>
                         <p className="text-blue-400/60 text-[8px] sm:text-[9px] font-black uppercase tracking-[0.3em] mb-6 sm:mb-8">Membership Option</p>
@@ -4448,18 +4458,18 @@ const App: React.FC = () => {
                         <div className="space-y-4 sm:space-y-6">
                           <div>
                             <h4 className="text-[9px] font-black text-slate-500 uppercase tracking-widest mb-2">Description</h4>
-                            <p className="text-slate-300 text-xs sm:text-sm leading-relaxed font-light">{tier.description}</p>
+                            <p className="max-w-xs break-words text-xs font-light leading-relaxed text-slate-300 sm:max-w-none sm:text-sm">{tier.description}</p>
                           </div>
                           <div>
                             <h4 className="text-[9px] font-black text-slate-500 uppercase tracking-widest mb-2">Access Level</h4>
-                            <div className="flex items-center gap-2 sm:gap-3 text-white text-[11px] sm:text-xs font-medium">
+                            <div className="flex min-w-0 items-start gap-2 text-[11px] font-medium text-white sm:gap-3 sm:text-xs">
                               <CheckCircle2 className={`w-3.5 h-3.5 sm:w-4 sm:h-4 shrink-0 ${tierClasses.check}`} />
-                              {tier.access}
+                              <span className="min-w-0 max-w-xs break-words sm:max-w-none">{tier.access}</span>
                             </div>
                           </div>
                           <div>
                             <h4 className="text-[9px] font-black text-slate-500 uppercase tracking-widest mb-2">Ideal For</h4>
-                            <p className="text-slate-400 text-[10px] sm:text-[11px] italic font-light">{tier.ideal}</p>
+                            <p className="max-w-xs break-words text-[10px] italic font-light text-slate-400 sm:max-w-none sm:text-[11px]">{tier.ideal}</p>
                           </div>
                         </div>
                       </div>

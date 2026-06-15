@@ -352,21 +352,24 @@ const ProvidersMarketContent: React.FC<ProvidersMarketProps> = ({
   }
 
   return (
-    <div className="space-y-12 animate-in fade-in slide-in-from-bottom-6 duration-700 pb-32">
+    <div
+      className="mx-auto w-full min-w-0 space-y-12 overflow-x-hidden pb-32 animate-in fade-in slide-in-from-bottom-6 duration-700"
+      style={{ maxWidth: 'calc(100vw - 2rem)' }}
+    >
       <header className="space-y-6">
-        <div className="flex flex-col md:flex-row md:items-end justify-between gap-6">
-          <div className="space-y-2">
-                  <h2 className="text-3xl sm:text-4xl font-black text-white uppercase tracking-tighter leading-tight">Providers Market</h2>
-            <p className="text-blue-400/60 text-[10px] font-black uppercase tracking-[0.4em]">Sovereign Talent Exchange</p>
+        <div className="flex min-w-0 flex-col justify-between gap-6 md:flex-row md:items-end">
+          <div className="min-w-0 space-y-2">
+                  <h2 className="max-w-full break-words text-[clamp(1.75rem,8vw,2.25rem)] font-black uppercase leading-tight text-white [overflow-wrap:break-word] [word-break:normal] sm:text-4xl">Providers Market</h2>
+            <p className="break-words text-[10px] font-black uppercase text-blue-400/60">Sovereign Talent Exchange</p>
           </div>
-          <div className="relative group max-w-md w-full">
+          <div className="group relative w-full max-w-md min-w-0">
             <Search className="absolute left-5 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-600 group-focus-within:text-blue-400 transition-colors" />
             <input
               type="text"
               placeholder="Filter by name, skill, or node ID..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              className="w-full pl-14 pr-6 py-4 bg-white/5 border border-white/10 rounded-2xl text-xs outline-none focus:ring-2 focus:ring-blue-500/30 transition-all font-medium placeholder:tracking-wider uppercase"
+              className="w-full min-w-0 rounded-2xl border border-white/10 bg-white/5 py-4 pl-14 pr-4 text-xs font-medium uppercase outline-none transition-all placeholder:text-[11px] focus:ring-2 focus:ring-blue-500/30 sm:pr-6 sm:placeholder:text-xs"
             />
           </div>
         </div>

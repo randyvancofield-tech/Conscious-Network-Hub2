@@ -53,7 +53,7 @@ export const PageHeader: React.FC<PageHeaderProps> = ({ eyebrow, title, descript
         <h1 className="break-normal text-[clamp(1.75rem,3vw,3rem)] font-black uppercase leading-tight text-white [overflow-wrap:normal] [word-break:normal]">
           {title}
         </h1>
-        {description && <p className="max-w-2xl text-sm leading-6 text-slate-400 sm:text-base">{description}</p>}
+        {description && <p className="max-w-xs break-words text-sm leading-6 text-slate-400 sm:max-w-2xl sm:text-base">{description}</p>}
       </div>
     </div>
     {actions && <div className="flex min-w-0 flex-wrap items-center gap-3">{actions}</div>}

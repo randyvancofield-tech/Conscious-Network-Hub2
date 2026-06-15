@@ -240,7 +240,10 @@ const KnowledgePathways: React.FC<KnowledgePathwaysProps> = ({
   }
 
   return (
-    <div className="space-y-12 animate-in fade-in slide-in-from-bottom-8 duration-700 pb-32">
+    <div
+      className="mx-auto w-full min-w-0 space-y-12 overflow-x-hidden pb-32 animate-in fade-in slide-in-from-bottom-8 duration-700"
+      style={{ maxWidth: 'calc(100vw - 2rem)' }}
+    >
       <header className="space-y-6">
         <button
           onClick={onGoBack}
@@ -250,16 +253,16 @@ const KnowledgePathways: React.FC<KnowledgePathwaysProps> = ({
           <span className="text-[10px] font-black uppercase tracking-[0.4em]">Sovereign Learning</span>
         </button>
 
-        <div className="flex flex-col md:flex-row md:items-end justify-between gap-6">
-          <div className="space-y-2">
-            <h2 className="text-3xl sm:text-4xl font-black text-white uppercase tracking-tighter leading-tight">Knowledge Pathways</h2>
-          <p className="text-blue-400/60 text-[10px] font-black uppercase tracking-[0.4em]">Discovering Autonomy & Ethical Growth</p>
+        <div className="flex min-w-0 flex-col justify-between gap-6 md:flex-row md:items-end">
+          <div className="min-w-0 space-y-2">
+            <h2 className="max-w-full whitespace-normal break-words text-[clamp(1.75rem,8vw,2.25rem)] font-black uppercase leading-tight text-white [overflow-wrap:break-word] [word-break:normal] sm:text-4xl">Knowledge Pathways</h2>
+          <p className="break-words text-[10px] font-black uppercase text-blue-400/60">Discovering Autonomy & Ethical Growth</p>
           </div>
-          <div className="flex items-center gap-4 p-4 glass-panel rounded-2xl border-white/5 shadow-2xl">
+          <div className="flex w-full min-w-0 items-center gap-4 rounded-2xl border-white/5 p-4 shadow-2xl glass-panel sm:w-auto">
             <Compass className="w-6 h-6 text-teal-400" />
-            <div className="text-left">
+            <div className="min-w-0 text-left">
               <p className="text-[9px] font-black text-slate-500 uppercase tracking-widest">Active Discovery</p>
-              <p className="text-xs font-bold text-white uppercase">
+              <p className="break-words text-xs font-bold uppercase text-white">
                 {isLoading ? 'Loading modules' : `${courseRecords.length} Sovereign Modules Identified`}
               </p>
             </div>
@@ -366,8 +369,11 @@ const KnowledgePathways: React.FC<KnowledgePathwaysProps> = ({
       )}
 
       <div className="glass-panel p-6 sm:p-8 xl:p-10 rounded-[2rem] xl:rounded-[2.5rem] bg-gradient-to-r from-teal-900/10 to-blue-900/10 border border-white/10 text-center space-y-4">
-        <h4 className="text-xl font-black text-white uppercase tracking-tighter">Sovereign Certification Layer</h4>
-        <p className="text-slate-400 text-sm max-w-2xl mx-auto font-light">
+        <h4 className="text-base font-black uppercase leading-tight text-white sm:text-xl">
+          <span className="block sm:inline">Sovereign Certification</span>{' '}
+          <span className="block sm:inline">Layer</span>
+        </h4>
+        <p className="mx-auto max-w-xs break-words text-sm font-light leading-6 text-slate-400 sm:max-w-2xl">
           Each completed pathway generates a unique verifiable credential anchored to your Conscious Identity node. These achievement records represent deep work in personal and professional autonomy.
         </p>
       </div>
