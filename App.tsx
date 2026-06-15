@@ -1386,6 +1386,8 @@ const App: React.FC = () => {
   };
   
   const handleGoHome = () => setCurrentView(AppView.ENTRY);
+  const handleReturnToHub = () => setCurrentView(user ? AppView.DASHBOARD : AppView.ENTRY);
+  const hubReturnLabel = user ? 'Back to Dashboard' : 'Back to Home';
   
   const handleExploreAsGuest = () => {
     setGuestSession();
@@ -1482,6 +1484,15 @@ const App: React.FC = () => {
     setProviderWalletBindingRequired(true);
     setProviderWalletStatus((current) => current || 'Bind your provider wallet before verification.');
   }, [currentView, user?.id, user?.providerWalletAddressBound, user?.providerApproved, user?.providerApprovalStatus, user?.providerRevokedAt]);
+
+  useEffect(() => {
+    const hasAuthToken = Boolean(getAuthToken());
+    if (!user && hasAuthToken) return;
+    if (hasProviderOperationsAccess(user)) return;
+    if (getProviderControlSession()) {
+      setProviderControlSession('');
+    }
+  }, [user?.id, user?.role, user?.providerApproved, user?.providerApprovalStatus, user?.providerRevokedAt]);
 
   useEffect(() => {
     if (currentView !== AppView.MEMBERSHIP_ACCESS) {
@@ -3674,6 +3685,7 @@ const App: React.FC = () => {
             user={user}
             onOpenMeeting={(id) => setCurrentView(AppView.MEETING_DETAIL, { id })}
             onOpenPortal={() => setCurrentView(AppView.CONSCIOUS_MEETINGS_PORTAL)}
+            onExit={handleReturnToHub}
           />
         );
       case AppView.PROVIDER_CRM:
@@ -3683,6 +3695,7 @@ const App: React.FC = () => {
             onOpenAdminConsole={() => setCurrentView(AppView.ADMIN_DASHBOARD)}
             onOpenAdministrativeAccess={() => setCurrentView(AppView.ADMINISTRATIVE_ACCESS)}
             onOpenProviderAccess={() => setCurrentView(AppView.PROVIDER_ACCESS)}
+            onExitCrm={handleReturnToHub}
           />
         ) : (
           renderProviderCrmAccessGate()
@@ -3693,6 +3706,7 @@ const App: React.FC = () => {
             <LazyConsciousMeetingPortalPage
               user={user}
               onOpenUpcoming={() => setCurrentView(AppView.CONSCIOUS_MEETINGS_UPCOMING)}
+              onExit={handleReturnToHub}
             />
           </React.Suspense>
         );
@@ -3730,6 +3744,7 @@ const App: React.FC = () => {
             enrolledCourses={enrolledCourses}
             onNavigateToUniversity={() => setCurrentView(AppView.KNOWLEDGE_PATHWAYS)}
             onUpdateProgress={updateCourseProgress}
+            onGoDashboard={() => setCurrentView(AppView.DASHBOARD)}
           />
         );
       case AppView.PROVIDERS:
@@ -3797,7 +3812,7 @@ const App: React.FC = () => {
       case AppView.KNOWLEDGE_PATHWAYS:
         return (
           <KnowledgePathways
-            onGoBack={() => setCurrentView(AppView.MY_COURSES)}
+            onGoBack={() => setCurrentView(user ? AppView.MY_COURSES : AppView.ENTRY)}
             onEnroll={enrollCourse}
             onOpenCourse={(id) => setCurrentView(AppView.COURSE_DETAIL, { id })}
             onBackToCatalog={() => setCurrentView(AppView.KNOWLEDGE_PATHWAYS)}
@@ -3816,8 +3831,8 @@ const App: React.FC = () => {
       case AppView.PRIVACY_POLICY:
         return (
           <div className="p-8 max-w-4xl mx-auto">
-            <button onClick={() => setCurrentView(AppView.DASHBOARD)} className="mb-4 text-blue-400 hover:text-blue-300 transition-colors flex items-center gap-2">
-              <ChevronRight className="w-4 h-4 rotate-180" /> Back to Hub
+            <button onClick={handleReturnToHub} className="mb-4 text-blue-400 hover:text-blue-300 transition-colors flex items-center gap-2">
+              <ChevronRight className="w-4 h-4 rotate-180" /> {hubReturnLabel}
             </button>
             <h1 className="text-3xl font-black text-white mb-6">Privacy Policy</h1>
             <div className="prose prose-invert max-w-none">
@@ -3828,8 +3843,8 @@ const App: React.FC = () => {
       case AppView.TERMS_OF_SERVICE:
         return (
           <div className="p-8 max-w-4xl mx-auto">
-            <button onClick={() => setCurrentView(AppView.DASHBOARD)} className="mb-4 text-blue-400 hover:text-blue-300 transition-colors flex items-center gap-2">
-              <ChevronRight className="w-4 h-4 rotate-180" /> Back to Hub
+            <button onClick={handleReturnToHub} className="mb-4 text-blue-400 hover:text-blue-300 transition-colors flex items-center gap-2">
+              <ChevronRight className="w-4 h-4 rotate-180" /> {hubReturnLabel}
             </button>
             <h1 className="text-3xl font-black text-white mb-6">Terms of Service</h1>
             <div className="prose prose-invert max-w-none">
@@ -3840,8 +3855,8 @@ const App: React.FC = () => {
       case AppView.AI_TRANSPARENCY_POLICY:
         return (
           <div className="p-8 max-w-4xl mx-auto">
-            <button onClick={() => setCurrentView(AppView.DASHBOARD)} className="mb-4 text-blue-400 hover:text-blue-300 transition-colors flex items-center gap-2">
-              <ChevronRight className="w-4 h-4 rotate-180" /> Back to Hub
+            <button onClick={handleReturnToHub} className="mb-4 text-blue-400 hover:text-blue-300 transition-colors flex items-center gap-2">
+              <ChevronRight className="w-4 h-4 rotate-180" /> {hubReturnLabel}
             </button>
             <h1 className="text-3xl font-black text-white mb-6">AI Transparency Policy</h1>
             <div className="prose prose-invert max-w-none">
@@ -3852,8 +3867,8 @@ const App: React.FC = () => {
       case AppView.BLOCKCHAIN_DATA_POLICY:
         return (
           <div className="p-8 max-w-4xl mx-auto">
-            <button onClick={() => setCurrentView(AppView.DASHBOARD)} className="mb-4 text-blue-400 hover:text-blue-300 transition-colors flex items-center gap-2">
-              <ChevronRight className="w-4 h-4 rotate-180" /> Back to Hub
+            <button onClick={handleReturnToHub} className="mb-4 text-blue-400 hover:text-blue-300 transition-colors flex items-center gap-2">
+              <ChevronRight className="w-4 h-4 rotate-180" /> {hubReturnLabel}
             </button>
             <h1 className="text-3xl font-black text-white mb-6">Blockchain Data Policy</h1>
             <div className="prose prose-invert max-w-none">
@@ -3864,8 +3879,8 @@ const App: React.FC = () => {
       case AppView.VENDOR_API_GOVERNANCE_POLICY:
         return (
           <div className="p-8 max-w-4xl mx-auto">
-            <button onClick={() => setCurrentView(AppView.DASHBOARD)} className="mb-4 text-blue-400 hover:text-blue-300 transition-colors flex items-center gap-2">
-              <ChevronRight className="w-4 h-4 rotate-180" /> Back to Hub
+            <button onClick={handleReturnToHub} className="mb-4 text-blue-400 hover:text-blue-300 transition-colors flex items-center gap-2">
+              <ChevronRight className="w-4 h-4 rotate-180" /> {hubReturnLabel}
             </button>
             <h1 className="text-3xl font-black text-white mb-6">Vendor API Governance Policy</h1>
             <div className="prose prose-invert max-w-none">
@@ -3876,8 +3891,8 @@ const App: React.FC = () => {
       case AppView.NIST_MAPPING_SUMMARY:
         return (
           <div className="p-8 max-w-4xl mx-auto">
-            <button onClick={() => setCurrentView(AppView.DASHBOARD)} className="mb-4 text-blue-400 hover:text-blue-300 transition-colors flex items-center gap-2">
-              <ChevronRight className="w-4 h-4 rotate-180" /> Back to Hub
+            <button onClick={handleReturnToHub} className="mb-4 text-blue-400 hover:text-blue-300 transition-colors flex items-center gap-2">
+              <ChevronRight className="w-4 h-4 rotate-180" /> {hubReturnLabel}
             </button>
             <h1 className="text-3xl font-black text-white mb-6">NIST Mapping Summary</h1>
             <div className="prose prose-invert max-w-none">
@@ -3888,8 +3903,8 @@ const App: React.FC = () => {
       case AppView.AI_SAFETY_GOVERNANCE:
         return (
           <div className="p-8 max-w-5xl mx-auto space-y-6">
-            <button onClick={() => setCurrentView(AppView.DASHBOARD)} className="mb-2 text-blue-400 hover:text-blue-300 transition-colors flex items-center gap-2">
-              <ChevronRight className="w-4 h-4 rotate-180" /> Back to Hub
+            <button onClick={handleReturnToHub} className="mb-2 text-blue-400 hover:text-blue-300 transition-colors flex items-center gap-2">
+              <ChevronRight className="w-4 h-4 rotate-180" /> {hubReturnLabel}
             </button>
             <h1 className="text-3xl font-black text-white">AI Safety & Governance</h1>
             <p className="text-slate-300">We align Conscious Network agents with NIST AI RMF, EU AI Act, and GDPR. Security shifts from the perimeter to the agent’s actions, identity, and data integrity.</p>

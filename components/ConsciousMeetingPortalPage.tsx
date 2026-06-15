@@ -3,6 +3,7 @@ import {
   Camera,
   CheckCircle2,
   Clock,
+  Home,
   Layers,
   Mic,
   Monitor,
@@ -22,6 +23,7 @@ const LazyConsciousMeetings = React.lazy(() => import('./ConsciousMeetings'));
 type ConsciousMeetingPortalPageProps = {
   user: UserProfile | null;
   onOpenUpcoming: () => void;
+  onExit: () => void;
   operationsEnabled?: boolean;
 };
 
@@ -49,6 +51,7 @@ const getPlatformLabel = (): string => {
 const ConsciousMeetingPortalPageContent: React.FC<ConsciousMeetingPortalPageProps> = ({
   user,
   onOpenUpcoming,
+  onExit,
   operationsEnabled = false,
 }) => {
   const [deviceCheck, setDeviceCheck] = useState<DeviceCheck | null>(null);
@@ -149,6 +152,7 @@ const ConsciousMeetingPortalPageContent: React.FC<ConsciousMeetingPortalPageProp
       icon: <Layers className="h-4 w-4" />,
     },
   ];
+  const exitLabel = user ? 'Dashboard' : 'Hub Home';
 
   return (
     <PageShell>
@@ -158,6 +162,9 @@ const ConsciousMeetingPortalPageContent: React.FC<ConsciousMeetingPortalPageProp
         description="Unified access for identity readiness, device checks, configuration history, and provider-hosted internal session controls."
         actions={
           <>
+            <ActionButton type="button" variant="secondary" onClick={onExit} icon={<Home className="h-4 w-4" />}>
+              {exitLabel}
+            </ActionButton>
             <ActionButton type="button" variant="secondary" onClick={onOpenUpcoming} icon={<Video className="h-4 w-4" />}>
               Upcoming Sessions
             </ActionButton>

@@ -4,6 +4,7 @@ import {
   CalendarClock,
   Clock,
   Filter,
+  Home,
   Layers,
   PlayCircle,
   Radio,
@@ -28,6 +29,7 @@ type ConsciousMeetingsUpcomingPageProps = {
   user: UserProfile | null;
   onOpenMeeting: (id: string) => void;
   onOpenPortal: () => void;
+  onExit: () => void;
 };
 
 type ArchiveEntry = {
@@ -68,6 +70,7 @@ const ConsciousMeetingsUpcomingPage: React.FC<ConsciousMeetingsUpcomingPageProps
   user,
   onOpenMeeting,
   onOpenPortal,
+  onExit,
 }) => {
   const [upcomingSessions, setUpcomingSessions] = useState<MeetingSessionSummary[]>([]);
   const [archivedSessions, setArchivedSessions] = useState<MeetingSessionSummary[]>([]);
@@ -159,6 +162,7 @@ const ConsciousMeetingsUpcomingPage: React.FC<ConsciousMeetingsUpcomingPageProps
       .sort((a, b) => b.score - a.score || getSessionStartMs(a.session) - getSessionStartMs(b.session));
     return scored.slice(0, 3).map((entry) => entry.session);
   }, [archivedSessions, filteredUpcoming, user]);
+  const exitLabel = user ? 'Dashboard' : 'Hub Home';
 
   return (
     <PageShell>
@@ -168,6 +172,9 @@ const ConsciousMeetingsUpcomingPage: React.FC<ConsciousMeetingsUpcomingPageProps
         description="A native meeting board for provider-created live sessions, archived wisdom, and resonance-based recommendations inside Conscious Network Hub."
         actions={
           <>
+            <ActionButton type="button" variant="secondary" onClick={onExit} icon={<Home className="h-4 w-4" />}>
+              {exitLabel}
+            </ActionButton>
             <ActionButton type="button" variant="secondary" onClick={refreshSessions} icon={<RefreshCw className="h-4 w-4" />}>
               Refresh
             </ActionButton>

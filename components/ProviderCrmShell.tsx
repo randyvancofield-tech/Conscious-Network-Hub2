@@ -7,6 +7,7 @@ import {
   CheckCircle2,
   ClipboardList,
   Handshake,
+  Home,
   LifeBuoy,
   Link2,
   Loader2,
@@ -74,6 +75,7 @@ interface ProviderCrmShellProps {
   onOpenAdminConsole: () => void;
   onOpenAdministrativeAccess: () => void;
   onOpenProviderAccess: () => void;
+  onExitCrm: () => void;
 }
 
 type NoteForm = {
@@ -300,6 +302,7 @@ const ProviderCrmShellContent: React.FC<ProviderCrmShellProps> = ({
   onOpenAdminConsole,
   onOpenAdministrativeAccess,
   onOpenProviderAccess,
+  onExitCrm,
 }) => {
   const [providerToken, setProviderToken] = useState(readProviderToken);
   const [tools, setTools] = useState<ProviderCrmTool[]>([]);
@@ -1412,6 +1415,14 @@ const ProviderCrmShellContent: React.FC<ProviderCrmShellProps> = ({
           <p className="mt-3 text-sm leading-7 text-slate-300">
             This workspace is limited to approved providers and the Provider CRM administrator.
           </p>
+          <button
+            type="button"
+            onClick={onExitCrm}
+            className={`${secondaryActionClass} mt-6`}
+          >
+            <Home className="h-4 w-4" />
+            <span className="cnh-action-label">{user ? 'Dashboard' : 'Hub Home'}</span>
+          </button>
         </div>
       </div>
     );
@@ -1435,13 +1446,23 @@ const ProviderCrmShellContent: React.FC<ProviderCrmShellProps> = ({
               {status}
             </p>
           )}
-          <button
-            type="button"
-            onClick={isAdmin ? onOpenAdministrativeAccess : onOpenProviderAccess}
-            className="mt-6 rounded-xl bg-blue-600 px-5 py-3 text-xs font-black uppercase tracking-widest text-white transition hover:bg-blue-500"
-          >
-            {isAdmin ? 'Open Administrative Access' : 'Open Provider Access'}
-          </button>
+          <div className="mt-6 flex flex-col gap-3 sm:flex-row">
+            <button
+              type="button"
+              onClick={isAdmin ? onOpenAdministrativeAccess : onOpenProviderAccess}
+              className="rounded-xl bg-blue-600 px-5 py-3 text-xs font-black uppercase tracking-widest text-white transition hover:bg-blue-500"
+            >
+              {isAdmin ? 'Open Administrative Access' : 'Open Provider Access'}
+            </button>
+            <button
+              type="button"
+              onClick={onExitCrm}
+              className={secondaryActionClass}
+            >
+              <Home className="h-4 w-4" />
+              <span className="cnh-action-label">{user ? 'Dashboard' : 'Hub Home'}</span>
+            </button>
+          </div>
         </div>
       </div>
     );
@@ -1464,6 +1485,14 @@ const ProviderCrmShellContent: React.FC<ProviderCrmShellProps> = ({
           </p>
         </div>
         <div className="flex flex-col gap-3 sm:items-end">
+          <button
+            type="button"
+            onClick={onExitCrm}
+            className={secondaryActionClass}
+          >
+            <Home className="h-4 w-4" />
+            <span className="cnh-action-label">Exit CRM</span>
+          </button>
           {isAdmin && (
             <button
               type="button"

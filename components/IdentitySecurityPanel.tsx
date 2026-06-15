@@ -7,6 +7,10 @@ import {
   walletErrorMessage,
   type WalletProviderEnvironment,
 } from '../services/walletProvider';
+import {
+  clearIdentitySecuritySessionStorage,
+  getIdentitySecuritySessionStorageKey,
+} from '../services/sessionService';
 import { UserProfile } from '../types';
 
 interface IdentitySecurityPanelProps {
@@ -24,7 +28,6 @@ declare global {
   }
 }
 
-const LS_KEY = 'hcn_identity_security_session_v1';
 const DEFAULT_CHAIN_ID = 1;
 
 function safeParseJSON<T>(value: string | null): T | null {
@@ -58,15 +61,18 @@ const normalizeChainId = (value: unknown): number => {
 
 const IdentitySecurityPanel: React.FC<IdentitySecurityPanelProps> = ({ isOpen, onClose, user }) => {
   const restoredSessionKeyRef = useRef<string | null>(null);
+  const userId = user?.id ? String(user.id) : '';
+  const storageKey = useMemo(() => getIdentitySecuritySessionStorageKey(userId), [userId]);
   const persisted = useMemo(() => {
+    if (!userId) return null;
     return safeParseJSON<{
       address?: string;
       chainId?: number;
       did?: string;
       verifyStatus?: VerifyStatus;
       verifiedAt?: string;
-    }>(localStorage.getItem(LS_KEY));
-  }, []);
+    }>(localStorage.getItem(storageKey));
+  }, [storageKey, userId]);
 
   const configuredChainId = normalizeChainId(
     (import.meta as any)?.env?.VITE_BLOCKCHAIN_NETWORK_ID || DEFAULT_CHAIN_ID
@@ -97,9 +103,28 @@ const IdentitySecurityPanel: React.FC<IdentitySecurityPanelProps> = ({ isOpen, o
   const identityDid = did || fallbackDid;
 
   useEffect(() => {
+    if (!userId) return;
     const payload = { address: connectedAddress, chainId, did, verifyStatus, verifiedAt };
-    localStorage.setItem(LS_KEY, JSON.stringify(payload));
-  }, [connectedAddress, chainId, did, verifyStatus, verifiedAt]);
+    localStorage.setItem(storageKey, JSON.stringify(payload));
+  }, [connectedAddress, chainId, did, storageKey, userId, verifyStatus, verifiedAt]);
+
+  useEffect(() => {
+    if (!userId) {
+      restoredSessionKeyRef.current = null;
+      setConnectedAddress('');
+      setChainId(0);
+      setDid('');
+      setVerifyStatus('unverified');
+      setVerifiedAt('');
+      return;
+    }
+
+    setConnectedAddress(persisted?.address || '');
+    setChainId(persisted?.chainId || 0);
+    setDid(persisted?.did || '');
+    setVerifyStatus(persisted?.verifyStatus || 'unverified');
+    setVerifiedAt(persisted?.verifiedAt || '');
+  }, [persisted, userId]);
 
   useEffect(() => {
     if (!toast) return;
@@ -147,19 +172,29 @@ const IdentitySecurityPanel: React.FC<IdentitySecurityPanelProps> = ({ isOpen, o
   }, [connectedAddress, chainId]);
 
   useEffect(() => {
-    const userId = user?.id ? String(user.id) : '';
-    if (!userId && !isOpen) return;
-    const sessionKey = userId || 'open-panel';
-    if (restoredSessionKeyRef.current === sessionKey) return;
+    if (!userId) return;
+    if (restoredSessionKeyRef.current === userId) return;
 
     const restoreIdentitySession = async (): Promise<void> => {
       try {
-        restoredSessionKeyRef.current = sessionKey;
+        restoredSessionKeyRef.current = userId;
         const data = await api<any>('/identity-security/session', {
           method: 'GET',
           auth: false,
         });
         const session = data?.session || {};
+        if (String(session.userId || '') !== userId) {
+          clearIdentitySecuritySessionStorage(userId);
+          try {
+            await api('/identity-security/logout', {
+              method: 'POST',
+              auth: false,
+            });
+          } catch {
+            // Ignore remote logout issues for mismatched browser identity state.
+          }
+          return;
+        }
         const restoredAddress = normalizeAddress(session.address);
         const restoredChainId = normalizeChainId(session.chainId);
         if (!restoredAddress) return;
@@ -176,7 +211,7 @@ const IdentitySecurityPanel: React.FC<IdentitySecurityPanelProps> = ({ isOpen, o
       }
     };
     void restoreIdentitySession();
-  }, [isOpen, user?.id]);
+  }, [userId]);
 
   const copyText = async (value: string) => {
     try {
@@ -254,7 +289,7 @@ const IdentitySecurityPanel: React.FC<IdentitySecurityPanelProps> = ({ isOpen, o
     setDid('');
     setVerifyStatus('unverified');
     setVerifiedAt('');
-    localStorage.removeItem(LS_KEY);
+    clearIdentitySecuritySessionStorage(userId);
     try {
       await api('/identity-security/logout', {
         method: 'POST',

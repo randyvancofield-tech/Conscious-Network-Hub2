@@ -7,6 +7,7 @@ export const PLATFORM_SESSION_KEY = 'hcn_platform_session';
 export const PROVIDER_SESSION_TOKEN_KEY = 'hcn_provider_session_token';
 export const PROVIDER_SESSION_TOKEN_EVENT = 'hcn:provider-session-token-updated';
 export const ADMIN_ELEVATION_TOKEN_KEY = 'hcn_admin_elevation_token';
+export const IDENTITY_SECURITY_SESSION_STORAGE_PREFIX = 'hcn_identity_security_session_v1';
 
 type PlatformSessionRole = 'guest' | 'user' | 'applicant' | 'provider' | 'admin';
 type PlatformSessionTier = 'free' | 'guided' | 'accelerated';
@@ -36,6 +37,34 @@ const hasBrowserStorage = (): boolean => typeof window !== 'undefined';
 const hasBrowserLocalStorage = (): boolean => typeof window !== 'undefined' && !!window.localStorage;
 const hasBrowserSessionStorage = (): boolean =>
   typeof window !== 'undefined' && !!window.sessionStorage;
+
+export const getIdentitySecuritySessionStorageKey = (userId?: string | null): string => {
+  const normalizedUserId = String(userId || '').trim();
+  return normalizedUserId
+    ? `${IDENTITY_SECURITY_SESSION_STORAGE_PREFIX}:${normalizedUserId}`
+    : IDENTITY_SECURITY_SESSION_STORAGE_PREFIX;
+};
+
+export const clearIdentitySecuritySessionStorage = (
+  userId?: string | null,
+  options: { allUsers?: boolean } = {}
+): void => {
+  if (!hasBrowserLocalStorage()) return;
+  const legacyKey = IDENTITY_SECURITY_SESSION_STORAGE_PREFIX;
+  if (options.allUsers) {
+    const keysToRemove: string[] = [];
+    for (let index = 0; index < window.localStorage.length; index += 1) {
+      const key = window.localStorage.key(index);
+      if (key === legacyKey || key?.startsWith(`${legacyKey}:`)) {
+        keysToRemove.push(key);
+      }
+    }
+    keysToRemove.forEach((key) => window.localStorage.removeItem(key));
+    return;
+  }
+  window.localStorage.removeItem(legacyKey);
+  window.localStorage.removeItem(getIdentitySecuritySessionStorageKey(userId));
+};
 
 const normalizePlatformTier = (tier?: string | null): PlatformSessionTier => {
   const normalized = String(tier || '').trim().toLowerCase();
@@ -121,6 +150,7 @@ export const setGuestSession = (): void => {
     window.localStorage.removeItem(ACTIVE_USER_CACHE_KEY);
     window.localStorage.removeItem(PLATFORM_SESSION_KEY);
   }
+  clearIdentitySecuritySessionStorage(undefined, { allUsers: true });
   setProviderControlSession('');
   writePlatformSession({
     isAuthenticated: false,
@@ -202,6 +232,7 @@ export const clearAuthSession = (): void => {
     window.localStorage.removeItem(ACTIVE_USER_CACHE_KEY);
     window.localStorage.removeItem(PLATFORM_SESSION_KEY);
   }
+  clearIdentitySecuritySessionStorage(undefined, { allUsers: true });
   setProviderControlSession('');
 };
 
