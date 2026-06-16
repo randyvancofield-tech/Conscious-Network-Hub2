@@ -40,7 +40,6 @@ import {
   setProviderControlSession,
 } from '../services/sessionService';
 import {
-  MEETING_MEDIA_CONSTRAINTS,
   canUseMediaDevices,
   canUseWebGl,
   hasLiveAudioTracks,
@@ -48,6 +47,7 @@ import {
   hasLiveVideoTracks,
   isBrowserSecureContext,
   normalizeMediaDeviceError,
+  requestMeetingMediaStream,
   stopMediaStream,
 } from '../services/mediaDeviceSupport';
 import type {
@@ -518,9 +518,14 @@ const ConsciousMeetings: React.FC<ConsciousMeetingsProps> = ({ user }) => {
 
     let permissionStream: MediaStream | null = null;
     try {
-      permissionStream = await navigator.mediaDevices.getUserMedia(MEETING_MEDIA_CONSTRAINTS);
+      const mediaRequest = await requestMeetingMediaStream();
+      permissionStream = mediaRequest.stream;
       setPermissionState('granted');
-      setMeetingOpsStatus('Camera and microphone permissions are ready. Test tracks were released; start a session when you are ready.');
+      setMeetingOpsStatus(
+        mediaRequest.usedFallbackConstraints
+          ? 'Camera and microphone permissions are ready using the browser fallback profile. Test tracks were released; start a session when you are ready.'
+          : 'Camera and microphone permissions are ready. Test tracks were released; start a session when you are ready.'
+      );
     } catch (err) {
       setPermissionState('denied');
       setMeetingOpsStatus(normalizeMediaDeviceError(err));
@@ -1623,7 +1628,8 @@ const ConsciousMeetings: React.FC<ConsciousMeetingsProps> = ({ user }) => {
 
     try {
       setPermissionState('pending');
-      const mediaStream = await navigator.mediaDevices.getUserMedia(MEETING_MEDIA_CONSTRAINTS);
+      const mediaRequest = await requestMeetingMediaStream();
+      const mediaStream = mediaRequest.stream;
       if (!hasLiveVideoTracks(mediaStream) || !hasLiveAudioTracks(mediaStream)) {
         stopMediaStream(mediaStream);
         setPermissionState('denied');
@@ -1636,7 +1642,11 @@ const ConsciousMeetings: React.FC<ConsciousMeetingsProps> = ({ user }) => {
       setStream(mediaStream);
       setPermissionState('granted');
       setIsSoloSessionActive(true);
-      setMeetingOpsStatus('Provider camera and microphone are live in this browser. Backgrounds and local recording remain local to this session.');
+      setMeetingOpsStatus(
+        mediaRequest.usedFallbackConstraints
+          ? 'Provider camera and microphone are live using the browser fallback profile. Backgrounds and local recording remain local to this session.'
+          : 'Provider camera and microphone are live in this browser. Backgrounds and local recording remain local to this session.'
+      );
 
       if (videoRef.current) {
         videoRef.current.srcObject = mediaStream;

@@ -11,6 +11,16 @@ export const MEETING_MEDIA_CONSTRAINTS: MediaStreamConstraints = {
   } as MediaTrackConstraints,
 };
 
+export const BASIC_MEETING_MEDIA_CONSTRAINTS: MediaStreamConstraints = {
+  video: true,
+  audio: true,
+};
+
+export type MeetingMediaRequestResult = {
+  stream: MediaStream;
+  usedFallbackConstraints: boolean;
+};
+
 export const isBrowserSecureContext = (): boolean => {
   if (typeof window === 'undefined') return true;
   if (window.isSecureContext) return true;
@@ -67,6 +77,33 @@ export const normalizeMediaDeviceError = (error: unknown): string => {
   }
 
   return 'Camera and microphone could not start on this device. Check browser permissions, device availability, and secure HTTPS access.';
+};
+
+const shouldRetryWithBasicConstraints = (error: unknown): boolean => {
+  const name = error instanceof DOMException ? error.name : error instanceof Error ? error.name : '';
+  return name === 'OverconstrainedError' || name === 'ConstraintNotSatisfiedError';
+};
+
+export const requestMeetingMediaStream = async (): Promise<MeetingMediaRequestResult> => {
+  if (!isBrowserSecureContext() || !canUseMediaDevices()) {
+    throw new DOMException('Media devices unavailable', 'NotAllowedError');
+  }
+
+  try {
+    return {
+      stream: await navigator.mediaDevices.getUserMedia(MEETING_MEDIA_CONSTRAINTS),
+      usedFallbackConstraints: false,
+    };
+  } catch (error) {
+    if (!shouldRetryWithBasicConstraints(error)) {
+      throw error;
+    }
+  }
+
+  return {
+    stream: await navigator.mediaDevices.getUserMedia(BASIC_MEETING_MEDIA_CONSTRAINTS),
+    usedFallbackConstraints: true,
+  };
 };
 
 export const canUseWebGl = (): boolean => {

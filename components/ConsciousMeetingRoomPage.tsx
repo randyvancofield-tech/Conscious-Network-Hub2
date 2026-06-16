@@ -27,12 +27,12 @@ import {
   postMeetingSignal,
 } from '../services/backendApiService';
 import {
-  MEETING_MEDIA_CONSTRAINTS,
   canUseMediaDevices,
   canUseWebGl,
   hasLiveTracks,
   isBrowserSecureContext,
   normalizeMediaDeviceError,
+  requestMeetingMediaStream,
   stopMediaStream,
 } from '../services/mediaDeviceSupport';
 import { ActionButton, EmptyState, PageHeader, PageShell, SurfacePanel } from './ui/PlatformPrimitives';
@@ -290,7 +290,8 @@ const ConsciousMeetingRoomPage: React.FC<ConsciousMeetingRoomPageProps> = ({ ses
     }
 
     try {
-      const nextStream = await navigator.mediaDevices.getUserMedia(MEETING_MEDIA_CONSTRAINTS);
+      const mediaRequest = await requestMeetingMediaStream();
+      const nextStream = mediaRequest.stream;
       if (!hasLiveTracks(nextStream)) {
         stopMediaStream(nextStream);
         setMediaDevicesReady(false);
@@ -300,7 +301,11 @@ const ConsciousMeetingRoomPage: React.FC<ConsciousMeetingRoomPageProps> = ({ ses
       stopMediaStream(localStream);
       setLocalStream(nextStream);
       setMediaDevicesReady(true);
-      setJoinStatus('Local camera and microphone are active for this browser only.');
+      setJoinStatus(
+        mediaRequest.usedFallbackConstraints
+          ? 'Local camera and microphone are active using the browser fallback profile. This media is active for this browser only.'
+          : 'Local camera and microphone are active for this browser only.'
+      );
     } catch (error) {
       setMediaDevicesReady(false);
       setJoinStatus(normalizeMediaDeviceError(error));
