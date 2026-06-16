@@ -58,6 +58,12 @@ const toInitials = (value: string): string => {
     .join('');
 };
 
+const toTitleLabel = (value: unknown): string => {
+  const normalized = String(value || '').replace(/[_-]+/g, ' ').trim();
+  if (!normalized) return '';
+  return normalized.replace(/\b\w/g, (letter) => letter.toUpperCase());
+};
+
 const avatarFallbackUrl = (name: string): string =>
   `https://ui-avatars.com/api/?name=${encodeURIComponent(name || 'Node')}&background=0f172a&color=38bdf8`;
 
@@ -178,6 +184,12 @@ const SocialProfileViewerContent: React.FC<SocialProfileViewerProps> = ({
         profileView.profile?.websiteUrl,
       ].filter((value) => String(value || '').trim().length > 0)
     : [];
+  const profileRoleLabel = profileView
+    ? [
+        toTitleLabel(profileView.profile?.role),
+        String(profileView.profile?.tier || '').trim(),
+      ].filter(Boolean).join(' / ') || 'Community Member'
+    : 'Community Member';
   const isInline = presentation === 'inline';
 
   return (
@@ -249,27 +261,38 @@ const SocialProfileViewerContent: React.FC<SocialProfileViewerProps> = ({
           )}
 
           {profileView && !loading && (
-            <div className="mx-auto max-w-5xl space-y-6 pb-8">
-              <section className="overflow-hidden rounded-2xl border border-white/10 bg-white/[0.04]">
-                <div className="relative h-44 bg-gradient-to-r from-blue-950/60 to-teal-950/25 sm:h-56 lg:h-64">
-                  <WideMediaFrame media={heroMedia} alt={`${profileName} profile banner`} className="h-full w-full object-cover object-center" />
+            <div className="mx-auto w-full max-w-5xl space-y-6 pb-8">
+              <section className="overflow-hidden rounded-[1.5rem] border border-white/10 bg-white/[0.04] shadow-2xl sm:rounded-[2rem]">
+                <div className="relative aspect-[16/9] min-h-[180px] max-h-[340px] bg-gradient-to-r from-blue-950/60 to-teal-950/25 sm:aspect-[16/7] lg:aspect-[16/6]">
+                  <WideMediaFrame
+                    media={heroMedia}
+                    alt={`${profileName} profile banner`}
+                    className="h-full w-full object-cover object-[center_34%]"
+                  />
                   <div className="absolute inset-0 bg-gradient-to-t from-[#05070a] via-black/15 to-transparent" />
                 </div>
-                <div className="grid grid-cols-1 gap-4 p-5 text-center sm:grid-cols-[auto_minmax(0,1fr)] sm:items-center sm:p-6 sm:text-left lg:p-7">
-                  <div className="-mt-10 flex justify-center sm:-mt-12 sm:block">
-                    {renderAvatarMedia(
-                      avatarMedia,
-                      profileName,
-                      'h-20 w-20 rounded-2xl border-4 border-[#05070a] object-cover object-top shadow-2xl sm:h-24 sm:w-24'
-                    )}
-                  </div>
-                  <div className="min-w-0 flex-1">
-                    <h5 className="cnh-person-name text-[clamp(1.35rem,2.4vw,2rem)] font-black leading-tight tracking-tight text-white">
-                      {profileName}
-                    </h5>
-                    <p className="cnh-profile-field mt-1 text-[11px] font-black uppercase tracking-widest text-blue-300">
-                      @{profileView.profile?.handle || 'node'}
-                    </p>
+                <div className="relative px-5 pb-6 sm:px-6 sm:pb-7 lg:px-8 lg:pb-8">
+                  <div className="grid grid-cols-1 gap-4 text-center sm:grid-cols-[auto_minmax(0,1fr)] sm:items-end sm:gap-5 sm:text-left">
+                    <div className="-mt-12 flex justify-center sm:-mt-14 sm:justify-start">
+                      <div className="rounded-[1.65rem] bg-[#05070a] p-1.5 shadow-2xl ring-1 ring-white/10 sm:rounded-[1.9rem]">
+                        {renderAvatarMedia(
+                          avatarMedia,
+                          profileName,
+                          'block h-24 w-24 rounded-[1.25rem] object-cover object-center sm:h-28 sm:w-28 sm:rounded-[1.45rem]'
+                        )}
+                      </div>
+                    </div>
+                    <div className="min-w-0 pt-1 sm:pt-5">
+                      <p className="cnh-status-badge mx-auto w-fit max-w-full rounded-full border border-blue-300/15 bg-blue-500/10 px-3 py-1 text-[9px] font-black uppercase tracking-widest text-blue-200 sm:mx-0">
+                        <span className="break-words [overflow-wrap:anywhere]">{profileRoleLabel}</span>
+                      </p>
+                      <h5 className="cnh-person-name mt-3 max-w-full break-words text-[clamp(1.35rem,2.4vw,2.05rem)] font-black leading-tight tracking-tight text-white [overflow-wrap:anywhere]">
+                        {profileName}
+                      </h5>
+                      <p className="cnh-profile-field mt-1 max-w-full break-words text-[11px] font-black uppercase tracking-widest text-blue-300 [overflow-wrap:anywhere]">
+                        @{profileView.profile?.handle || 'node'}
+                      </p>
+                    </div>
                   </div>
                 </div>
               </section>

@@ -69,26 +69,51 @@ const normalizeProvider = (rawProvider: any): ProviderProfile => {
   };
 };
 
-const renderProviderMedia = (
-  media: NormalizedMediaAsset,
-  alt: string,
-  className: string,
-  controls = false
-) => {
+const ProviderMediaFallback: React.FC<{ alt: string; className: string }> = ({ alt, className }) => (
+  <div
+    className={`${className} flex items-center justify-center overflow-hidden bg-[radial-gradient(circle_at_28%_22%,rgba(59,130,246,0.2),transparent_34%),radial-gradient(circle_at_78%_70%,rgba(45,212,191,0.16),transparent_36%),linear-gradient(135deg,rgba(15,23,42,0.92),rgba(2,6,23,0.98))]`}
+    aria-label={alt}
+  >
+    <div className="px-5 text-center">
+      <p className="text-[10px] font-black uppercase tracking-widest text-blue-200/70">Conscious Network Hub</p>
+      <p className="mt-2 text-sm leading-6 text-slate-300">Verified provider media will appear here.</p>
+    </div>
+  </div>
+);
+
+const ProviderMediaFrame: React.FC<{
+  media: NormalizedMediaAsset;
+  alt: string;
+  className: string;
+  controls?: boolean;
+}> = ({ media, alt, className, controls = false }) => {
+  const [failed, setFailed] = useState(false);
+  const mediaUrl = media.url || '';
+
+  useEffect(() => {
+    setFailed(false);
+  }, [mediaUrl]);
+
+  if (!mediaUrl || failed) {
+    return <ProviderMediaFallback alt={alt} className={className} />;
+  }
+
   if (isVideoMediaAsset(media)) {
     return (
       <video
-        src={media.url || ''}
+        src={mediaUrl}
         className={className}
         muted={!controls}
         loop
         autoPlay={!controls}
         controls={controls}
         playsInline
+        onError={() => setFailed(true)}
       />
     );
   }
-  return <img src={media.url || ''} alt={alt} className={className} />;
+
+  return <img src={mediaUrl} alt={alt} className={className} onError={() => setFailed(true)} />;
 };
 
 const ProvidersMarketContent: React.FC<ProvidersMarketProps> = ({
@@ -264,7 +289,12 @@ const ProvidersMarketContent: React.FC<ProvidersMarketProps> = ({
 
         <div className="grid grid-cols-1 gap-6 xl:grid-cols-[1.1fr_0.9fr]">
           <SurfacePanel className="overflow-hidden p-0">
-            {renderProviderMedia(routeProvider.heroMedia, routeProvider.name, 'h-72 w-full object-cover', true)}
+            <ProviderMediaFrame
+              media={routeProvider.heroMedia}
+              alt={routeProvider.name}
+              className="aspect-[16/9] min-h-[220px] max-h-[360px] w-full object-cover object-[center_35%] sm:aspect-[16/7]"
+              controls
+            />
             <div className="space-y-5 p-6 sm:p-8">
               <h2 className="text-xl font-black uppercase text-white">Provider Profile</h2>
               <p className="text-sm leading-6 text-slate-400">{routeProvider.bio}</p>
@@ -453,11 +483,11 @@ const ProvidersMarketContent: React.FC<ProvidersMarketProps> = ({
           {filteredProviders.map((provider) => (
             <div key={provider.id} className="glass-panel group flex min-w-0 flex-col overflow-hidden rounded-[2rem] border-white/5 shadow-2xl transition-all duration-500 hover:-translate-y-1 hover:border-blue-500/30 2xl:rounded-[2.5rem]">
               <div className="relative h-44 overflow-hidden sm:h-48">
-                {renderProviderMedia(
-                  provider.imageMedia,
-                  provider.name,
-                  'w-full h-full object-cover group-hover:scale-110 transition-transform duration-[3s] ease-out'
-                )}
+                <ProviderMediaFrame
+                  media={provider.imageMedia}
+                  alt={provider.name}
+                  className="h-full w-full object-cover object-[center_35%] transition-transform duration-[3s] ease-out group-hover:scale-110"
+                />
                 <div className="absolute inset-0 bg-gradient-to-t from-[#05070a] via-transparent to-transparent opacity-60" />
                 <div className="absolute top-4 right-4 flex gap-2">
                   <div className="px-3 py-1 bg-black/60 backdrop-blur-md rounded-full border border-white/10 flex items-center gap-2">
@@ -537,8 +567,13 @@ const ProvidersMarketContent: React.FC<ProvidersMarketProps> = ({
       {selectedProvider && (
         <div className="fixed inset-0 z-[180] bg-black/85 backdrop-blur-sm p-4 flex items-start sm:items-center justify-center overflow-y-auto custom-scrollbar">
           <div className="glass-panel w-full max-w-3xl my-4 max-h-[calc(100dvh-2rem)] rounded-[2.5rem] border border-white/10 overflow-y-auto custom-scrollbar shadow-2xl animate-in zoom-in duration-300">
-            <div className="relative h-64">
-              {renderProviderMedia(selectedProvider.heroMedia, selectedProvider.name, 'w-full h-full object-cover', true)}
+            <div className="relative aspect-[16/9] min-h-[220px] max-h-[340px] sm:aspect-[16/7]">
+              <ProviderMediaFrame
+                media={selectedProvider.heroMedia}
+                alt={selectedProvider.name}
+                className="h-full w-full object-cover object-[center_35%]"
+                controls
+              />
               <div className="absolute inset-0 bg-gradient-to-t from-[#05070a] via-black/30 to-transparent" />
               <button
                 onClick={() => setSelectedProvider(null)}
