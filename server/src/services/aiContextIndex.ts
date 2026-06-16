@@ -305,7 +305,10 @@ const buildUserProfileContext = async (userId?: string): Promise<string | undefi
       select: {
         role: true,
         tier: true,
+        membershipStatus: true,
+        providerApproved: true,
         providerApprovalStatus: true,
+        providerRevokedAt: true,
         interests: true,
       },
     });
@@ -313,10 +316,14 @@ const buildUserProfileContext = async (userId?: string): Promise<string | undefi
     return compactText([
       `Authenticated role: ${user.role || 'user'}`,
       user.tier ? `Membership tier: ${user.tier}` : '',
+      user.membershipStatus ? `Membership status: ${user.membershipStatus}` : '',
+      user.providerApproved === true ? 'Provider approval flag: approved' : '',
       user.providerApprovalStatus ? `Provider status: ${user.providerApprovalStatus}` : '',
+      user.providerRevokedAt ? 'Provider access: revoked' : '',
       Array.isArray(user.interests) && user.interests.length > 0
         ? `Stated interests: ${user.interests.join(', ')}`
         : '',
+      'This personalization is limited to the authenticated user own role/tier/status/interests and must not be described as long-term AI memory.',
     ].filter(Boolean).join('\n'), 900);
   } catch {
     return undefined;

@@ -26,6 +26,15 @@ import {
   MeetingSessionSummary,
   postMeetingSignal,
 } from '../services/backendApiService';
+import {
+  MEETING_MEDIA_CONSTRAINTS,
+  canUseMediaDevices,
+  canUseWebGl,
+  hasLiveTracks,
+  isBrowserSecureContext,
+  normalizeMediaDeviceError,
+  stopMediaStream,
+} from '../services/mediaDeviceSupport';
 import { ActionButton, EmptyState, PageHeader, PageShell, SurfacePanel } from './ui/PlatformPrimitives';
 import MeetingBrandLoop from './ui/MeetingBrandLoop';
 import cnhLogo from '../src/assets/brand/conscious-network-hub-logo.png';
@@ -79,6 +88,7 @@ const ConsciousMeetingRoomPage: React.FC<ConsciousMeetingRoomPageProps> = ({ ses
   const [joinStatus, setJoinStatus] = useState('');
   const [hasJoined, setHasJoined] = useState(false);
   const [xrSupported, setXrSupported] = useState(false);
+  const [xrReadinessMessage, setXrReadinessMessage] = useState('Checking spatial browser profile...');
   const [mediaDevicesReady, setMediaDevicesReady] = useState(false);
   const [roomConfig, setRoomConfig] = useState<MeetingRoomConfig | null>(null);
   const [localStream, setLocalStream] = useState<MediaStream | null>(null);
@@ -113,6 +123,11 @@ const ConsciousMeetingRoomPage: React.FC<ConsciousMeetingRoomPageProps> = ({ ses
   useEffect(() => {
     let cancelled = false;
     const inspectDevice = async () => {
+      if (!isBrowserSecureContext() || !canUseMediaDevices()) {
+        if (!cancelled) setMediaDevicesReady(false);
+        return;
+      }
+
       try {
         const devices = await navigator.mediaDevices?.enumerateDevices?.();
         if (!cancelled) {
@@ -123,12 +138,43 @@ const ConsciousMeetingRoomPage: React.FC<ConsciousMeetingRoomPageProps> = ({ ses
       }
 
       const xr = (navigator as NavigatorWithXR).xr;
+      if (!isBrowserSecureContext()) {
+        if (!cancelled) {
+          setXrSupported(false);
+          setXrReadinessMessage('5D requires HTTPS or localhost because WebXR and camera access are secure-context APIs.');
+        }
+        return;
+      }
+      if (!canUseWebGl()) {
+        if (!cancelled) {
+          setXrSupported(false);
+          setXrReadinessMessage('5D requires WebGL rendering support. This browser could not initialize WebGL.');
+        }
+        return;
+      }
+      if (!xr?.isSessionSupported) {
+        if (!cancelled) {
+          setXrSupported(false);
+          setXrReadinessMessage('This browser does not expose WebXR. Continue in Standard View or use a WebXR-capable device.');
+        }
+        return;
+      }
       if (xr?.isSessionSupported) {
         try {
           const supported = await xr.isSessionSupported('immersive-vr');
-          if (!cancelled) setXrSupported(Boolean(supported));
+          if (!cancelled) {
+            setXrSupported(Boolean(supported));
+            setXrReadinessMessage(
+              supported
+                ? 'WebXR and WebGL are available for this browser profile.'
+                : 'WebXR is present, but immersive-vr is not supported on this device.'
+            );
+          }
         } catch {
-          if (!cancelled) setXrSupported(false);
+          if (!cancelled) {
+            setXrSupported(false);
+            setXrReadinessMessage('The browser could not complete WebXR readiness checks.');
+          }
         }
       }
     };
@@ -143,7 +189,7 @@ const ConsciousMeetingRoomPage: React.FC<ConsciousMeetingRoomPageProps> = ({ ses
       if (hasJoined && session?.id) {
         void leaveMeetingSession(session.id);
       }
-      localStream?.getTracks().forEach((track) => track.stop());
+      stopMediaStream(localStream);
       if (recordingTimerRef.current) {
         clearInterval(recordingTimerRef.current);
       }
@@ -237,14 +283,27 @@ const ConsciousMeetingRoomPage: React.FC<ConsciousMeetingRoomPageProps> = ({ ses
   };
 
   const enableLocalMedia = async () => {
+    if (!isBrowserSecureContext() || !canUseMediaDevices()) {
+      setMediaDevicesReady(false);
+      setJoinStatus(normalizeMediaDeviceError(new DOMException('Media devices unavailable', 'NotAllowedError')));
+      return;
+    }
+
     try {
-      const nextStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
-      localStream?.getTracks().forEach((track) => track.stop());
+      const nextStream = await navigator.mediaDevices.getUserMedia(MEETING_MEDIA_CONSTRAINTS);
+      if (!hasLiveTracks(nextStream)) {
+        stopMediaStream(nextStream);
+        setMediaDevicesReady(false);
+        setJoinStatus('Camera and microphone started but no live track was available. Reconnect your device and try again.');
+        return;
+      }
+      stopMediaStream(localStream);
       setLocalStream(nextStream);
       setMediaDevicesReady(true);
       setJoinStatus('Local camera and microphone are active for this browser only.');
-    } catch {
-      setJoinStatus('Camera and microphone permission was denied or unavailable.');
+    } catch (error) {
+      setMediaDevicesReady(false);
+      setJoinStatus(normalizeMediaDeviceError(error));
     }
   };
 
@@ -485,7 +544,7 @@ const ConsciousMeetingRoomPage: React.FC<ConsciousMeetingRoomPageProps> = ({ ses
                 <p className="relative mt-2 max-w-xl text-sm leading-6 text-slate-100">
                   {xrSupported
                     ? 'WebXR tracking profile detected. The provider stream is ready for spatial placement.'
-                    : 'WebXR tracking is not detected. Connect your spatial tools or continue in Standard View.'}
+                    : xrReadinessMessage}
                 </p>
               </div>
             )}
@@ -576,7 +635,7 @@ const ConsciousMeetingRoomPage: React.FC<ConsciousMeetingRoomPageProps> = ({ ses
               </p>
               <p className="flex items-center gap-2">
                 <Layers className={`h-4 w-4 ${session.nativeRoom?.immersiveEnabled ? 'text-teal-300' : 'text-slate-500'}`} />
-                {session.nativeRoom?.immersiveEnabled ? '5D gateway provider-enabled' : '5D gateway off for this room'}
+                {session.nativeRoom?.immersiveEnabled ? `5D gateway provider-enabled: ${xrReadinessMessage}` : '5D gateway off for this room'}
               </p>
             </div>
           </div>

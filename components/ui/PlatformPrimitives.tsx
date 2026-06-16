@@ -56,7 +56,7 @@ export const PageHeader: React.FC<PageHeaderProps> = ({ eyebrow, title, descript
         {description && <p className="max-w-xs break-words text-sm leading-6 text-slate-400 sm:max-w-2xl sm:text-base">{description}</p>}
       </div>
     </div>
-    {actions && <div className="flex min-w-0 flex-wrap items-center gap-3">{actions}</div>}
+    {actions && <div className="flex w-full min-w-0 flex-wrap items-center gap-3 lg:w-auto lg:justify-end">{actions}</div>}
   </header>
 );
 

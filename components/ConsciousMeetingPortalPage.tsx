@@ -161,17 +161,23 @@ const ConsciousMeetingPortalPageContent: React.FC<ConsciousMeetingPortalPageProp
         title="Meeting Portal"
         description="Unified access for identity readiness, device checks, configuration history, and provider-hosted internal session controls."
         actions={
-          <>
-            <ActionButton type="button" variant="secondary" onClick={onExit} icon={<Home className="h-4 w-4" />}>
+          <div className="grid w-full max-w-full grid-cols-1 gap-3 sm:flex sm:w-auto sm:flex-wrap">
+            <ActionButton type="button" variant="secondary" onClick={onExit} icon={<Home className="h-4 w-4" />} className="w-full sm:w-auto">
               {exitLabel}
             </ActionButton>
-            <ActionButton type="button" variant="secondary" onClick={onOpenUpcoming} icon={<Video className="h-4 w-4" />}>
+            <ActionButton type="button" variant="secondary" onClick={onOpenUpcoming} icon={<Video className="h-4 w-4" />} className="w-full sm:w-auto">
               Upcoming Sessions
             </ActionButton>
-            <ActionButton type="button" onClick={runDeviceCheck} disabled={isChecking} icon={<RefreshCw className="h-4 w-4" />}>
+            <ActionButton
+              type="button"
+              onClick={runDeviceCheck}
+              disabled={isChecking}
+              icon={<RefreshCw className="h-4 w-4" />}
+              className="w-full sm:w-auto"
+            >
               Check Devices
             </ActionButton>
-          </>
+          </div>
         }
       />
 

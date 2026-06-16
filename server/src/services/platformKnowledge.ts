@@ -131,6 +131,19 @@ const internalLaunchDocuments: PlatformKnowledgeDocument[] = [
     ].join(' '),
   },
   {
+    id: 'internal:provider-pilot-current-state',
+    title: 'CNH provider pilot current-state boundaries',
+    sourceType: 'internal',
+    lastReviewed: LAST_REVIEWED,
+    content: [
+      'For the controlled provider pilot, CNH supports approved providers entering provider CRM, creating native CNH meeting rooms, starting and ending provider sessions, inviting users or groups, and issuing signed guest links where configured.',
+      'Provider-hosted meeting rooms currently emphasize lifecycle truth, browser-local camera and microphone access, signed access, local-only participant recording when enabled, and clear 5D/WebXR fallback messaging.',
+      'Member self-booking and public booking workflows are gated for launch. Members may discover public-safe provider information and join authorized sessions, but booking, messaging, and private provider contact flows require authenticated eligibility and future hardening.',
+      'Meeting AI notes, transcript capture, participant-wide notes sync, cloud/server recording, replay/VOD, and full multi-peer spatial collaboration are locked or future-build items unless current runtime context explicitly says otherwise.',
+      'GSP in pilot conversations should be treated as a guided support pathway concept connected to CNH provider service, growth, and learning workflows, not as a separate fully launched product or guaranteed service outcome.',
+    ].join(' '),
+  },
+  {
     id: 'internal:privacy-and-ai-boundaries',
     title: 'CNH privacy and AI access boundaries',
     sourceType: 'internal',
@@ -171,14 +184,33 @@ const hasAny = (text: string, patterns: RegExp[]): boolean =>
 const boundaryPatterns = [
   /\b(list|show|give|export|reveal|dump|delete|disable|lock)\b.*\b(users?|members?|providers?|applicants?|admins?|emails?|wallets?|passwords?|tokens?|recovery codes?|private reflections?)\b/i,
   /\b(admin password|bypass|private data|wallet address|session token|recovery code)\b/i,
+  /\b(unpublished|draft|private|hidden)\b.*\b(courses?|content|provider records?|profiles?)\b/i,
 ];
 
 const providerPatterns = [
-  /\b(provider|applicant|application|apply|approval|approve|reject|crm|wallet verification|wallet binding)\b/i,
+  /\b(provider|applicant|application|apply|approval|approve|reject|crm|wallet verification|wallet binding|spiritual coach|coach|facilitator)\b/i,
+];
+
+const providerHostPatterns = [
+  /\b(providers?)\b.*\b(host|create|start|run|lead)\b.*\b(sessions?|meetings?|rooms?)\b/i,
+  /\b(host controls?|provider-led sessions?|native cnh rooms?)\b/i,
+];
+
+const bookingPatterns = [
+  /\b(members?|users?)\b.*\b(book|schedule|reserve|request)\b.*\b(providers?|sessions?|appointments?)\b/i,
+  /\b(book providers?|provider booking|self[-\s]?booking)\b/i,
+];
+
+const availabilityPatterns = [
+  /\b(available now|what is available|what works|still gated|future build|not available|locked|gated)\b/i,
 ];
 
 const membershipPatterns = [
   /\b(membership|tier|free|community tier|guided tier|accelerated tier|checkout|access level)\b/i,
+];
+
+const coursePatterns = [
+  /\b(courses?|learning pathway|my courses|enrollment|progress|resume|published course|unpublished course|draft course)\b/i,
 ];
 
 const privacyPatterns = [
@@ -189,12 +221,21 @@ const careersPatterns = [
   /\b(conscious careers|career|entrepreneur|entrepreneurship|grant|economic mobility|business ownership|franchise)\b/i,
 ];
 
+const gspPatterns = [
+  /\b(gsp|guided support pathway|growth support pathway|guided service pathway)\b/i,
+];
+
 const platformPatterns = [
   /\b(conscious network hub|higher conscious network|cnh|hcn|this platform|the platform|what do you know)\b/i,
   ...providerPatterns,
+  ...providerHostPatterns,
+  ...bookingPatterns,
   ...membershipPatterns,
+  ...coursePatterns,
   ...privacyPatterns,
   ...careersPatterns,
+  ...availabilityPatterns,
+  ...gspPatterns,
 ];
 
 export const isPlatformKnowledgeRequest = (message: string): boolean => {
@@ -208,13 +249,70 @@ export const buildPlatformFallbackReply = (message: string): string | null => {
 
   if (hasAny(request, boundaryPatterns)) {
     return [
-      'I can explain the admin and safety model, but I cannot reveal, list, alter, or delete private users, providers, applicants, wallet data, recovery codes, private reflections, or admin records from an AI chat.',
+      'I can explain the admin and safety model, but I cannot reveal, list, summarize, alter, or delete private users, providers, applicants, wallet data, recovery codes, unpublished courses, private reflections, private uploads, or admin records from an AI chat.',
       '',
       'In CNH, those actions belong in authenticated admin tools with server-side role checks, elevated admin authorization where required, audit logging, and clear review controls. For abuse handling, the safe pattern is: inspect the record in the admin console, disable or revoke access through the approved admin endpoint, preserve audit history, and avoid exposing private data in chat responses.',
     ].join('\n');
   }
 
+  if (hasAny(request, availabilityPatterns)) {
+    return [
+      'Here is the current pilot truth-state for CNH:',
+      '',
+      'Available now:',
+      '- Member and provider account access through protected backend sessions.',
+      '- Provider application, applicant status, admin review, and approved-provider state.',
+      '- Approved-provider CRM entry after the required provider access checks.',
+      '- Provider host controls for native CNH meeting rooms, including create, start, end, invited users/groups, and signed guest links where configured.',
+      '- Published course and public-safe provider/community discovery surfaces.',
+      '- AI platform guidance grounded in approved CNH context and privacy boundaries.',
+      '',
+      'Still gated or future build:',
+      '- Member self-booking of providers.',
+      '- Meeting AI notes, transcript capture, session-scoped notes persistence, and participant-wide notes sync.',
+      '- Cloud/server recording, replay, VOD, and institutional archives.',
+      '- Full multi-peer spatial collaboration beyond local WebXR/5D readiness checks.',
+      '',
+      'Private records, emails, wallets, unpublished courses, applicant documents, CRM notes, and admin records are not AI-visible public sources.',
+    ].join('\n');
+  }
+
+  if (hasAny(request, providerHostPatterns)) {
+    return [
+      'Yes. In the current provider pilot, approved providers can use provider host controls to create native CNH meeting rooms, start scheduled sessions, end live sessions, invite users or groups, and create signed guest links where configured.',
+      '',
+      'Important boundaries:',
+      '- The provider must be approved and have provider access active.',
+      '- Session entry is lifecycle-bound: scheduled rooms wait for the host, live rooms are joinable when authorized, and ended/archived rooms close active controls.',
+      '- Camera, microphone, local recording, and 5D/WebXR readiness are browser/device dependent.',
+      '- AI meeting notes, transcript capture, cloud recording, VOD, and full spatial collaboration remain locked or future-build items unless explicitly enabled by current backend support.',
+    ].join('\n');
+  }
+
+  if (hasAny(request, bookingPatterns)) {
+    return [
+      'Member self-booking of providers is not active as a public launch feature yet.',
+      '',
+      'Current behavior: members can view public-safe provider discovery where available and join authorized provider-created sessions. Booking, direct messaging, private contact, and appointment workflows remain gated until the platform has the required eligibility checks, privacy controls, provider availability rules, and audit-safe persistence.',
+      '',
+      'For the provider pilot, providers should publish or host CNH meeting rooms through approved host controls rather than relying on public self-booking.',
+    ].join('\n');
+  }
+
   if (hasAny(request, providerPatterns)) {
+    if (/\b(spiritual coach|coach|facilitator)\b/i.test(request)) {
+      return [
+        'A spiritual coach should start by entering the provider pathway with clarity and boundaries.',
+        '',
+        'Practical first steps:',
+        '- Apply through the provider application path and describe the service area, audience, ethics, and support boundaries.',
+        '- Use the applicant portal to track review status and respond to any requested information.',
+        '- After approval, sign in as an approved provider and complete wallet verification before CRM access.',
+        '- Use provider CRM and host controls to prepare pilot sessions, invite the right participants, and keep member privacy protected.',
+        '- Be explicit that CNH support is educational, reflective, spiritual, coaching, or wellness-oriented as appropriate, not emergency, clinical, legal, or financial advice.',
+      ].join('\n');
+    }
+
     return [
       'CNH separates applicants, approved providers, and admins.',
       '',
@@ -225,6 +323,7 @@ export const buildPlatformFallbackReply = (message: string): string | null => {
       '- Admin may approve, reject, or request more information where supported.',
       '- Approval creates the approved provider state, but does not grant admin permissions.',
       '- Approved providers sign in through the provider path and must complete wallet binding or verification before provider CRM access.',
+      '- During the provider pilot, approved providers can use host controls for native CNH meeting rooms, invite workflows, and signed guest links where configured.',
       '',
       'Pending or rejected applicants and ordinary members should not be able to enter provider CRM or admin areas.',
     ].join('\n');
@@ -259,6 +358,14 @@ export const buildPlatformFallbackReply = (message: string): string | null => {
       'Its purpose is to help members and providers move from learning into business ownership readiness, skill and life development, provider pathways, and future grant or reinvestment opportunities as those features are implemented.',
       '',
       'The AI should not claim active grants, guaranteed funding, formal partnerships, or business outcomes unless the current platform context explicitly confirms them.',
+    ].join('\n');
+  }
+
+  if (hasAny(request, gspPatterns)) {
+    return [
+      'GSP should be described cautiously in this pilot as a guided support pathway concept connected to CNH service, growth, provider support, and learning workflows.',
+      '',
+      'It should not be presented as a separate fully launched product, guaranteed service, guaranteed outcome, or replacement for professional medical, legal, financial, clinical, or emergency support. The safe next step is to connect the person to CNH membership, learning, provider discovery, or provider application pathways based on their role and current access.',
     ].join('\n');
   }
 

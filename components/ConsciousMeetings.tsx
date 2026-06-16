@@ -39,6 +39,17 @@ import {
   PROVIDER_SESSION_TOKEN_KEY,
   setProviderControlSession,
 } from '../services/sessionService';
+import {
+  MEETING_MEDIA_CONSTRAINTS,
+  canUseMediaDevices,
+  canUseWebGl,
+  hasLiveAudioTracks,
+  hasLiveTracks,
+  hasLiveVideoTracks,
+  isBrowserSecureContext,
+  normalizeMediaDeviceError,
+  stopMediaStream,
+} from '../services/mediaDeviceSupport';
 import type {
   ExternalMeetingPreview,
   MeetingSessionMode,
@@ -135,6 +146,7 @@ const EMPTY_MEETING_NOTES = (): MeetingNotes => ({
 });
 
 const BACKGROUND_UPLOAD_MAX_BYTES = 25 * 1024 * 1024;
+const ALLOWED_BACKGROUND_IMAGE_TYPES = new Set(['image/jpeg', 'image/png', 'image/webp', 'image/gif']);
 const ALLOWED_BACKGROUND_VIDEO_TYPES = new Set(['video/mp4', 'video/webm', 'video/quicktime']);
 const SYNTHESIS_AGENT_OPTIONS: Array<{ id: SynthesisAgentMode; label: string; description: string }> = [
   {
@@ -180,6 +192,37 @@ const BACKGROUND_PRESETS: MeetingBackgroundPreset[] = [
     source: '/video/home-bg.mp4',
   },
 ];
+
+const shouldSetCrossOriginForMedia = (source: string): boolean => {
+  if (!/^https?:\/\//i.test(source)) return false;
+  if (typeof window === 'undefined') return true;
+  try {
+    return new URL(source).origin !== window.location.origin;
+  } catch {
+    return false;
+  }
+};
+
+const drawCover = (
+  context: CanvasRenderingContext2D,
+  source: CanvasImageSource,
+  sourceWidth: number,
+  sourceHeight: number,
+  targetWidth: number,
+  targetHeight: number
+): void => {
+  if (sourceWidth <= 0 || sourceHeight <= 0 || targetWidth <= 0 || targetHeight <= 0) {
+    context.drawImage(source, 0, 0, targetWidth, targetHeight);
+    return;
+  }
+
+  const scale = Math.max(targetWidth / sourceWidth, targetHeight / sourceHeight);
+  const width = sourceWidth * scale;
+  const height = sourceHeight * scale;
+  const x = (targetWidth - width) / 2;
+  const y = (targetHeight - height) / 2;
+  context.drawImage(source, x, y, width, height);
+};
 
 const isApprovedProviderUser = (user: UserProfile | null): boolean =>
   Boolean(
@@ -329,6 +372,7 @@ const ConsciousMeetings: React.FC<ConsciousMeetingsProps> = ({ user }) => {
   const [isImmersiveSupported, setIsImmersiveSupported] = useState(false);
   const [hasCheckedImmersiveSupport, setHasCheckedImmersiveSupport] = useState(false);
   const [immersiveDeviceProfile, setImmersiveDeviceProfile] = useState('unknown');
+  const [immersiveSupportReason, setImmersiveSupportReason] = useState('Checking browser capabilities...');
   const [immersiveSupportedModes, setImmersiveSupportedModes] = useState<Array<'immersive-ar' | 'immersive-vr'>>([]);
   const [immersiveActiveMode, setImmersiveActiveMode] = useState<'immersive-ar' | 'immersive-vr' | 'unknown'>('unknown');
 
@@ -338,6 +382,9 @@ const ConsciousMeetings: React.FC<ConsciousMeetingsProps> = ({ user }) => {
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const recordingIntervalRef = useRef<NodeJS.Timeout | null>(null);
   const analyserRef = useRef<AnalyserNode | null>(null);
+  const audioContextRef = useRef<AudioContext | null>(null);
+  const micSourceRef = useRef<MediaStreamAudioSourceNode | null>(null);
+  const micAnimationFrameRef = useRef<number | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const xrMountRef = useRef<HTMLDivElement>(null);
   const xrSessionRef = useRef<any>(null);
@@ -436,13 +483,49 @@ const ConsciousMeetings: React.FC<ConsciousMeetingsProps> = ({ user }) => {
     setSelectedInviteGroupId('');
   };
 
+  const cleanupAudioAnalyser = () => {
+    if (micAnimationFrameRef.current !== null) {
+      cancelAnimationFrame(micAnimationFrameRef.current);
+      micAnimationFrameRef.current = null;
+    }
+    try {
+      micSourceRef.current?.disconnect();
+    } catch {
+      // Ignore browser audio cleanup exceptions.
+    }
+    try {
+      analyserRef.current?.disconnect();
+    } catch {
+      // Ignore browser audio cleanup exceptions.
+    }
+    const audioContext = audioContextRef.current;
+    if (audioContext && audioContext.state !== 'closed') {
+      audioContext.close().catch(() => undefined);
+    }
+    micSourceRef.current = null;
+    analyserRef.current = null;
+    audioContextRef.current = null;
+    setMicLevel(0);
+  };
+
   const checkPermissions = async () => {
     setPermissionState('pending');
+    if (!isBrowserSecureContext() || !canUseMediaDevices()) {
+      setPermissionState('denied');
+      setMeetingOpsStatus(normalizeMediaDeviceError(new DOMException('Media devices unavailable', 'NotAllowedError')));
+      return;
+    }
+
+    let permissionStream: MediaStream | null = null;
     try {
-      await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
+      permissionStream = await navigator.mediaDevices.getUserMedia(MEETING_MEDIA_CONSTRAINTS);
       setPermissionState('granted');
+      setMeetingOpsStatus('Camera and microphone permissions are ready. Test tracks were released; start a session when you are ready.');
     } catch (err) {
       setPermissionState('denied');
+      setMeetingOpsStatus(normalizeMediaDeviceError(err));
+    } finally {
+      stopMediaStream(permissionStream);
     }
   };
 
@@ -1010,12 +1093,6 @@ const ConsciousMeetings: React.FC<ConsciousMeetingsProps> = ({ user }) => {
     }
   };
 
-  const hasLiveTracks = (candidate: MediaStream | null): candidate is MediaStream =>
-    candidate instanceof MediaStream && candidate.getTracks().some((track) => track.readyState === 'live');
-
-  const hasLiveVideoTracks = (candidate: MediaStream | null): candidate is MediaStream =>
-    candidate instanceof MediaStream && candidate.getVideoTracks().some((track) => track.readyState === 'live');
-
   const getProviderMediaStream = (): MediaStream | null => {
     if (hasLiveTracks(processedStream)) {
       return processedStream;
@@ -1148,8 +1225,18 @@ const ConsciousMeetings: React.FC<ConsciousMeetingsProps> = ({ user }) => {
       setImmersiveError(message);
       return;
     }
+    if (!isBrowserSecureContext()) {
+      const message = '5D requires HTTPS or localhost because WebXR and camera access are secure-context APIs.';
+      setImmersiveError(message);
+      return;
+    }
+    if (!canUseWebGl()) {
+      const message = '5D requires WebGL rendering support. This browser could not initialize a WebGL context.';
+      setImmersiveError(message);
+      return;
+    }
     if (!isImmersiveSupported || !hasCheckedImmersiveSupport) {
-      const unsupportedMessage = 'Immersive mode is not supported on this browser/device.';
+      const unsupportedMessage = immersiveSupportReason || 'Immersive mode is not supported on this browser/device.';
       setImmersiveError(unsupportedMessage);
       void reportImmersiveSessionEvent({
         eventType: 'error',
@@ -1255,7 +1342,7 @@ const ConsciousMeetings: React.FC<ConsciousMeetingsProps> = ({ user }) => {
 
       const providerStream = getProviderMediaStream();
       if (!providerStream || !hasLiveTracks(providerStream) || !hasLiveVideoTracks(providerStream)) {
-        throw new Error('No provider media stream is available for immersive mapping.');
+        throw new Error('Start camera and microphone before entering 5D. The spatial view needs an active provider camera stream.');
       }
 
       const providerVideo = providerVideoRef.current;
@@ -1528,42 +1615,62 @@ const ConsciousMeetings: React.FC<ConsciousMeetingsProps> = ({ user }) => {
       setMeetingOpsStatus('Provider host access is required. Sign in through Provider Access.');
       return;
     }
+    if (!isBrowserSecureContext() || !canUseMediaDevices()) {
+      setPermissionState('denied');
+      setMeetingOpsStatus(normalizeMediaDeviceError(new DOMException('Media devices unavailable', 'NotAllowedError')));
+      return;
+    }
+
     try {
       setPermissionState('pending');
-      const mediaStream = await navigator.mediaDevices.getUserMedia({ 
-        video: true, 
-        audio: true 
-      });
+      const mediaStream = await navigator.mediaDevices.getUserMedia(MEETING_MEDIA_CONSTRAINTS);
+      if (!hasLiveVideoTracks(mediaStream) || !hasLiveAudioTracks(mediaStream)) {
+        stopMediaStream(mediaStream);
+        setPermissionState('denied');
+        setMeetingOpsStatus('Camera and microphone access started, but this session requires both a live camera and a live microphone track.');
+        return;
+      }
+
+      stopMediaStream(stream);
+      cleanupAudioAnalyser();
       setStream(mediaStream);
       setPermissionState('granted');
       setIsSoloSessionActive(true);
+      setMeetingOpsStatus('Provider camera and microphone are live in this browser. Backgrounds and local recording remain local to this session.');
 
       if (videoRef.current) {
         videoRef.current.srcObject = mediaStream;
+        videoRef.current.play().catch(() => undefined);
       }
 
       // Setup audio analyser for mic level
-      const audioContext = new AudioContext();
+      const AudioContextCtor =
+        window.AudioContext || (window as Window & { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
+      if (!AudioContextCtor) return;
+
+      const audioContext = new AudioContextCtor();
       const analyser = audioContext.createAnalyser();
       const microphone = audioContext.createMediaStreamSource(mediaStream);
       microphone.connect(analyser);
       analyser.fftSize = 256;
       analyserRef.current = analyser;
+      audioContextRef.current = audioContext;
+      micSourceRef.current = microphone;
 
       const dataArray = new Uint8Array(analyser.frequencyBinCount);
       const updateMicLevel = () => {
-        if (analyserRef.current) {
+        if (analyserRef.current === analyser && hasLiveAudioTracks(mediaStream)) {
           analyserRef.current.getByteFrequencyData(dataArray);
           const average = dataArray.reduce((a, b) => a + b) / dataArray.length;
           setMicLevel(average / 255);
-          requestAnimationFrame(updateMicLevel);
+          micAnimationFrameRef.current = requestAnimationFrame(updateMicLevel);
         }
       };
       updateMicLevel();
 
     } catch (err) {
       setPermissionState('denied');
-      setMeetingOpsStatus('Camera and microphone access is required for solo sessions. Please check your browser permissions.');
+      setMeetingOpsStatus(normalizeMediaDeviceError(err));
     }
   };
 
@@ -1586,9 +1693,10 @@ const ConsciousMeetings: React.FC<ConsciousMeetingsProps> = ({ user }) => {
 
     processedStreamCleanupRef.current?.();
     setProcessedStream(null);
+    cleanupAudioAnalyser();
 
     if (stream) {
-      stream.getTracks().forEach(track => track.stop());
+      stopMediaStream(stream);
       setStream(null);
     }
     if (mediaRecorderRef.current && recordingState !== 'idle') {
@@ -1745,7 +1853,10 @@ const ConsciousMeetings: React.FC<ConsciousMeetingsProps> = ({ user }) => {
     if (!file) return;
 
     const normalizedType = file.type.toLowerCase();
-    const isImage = normalizedType.startsWith('image/');
+    const normalizedName = file.name.toLowerCase();
+    const isImage =
+      ALLOWED_BACKGROUND_IMAGE_TYPES.has(normalizedType) ||
+      (!normalizedType && /\.(jpe?g|png|webp|gif)$/i.test(normalizedName));
     const isAllowedVideo = ALLOWED_BACKGROUND_VIDEO_TYPES.has(normalizedType);
     if (!isImage && !isAllowedVideo) {
       setMeetingOpsStatus('Allowed background uploads: JPG, PNG, WEBP, GIF, MP4, or WEBM.');
@@ -1764,6 +1875,7 @@ const ConsciousMeetings: React.FC<ConsciousMeetingsProps> = ({ user }) => {
     setSelectedBackground(url);
     setBackgroundType(isImage ? 'image' : 'video');
     setCustomBackgroundFile(file);
+    setMeetingOpsStatus(`Selected ${isImage ? 'image' : 'video'} background "${file.name}". It will remain local to this browser session.`);
     event.target.value = '';
   };
 
@@ -2019,6 +2131,7 @@ const ConsciousMeetings: React.FC<ConsciousMeetingsProps> = ({ user }) => {
         if (!cancelled) {
           setIsImmersiveSupported(false);
           setImmersiveDeviceProfile('unknown');
+          setImmersiveSupportReason('Browser capability detection is unavailable in this environment.');
           setImmersiveSupportedModes([]);
           setHasCheckedImmersiveSupport(true);
         }
@@ -2027,10 +2140,31 @@ const ConsciousMeetings: React.FC<ConsciousMeetingsProps> = ({ user }) => {
 
       const xrSystem = (navigator as Navigator & { xr?: any }).xr;
       const deviceProfile = getImmersiveDeviceProfile();
+      if (!isBrowserSecureContext()) {
+        if (!cancelled) {
+          setIsImmersiveSupported(false);
+          setImmersiveDeviceProfile(deviceProfile);
+          setImmersiveSupportReason('5D requires HTTPS or localhost because WebXR and camera access are secure-context APIs.');
+          setImmersiveSupportedModes([]);
+          setHasCheckedImmersiveSupport(true);
+        }
+        return;
+      }
+      if (!canUseWebGl()) {
+        if (!cancelled) {
+          setIsImmersiveSupported(false);
+          setImmersiveDeviceProfile(deviceProfile);
+          setImmersiveSupportReason('5D requires WebGL rendering support. This browser could not initialize a WebGL context.');
+          setImmersiveSupportedModes([]);
+          setHasCheckedImmersiveSupport(true);
+        }
+        return;
+      }
       if (!xrSystem) {
         if (!cancelled) {
           setIsImmersiveSupported(false);
           setImmersiveDeviceProfile(deviceProfile);
+          setImmersiveSupportReason('This browser does not expose WebXR. Use a WebXR-capable browser/device or continue in Standard View.');
           setImmersiveSupportedModes([]);
           setHasCheckedImmersiveSupport(true);
         }
@@ -2052,12 +2186,18 @@ const ConsciousMeetings: React.FC<ConsciousMeetingsProps> = ({ user }) => {
         if (!cancelled) {
           setIsImmersiveSupported(supportedModes.length > 0);
           setImmersiveDeviceProfile(deviceProfile);
+          setImmersiveSupportReason(
+            supportedModes.length > 0
+              ? 'WebXR and WebGL are available. Start camera/mic before entering 5D.'
+              : 'WebXR is present, but this device reports no immersive-ar or immersive-vr session support.'
+          );
           setImmersiveSupportedModes(supportedModes);
         }
       } catch {
         if (!cancelled) {
           setIsImmersiveSupported(false);
           setImmersiveDeviceProfile(deviceProfile);
+          setImmersiveSupportReason('The browser could not complete WebXR capability checks. Continue in Standard View.');
           setImmersiveSupportedModes([]);
         }
       } finally {
@@ -2175,7 +2315,9 @@ const ConsciousMeetings: React.FC<ConsciousMeetingsProps> = ({ user }) => {
         if (backgroundType === 'image' && selectedBackground) {
           backgroundImage = await new Promise<HTMLImageElement>((resolve, reject) => {
             const image = new window.Image();
-            image.crossOrigin = 'anonymous';
+            if (shouldSetCrossOriginForMedia(selectedBackground)) {
+              image.crossOrigin = 'anonymous';
+            }
             image.onload = () => resolve(image);
             image.onerror = () => reject(new Error('Background image failed to load.'));
             image.src = selectedBackground;
@@ -2186,7 +2328,9 @@ const ConsciousMeetings: React.FC<ConsciousMeetingsProps> = ({ user }) => {
           backgroundVideo.loop = true;
           backgroundVideo.muted = true;
           backgroundVideo.playsInline = true;
-          backgroundVideo.crossOrigin = 'anonymous';
+          if (shouldSetCrossOriginForMedia(selectedBackground)) {
+            backgroundVideo.crossOrigin = 'anonymous';
+          }
           backgroundVideo.preload = 'auto';
           try {
             await backgroundVideo.play();
@@ -2222,9 +2366,23 @@ const ConsciousMeetings: React.FC<ConsciousMeetingsProps> = ({ user }) => {
             renderContext.drawImage(results.image as CanvasImageSource, 0, 0, canvasWidth, canvasHeight);
             renderContext.restore();
           } else if (backgroundType === 'video' && backgroundVideo && backgroundVideo.readyState >= 2) {
-            renderContext.drawImage(backgroundVideo, 0, 0, canvasWidth, canvasHeight);
+            drawCover(
+              renderContext,
+              backgroundVideo,
+              backgroundVideo.videoWidth || canvasWidth,
+              backgroundVideo.videoHeight || canvasHeight,
+              canvasWidth,
+              canvasHeight
+            );
           } else if (backgroundType === 'image' && backgroundImage) {
-            renderContext.drawImage(backgroundImage, 0, 0, canvasWidth, canvasHeight);
+            drawCover(
+              renderContext,
+              backgroundImage,
+              backgroundImage.naturalWidth || canvasWidth,
+              backgroundImage.naturalHeight || canvasHeight,
+              canvasWidth,
+              canvasHeight
+            );
           } else {
             renderContext.fillStyle = '#0f172a';
             renderContext.fillRect(0, 0, canvasWidth, canvasHeight);
@@ -2260,7 +2418,9 @@ const ConsciousMeetings: React.FC<ConsciousMeetingsProps> = ({ user }) => {
         };
 
         void processFrame();
-      } catch {
+      } catch (error) {
+        const reason = error instanceof Error ? error.message : 'Background compositor failed.';
+        setMeetingOpsStatus(`Background effect could not render: ${reason} Standard camera view remains active.`);
         cleanupProcessing();
       }
     };
@@ -2285,10 +2445,11 @@ const ConsciousMeetings: React.FC<ConsciousMeetingsProps> = ({ user }) => {
   useEffect(() => {
     return () => {
       processedStreamCleanupRef.current?.();
+      cleanupAudioAnalyser();
 
       const activeStream = liveStreamRef.current;
       if (activeStream) {
-        activeStream.getTracks().forEach(track => track.stop());
+        stopMediaStream(activeStream);
       }
       if (recordingIntervalRef.current) {
         clearInterval(recordingIntervalRef.current);
@@ -2357,7 +2518,13 @@ const ConsciousMeetings: React.FC<ConsciousMeetingsProps> = ({ user }) => {
     };
   }, [stream, processedStream, isSoloSessionActive]);
 
-  const canEnterImmersiveView = hasCheckedImmersiveSupport && isImmersiveSupported;
+  const hasProviderMediaForImmersive = hasLiveVideoTracks(processedStream) || hasLiveVideoTracks(stream);
+  const canEnterImmersiveView = hasCheckedImmersiveSupport && isImmersiveSupported && hasProviderMediaForImmersive;
+  const immersiveUnavailableLabel = !hasCheckedImmersiveSupport
+    ? 'Checking 5D Device Support'
+    : !isImmersiveSupported
+      ? '5D Immersive View Unavailable'
+      : 'Start Camera Before 5D';
   const activeMeeting = meetings[0] || null;
   const hasActiveMeetingNotes = hasPersistedMeetingNotes(activeMeeting);
   const canSaveRecording = Boolean(user?.id && activeMeeting && user.id === activeMeeting.hostUserId);
@@ -2623,12 +2790,12 @@ const ConsciousMeetings: React.FC<ConsciousMeetingsProps> = ({ user }) => {
                           className="w-full py-4 sm:py-5 md:py-6 bg-slate-800 text-slate-500 rounded-xl sm:rounded-2xl md:rounded-3xl font-black text-sm sm:text-base md:text-lg lg:text-xl uppercase tracking-widest shadow-2xl flex items-center justify-center gap-3 sm:gap-4 cursor-not-allowed"
                         >
                           <Video className="w-5 h-5 sm:w-6 sm:h-6" />
-                          {hasCheckedImmersiveSupport ? '5D Immersive View Unavailable' : 'Checking 5D Device Support'}
+                          {immersiveUnavailableLabel}
                         </button>
                       )}
 
                       <p className="text-[9px] sm:text-[10px] text-slate-500 uppercase tracking-widest text-center">
-                        Auto-optimized for Meta Quest, Apple Vision Pro, and mobile AR goggles
+                        5D requires HTTPS, WebXR, WebGL, and an active provider camera stream. Standard View remains available.
                       </p>
 
                       <div className="p-4 sm:p-5 rounded-xl sm:rounded-2xl border border-white/10 bg-white/5 space-y-3">
@@ -2656,6 +2823,12 @@ const ConsciousMeetings: React.FC<ConsciousMeetingsProps> = ({ user }) => {
                             <span className="text-slate-500">Active Mode</span>
                             <span className={immersiveActiveMode === 'unknown' ? 'text-slate-300' : 'text-teal-300'}>
                               {immersiveActiveMode}
+                            </span>
+                          </div>
+                          <div className="flex justify-between items-center gap-4 p-2.5 rounded-lg bg-black/20 sm:col-span-2">
+                            <span className="text-slate-500">Readiness</span>
+                            <span className="text-right text-slate-200">
+                              {hasProviderMediaForImmersive ? 'Provider media active' : immersiveSupportReason}
                             </span>
                           </div>
                         </div>
@@ -2693,7 +2866,7 @@ const ConsciousMeetings: React.FC<ConsciousMeetingsProps> = ({ user }) => {
                           disabled
                           className="px-4 sm:px-6 py-2 sm:py-3 bg-slate-700 text-slate-500 rounded-lg sm:rounded-xl font-black text-[8px] sm:text-[9px] uppercase tracking-widest cursor-not-allowed"
                         >
-                          5D Unavailable
+                          {immersiveUnavailableLabel}
                         </button>
                       )}
                       <button
@@ -2817,6 +2990,17 @@ const ConsciousMeetings: React.FC<ConsciousMeetingsProps> = ({ user }) => {
                   {/* Background Selection */}
                   <div className="space-y-4">
                     <h4 className="text-[9px] sm:text-[10px] font-black text-slate-500 uppercase tracking-widest">Meeting Background</h4>
+                    <p className="rounded-xl border border-white/10 bg-black/20 px-4 py-3 text-[10px] leading-5 text-slate-300">
+                      Active visual layer: {
+                        backgroundType === 'none'
+                          ? 'standard camera'
+                          : backgroundType === 'blur'
+                            ? 'privacy blur'
+                            : customBackgroundFile
+                              ? `${customBackgroundFile.name} (${backgroundType})`
+                              : `${BACKGROUND_PRESETS.find((preset) => preset.source === selectedBackground)?.label || 'selected background'} (${backgroundType})`
+                      }. Background media stays local to this browser session.
+                    </p>
                     <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 sm:gap-4">
                       <button
                         onClick={clearBackgroundEffect}
