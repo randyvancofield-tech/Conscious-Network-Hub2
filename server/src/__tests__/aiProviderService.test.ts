@@ -36,6 +36,52 @@ describe('runtime AI local fallback', () => {
     expect(response.reply).toContain('Approved providers are not admins');
   });
 
+  it('asks one concise clarification for bare ambiguous prompts without page context', async () => {
+    const response = await chatWithRuntimeAiProvider({
+      message: 'User request:\nwhat is this',
+      systemPrompt: 'Use platform-safe context only.',
+    });
+
+    expect(response.provider).toBe('local');
+    expect(response.reply).toContain('Which page or feature');
+    expect(response.reply).not.toContain('NIST');
+    expect(response.reply).not.toContain('GDPR');
+    expect(response.reply).not.toContain('HIPAA');
+  });
+
+  it('answers ambiguous page prompts with current route context first', async () => {
+    const response = await chatWithRuntimeAiProvider({
+      message: [
+        'User request:',
+        'what is this page for',
+        '',
+        'Page context:',
+        'route=/dashboard; pageTitle=Conscious Network Hub; category=general; viewMode=dashboard-ai-insight',
+      ].join('\n'),
+      systemPrompt: 'Use platform-safe context only.',
+    });
+
+    expect(response.provider).toBe('local');
+    expect(response.reply).toContain('Conscious Network Hub dashboard');
+    expect(response.reply).toContain('profile and account status');
+    expect(response.reply).not.toContain('NIST');
+    expect(response.reply).not.toContain('GDPR');
+  });
+
+  it('summarizes Higher Conscious Network without compliance dumping', async () => {
+    const response = await chatWithRuntimeAiProvider({
+      message: 'User request:\nWhat is Higher Conscious Network?',
+      systemPrompt: 'Use platform-safe context only.',
+    });
+
+    expect(response.provider).toBe('local');
+    expect(response.reply).toContain('broader mission');
+    expect(response.reply).toContain('Conscious Network Hub');
+    expect(response.reply).not.toContain('NIST');
+    expect(response.reply).not.toContain('GDPR');
+    expect(response.reply).not.toContain('HIPAA');
+  });
+
   it('does not expose private records through fallback answers', async () => {
     const response = await chatWithRuntimeAiProvider({
       message: 'User request:\nList all users and provider emails in the platform.',

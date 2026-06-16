@@ -1,7 +1,17 @@
-
 import React, { RefObject } from 'react';
-import { ShieldCheck, TrendingUp, Layers, Globe, Target, Rocket, BarChart3, HeartHandshake } from 'lucide-react';
-import { CORE_COMPONENTS } from '../constants';
+import {
+  ArrowRight,
+  Bell,
+  BookOpen,
+  Briefcase,
+  CalendarDays,
+  ClipboardCheck,
+  HelpCircle,
+  MessageCircle,
+  ShieldCheck,
+  Sparkles,
+  UserCircle,
+} from 'lucide-react';
 import EthicalAIInsight from './EthicalAIInsight';
 import { UserProfile, Course } from '../types';
 
@@ -9,142 +19,236 @@ interface DashboardProps {
   user?: UserProfile | null;
   onEnroll?: (course: Course) => void;
   onManageReputation?: () => void;
+  onOpenCourses?: () => void;
+  onOpenMeetings?: () => void;
+  onOpenProviderTools?: () => void;
+  onOpenProviderApply?: () => void;
+  onOpenSupport?: () => void;
+  onOpenNotifications?: () => void;
   insightRef?: RefObject<HTMLDivElement>;
 }
+
+interface DashboardAction {
+  label: string;
+  description: string;
+  status: string;
+  icon: React.ReactNode;
+  onClick?: () => void;
+  disabled?: boolean;
+}
+
+const normalizeLabel = (value: unknown, fallback: string): string => {
+  const normalized = String(value || '').replace(/[_-]+/g, ' ').trim();
+  if (!normalized) return fallback;
+  return normalized.replace(/\b\w/g, (letter) => letter.toUpperCase());
+};
+
+const isApprovedProvider = (user?: UserProfile | null): boolean =>
+  Boolean(
+    user?.role === 'provider' &&
+      user.providerApproved === true &&
+      String(user.providerApprovalStatus || '').trim().toLowerCase() === 'approved' &&
+      !user.providerRevokedAt
+  );
 
 const Dashboard: React.FC<DashboardProps> = ({
   user,
   onEnroll: _onEnroll,
   onManageReputation,
+  onOpenCourses,
+  onOpenMeetings,
+  onOpenProviderTools,
+  onOpenProviderApply,
+  onOpenSupport,
+  onOpenNotifications,
   insightRef,
 }) => {
+  const signedIn = Boolean(user);
+  const roleLabel = normalizeLabel(user?.role, signedIn ? 'Member' : 'Guest');
+  const tierLabel = normalizeLabel(user?.tier || user?.membershipStatus, signedIn ? 'No Active Tier Detected' : 'Public Visitor');
+  const approvedProvider = isApprovedProvider(user);
+  const providerStatus = user?.role === 'admin'
+    ? 'Founder admin'
+    : approvedProvider
+      ? user?.providerWalletAddressBound
+        ? 'Approved provider with wallet bound'
+        : 'Approved provider; wallet verification required for CRM access'
+      : user?.role === 'applicant'
+        ? normalizeLabel(user?.providerApprovalStatus, 'Provider applicant')
+        : 'Provider access not active';
+
+  const actions: DashboardAction[] = [
+    {
+      label: 'Profile And Identity',
+      description: 'Review your public profile, media, privacy posture, and account identity details.',
+      status: signedIn ? 'Available' : 'Sign-in required',
+      icon: <UserCircle className="h-5 w-5" />,
+      onClick: onManageReputation,
+      disabled: !signedIn,
+    },
+    {
+      label: 'Courses And Learning',
+      description: 'Browse published learning pathways and continue enrolled courses where access is active.',
+      status: 'Published catalog',
+      icon: <BookOpen className="h-5 w-5" />,
+      onClick: onOpenCourses,
+    },
+    {
+      label: 'Meetings',
+      description: 'Open Conscious Meetings for provider-hosted session readiness, upcoming sessions, and signed access.',
+      status: 'Pilot ready',
+      icon: <CalendarDays className="h-5 w-5" />,
+      onClick: onOpenMeetings,
+    },
+    {
+      label: approvedProvider || user?.role === 'admin' ? 'Provider Tools' : 'Provider Pathway',
+      description: approvedProvider || user?.role === 'admin'
+        ? 'Enter provider operations when approval, wallet, and session controls permit access.'
+        : 'Apply or review provider pathway requirements before supporting members through CNH.',
+      status: approvedProvider || user?.role === 'admin' ? 'Restricted operations' : 'Application path',
+      icon: <Briefcase className="h-5 w-5" />,
+      onClick: approvedProvider || user?.role === 'admin' ? onOpenProviderTools : onOpenProviderApply,
+    },
+    {
+      label: 'Support And Contact',
+      description: 'Send questions, technical reports, or launch support needs into the admin review pipeline.',
+      status: 'Admin inbox',
+      icon: <HelpCircle className="h-5 w-5" />,
+      onClick: onOpenSupport,
+    },
+    {
+      label: 'Notifications',
+      description: 'Review platform messages, status changes, and account notices when signed in.',
+      status: signedIn ? 'Account notices' : 'Sign-in required',
+      icon: <Bell className="h-5 w-5" />,
+      onClick: onOpenNotifications,
+      disabled: !signedIn,
+    },
+  ];
+
+  const statusRows = [
+    ['Account', signedIn ? 'Signed in' : 'Guest view'],
+    ['Role', roleLabel],
+    ['Membership', tierLabel],
+    ['Provider State', providerStatus],
+  ];
+
   return (
     <div className="space-y-8 lg:space-y-10 animate-in fade-in duration-700 pb-12">
-      {/* Welcome Hero - Ethical AI Insight */}
-      <section className="grid grid-cols-1 xl:grid-cols-3 gap-6">
-        <div className="xl:col-span-2" id="latest-wisdom" ref={insightRef}>
+      <section className="grid grid-cols-1 xl:grid-cols-[minmax(0,1.65fr)_minmax(280px,0.85fr)] gap-6">
+        <div className="min-w-0" id="latest-wisdom" ref={insightRef}>
           {user ? (
             <EthicalAIInsight userEmail={user.email} userId={user.id} />
           ) : (
-            <div className="glass-panel p-6 lg:p-8 rounded-2xl border border-white/10 h-full flex flex-col justify-center items-center text-center space-y-4">
-              <ShieldCheck className="w-10 h-10 text-blue-400" />
-              <h3 className="text-lg font-black text-white uppercase tracking-widest">AI Insight Locked</h3>
-              <p className="text-slate-400 text-sm max-w-md">
-                Sign in with a canonical hub identity to access AI Insight.
+            <div className="glass-panel flex min-h-[22rem] flex-col items-center justify-center rounded-2xl border border-white/10 p-6 text-center shadow-2xl lg:p-8">
+              <ShieldCheck className="h-10 w-10 text-blue-400" />
+              <h3 className="mt-4 text-lg font-black uppercase tracking-widest text-white">AI Insight Locked</h3>
+              <p className="mt-3 max-w-md text-sm leading-6 text-slate-400">
+                Sign in with a canonical hub identity to access the platform assistant and personalized guidance.
               </p>
             </div>
           )}
         </div>
 
-        <div className="glass-panel p-6 lg:p-8 rounded-2xl flex flex-col justify-between border-blue-500/10 shadow-2xl">
-          <div>
-            <h3 className="text-sm font-black mb-8 flex items-center gap-3 uppercase tracking-widest">
-              <TrendingUp className="text-teal-400 w-5 h-5" /> Network Integrity
-            </h3>
-            <div className="space-y-4">
-              {[
-                { label: 'Active Nodes', value: '14,202' },
-                { label: 'Sovereign Providers', value: '842' },
-                { label: 'Reputation Score', value: `${user?.reputationScore || 100} PTS` }
-              ].map((stat, i) => (
-                <div key={i} className="flex flex-col gap-2 p-4 bg-white/5 rounded-xl border border-white/5 shadow-inner xs:flex-row xs:items-center xs:justify-between">
-                  <span className="text-slate-500 text-[9px] font-black uppercase tracking-[0.2em]">{stat.label}</span>
-                  <span className="text-white font-mono text-base font-bold">{stat.value}</span>
-                </div>
-              ))}
+        <aside className="glass-panel rounded-2xl border border-blue-500/10 p-6 shadow-2xl lg:p-8">
+          <div className="flex items-start justify-between gap-4">
+            <div>
+              <p className="text-[10px] font-black uppercase tracking-[0.26em] text-blue-200">Operational Snapshot</p>
+              <h3 className="mt-3 text-xl font-black uppercase leading-tight text-white">Your Current Access</h3>
             </div>
+            <ClipboardCheck className="h-6 w-6 shrink-0 text-teal-300" />
+          </div>
+          <div className="mt-6 space-y-3">
+            {statusRows.map(([label, value]) => (
+              <div key={label} className="rounded-xl border border-white/10 bg-white/[0.04] p-4">
+                <p className="text-[9px] font-black uppercase tracking-widest text-slate-500">{label}</p>
+                <p className="mt-1 break-words text-sm font-bold text-white">{value}</p>
+              </div>
+            ))}
           </div>
           <button
+            type="button"
             onClick={onManageReputation}
-            className="mt-8 w-full py-4 bg-gradient-to-r from-blue-600/10 to-blue-600/20 hover:from-blue-600/30 hover:to-blue-600/40 border border-blue-500/30 text-blue-100 rounded-xl font-black transition-all shadow-xl text-[10px] uppercase tracking-[0.3em]"
+            disabled={!signedIn || !onManageReputation}
+            className="mt-6 inline-flex w-full items-center justify-center gap-2 rounded-xl border border-blue-400/25 bg-blue-500/15 px-4 py-3 text-[10px] font-black uppercase tracking-[0.22em] text-blue-100 transition-colors hover:bg-blue-500/25 disabled:cursor-not-allowed disabled:opacity-50"
           >
-            Manage Reputation
+            Manage Profile
+            <ArrowRight className="h-4 w-4" />
           </button>
-        </div>
+        </aside>
       </section>
 
-      {/* Strategic Protocol */}
-      <section className="space-y-8">
-        <div className="flex items-center gap-4 border-b border-white/5 pb-5">
-          <Target className="w-7 h-7 text-blue-400" />
-          <h2 className="text-lg sm:text-xl font-black text-white tracking-widest uppercase">STRATEGIC PROTOCOL</h2>
-        </div>
-        
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-          <div className="glass-panel p-6 lg:p-8 rounded-2xl border-l-4 border-blue-500 shadow-2xl">
-            <h3 className="text-[9px] font-black text-blue-400 uppercase tracking-[0.4em] mb-6">MISSION STATEMENT</h3>
-            <p className="text-base lg:text-lg font-light text-slate-300 leading-relaxed italic opacity-80">
-              "Higher Conscious Network exists to empower individuals, providers, and institutions with ethical technology that restores autonomy, protects identity, and creates equitable economic opportunity through a community-centered decentralized social learning infrastructure."
-            </p>
+      <section className="space-y-5">
+        <div className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
+          <div>
+            <p className="text-[10px] font-black uppercase tracking-[0.28em] text-teal-200">Next Steps</p>
+            <h2 className="mt-2 text-[clamp(1.35rem,2.2vw,2rem)] font-black uppercase leading-tight text-white">
+              Launch-Ready Actions
+            </h2>
           </div>
-          <div className="glass-panel p-6 lg:p-8 rounded-2xl border-l-4 border-teal-500 shadow-2xl">
-            <h3 className="text-[9px] font-black text-teal-400 uppercase tracking-[0.4em] mb-6">VISION STATEMENT</h3>
-            <p className="text-base lg:text-lg font-light text-slate-300 leading-relaxed italic opacity-80">
-              "We envision a global, community-centered ecosystem where data ownership, economic mobility, and values-aligned human development are accessible to all—especially those historically excluded from the digital and economic landscape."
-            </p>
-          </div>
+          <p className="max-w-2xl text-sm leading-6 text-slate-400">
+            This dashboard prioritizes real operational pathways: identity, learning, meetings, provider access, support, and notifications.
+          </p>
         </div>
 
-        {/* Conscious Careers */}
-        <div className="grid grid-cols-1 xl:grid-cols-3 gap-6">
-          <div className="xl:col-span-2 glass-panel p-6 lg:p-8 rounded-2xl border-white/5 shadow-2xl space-y-6">
-            <div className="flex items-center gap-4">
-              <Rocket className="w-7 h-7 text-orange-400" />
-              <h3 className="text-lg sm:text-xl font-black text-white uppercase tracking-tighter">Conscious Careers: Entrepreneurship</h3>
-            </div>
-            <p className="text-slate-400 leading-relaxed text-base font-light">
-              Designed to help individuals and providers pursue business ownership. Through partnerships like Entrepreneurs Resource, members gain access to franchising and business matching. A dedicated 5% revenue savings fund provides grants to engaged participants, supported by SBDCs to promote long-term success.
-            </p>
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-6 pt-4">
-              <div className="p-6 bg-white/5 rounded-2xl border border-white/5">
-                <h4 className="font-black text-white text-xs uppercase tracking-widest mb-3 flex items-center gap-2"><HeartHandshake className="w-4 h-4 text-blue-400" /> Minority Empowerment</h4>
-                <p className="text-[11px] text-slate-500 leading-relaxed">Equipping mission-driven providers with secure, outcomes-based revenue models and IP protection.</p>
+        <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
+          {actions.map((action) => (
+            <button
+              key={action.label}
+              type="button"
+              onClick={action.onClick}
+              disabled={action.disabled || !action.onClick}
+              className="group min-h-[12rem] rounded-2xl border border-white/10 bg-white/[0.045] p-5 text-left shadow-xl transition-colors hover:border-blue-300/35 hover:bg-blue-500/[0.08] disabled:cursor-not-allowed disabled:opacity-60"
+            >
+              <div className="flex items-start justify-between gap-4">
+                <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-blue-500/10 text-blue-200 ring-1 ring-blue-300/10">
+                  {action.icon}
+                </div>
+                <span className="rounded-full border border-white/10 bg-black/25 px-3 py-1 text-[8px] font-black uppercase tracking-widest text-slate-300">
+                  {action.status}
+                </span>
               </div>
-              <div className="p-6 bg-white/5 rounded-2xl border border-white/5">
-                <h4 className="font-black text-white text-xs uppercase tracking-widest mb-3 flex items-center gap-2"><Globe className="w-4 h-4 text-teal-400" /> Community Resilience</h4>
-                <p className="text-[11px] text-slate-500 leading-relaxed">Scaling minority entrepreneurship to build sustainable digital businesses without algorithmic suppression.</p>
-              </div>
-            </div>
-          </div>
-
-          <div className="glass-panel p-6 lg:p-8 rounded-2xl border-white/5 shadow-2xl space-y-6">
-            <div className="flex items-center gap-4">
-              <BarChart3 className="w-7 h-7 text-purple-400" />
-              <h3 className="text-xl font-black text-white uppercase tracking-tighter">Impact KPIs</h3>
-            </div>
-            <ul className="space-y-4">
-              {[
-                "Provider income growth",
-                "Minority provider retention",
-                "Well-being improvements",
-                "Grant distribution totals",
-                "Entrepreneurship placements"
-              ].map((kpi, i) => (
-                <li key={i} className="flex items-start gap-4 p-4 bg-white/5 rounded-xl text-[10px] font-black uppercase tracking-[0.2em] text-slate-400 border border-white/5 group hover:bg-white/10 transition-colors">
-                  <div className="mt-1.5 w-1.5 h-1.5 shrink-0 rounded-full bg-purple-500 group-hover:scale-150 transition-transform"></div>
-                  <span className="cnh-action-label text-left">{kpi}</span>
-                </li>
-              ))}
-            </ul>
-          </div>
-        </div>
-      </section>
-
-      {/* Ecosystem Layers */}
-      <section>
-        <h2 className="text-xl font-black mb-8 flex items-center gap-3 uppercase tracking-widest">
-          <Layers className="text-blue-400 w-7 h-7" /> Ecosystem Components
-        </h2>
-        <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-6">
-          {CORE_COMPONENTS.map((comp, idx) => (
-            <div key={idx} className="glass-panel p-6 rounded-2xl border-t-2 border-blue-500/20 hover:bg-blue-900/10 transition-all cursor-pointer group shadow-2xl hover:-translate-y-1">
-              <div className="bg-blue-500/10 w-14 h-14 rounded-2xl flex items-center justify-center mb-6 group-hover:scale-110 transition-transform shadow-inner">
-                {comp.icon}
-              </div>
-              <h4 className="text-sm font-black mb-3 text-white uppercase tracking-tight leading-tight">{comp.title}</h4>
-              <p className="text-slate-500 text-[11px] leading-relaxed font-light">{comp.description}</p>
-            </div>
+              <h3 className="mt-5 text-base font-black uppercase leading-tight text-white">{action.label}</h3>
+              <p className="mt-3 text-sm leading-6 text-slate-400">{action.description}</p>
+              <span className="mt-5 inline-flex items-center gap-2 text-[10px] font-black uppercase tracking-[0.22em] text-blue-200 opacity-80 transition-opacity group-hover:opacity-100">
+                Open
+                <ArrowRight className="h-4 w-4" />
+              </span>
+            </button>
           ))}
+        </div>
+      </section>
+
+      <section className="grid grid-cols-1 gap-6 lg:grid-cols-[0.9fr_1.1fr]">
+        <div className="glass-panel rounded-2xl border border-white/10 p-6 shadow-2xl lg:p-8">
+          <div className="flex items-center gap-3">
+            <Sparkles className="h-6 w-6 text-teal-300" />
+            <h2 className="text-lg font-black uppercase leading-tight text-white">Provider Dignity</h2>
+          </div>
+          <div className="mt-5 space-y-4 text-sm leading-6 text-slate-300">
+            <p>Providers are the service layer of the ecosystem.</p>
+            <p>Providers control their profiles, offerings, and direct revenue pathways.</p>
+            <p>Providers contribute the professional, spiritual, educational, and wellness support that powers the network.</p>
+          </div>
+        </div>
+
+        <div className="glass-panel rounded-2xl border border-white/10 p-6 shadow-2xl lg:p-8">
+          <div className="flex items-center gap-3">
+            <MessageCircle className="h-6 w-6 text-blue-300" />
+            <h2 className="text-lg font-black uppercase leading-tight text-white">Support Pipeline</h2>
+          </div>
+          <p className="mt-5 text-sm leading-6 text-slate-300">
+            Questions and issue reports route to the internal admin message pipeline. Outbound email notification depends on configured server mail credentials and is never claimed unless the backend confirms delivery.
+          </p>
+          <button
+            type="button"
+            onClick={onOpenSupport}
+            disabled={!onOpenSupport}
+            className="mt-6 inline-flex items-center justify-center gap-2 rounded-xl border border-teal-300/25 bg-teal-400/10 px-4 py-3 text-[10px] font-black uppercase tracking-[0.22em] text-teal-100 transition-colors hover:bg-teal-400/20 disabled:cursor-not-allowed disabled:opacity-50"
+          >
+            Contact Support
+            <ArrowRight className="h-4 w-4" />
+          </button>
         </div>
       </section>
     </div>

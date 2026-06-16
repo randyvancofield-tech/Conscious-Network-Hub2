@@ -555,6 +555,15 @@ export interface NativeProviderSessionResult {
   };
 }
 
+export interface EthicalAIContext {
+  category?: string;
+  userId?: string;
+  route?: string;
+  path?: string;
+  pageTitle?: string;
+  viewMode?: string;
+}
+
 class BackendAPIService {
   private conversationHistory: Array<{ role: string; content: string }> = [];
   private activeHistoryKey: string;
@@ -574,7 +583,7 @@ class BackendAPIService {
    */
   async askEthicalAI(
     question: string,
-    context?: { category?: string; userId?: string },
+    context?: EthicalAIContext,
     _onStream?: (chunk: string) => void
   ): Promise<EnhancedResponse> {
     try {
@@ -1835,7 +1844,7 @@ export default backendAPI;
 // Also export individual functions for compatibility with existing code
 export async function askEthicalAI(
   question: string,
-  context?: { category?: string; userId?: string },
+  context?: EthicalAIContext,
   onStream?: (chunk: string) => void
 ): Promise<EnhancedResponse> {
   return backendAPI.askEthicalAI(question, context, onStream);

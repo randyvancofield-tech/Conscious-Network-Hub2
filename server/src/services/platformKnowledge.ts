@@ -174,8 +174,53 @@ export const getApprovedPlatformKnowledgeDocuments = (): PlatformKnowledgeDocume
 ];
 
 const extractUserRequest = (message: string): string => {
-  const match = /User request:\s*([\s\S]*?)(?:\n\nPlatform context:|$)/i.exec(message);
+  const match = /User request:\s*([\s\S]*?)(?:\n\nPage context:|\n\nPlatform context:|$)/i.exec(message);
   return (match?.[1] || message).trim();
+};
+
+const extractPageContext = (message: string): string => {
+  const match = /Page context:\s*([\s\S]*?)(?:\n\nPlatform context:|$)/i.exec(message);
+  return (match?.[1] || '').trim();
+};
+
+const pageContextValue = (context: string, key: string): string => {
+  const match = new RegExp(`${key}=([^;]+)`, 'i').exec(context);
+  return (match?.[1] || '').trim();
+};
+
+const isAmbiguousPageQuestion = (text: string): boolean =>
+  /^(what is this|what is this page|what is this page for|where am i|what am i looking at)\??$/i.test(text.trim());
+
+const describePageContext = (context: string): string | null => {
+  const route = pageContextValue(context, 'route').toLowerCase();
+  const category = pageContextValue(context, 'category').toLowerCase();
+
+  if (route.includes('/dashboard') || category.includes('daily-wisdom') || category.includes('general')) {
+    return 'This is your Conscious Network Hub dashboard. It should help you orient quickly: profile and account status, courses, meetings, provider actions when eligible, support, notifications, and the AI assistant.';
+  }
+  if (route.includes('/providers')) {
+    return 'This is the Available Providers discovery area. Guests can view public-safe provider network information, while booking, direct contact, private profiles, CRM tools, and protected actions remain gated.';
+  }
+  if (route.includes('/provider/apply')) {
+    return 'This is the provider application path. It is for people who want to be reviewed before supporting members through CNH provider pathways.';
+  }
+  if (route.includes('/conscious-meetings')) {
+    return 'This is the Conscious Meetings area. It supports provider-hosted session readiness, upcoming sessions, signed access, and lifecycle-aware meeting entry. AI notes, transcripts, server recording, replay, and VOD remain locked until those systems are fully implemented.';
+  }
+  if (route.includes('/courses') || route.includes('/my-courses')) {
+    return 'This is the learning area. Public visitors can browse published course information, while enrollment, progress, and My Courses belong to authenticated member access.';
+  }
+  if (route.includes('/membership-access') || route.includes('/membership')) {
+    return 'This is the membership access area. It directs people into CNH account access and tier-aware membership pathways.';
+  }
+  if (route.includes('/conscious-careers') || route.includes('/entrepreneurship-support')) {
+    return 'This is Conscious Careers entrepreneurship support. It helps members clarify readiness, build a Conscious Plan, understand public resource boundaries, and move toward appropriate support pathways.';
+  }
+  if (route.includes('/community')) {
+    return 'This is a community discovery area for public-safe member or social learning surfaces. Private messages, private uploads, and hidden profile fields are not public AI sources.';
+  }
+
+  return null;
 };
 
 const hasAny = (text: string, patterns: RegExp[]): boolean =>
@@ -188,7 +233,7 @@ const boundaryPatterns = [
 ];
 
 const providerPatterns = [
-  /\b(provider|applicant|application|apply|approval|approve|reject|crm|wallet verification|wallet binding|spiritual coach|coach|facilitator)\b/i,
+  /\b(providers?|applicants?|applications?|apply|approval|approve|reject|crm|wallet verification|wallet binding|spiritual coach|coach|facilitator)\b/i,
 ];
 
 const providerHostPatterns = [
@@ -245,6 +290,22 @@ export const isPlatformKnowledgeRequest = (message: string): boolean => {
 
 export const buildPlatformFallbackReply = (message: string): string | null => {
   const request = extractUserRequest(message);
+  const pageContext = extractPageContext(message);
+
+  if (isAmbiguousPageQuestion(request)) {
+    const pageDescription = describePageContext(pageContext);
+    if (pageDescription) return pageDescription;
+
+    if (pageContext) {
+      const route = pageContextValue(pageContext, 'route') || pageContextValue(pageContext, 'pageTitle');
+      return route
+        ? `This appears to be the CNH area identified as ${route}. What would you like to understand about it?`
+        : 'I can help, but I need one detail: which page or feature are you asking about?';
+    }
+
+    return 'Which page or feature are you asking about?';
+  }
+
   if (!hasAny(request, platformPatterns)) return null;
 
   if (hasAny(request, boundaryPatterns)) {
@@ -252,6 +313,16 @@ export const buildPlatformFallbackReply = (message: string): string | null => {
       'I can explain the admin and safety model, but I cannot reveal, list, summarize, alter, or delete private users, providers, applicants, wallet data, recovery codes, unpublished courses, private reflections, private uploads, or admin records from an AI chat.',
       '',
       'In CNH, those actions belong in authenticated admin tools with server-side role checks, elevated admin authorization where required, audit logging, and clear review controls. For abuse handling, the safe pattern is: inspect the record in the admin console, disable or revoke access through the approved admin endpoint, preserve audit history, and avoid exposing private data in chat responses.',
+    ].join('\n');
+  }
+
+  if (/\bhigher conscious network|hcn\b/i.test(request) && !/\bconscious network hub|cnh\b/i.test(request)) {
+    return [
+      'Higher Conscious Network is the broader mission and ecosystem identity behind Conscious Network Hub.',
+      '',
+      'It is positioned around ethical technology, human autonomy, provider dignity, learning, community-centered development, and economic mobility. Conscious Network Hub is the active social-learning platform layer, and Conscious Careers is the entrepreneurship and economic mobility pathway connected to that ecosystem.',
+      '',
+      'The platform should speak clearly about what is live today and avoid promising grants, partnerships, clinical support, or private-data access unless those systems are actually implemented and authorized.',
     ].join('\n');
   }
 

@@ -276,7 +276,13 @@ const EthicalAIInsight: React.FC<EthicalAIInsightProps> = ({ userEmail, userId =
 
     const startTime = Date.now();
     try {
-      const response = await askEthicalAI(sanitized, { category: selectedQACategory, userId });
+      const response = await askEthicalAI(sanitized, {
+        category: selectedQACategory,
+        userId,
+        route: typeof window !== 'undefined' ? window.location.pathname : undefined,
+        pageTitle: typeof document !== 'undefined' ? document.title : undefined,
+        viewMode: 'dashboard-ai-insight',
+      });
       const responseTime = Date.now() - startTime;
 
       const aiMessage: MessageWithMeta = {

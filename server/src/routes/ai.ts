@@ -10,6 +10,7 @@ import {
 import { getVertexAIService } from '../services/vertexAiService';
 import { chatWithOpenAI, isOpenAIConfigured } from "../services/openAiService";
 import { createAdminMessage, normalizeAdminMessagePriority } from '../services/adminMessageStore';
+import emailService from '../services/emailService';
 import {
   buildAiContext,
   getAiContextIndexStatus,
@@ -51,6 +52,15 @@ interface AiProviderResponse {
   processingTimeMs: number;
 }
 
+interface AiRequestContext {
+  category?: string;
+  userId?: string;
+  route?: string;
+  path?: string;
+  pageTitle?: string;
+  viewMode?: string;
+}
+
 const getVertexServiceOrNull = () => {
   try {
     return getVertexAIService();
@@ -74,18 +84,23 @@ const ensureAiAvailability = (res: Response): boolean => {
 const buildGroundedPrompt = (input: {
   message: string;
   contextText?: string;
+  pageContextText?: string;
   userProfileContext?: string;
 }): { systemPrompt: string; userPrompt: string } => {
   const safetyContext = buildRuntimeGuardrailContext(input.message);
   const systemPrompt = [
     AI_SECURITY_SYSTEM_PROMPT,
     safetyContext,
-    input.contextText
+    (input.contextText || input.pageContextText)
       ? [
           'Ground platform-specific answers in the supplied context.',
+          'Answer the direct question first. Keep short prompts short.',
+          'If the user asks "what is this" or "what is this page for", use the supplied page context before broad platform context.',
+          'If the question is ambiguous and no page context is available, ask one concise clarification question.',
           'For CNH questions, distinguish implemented app behavior from public website future intent or informational positioning.',
           'Use role-safe explanations for member, provider-application status, approved provider, and solo-admin distinctions.',
           'Never expose private session personalization data as a source, and do not claim unavailable services, grants, partnerships, or access permissions are complete unless the context explicitly says so.',
+          'Use plain, readable paragraphs. Avoid raw markdown headings, tables, or compliance framework dumps unless the user asks for them.',
         ].join(' ')
       : '',
   ].filter(Boolean).join('\n\n');
@@ -93,6 +108,7 @@ const buildGroundedPrompt = (input: {
   const userPrompt = [
     'User request:',
     input.message,
+    input.pageContextText ? `\nPage context:\n${input.pageContextText}` : '',
     input.contextText ? `\nPlatform context:\n${input.contextText}` : '',
   ].filter(Boolean).join('\n\n');
 
@@ -120,12 +136,14 @@ const normalizeConversationHistory = (
 const normalizeAiContext = (
   value: unknown,
   fallbackUserId?: string
-): { category?: string; userId?: string } => {
+): AiRequestContext => {
   const maybe = value && typeof value === 'object' ? (value as any) : {};
-  const category =
-    typeof maybe.category === 'string' && maybe.category.trim().length > 0
-      ? maybe.category.trim().slice(0, 100)
+  const readString = (key: string, maxLength: number): string | undefined =>
+    typeof maybe[key] === 'string' && maybe[key].trim().length > 0
+      ? maybe[key].trim().slice(0, maxLength)
       : undefined;
+  const category =
+    readString('category', 100);
   const userId =
     typeof maybe.userId === 'string' && maybe.userId.trim().length > 0
       ? maybe.userId.trim()
@@ -134,8 +152,39 @@ const normalizeAiContext = (
   return {
     ...(category ? { category } : {}),
     ...(userId ? { userId } : {}),
+    ...(readString('route', 180) ? { route: readString('route', 180) } : {}),
+    ...(readString('path', 180) ? { path: readString('path', 180) } : {}),
+    ...(readString('pageTitle', 180) ? { pageTitle: readString('pageTitle', 180) } : {}),
+    ...(readString('viewMode', 100) ? { viewMode: readString('viewMode', 100) } : {}),
   };
 };
+
+const buildPageContextText = (context?: AiRequestContext): string => {
+  if (!context) return '';
+  const route = context.route || context.path;
+  const parts = [
+    route ? `route=${route}` : '',
+    context.pageTitle ? `pageTitle=${context.pageTitle}` : '',
+    context.category ? `category=${context.category}` : '',
+    context.viewMode ? `viewMode=${context.viewMode}` : '',
+  ].filter(Boolean);
+  return parts.join('; ');
+};
+
+const normalizeAiReplyForChat = (reply: string): string =>
+  String(reply || '')
+    .replace(/\r\n/g, '\n')
+    .replace(/^#{1,6}\s+/gm, '')
+    .replace(/\*\*([^*]+)\*\*/g, '$1')
+    .replace(/`([^`]+)`/g, '$1')
+    .replace(/[ \t]+\n/g, '\n')
+    .replace(/\n{3,}/g, '\n\n')
+    .trim();
+
+const finalizeAiResponse = (response: AiProviderResponse): AiProviderResponse => ({
+  ...response,
+  reply: normalizeAiReplyForChat(response.reply),
+});
 
 const isVertexFallbackText = (reply: string): boolean =>
   /^fallback:\s*unable to reach vertex ai/i.test(reply.trim());
@@ -208,14 +257,16 @@ const generateAiResponse = async (
   message: string,
   options?: {
     conversationHistory?: Array<{ role: string; content: string }>;
-    context?: { category?: string; userId?: string };
+    context?: AiRequestContext;
   }
 ): Promise<AiProviderResponse> => {
   const safeMessage = sanitizeAiInput(message);
   const aiContext = await buildAiContext(safeMessage, options?.context?.userId);
+  const pageContextText = buildPageContextText(options?.context);
   const { systemPrompt, userPrompt } = buildGroundedPrompt({
     message: safeMessage,
     contextText: aiContext.contextText,
+    pageContextText,
     userProfileContext: aiContext.userProfileContext,
   });
   const vertexService = getVertexServiceOrNull();
@@ -227,23 +278,23 @@ const generateAiResponse = async (
       sources: aiContext.sources,
     });
     if (!isVertexFallbackText(vertex.reply)) {
-      return {
+      return finalizeAiResponse({
         provider: 'vertex',
         reply: vertex.reply,
         citations: [...mapVertexCitations(vertex.citations), ...mapVertexCitations(aiContext.sources)],
         confidenceScore: vertex.confidenceScore ?? 75,
         processingTimeMs: vertex.processingTimeMs ?? 0,
-      };
+      });
     }
   }
 
   if (isOpenAIConfigured()) {
     try {
       const openAi = await generateOpenAiResponse(userPrompt);
-      return {
+      return finalizeAiResponse({
         ...openAi,
         citations: mapVertexCitations(aiContext.sources),
-      };
+      });
     } catch (error) {
       console.warn('[AI] OpenAI provider failed; falling back to runtime provider chain:', error instanceof Error ? error.message : error);
     }
@@ -255,13 +306,13 @@ const generateAiResponse = async (
     conversationHistory: options?.conversationHistory as Array<{ role: 'user' | 'assistant'; content: string }> | undefined,
   });
 
-  return {
+  return finalizeAiResponse({
     provider: runtime.provider,
     reply: runtime.reply,
     citations: mapVertexCitations(aiContext.sources),
     confidenceScore: runtime.provider === 'local' ? 55 : 78,
     processingTimeMs: runtime.processingTimeMs,
-  };
+  });
 };
 
 const buildDailyWisdomPrompt = (refreshNonce: string): string => {
@@ -655,8 +706,26 @@ router.post('/report-issue', validateChatInput, async (req: Request, res: Respon
       metadata: {
         delivery: 'admin_console',
         aiTriagePriority: priority,
+        emailNotification: emailService.configured() ? 'attempt_pending' : 'configuration_required',
+        targetRecipient: emailService.adminRecipient(),
       },
     });
+    const emailConfigured = emailService.configured();
+    const emailResult = emailConfigured
+      ? await emailService.sendIssueReport({
+          userEmail,
+          title,
+          description,
+          category,
+          priority,
+          analysis,
+        })
+      : { ok: true, skipped: true, reason: 'email_not_configured' };
+    const emailStatus = emailConfigured
+      ? emailResult.ok && !emailResult.skipped
+        ? 'sent'
+        : 'failed'
+      : 'configuration-required';
 
     // Always return success response to frontend
     console.log('[API] Returning success response to client');
@@ -670,8 +739,14 @@ router.post('/report-issue', validateChatInput, async (req: Request, res: Respon
       confidenceScore: 80,
       processingTimeMs: 100,
       ticketId: adminMessage.id,
-      delivery: 'admin-console',
-      emailSent: false,
+      delivery: {
+        internal: 'admin-console',
+        email: emailStatus,
+        recipient: emailService.adminRecipient(),
+      },
+      emailConfigured,
+      emailSent: emailStatus === 'sent',
+      emailStatus,
     });
   } catch (error) {
     console.error('[API] Issue Report Error:', error);

@@ -37,6 +37,7 @@ import aiTransparencyPolicy from './docs/compliance/ai-transparency-policy-draft
 import blockchainDataPolicy from './docs/compliance/blockchain-data-policy-draft.md?raw';
 import vendorApiGovernancePolicy from './docs/compliance/vendor-api-governance-policy-draft.md?raw';
 import nistMappingSummary from './docs/compliance/nist-mapping-summary.md?raw';
+import aiSafetyGovernancePolicy from './docs/compliance/ai-safety-governance-policy-draft.md?raw';
 import {
   getAuthToken,
   getCachedAuthUser,
@@ -2474,6 +2475,7 @@ const App: React.FC = () => {
       case 'blockchain': return blockchainDataPolicy;
       case 'vendor': return vendorApiGovernancePolicy;
       case 'nist': return nistMappingSummary;
+      case 'ai-safety': return aiSafetyGovernancePolicy;
       default: return '';
     }
   };
@@ -2494,7 +2496,7 @@ const App: React.FC = () => {
       .trim();
   };
 
-  const policies = ['privacy', 'terms', 'ai-transparency', 'blockchain', 'vendor', 'nist'];
+  const policies = ['privacy', 'terms', 'ai-transparency', 'blockchain', 'vendor', 'nist', 'ai-safety'];
 
   const getNextPolicy = (current: string) => {
     const index = policies.indexOf(current);
@@ -2696,7 +2698,11 @@ const App: React.FC = () => {
     setContactSubmitting(true);
     setContactStatus('');
     try {
-      const data = await api<{ ticketId?: string; delivery?: string }>('/support/contact', {
+      const data = await api<{
+        ticketId?: string;
+        delivery?: string | { internal?: string; email?: string; recipient?: string };
+        emailStatus?: string;
+      }>('/support/contact', {
         method: 'POST',
         auth: false,
         body: {
@@ -2707,7 +2713,19 @@ const App: React.FC = () => {
           route: typeof window !== 'undefined' ? window.location.pathname : routePathForView(currentView, routeParams),
         },
       });
-      setContactStatus(`Request received${data.ticketId ? `: ${data.ticketId}` : ''}.`);
+      const emailStatus =
+        typeof data.delivery === 'object' && data.delivery?.email
+          ? data.delivery.email
+          : data.emailStatus;
+      setContactStatus(
+        `Request received${data.ticketId ? `: ${data.ticketId}` : ''}. ${
+          emailStatus === 'sent'
+            ? 'Admin notification email was sent.'
+            : emailStatus === 'configuration-required'
+              ? 'The request is in the admin inbox; outbound email requires server email configuration.'
+              : ''
+        }`.trim()
+      );
       setContactMessage('');
       setContactSubject('');
     } catch (error) {
@@ -3654,6 +3672,12 @@ const App: React.FC = () => {
             user={user}
             onEnroll={enrollCourse}
             onManageReputation={() => setCurrentView(AppView.MY_CONSCIOUS_IDENTITY)}
+            onOpenCourses={() => setCurrentView(AppView.KNOWLEDGE_PATHWAYS)}
+            onOpenMeetings={() => setCurrentView(AppView.CONSCIOUS_MEETINGS_PORTAL)}
+            onOpenProviderTools={() => setCurrentView(canOpenProviderCrm(user) ? AppView.PROVIDER_CRM : AppView.PROVIDER_SIGN_IN)}
+            onOpenProviderApply={() => setCurrentView(AppView.PROVIDER_APPLY)}
+            onOpenSupport={openContactModal}
+            onOpenNotifications={() => setCurrentView(AppView.NOTIFICATIONS)}
             insightRef={insightRef}
           />
         );
@@ -3902,53 +3926,13 @@ const App: React.FC = () => {
         );
       case AppView.AI_SAFETY_GOVERNANCE:
         return (
-          <div className="p-8 max-w-5xl mx-auto space-y-6">
-            <button onClick={handleReturnToHub} className="mb-2 text-blue-400 hover:text-blue-300 transition-colors flex items-center gap-2">
+          <div className="p-8 max-w-4xl mx-auto">
+            <button onClick={handleReturnToHub} className="mb-4 text-blue-400 hover:text-blue-300 transition-colors flex items-center gap-2">
               <ChevronRight className="w-4 h-4 rotate-180" /> {hubReturnLabel}
             </button>
-            <h1 className="text-3xl font-black text-white">AI Safety & Governance</h1>
-            <p className="text-slate-300">We align Conscious Network agents with NIST AI RMF, EU AI Act, and GDPR. Security shifts from the perimeter to the agent’s actions, identity, and data integrity.</p>
-            <div className="grid md:grid-cols-2 gap-6">
-              <div className="glass-panel p-6 rounded-2xl border border-white/5 space-y-3">
-                <h3 className="text-lg font-black text-white">1) Identity & Access</h3>
-                <ul className="text-slate-300 text-sm space-y-2">
-                  <li>Unique traceable identities (e.g., workload IDs) per agent.</li>
-                  <li>Least agency: minimal tools/data per task.</li>
-                  <li>Zero Trust: re-auth every tool call/data request.</li>
-                </ul>
-              </div>
-              <div className="glass-panel p-6 rounded-2xl border border-white/5 space-y-3">
-                <h3 className="text-lg font-black text-white">2) Operational Guardrails</h3>
-                <ul className="text-slate-300 text-sm space-y-2">
-                  <li>Prompt shields & I/O filters for injections and data leakage.</li>
-                  <li>Sandboxed tools + circuit breakers on policy deviation.</li>
-                  <li>Human-in-the-loop for high-stakes actions.</li>
-                </ul>
-              </div>
-              <div className="glass-panel p-6 rounded-2xl border border-white/5 space-y-3">
-                <h3 className="text-lg font-black text-white">3) Data Integrity & Privacy</h3>
-                <ul className="text-slate-300 text-sm space-y-2">
-                  <li>Memory sanitization and periodic resets to remove poisoning.</li>
-                  <li>Data lineage/provenance tracking across pipelines.</li>
-                  <li>PETs (masking, differential privacy) before model access.</li>
-                </ul>
-              </div>
-              <div className="glass-panel p-6 rounded-2xl border border-white/5 space-y-3">
-                <h3 className="text-lg font-black text-white">4) Governance & Monitoring</h3>
-                <ul className="text-slate-300 text-sm space-y-2">
-                  <li>Immutable audit logs of inputs/outputs/decisions.</li>
-                  <li>Real-time behavioral monitoring for anomalies.</li>
-                  <li>Continuous adversarial testing/red teaming.</li>
-                </ul>
-              </div>
-            </div>
-            <div className="glass-panel p-6 rounded-2xl border border-blue-500/20">
-              <h3 className="text-lg font-black text-white mb-3">Regulatory Mapping</h3>
-              <div className="text-slate-300 text-sm space-y-2">
-                <p><strong>NIST AI RMF:</strong> Govern, Map, Measure, Manage risks across the lifecycle.</p>
-                <p><strong>EU AI Act:</strong> Transparency, human oversight, adversarial testing, incident reporting for high-risk systems.</p>
-                <p><strong>GDPR:</strong> Data minimization, right to explanation, data subject rights protection.</p>
-              </div>
+            <h1 className="text-3xl font-black text-white mb-6">AI Safety & Governance</h1>
+            <div className="prose prose-invert max-w-none">
+              <pre className="whitespace-pre-wrap text-slate-300 leading-relaxed">{cleanPolicyContent(aiSafetyGovernancePolicy)}</pre>
             </div>
           </div>
         );
@@ -3965,6 +3949,12 @@ const App: React.FC = () => {
           <Dashboard
             user={user}
             onManageReputation={() => setCurrentView(AppView.MY_CONSCIOUS_IDENTITY)}
+            onOpenCourses={() => setCurrentView(AppView.KNOWLEDGE_PATHWAYS)}
+            onOpenMeetings={() => setCurrentView(AppView.CONSCIOUS_MEETINGS_PORTAL)}
+            onOpenProviderTools={() => setCurrentView(canOpenProviderCrm(user) ? AppView.PROVIDER_CRM : AppView.PROVIDER_SIGN_IN)}
+            onOpenProviderApply={() => setCurrentView(AppView.PROVIDER_APPLY)}
+            onOpenSupport={openContactModal}
+            onOpenNotifications={() => setCurrentView(AppView.NOTIFICATIONS)}
           />
         );
     }
@@ -5123,6 +5113,7 @@ const App: React.FC = () => {
                     <button onClick={() => setSelectedPolicy('blockchain')} className="w-full text-left py-3 px-4 bg-white/5 hover:bg-white/10 rounded-lg text-white font-medium">Blockchain Data Policy</button>
                     <button onClick={() => setSelectedPolicy('vendor')} className="w-full text-left py-3 px-4 bg-white/5 hover:bg-white/10 rounded-lg text-white font-medium">Vendor API Governance Policy</button>
                     <button onClick={() => setSelectedPolicy('nist')} className="w-full text-left py-3 px-4 bg-white/5 hover:bg-white/10 rounded-lg text-white font-medium">NIST Mapping Summary</button>
+                    <button onClick={() => setSelectedPolicy('ai-safety')} className="w-full text-left py-3 px-4 bg-white/5 hover:bg-white/10 rounded-lg text-white font-medium">AI Safety & Governance</button>
                   </div>
                 </div>
               ) : (
