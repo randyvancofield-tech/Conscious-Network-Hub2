@@ -107,6 +107,19 @@ describe('runtime AI local fallback', () => {
     expect(response.reply).toContain('future-build');
   });
 
+  it('answers direct provider host instructions with lifecycle-safe guidance', async () => {
+    const response = await chatWithRuntimeAiProvider({
+      message: 'User request:\nHow do I host a session?',
+      systemPrompt: 'Use platform-safe context only.',
+    });
+
+    expect(response.provider).toBe('local');
+    expect(response.reply).toContain('approved providers');
+    expect(response.reply).toContain('create native CNH meeting rooms');
+    expect(response.reply).toContain('start scheduled sessions');
+    expect(response.reply).toContain('future-build');
+  });
+
   it('states member provider booking is gated for launch', async () => {
     const response = await chatWithRuntimeAiProvider({
       message: 'User request:\nCan members book providers?',
@@ -117,6 +130,31 @@ describe('runtime AI local fallback', () => {
     expect(response.reply).toContain('not active');
     expect(response.reply).toContain('public-safe provider discovery');
     expect(response.reply).toContain('gated');
+  });
+
+  it('states direct member booking requests are gated for launch', async () => {
+    const response = await chatWithRuntimeAiProvider({
+      message: 'User request:\nCan members book me?',
+      systemPrompt: 'Use platform-safe context only.',
+    });
+
+    expect(response.provider).toBe('local');
+    expect(response.reply).toContain('not active');
+    expect(response.reply).toContain('public-safe provider discovery');
+    expect(response.reply).toContain('gated');
+  });
+
+  it('lists current provider pilot tools without claiming future features are live', async () => {
+    const response = await chatWithRuntimeAiProvider({
+      message: 'User request:\nWhat provider tools are available?',
+      systemPrompt: 'Use platform-safe context only.',
+    });
+
+    expect(response.provider).toBe('local');
+    expect(response.reply).toContain('Provider CRM');
+    expect(response.reply).toContain('wallet verification');
+    expect(response.reply).toContain('Native CNH meeting host controls');
+    expect(response.reply).toContain('Still gated or future build');
   });
 
   it('refuses unpublished course disclosure in fallback answers', async () => {

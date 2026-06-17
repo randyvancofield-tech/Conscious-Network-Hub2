@@ -238,16 +238,26 @@ const providerPatterns = [
 
 const providerHostPatterns = [
   /\b(providers?)\b.*\b(host|create|start|run|lead)\b.*\b(sessions?|meetings?|rooms?)\b/i,
+  /\b(how do i|how can i|where do i)\b.*\b(host|create|start|run|lead)\b.*\b(a\s+)?(session|meeting|room)\b/i,
+  /\bhost\s+(a\s+)?(session|meeting|room)\b/i,
   /\b(host controls?|provider-led sessions?|native cnh rooms?)\b/i,
 ];
 
 const bookingPatterns = [
   /\b(members?|users?)\b.*\b(book|schedule|reserve|request)\b.*\b(providers?|sessions?|appointments?)\b/i,
+  /\bcan\s+(members?|users?)\s+(book|schedule|reserve|request)\s+me\b/i,
+  /\bcan\s+i\s+be\s+(booked|scheduled|reserved|requested)\b/i,
   /\b(book providers?|provider booking|self[-\s]?booking)\b/i,
 ];
 
 const availabilityPatterns = [
   /\b(available now|what is available|what works|still gated|future build|not available|locked|gated)\b/i,
+];
+
+const providerToolPatterns = [
+  /\b(provider|crm|host)\s+tools?\b/i,
+  /\bwhat\s+(provider|crm|host)\s+tools?\s+(are\s+)?(available|live|ready|enabled)\b/i,
+  /\btools?\s+available\s+for\s+(providers?|hosts?)\b/i,
 ];
 
 const membershipPatterns = [
@@ -367,6 +377,21 @@ export const buildPlatformFallbackReply = (message: string): string | null => {
       'Current behavior: members can view public-safe provider discovery where available and join authorized provider-created sessions. Booking, direct messaging, private contact, and appointment workflows remain gated until the platform has the required eligibility checks, privacy controls, provider availability rules, and audit-safe persistence.',
       '',
       'For the provider pilot, providers should publish or host CNH meeting rooms through approved host controls rather than relying on public self-booking.',
+    ].join('\n');
+  }
+
+  if (hasAny(request, providerToolPatterns)) {
+    return [
+      'Current provider tools are available only after the provider is approved and the required provider access checks are complete.',
+      '',
+      'Available in the provider pilot:',
+      '- Provider CRM entry after approved-provider sign-in and wallet verification.',
+      '- Provider workspace tools such as records, notes, follow-ups, content/course drafting support, collaboration items, analytics where enabled, and provider support queues.',
+      '- Native CNH meeting host controls for creating rooms, starting and ending sessions, inviting platform users/groups, and issuing signed guest links where configured.',
+      '- Provider device readiness checks for secure context, camera, microphone, WebGL, WebXR/5D support, and browser-local preview behavior.',
+      '- AI platform guidance for provider pathway questions, with privacy and safety boundaries.',
+      '',
+      'Still gated or future build: member self-booking, direct provider messaging, AI meeting notes, transcript capture, participant-wide notes sync, cloud/server recording, replay/VOD, and full multi-peer spatial collaboration.',
     ].join('\n');
   }
 
