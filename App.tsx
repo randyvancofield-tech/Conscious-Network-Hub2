@@ -3,7 +3,6 @@ import React, { useState, useEffect, useMemo, useRef } from 'react';
 import Dashboard from './components/Dashboard';
 import IdentitySecurityPanel from './components/IdentitySecurityPanel';
 import MyCourses from './components/MyCourses';
-import ProvidersMarket from './components/ProvidersMarket';
 import KnowledgePathways from './components/KnowledgePathways';
 import CommunityMembers from './components/CommunityMembers';
 import SocialLearningHub from './components/SocialLearningHub';
@@ -97,7 +96,6 @@ const PLATFORM_SEARCH_CATALOG: PlatformSearchResult[] = [
   { id: 'social', title: 'Social Learning', description: 'Member social learning feed.', view: AppView.CONSCIOUS_SOCIAL_LEARNING, keywords: ['posts', 'feed', 'community'] },
   { id: 'community', title: 'Community', description: 'Member directory and profiles.', view: AppView.COMMUNITY, keywords: ['members', 'directory', 'profiles'] },
   { id: 'meetings', title: 'Conscious Meetings', description: 'Upcoming provider-created meeting sessions.', view: AppView.CONSCIOUS_MEETINGS_UPCOMING, keywords: ['sessions', 'events', 'video'] },
-  { id: 'providers', title: 'Available Providers', description: 'Approved public provider profiles.', view: AppView.PROVIDERS, keywords: ['provider', 'services', 'market'] },
   { id: 'careers', title: 'Conscious Careers', description: 'Entrepreneurship readiness, Conscious Plan, guidance, and grant pathway.', view: AppView.ENTREPRENEURSHIP_SUPPORT, keywords: ['grant', 'career', 'entrepreneurship'] },
   { id: 'entrepreneurship', title: 'Entrepreneurship Support', description: 'Conscious Careers pathway portal for readiness and regional entrepreneurship resources.', view: AppView.ENTREPRENEURSHIP_SUPPORT, keywords: ['business', 'sbdc', 'readiness'] },
   { id: 'provider-access', title: 'Provider Access', description: 'Approved provider sign-in, application, and applicant status.', view: AppView.PROVIDER_ACCESS, keywords: ['provider sign in', 'apply', 'applicant'] },
@@ -247,10 +245,6 @@ const routePathForView = (view: AppView, params: Record<string, string> = {}): s
       return '/courses';
     case AppView.COURSE_DETAIL:
       return `/courses/${encodeURIComponent(params.id || '')}`;
-    case AppView.PROVIDERS:
-      return '/providers';
-    case AppView.PROVIDER_DETAIL:
-      return `/providers/${encodeURIComponent(params.id || '')}`;
     case AppView.MY_CONSCIOUS_IDENTITY:
       return '/profile';
     case AppView.MEMBERSHIP:
@@ -324,7 +318,6 @@ const resolveRoute = (pathname: string, search = ''): RouteState => {
     '/conscious-meetings/portal': AppView.CONSCIOUS_MEETINGS_PORTAL,
     '/my-courses': AppView.MY_COURSES,
     '/courses': AppView.KNOWLEDGE_PATHWAYS,
-    '/providers': AppView.PROVIDERS,
     '/profile': AppView.MY_CONSCIOUS_IDENTITY,
     '/membership': AppView.MEMBERSHIP,
     '/notifications': AppView.NOTIFICATIONS,
@@ -368,10 +361,6 @@ const resolveRoute = (pathname: string, search = ''): RouteState => {
   if (segments.length === 2 && segments[0] === 'courses') {
     return { view: AppView.COURSE_DETAIL, params: { id: decodeURIComponent(segments[1]) }, path };
   }
-  if (segments.length === 2 && segments[0] === 'providers') {
-    return { view: AppView.PROVIDER_DETAIL, params: { id: decodeURIComponent(segments[1]) }, path };
-  }
-
   return { view: AppView.NOT_FOUND, params: { path }, path };
 };
 
@@ -419,8 +408,6 @@ const isGuestAllowedView = (view: AppView): boolean =>
     AppView.MEETING_DETAIL,
     AppView.KNOWLEDGE_PATHWAYS,
     AppView.COURSE_DETAIL,
-    AppView.PROVIDERS,
-    AppView.PROVIDER_DETAIL,
     AppView.PRIVACY_POLICY,
     AppView.TERMS_OF_SERVICE,
     AppView.AI_TRANSPARENCY_POLICY,
@@ -2599,7 +2586,6 @@ const App: React.FC = () => {
     'provider-crm': AppView.PROVIDER_CRM,
     'my-courses': AppView.MY_COURSES,
     courses: AppView.KNOWLEDGE_PATHWAYS,
-    providers: AppView.PROVIDERS,
     careers: AppView.ENTREPRENEURSHIP_SUPPORT,
     profile: AppView.MY_CONSCIOUS_IDENTITY,
     membership: AppView.MEMBERSHIP,
@@ -2620,7 +2606,7 @@ const App: React.FC = () => {
       return NAVIGATION_ITEMS.filter(
         (item) =>
           item.id !== 'admin' &&
-          (item.id === 'provider-crm' || item.id === 'providers' || canTierAccessNavItem(user.tier, item.id))
+          (item.id === 'provider-crm' || canTierAccessNavItem(user.tier, item.id))
       );
     }
     if (!hasConfirmedMembership(user)) {
@@ -2649,7 +2635,7 @@ const App: React.FC = () => {
         AppView.AI_TRANSPARENCY_POLICY,
       ].includes(view);
     }
-    if (hasProviderOperationsAccess(user) && [AppView.PROVIDER_CRM, AppView.PROVIDERS].includes(view)) {
+    if (hasProviderOperationsAccess(user) && view === AppView.PROVIDER_CRM) {
       return true;
     }
     if (!hasConfirmedMembership(user)) {
@@ -2979,7 +2965,7 @@ const App: React.FC = () => {
       currentView !== AppView.NOT_FOUND &&
       !(
         hasProviderOperationsAccess(user) &&
-        [AppView.PROVIDER_CRM, AppView.PROVIDERS, AppView.PROVIDER_DETAIL].includes(currentView)
+        currentView === AppView.PROVIDER_CRM
       ) &&
       !canTierAccessView(user.tier, currentView)
     ) {
@@ -3771,35 +3757,6 @@ const App: React.FC = () => {
             onGoDashboard={() => setCurrentView(AppView.DASHBOARD)}
           />
         );
-      case AppView.PROVIDERS:
-        return (
-          <ProvidersMarket
-            onOpenProvider={(id) => setCurrentView(AppView.PROVIDER_DETAIL, { id })}
-            onBackToList={() => setCurrentView(AppView.PROVIDERS)}
-            onApplyAsProvider={() => setCurrentView(AppView.PROVIDER_APPLY)}
-            onMembershipAccess={() => setCurrentView(AppView.MEMBERSHIP_ACCESS)}
-            onExploreHub={() => setCurrentView(AppView.ENTRY)}
-            onSignInRequired={() => {
-              resetSignInChallengeInputs();
-              setSigninModalOpen(true);
-            }}
-          />
-        );
-      case AppView.PROVIDER_DETAIL:
-        return (
-          <ProvidersMarket
-            providerId={routeParams.id}
-            onOpenProvider={(id) => setCurrentView(AppView.PROVIDER_DETAIL, { id })}
-            onBackToList={() => setCurrentView(AppView.PROVIDERS)}
-            onApplyAsProvider={() => setCurrentView(AppView.PROVIDER_APPLY)}
-            onMembershipAccess={() => setCurrentView(AppView.MEMBERSHIP_ACCESS)}
-            onExploreHub={() => setCurrentView(AppView.ENTRY)}
-            onSignInRequired={() => {
-              resetSignInChallengeInputs();
-              setSigninModalOpen(true);
-            }}
-          />
-        );
       case AppView.MEMBERSHIP:
         return (
           <MembershipPage
@@ -4555,9 +4512,7 @@ const App: React.FC = () => {
                   {filteredNavigationItems.map((item) => {
                     const view = navViewMap[item.id];
                     const parentView =
-                      currentView === AppView.PROVIDER_DETAIL
-                        ? AppView.PROVIDERS
-                        : currentView === AppView.COURSE_DETAIL
+                      currentView === AppView.COURSE_DETAIL
                           ? AppView.KNOWLEDGE_PATHWAYS
                           : [
                               AppView.CONSCIOUS_MEETINGS_UPCOMING,

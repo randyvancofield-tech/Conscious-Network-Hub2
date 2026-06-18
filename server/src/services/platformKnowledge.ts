@@ -198,9 +198,6 @@ const describePageContext = (context: string): string | null => {
   if (route.includes('/dashboard') || category.includes('daily-wisdom') || category.includes('general')) {
     return 'This is your Conscious Network Hub dashboard. It should help you orient quickly: profile and account status, courses, meetings, provider actions when eligible, support, notifications, and the AI assistant.';
   }
-  if (route.includes('/providers')) {
-    return 'This is the Available Providers discovery area. Guests can view public-safe provider network information, while booking, direct contact, private profiles, CRM tools, and protected actions remain gated.';
-  }
   if (route.includes('/provider/apply')) {
     return 'This is the provider application path. It is for people who want to be reviewed before supporting members through CNH provider pathways.';
   }
