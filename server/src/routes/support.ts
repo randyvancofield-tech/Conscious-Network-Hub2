@@ -121,7 +121,6 @@ router.post(
         delivery: {
           internal: 'admin-console',
           email: emailStatus,
-          recipient: recipientEmail,
         },
         emailConfigured,
         emailSent: emailStatus === 'sent',

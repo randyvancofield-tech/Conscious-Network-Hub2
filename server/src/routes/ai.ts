@@ -742,7 +742,6 @@ router.post('/report-issue', validateChatInput, async (req: Request, res: Respon
       delivery: {
         internal: 'admin-console',
         email: emailStatus,
-        recipient: emailService.adminRecipient(),
       },
       emailConfigured,
       emailSent: emailStatus === 'sent',
