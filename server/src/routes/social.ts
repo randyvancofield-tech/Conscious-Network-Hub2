@@ -469,7 +469,7 @@ router.post('/posts', validateJsonBody(socialCreatePostSchema), async (req: Requ
       metadata: { reason: 'store_error' },
     });
     return res.status(500).json({
-      error: error instanceof Error ? error.message : 'Failed to create post',
+      error: 'Failed to create post',
     });
   }
 });
@@ -626,7 +626,7 @@ router.post('/posts/:postId/like', async (req: Request, res: Response): Promise<
       metadata: { reason: 'post_not_found' },
     });
     return res.status(404).json({
-      error: error instanceof Error ? error.message : 'Failed to update like state',
+      error: 'Failed to update like state',
     });
   }
 });

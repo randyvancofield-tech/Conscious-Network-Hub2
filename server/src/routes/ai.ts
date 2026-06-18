@@ -755,7 +755,7 @@ router.post('/report-issue', validateChatInput, async (req: Request, res: Respon
     res.status(500).json({
       ok: false,
       error: 'Failed to process issue report',
-      message: error instanceof Error ? error.message : 'Unknown error',
+      message: 'Issue report could not be routed. Please retry or contact support.',
     });
   }
 });

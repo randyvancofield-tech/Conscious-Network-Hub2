@@ -403,11 +403,10 @@ const EthicalAIInsight: React.FC<EthicalAIInsightProps> = ({ userEmail, userId =
       });
       analyticsService.trackIssueReport(reportCategory, result.priority);
 
-      const auditLog = securityService.createAuditLog('issue_reported', userId, {
+      securityService.createAuditLog('issue_reported', userId, {
         category: reportCategory,
         priority: result.priority
       });
-      console.log('Audit:', auditLog);
 
       setReportTitle('');
       setReportDescription('');

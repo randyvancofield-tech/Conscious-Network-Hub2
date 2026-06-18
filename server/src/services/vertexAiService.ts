@@ -131,7 +131,7 @@ export class VertexAIService {
       console.error('Vertex AI Chat Error:', error);
       const processingTime = Date.now() - startTime;
       return {
-        reply: `Fallback: unable to reach Vertex AI. (${error instanceof Error ? error.message : 'Unknown error'})`,
+        reply: 'Fallback: unable to reach Vertex AI. Please retry shortly or use the platform support path if this continues.',
         citations: [],
         usage: {},
         confidenceScore: 50,
