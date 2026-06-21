@@ -3,7 +3,7 @@ const SHELL_ASSETS = [
   '/',
   '/index.html',
   '/manifest.webmanifest',
-  '/brand/higher-conscious-network-icon.svg',
+  '/brand/higher-conscious-network-logo.png',
   '/brand/higher-conscious-network-icon-192.png',
   '/brand/higher-conscious-network-icon-512.png',
 ];

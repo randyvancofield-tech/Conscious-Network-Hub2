@@ -4089,6 +4089,21 @@ const App: React.FC = () => {
                 </p>
               </div>
 
+              {isInstallPromptVisible && !isStandaloneApp && (
+                <div className="flex justify-center">
+                  <button
+                    type="button"
+                    onClick={handleInstallApp}
+                    className="inline-flex min-h-[3.25rem] items-center justify-center gap-3 rounded-2xl border border-cyan-300/30 bg-cyan-400/10 px-5 py-3 text-xs font-black uppercase text-cyan-50 shadow-[0_0_30px_rgba(34,211,238,0.14)] transition-all hover:-translate-y-0.5 hover:bg-cyan-400/20 active:scale-[0.98] sm:px-6"
+                    aria-label="Install Higher Conscious Network"
+                    title="Install Higher Conscious Network"
+                  >
+                    <Download className="h-4 w-4 shrink-0" />
+                    <span className="cnh-action-label">Install Higher Conscious Network</span>
+                  </button>
+                </div>
+              )}
+
               <div className="grid grid-cols-1 gap-4 pt-2 sm:grid-cols-2 sm:gap-5 sm:pt-4 2xl:grid-cols-4 max-w-6xl 2xl:max-w-7xl mx-auto">
                 <button
                   onClick={handleEnterHub}
@@ -4833,7 +4848,8 @@ const App: React.FC = () => {
                       title="Install Higher Conscious Network"
                     >
                       <Download className="h-4 w-4 shrink-0" />
-                      <span className="hidden xl:inline">Install App</span>
+                      <span className="hidden 2xl:inline">Install Higher Conscious Network</span>
+                      <span className="hidden xl:inline 2xl:hidden">Install HCN</span>
                     </button>
                   )}
                   <div
