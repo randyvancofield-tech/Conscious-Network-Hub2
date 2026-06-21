@@ -1,35 +1,3 @@
-import { Course } from '../types';
-
-export type ProviderSurfaceRecord = {
-  id: string;
-  name: string;
-  category: string;
-  location: string;
-  bio: string;
-  specialty: string;
-  rating: number | null;
-  experience: string;
-  image: string;
-  verificationStatus: 'review_pending' | 'verified';
-  accessMode: 'request' | 'invite_only';
-  services: string[];
-};
-
-export type MeetingSurfaceRecord = {
-  id: string;
-  title: string;
-  providerId: string;
-  providerName: string;
-  description: string;
-  startTime: string;
-  endTime: string;
-  status: 'scheduled' | 'live' | 'completed' | 'replay';
-  capacity: number;
-  participantCount: number;
-  accessTier: 'Free / Community Tier' | 'Guided Tier' | 'Accelerated Tier';
-  deliveryMode: 'live' | 'scheduled' | 'replay';
-};
-
 export type MembershipTierRecord = {
   id: string;
   name: string;
@@ -41,41 +9,6 @@ export type MembershipTierRecord = {
   features: string[];
   checkoutEnabled: boolean;
 };
-
-export const PROVIDER_SURFACE_RECORDS: ProviderSurfaceRecord[] = [];
-
-export const COURSE_SURFACE_RECORDS: Course[] = [
-  {
-    id: 'identity-sovereignty-foundations',
-    title: 'Identity Sovereignty Foundations',
-    provider: 'Conscious Network Curriculum',
-    description:
-      'A foundational pathway for understanding member identity, privacy posture, consent, and profile integrity before advanced participation.',
-    tier: 'Basic',
-    enrolled: 0,
-    image: '/images/course-identity.svg',
-    progress: 0,
-    progressScore: 0,
-    status: 'published',
-    enrollmentStatus: null,
-  },
-  {
-    id: 'provider-practice-operations',
-    title: 'Provider Practice Operations',
-    provider: 'Conscious Network Curriculum',
-    description:
-      'An operational pathway for providers preparing services, session boundaries, membership access, and outcome documentation.',
-    tier: 'Professional',
-    enrolled: 0,
-    image: '/images/course-provider.svg',
-    progress: 0,
-    progressScore: 0,
-    status: 'published',
-    enrollmentStatus: null,
-  },
-];
-
-export const MEETING_SURFACE_RECORDS: MeetingSurfaceRecord[] = [];
 
 export const MEMBERSHIP_TIERS: MembershipTierRecord[] = [
   {
