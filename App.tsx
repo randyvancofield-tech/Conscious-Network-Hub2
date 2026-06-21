@@ -26,7 +26,7 @@ import { AppView, UserProfile, Course } from './types';
 import { NAVIGATION_ITEMS } from './constants';
 import { 
   Shield, X, Search, Bell,
-  ChevronRight, Home, LogOut, Building2, CheckCircle2, Sparkles, Key, WalletCards, LockKeyhole
+  ChevronRight, Home, LogOut, Building2, CheckCircle2, Sparkles, Key, WalletCards, LockKeyhole, Download
 } from 'lucide-react';
 import cnhLogo from './src/assets/brand/conscious-network-hub-logo.png';
 import careersLogo from './src/assets/brand/conscious-careers-logo.png';
@@ -66,6 +66,11 @@ type RouteState = {
   view: AppView;
   params: Record<string, string>;
   path: string;
+};
+
+type BeforeInstallPromptEvent = Event & {
+  prompt: () => Promise<void>;
+  userChoice: Promise<{ outcome: 'accepted' | 'dismissed'; platform: string }>;
 };
 
 type ProviderWalletChallenge = {
@@ -728,6 +733,9 @@ const App: React.FC = () => {
   const [pendingScrollWisdom, setPendingScrollWisdom] = useState(false);
   const [healthStatus, setHealthStatus] = useState<'checking' | 'online' | 'offline'>('checking');
   const [navAvatarFailed, setNavAvatarFailed] = useState(false);
+  const [installPromptEvent, setInstallPromptEvent] = useState<BeforeInstallPromptEvent | null>(null);
+  const [isInstallPromptVisible, setInstallPromptVisible] = useState(false);
+  const [isStandaloneApp, setStandaloneApp] = useState(false);
 
   const setCurrentView = (
     view: AppView,
@@ -762,6 +770,68 @@ const App: React.FC = () => {
     user?.profileMedia?.avatar?.url,
     user?.profileMedia?.avatar?.objectKey,
   ]);
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+
+    const isStandalone =
+      window.matchMedia('(display-mode: standalone)').matches ||
+      Boolean((window.navigator as Navigator & { standalone?: boolean }).standalone);
+
+    setStandaloneApp(isStandalone);
+    if (isStandalone) return;
+
+    const handleBeforeInstallPrompt = (event: Event) => {
+      event.preventDefault();
+      setInstallPromptEvent(event as BeforeInstallPromptEvent);
+      setInstallPromptVisible(true);
+    };
+
+    const handleAppInstalled = () => {
+      setInstallPromptVisible(false);
+      setInstallPromptEvent(null);
+      setStandaloneApp(true);
+    };
+
+    window.addEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
+    window.addEventListener('appinstalled', handleAppInstalled);
+
+    return () => {
+      window.removeEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
+      window.removeEventListener('appinstalled', handleAppInstalled);
+    };
+  }, []);
+
+  useEffect(() => {
+    if (
+      typeof window === 'undefined' ||
+      !('serviceWorker' in navigator) ||
+      import.meta.env.DEV
+    ) {
+      return;
+    }
+
+    const registerServiceWorker = () => {
+      navigator.serviceWorker.register('/service-worker.js', { scope: '/' }).catch(() => undefined);
+    };
+
+    if (document.readyState === 'complete') {
+      registerServiceWorker();
+      return;
+    }
+
+    window.addEventListener('load', registerServiceWorker, { once: true });
+    return () => window.removeEventListener('load', registerServiceWorker);
+  }, []);
+
+  const handleInstallApp = async () => {
+    if (!installPromptEvent) return;
+
+    setInstallPromptVisible(false);
+    await installPromptEvent.prompt();
+    await installPromptEvent.userChoice.catch(() => undefined);
+    setInstallPromptEvent(null);
+  };
 
   useEffect(() => {
     if (typeof window === 'undefined') return;
@@ -4754,6 +4824,18 @@ const App: React.FC = () => {
                 </div>
                 
                 <div className="flex shrink-0 items-center gap-1.5 sm:gap-2 md:gap-3 xl:gap-4">
+                  {isInstallPromptVisible && !isStandaloneApp && (
+                    <button
+                      type="button"
+                      onClick={handleInstallApp}
+                      className="inline-flex shrink-0 items-center gap-2 rounded-xl border border-cyan-300/30 bg-cyan-400/10 px-2.5 py-2 text-[10px] font-black uppercase text-cyan-100 transition-all hover:bg-cyan-400/20 sm:px-3"
+                      aria-label="Install Higher Conscious Network app"
+                      title="Install Higher Conscious Network"
+                    >
+                      <Download className="h-4 w-4 shrink-0" />
+                      <span className="hidden xl:inline">Install App</span>
+                    </button>
+                  )}
                   <div
                     aria-label={`AI status: ${healthStatus === 'online' ? 'live' : healthStatus}`}
                     className={`flex items-center gap-2 px-2 py-2 xl:px-3 rounded-xl text-[10px] font-black uppercase tracking-[0.2em] border ${

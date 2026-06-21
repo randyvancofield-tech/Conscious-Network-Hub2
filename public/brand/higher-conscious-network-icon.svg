@@ -1,0 +1,27 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-labelledby="title desc">
+  <title id="title">Higher Conscious Network</title>
+  <desc id="desc">Higher Conscious Network HCN monogram app icon.</desc>
+  <defs>
+    <radialGradient id="halo" cx="50%" cy="42%" r="66%">
+      <stop offset="0%" stop-color="#67e8f9"/>
+      <stop offset="38%" stop-color="#2563eb"/>
+      <stop offset="100%" stop-color="#020617"/>
+    </radialGradient>
+    <linearGradient id="ring" x1="74" y1="54" x2="438" y2="458" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#99f6e4"/>
+      <stop offset="0.48" stop-color="#38bdf8"/>
+      <stop offset="1" stop-color="#1d4ed8"/>
+    </linearGradient>
+    <filter id="softGlow" x="-20%" y="-20%" width="140%" height="140%">
+      <feGaussianBlur stdDeviation="10" result="blur"/>
+      <feColorMatrix in="blur" type="matrix" values="0 0 0 0 0.26 0 0 0 0 0.92 0 0 0 0 0.84 0 0 0 0.9 0"/>
+      <feBlend in="SourceGraphic" mode="screen"/>
+    </filter>
+  </defs>
+  <rect width="512" height="512" rx="108" fill="#05070a"/>
+  <circle cx="256" cy="256" r="196" fill="url(#halo)" opacity="0.82"/>
+  <circle cx="256" cy="256" r="206" fill="none" stroke="url(#ring)" stroke-width="14"/>
+  <path d="M145 321V191h32v50h50v-50h32v130h-32v-52h-50v52h-32Zm146 0V191h32l55 75v-75h32v130h-32l-55-75v75h-32Z" fill="#f8fafc" filter="url(#softGlow)"/>
+  <path d="M148 368h216" stroke="#99f6e4" stroke-width="10" stroke-linecap="round" opacity="0.88"/>
+  <text x="256" y="405" text-anchor="middle" fill="#dbeafe" font-family="Arial, Helvetica, sans-serif" font-size="28" font-weight="700" letter-spacing="3">HCN</text>
+</svg>
