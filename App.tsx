@@ -738,7 +738,6 @@ const App: React.FC = () => {
   const [healthStatus, setHealthStatus] = useState<'checking' | 'online' | 'offline'>('checking');
   const [navAvatarFailed, setNavAvatarFailed] = useState(false);
   const [installPromptEvent, setInstallPromptEvent] = useState<BeforeInstallPromptEvent | null>(null);
-  const [isInstallPromptVisible, setInstallPromptVisible] = useState(false);
   const [isStandaloneApp, setStandaloneApp] = useState(false);
   const [isInstallGuidanceOpen, setInstallGuidanceOpen] = useState(false);
   const [installGuidancePanel, setInstallGuidancePanel] = useState<InstallGuidancePanel>('overview');
@@ -791,11 +790,9 @@ const App: React.FC = () => {
     const handleBeforeInstallPrompt = (event: Event) => {
       event.preventDefault();
       setInstallPromptEvent(event as BeforeInstallPromptEvent);
-      setInstallPromptVisible(true);
     };
 
     const handleAppInstalled = () => {
-      setInstallPromptVisible(false);
       setInstallPromptEvent(null);
       setStandaloneApp(true);
     };
@@ -838,7 +835,6 @@ const App: React.FC = () => {
       return;
     }
 
-    setInstallPromptVisible(false);
     setInstallGuidanceOpen(false);
     await installPromptEvent.prompt();
     await installPromptEvent.userChoice.catch(() => undefined);
@@ -996,6 +992,28 @@ const App: React.FC = () => {
       window.location.assign(PWA_INSTALL_BASE_URL);
     }
   };
+
+  const shouldShowInstallAffordance = !isStandaloneApp;
+  const shouldShowFloatingInstallAffordance =
+    shouldShowInstallAffordance &&
+    !isInstallGuidanceOpen &&
+    !isSignupModalOpen &&
+    !isSigninModalOpen &&
+    !isMembershipCheckoutPending &&
+    currentView !== AppView.ENTRY &&
+    currentView !== AppView.DASHBOARD &&
+    currentView !== AppView.MY_CONSCIOUS_IDENTITY &&
+    currentView !== AppView.COMMUNITY &&
+    currentView !== AppView.KNOWLEDGE_PATHWAYS &&
+    currentView !== AppView.COURSE_DETAIL &&
+    currentView !== AppView.MY_COURSES &&
+    currentView !== AppView.CONSCIOUS_MEETINGS &&
+    currentView !== AppView.CONSCIOUS_MEETINGS_UPCOMING &&
+    currentView !== AppView.CONSCIOUS_MEETINGS_PORTAL &&
+    currentView !== AppView.MEETING_DETAIL &&
+    currentView !== AppView.PROVIDER_CRM &&
+    currentView !== AppView.ADMIN_DASHBOARD &&
+    currentView !== AppView.ADMIN_PROVIDER_APPLICANTS;
 
   useEffect(() => {
     if (typeof window === 'undefined') return;
@@ -4213,8 +4231,8 @@ const App: React.FC = () => {
         {shouldShowMusicBox && <MusicBox />}
 
         {isInstallGuidanceOpen && (
-          <div className="fixed inset-0 z-[1200] flex items-center justify-center bg-black/80 p-4 backdrop-blur-2xl">
-            <div className="w-full max-w-lg rounded-3xl border border-cyan-300/20 bg-slate-950/95 p-5 shadow-2xl sm:p-6">
+          <div className="fixed inset-0 z-[1200] flex items-start justify-center overflow-y-auto bg-black/80 px-3 py-[max(0.75rem,env(safe-area-inset-top))] pb-[max(1rem,env(safe-area-inset-bottom))] backdrop-blur-2xl sm:items-center sm:p-6">
+            <div className="my-auto max-h-[calc(100dvh-2rem)] w-full max-w-lg overflow-y-auto rounded-3xl border border-cyan-300/20 bg-slate-950/95 p-5 shadow-2xl custom-scrollbar sm:p-6">
               <div className="flex items-start justify-between gap-4">
                 <div className="flex min-w-0 items-center gap-3">
                   <button
@@ -4392,6 +4410,19 @@ const App: React.FC = () => {
               </button>
             </div>
           </div>
+        )}
+
+        {shouldShowFloatingInstallAffordance && (
+          <button
+            type="button"
+            onClick={handleInstallApp}
+            className="fixed right-3 top-[calc(env(safe-area-inset-top)+0.75rem)] z-[950] inline-flex min-h-[2.75rem] max-w-[calc(100vw-1.5rem)] items-center justify-center gap-2 rounded-2xl border border-cyan-300/30 bg-slate-950/90 px-3 py-2 text-[10px] font-black uppercase text-cyan-50 shadow-[0_0_30px_rgba(34,211,238,0.16)] backdrop-blur-2xl transition-all hover:-translate-y-0.5 hover:bg-cyan-400/15 active:scale-[0.98] sm:right-5 sm:top-[calc(env(safe-area-inset-top)+1rem)] sm:px-4"
+            aria-label="Install Higher Conscious Network app"
+            title="Install Higher Conscious Network"
+          >
+            <Download className="h-4 w-4 shrink-0" />
+            <span className="whitespace-nowrap">Install App</span>
+          </button>
         )}
 
         {currentView === AppView.ENTRY && (
@@ -5165,7 +5196,7 @@ const App: React.FC = () => {
                 </div>
                 
                 <div className="flex shrink-0 items-center gap-1.5 sm:gap-2 md:gap-3 xl:gap-4">
-                  {isInstallPromptVisible && !isStandaloneApp && (
+                  {shouldShowInstallAffordance && (
                     <button
                       type="button"
                       onClick={handleInstallApp}
