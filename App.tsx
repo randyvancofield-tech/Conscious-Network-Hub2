@@ -75,6 +75,8 @@ type BeforeInstallPromptEvent = Event & {
 
 type InstallGuidancePanel = 'overview' | 'browser-menu' | 'supported-browser';
 
+const PWA_INSTALL_BASE_URL = 'https://conscious-network.org';
+
 type ProviderWalletChallenge = {
   challengeId: string;
   domain: string;
@@ -894,7 +896,7 @@ const App: React.FC = () => {
         menuGuideSummary:
           'This in-app browser may hide install controls. Open the site in Safari, Chrome, or Edge first, then install.',
         menuSteps: [
-          'Use the app menu to open this page in your device browser.',
+          'Use the app menu to open conscious-network.org in your device browser.',
           'If that option is unavailable, copy the site link.',
           'Open the link in Safari, Chrome, or Edge and use Add to Home Screen or Install App.',
         ],
@@ -970,7 +972,7 @@ const App: React.FC = () => {
 
   const handleCopyInstallLink = async () => {
     if (typeof window === 'undefined') return;
-    const installUrl = window.location.origin || 'https://conscious-network.org';
+    const installUrl = PWA_INSTALL_BASE_URL;
     if (window.navigator.clipboard) {
       await window.navigator.clipboard.writeText(installUrl);
     } else {
@@ -988,9 +990,10 @@ const App: React.FC = () => {
   };
 
   const handleOpenSupportedBrowserGuide = () => {
-    setInstallGuidancePanel('supported-browser');
+    setInstallGuidanceOpen(false);
+    setInstallGuidancePanel('overview');
     if (typeof window !== 'undefined') {
-      window.open(window.location.href, '_blank', 'noopener,noreferrer');
+      window.location.assign(PWA_INSTALL_BASE_URL);
     }
   };
 
@@ -4316,10 +4319,13 @@ const App: React.FC = () => {
                 <div className="mt-5 space-y-4">
                   <button
                     type="button"
-                    onClick={() => setInstallGuidancePanel('overview')}
+                    onClick={() => {
+                      setInstallGuidanceOpen(false);
+                      setInstallGuidancePanel('overview');
+                    }}
                     className="text-[10px] font-black uppercase tracking-widest text-cyan-200 transition hover:text-cyan-100"
                   >
-                    Back to install actions
+                    Return to current page
                   </button>
 
                   <div className="rounded-2xl border border-white/10 bg-white/[0.04] p-4">
