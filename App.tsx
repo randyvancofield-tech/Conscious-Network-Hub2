@@ -736,6 +736,7 @@ const App: React.FC = () => {
   const [installPromptEvent, setInstallPromptEvent] = useState<BeforeInstallPromptEvent | null>(null);
   const [isInstallPromptVisible, setInstallPromptVisible] = useState(false);
   const [isStandaloneApp, setStandaloneApp] = useState(false);
+  const [isInstallGuidanceOpen, setInstallGuidanceOpen] = useState(false);
 
   const setCurrentView = (
     view: AppView,
@@ -825,13 +826,52 @@ const App: React.FC = () => {
   }, []);
 
   const handleInstallApp = async () => {
-    if (!installPromptEvent) return;
+    if (!installPromptEvent) {
+      setInstallGuidanceOpen(true);
+      return;
+    }
 
     setInstallPromptVisible(false);
     await installPromptEvent.prompt();
     await installPromptEvent.userChoice.catch(() => undefined);
     setInstallPromptEvent(null);
   };
+
+  const installGuidanceSteps = useMemo(() => {
+    if (typeof window === 'undefined') {
+      return [
+        'Open this site in your mobile browser.',
+        'Open the browser menu.',
+        'Choose Add to Home Screen or Install App.',
+      ];
+    }
+
+    const userAgent = window.navigator.userAgent.toLowerCase();
+    const isIos = /iphone|ipad|ipod/.test(userAgent);
+    const isAndroid = /android/.test(userAgent);
+
+    if (isIos) {
+      return [
+        'Open conscious-network.org in Safari.',
+        'Tap the Share button in the browser toolbar.',
+        'Choose Add to Home Screen, then tap Add.',
+      ];
+    }
+
+    if (isAndroid) {
+      return [
+        'Open conscious-network.org in Chrome.',
+        'Tap the browser menu.',
+        'Choose Install App or Add to Home Screen.',
+      ];
+    }
+
+    return [
+      'Open conscious-network.org in a browser that supports installable web apps.',
+      'Use the browser install icon or menu.',
+      'Choose Install Higher Conscious Network.',
+    ];
+  }, []);
 
   useEffect(() => {
     if (typeof window === 'undefined') return;
@@ -4047,6 +4087,61 @@ const App: React.FC = () => {
 
       <div className="relative z-10 w-full min-h-screen flex flex-col overflow-x-hidden">
         {shouldShowMusicBox && <MusicBox />}
+
+        {isInstallGuidanceOpen && (
+          <div className="fixed inset-0 z-[1200] flex items-center justify-center bg-black/80 p-4 backdrop-blur-2xl">
+            <div className="w-full max-w-md rounded-3xl border border-cyan-300/20 bg-slate-950/95 p-6 shadow-2xl">
+              <div className="flex items-start justify-between gap-4">
+                <div className="flex min-w-0 items-center gap-3">
+                  <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl border border-cyan-300/20 bg-cyan-400/10 text-cyan-100">
+                    <Download className="h-5 w-5" />
+                  </div>
+                  <div className="min-w-0">
+                    <p className="text-[10px] font-black uppercase tracking-widest text-cyan-200">Install app</p>
+                    <h2 className="mt-1 text-lg font-black uppercase leading-tight text-white">
+                      Install Higher Conscious Network
+                    </h2>
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setInstallGuidanceOpen(false)}
+                  className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-white/10 bg-white/5 text-slate-300 transition-colors hover:bg-white/10 hover:text-white"
+                  aria-label="Close install guidance"
+                >
+                  <X className="h-5 w-5" />
+                </button>
+              </div>
+
+              <p className="mt-5 text-sm leading-6 text-slate-300">
+                Your mobile browser may use its own menu instead of showing a direct install prompt. Follow these steps
+                to add Higher Conscious Network to your home screen.
+              </p>
+
+              <ol className="mt-5 space-y-3">
+                {installGuidanceSteps.map((step, index) => (
+                  <li
+                    key={step}
+                    className="flex gap-3 rounded-2xl border border-white/10 bg-white/[0.04] p-3 text-sm leading-6 text-slate-200"
+                  >
+                    <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-cyan-400/10 text-xs font-black text-cyan-100">
+                      {index + 1}
+                    </span>
+                    <span>{step}</span>
+                  </li>
+                ))}
+              </ol>
+
+              <button
+                type="button"
+                onClick={() => setInstallGuidanceOpen(false)}
+                className="mt-6 w-full rounded-2xl bg-cyan-400 px-5 py-3 text-xs font-black uppercase text-slate-950 transition hover:bg-cyan-300"
+              >
+                Done
+              </button>
+            </div>
+          </div>
+        )}
         
         {hasApiKey === false && (
           <div className="fixed inset-0 z-[1000] flex items-start sm:items-center justify-center overflow-y-auto custom-scrollbar bg-black/90 backdrop-blur-3xl p-4 sm:p-6">
@@ -4089,7 +4184,7 @@ const App: React.FC = () => {
                 </p>
               </div>
 
-              {isInstallPromptVisible && !isStandaloneApp && (
+              {!isStandaloneApp && (
                 <div className="flex justify-center">
                   <button
                     type="button"
