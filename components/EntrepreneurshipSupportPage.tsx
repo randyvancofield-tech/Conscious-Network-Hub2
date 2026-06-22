@@ -14,6 +14,7 @@ import {
   Sparkles,
 } from 'lucide-react';
 import { UserProfile } from '../types';
+import { downloadTextFile } from '../services/downloadService';
 import careersLogo from '../src/assets/brand/conscious-careers-logo.png';
 import foundationGatewayGuide from '../src/assets/brand/foundation-gateway-guide.jpg';
 
@@ -650,15 +651,11 @@ const EntrepreneurshipSupportPage: React.FC<EntrepreneurshipSupportPageProps> = 
 </body>
 </html>`;
 
-    const blob = new Blob([reportHtml], { type: 'text/html;charset=utf-8' });
-    const objectUrl = URL.createObjectURL(blob);
-    const anchor = document.createElement('a');
-    anchor.href = objectUrl;
-    anchor.download = `conscious-plan-${generatedAt.toISOString().slice(0, 10)}.html`;
-    document.body.appendChild(anchor);
-    anchor.click();
-    anchor.remove();
-    window.setTimeout(() => URL.revokeObjectURL(objectUrl), 0);
+    downloadTextFile({
+      content: reportHtml,
+      filename: `conscious-plan-${generatedAt.toISOString().slice(0, 10)}.html`,
+      mimeType: 'text/html;charset=utf-8',
+    });
   };
 
   if (portalMode === 'assessment') {

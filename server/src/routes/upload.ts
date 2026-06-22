@@ -38,6 +38,18 @@ const upload = multer({
 
 type MulterRequest = Request & { file?: Express.Multer.File };
 type UploadCategory = 'avatar' | 'cover' | 'profile-background' | 'reflection' | 'social';
+
+const sanitizeDownloadFilename = (filename: string): string => {
+  const normalized = String(filename || '').trim().replace(/[\\/\r\n"]/g, '_');
+  return normalized || 'upload.bin';
+};
+
+const buildContentDisposition = (type: 'inline' | 'attachment', filename: string): string => {
+  const safeFilename = sanitizeDownloadFilename(filename);
+  const asciiFilename = safeFilename.replace(/[^\x20-\x7E]/g, '_');
+  return `${type}; filename="${asciiFilename}"; filename*=UTF-8''${encodeURIComponent(safeFilename)}`;
+};
+
 const isAllowedProfileMediaMimeType = (mimeType: string): boolean => {
   return mimeType.startsWith('image/') || mimeType.startsWith('video/');
 };
@@ -162,10 +174,13 @@ const sendResolvedUploadObject = async (
     }
 
     const mimeType = resolved.mimeType || 'application/octet-stream';
+    const originalName = String(resolved.originalName || 'upload.bin').trim() || 'upload.bin';
+    const dispositionType = String(req.query.download || '').trim() === '1' ? 'attachment' : 'inline';
     const totalSize = resolved.sizeBytes;
     const rangeHeader = String(req.headers.range || '').trim();
 
     res.setHeader('Content-Type', mimeType);
+    res.setHeader('Content-Disposition', buildContentDisposition(dispositionType, originalName));
     res.setHeader(
       'Cache-Control',
       cacheScope === 'public'

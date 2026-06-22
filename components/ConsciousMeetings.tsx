@@ -39,6 +39,7 @@ import {
   PROVIDER_SESSION_TOKEN_KEY,
   setProviderControlSession,
 } from '../services/sessionService';
+import { downloadBlobFile, downloadTextFile } from '../services/downloadService';
 import {
   canUseMediaDevices,
   canUseWebGl,
@@ -1812,7 +1813,7 @@ const ConsciousMeetings: React.FC<ConsciousMeetingsProps> = ({ user }) => {
     }
   };
 
-  const downloadRecording = () => {
+  const downloadRecording = async () => {
     const activeMeeting = meetings[0];
     const canSaveRecording = Boolean(user?.id && activeMeeting && user.id === activeMeeting.hostUserId);
     if (!canSaveRecording) {
@@ -1825,15 +1826,10 @@ const ConsciousMeetings: React.FC<ConsciousMeetingsProps> = ({ user }) => {
       return;
     }
 
-    const blob = new Blob(recordedChunks, { type: 'video/webm' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `conscious-session-${new Date().toISOString().slice(0, 19).replace(/:/g, '-')}.webm`;
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-    URL.revokeObjectURL(url);
+    await downloadBlobFile({
+      blob: new Blob(recordedChunks, { type: 'video/webm' }),
+      filename: `conscious-session-${new Date().toISOString().slice(0, 19).replace(/:/g, '-')}.webm`,
+    });
     setMeetingOpsStatus('Local browser recording downloaded. No server archive or VOD was created.');
   };
 
@@ -1919,15 +1915,11 @@ const ConsciousMeetings: React.FC<ConsciousMeetingsProps> = ({ user }) => {
         (item) => `- ${item.owner}: ${item.task} (Due: ${item.dueDate})`
       ),
     ].join('\n');
-    const blob = new Blob([content], { type: 'text/plain;charset=utf-8' });
-    const url = URL.createObjectURL(blob);
-    const anchor = document.createElement('a');
-    anchor.href = url;
-    anchor.download = `meeting-notes-${meeting.id}.txt`;
-    document.body.appendChild(anchor);
-    anchor.click();
-    document.body.removeChild(anchor);
-    URL.revokeObjectURL(url);
+    downloadTextFile({
+      content,
+      filename: `meeting-notes-${meeting.id}.txt`,
+      mimeType: 'text/plain;charset=utf-8',
+    });
   };
 
   const syncMeetingNotes = async (meeting: Meeting) => {

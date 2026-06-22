@@ -35,6 +35,7 @@ import {
   requestMeetingMediaStream,
   stopMediaStream,
 } from '../services/mediaDeviceSupport';
+import { downloadBlobFile } from '../services/downloadService';
 import { ActionButton, EmptyState, PageHeader, PageShell, SurfacePanel } from './ui/PlatformPrimitives';
 import MeetingBrandLoop from './ui/MeetingBrandLoop';
 import cnhLogo from '../src/assets/brand/conscious-network-hub-logo.png';
@@ -353,17 +354,12 @@ const ConsciousMeetingRoomPage: React.FC<ConsciousMeetingRoomPageProps> = ({ ses
     setJoinStatus('Local recording stopped. Download is available only in this browser session.');
   };
 
-  const downloadLocalRecording = () => {
+  const downloadLocalRecording = async () => {
     if (recordedChunks.length === 0) return;
-    const blob = new Blob(recordedChunks, { type: 'video/webm' });
-    const url = URL.createObjectURL(blob);
-    const anchor = document.createElement('a');
-    anchor.href = url;
-    anchor.download = `conscious-meeting-local-${new Date().toISOString().slice(0, 19).replace(/:/g, '-')}.webm`;
-    document.body.appendChild(anchor);
-    anchor.click();
-    document.body.removeChild(anchor);
-    URL.revokeObjectURL(url);
+    await downloadBlobFile({
+      blob: new Blob(recordedChunks, { type: 'video/webm' }),
+      filename: `conscious-meeting-local-${new Date().toISOString().slice(0, 19).replace(/:/g, '-')}.webm`,
+    });
   };
 
   if (isLoading) {

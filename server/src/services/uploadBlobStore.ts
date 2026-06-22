@@ -31,6 +31,7 @@ export interface PersistedUploadObject {
 export interface ResolvedUploadObject {
   buffer: Buffer;
   mimeType: string;
+  originalName: string;
   sizeBytes: number;
 }
 
@@ -384,6 +385,7 @@ export const resolveUploadObjectByKey = async (
     return {
       buffer,
       mimeType: parsedKey.mimeType || 'application/octet-stream',
+      originalName: sanitizeOriginalName(parsedKey.originalName || ''),
       sizeBytes: buffer.length,
     };
   } catch (error) {

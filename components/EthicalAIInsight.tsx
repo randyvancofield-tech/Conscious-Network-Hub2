@@ -13,6 +13,7 @@ import { ApiError } from '../services/apiClient';
 import { securityService } from '../services/securityService';
 import { cacheService, ConversationEntry } from '../services/cacheService';
 import { analyticsService } from '../services/analyticsService';
+import { downloadTextFile } from '../services/downloadService';
 
 interface EthicalAIInsightProps {
   userEmail?: string;
@@ -430,12 +431,11 @@ const EthicalAIInsight: React.FC<EthicalAIInsightProps> = ({ userEmail, userId =
       ? cacheService.exportConversationMarkdown(userId)
       : cacheService.exportConversationJSON(userId);
 
-    const blob = new Blob([data], { type: format === 'markdown' ? 'text/markdown' : 'application/json' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `conversation.${format === 'markdown' ? 'md' : 'json'}`;
-    a.click();
+    downloadTextFile({
+      content: data,
+      filename: `conversation.${format === 'markdown' ? 'md' : 'json'}`,
+      mimeType: format === 'markdown' ? 'text/markdown;charset=utf-8' : 'application/json;charset=utf-8',
+    });
 
     analyticsService.trackExport(format);
   };

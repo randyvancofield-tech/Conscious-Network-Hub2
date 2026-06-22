@@ -1,4 +1,5 @@
 import { getBackendBaseUrl } from './apiClient';
+import { openBlobFile } from './downloadService';
 import { getAuthToken } from './sessionService';
 
 export interface PrivateUploadRef {
@@ -30,16 +31,6 @@ const buildPrivateUploadUrl = (objectKey: string): string => {
   return `${baseUrl}/api/upload/object/${encodeURIComponent(objectKey)}`;
 };
 
-const downloadBlob = (blobUrl: string, filename: string): void => {
-  const anchor = document.createElement('a');
-  anchor.href = blobUrl;
-  anchor.download = filename || 'download';
-  anchor.rel = 'noreferrer';
-  document.body.appendChild(anchor);
-  anchor.click();
-  anchor.remove();
-};
-
 export const openPrivateUpload = async (file: PrivateUploadRef): Promise<void> => {
   const objectKey = extractObjectKey(file);
   if (!objectKey) {
@@ -62,11 +53,8 @@ export const openPrivateUpload = async (file: PrivateUploadRef): Promise<void> =
     throw new Error(`Unable to open private file (HTTP ${response.status}).`);
   }
 
-  const blob = await response.blob();
-  const blobUrl = URL.createObjectURL(blob);
-  const opened = window.open(blobUrl, '_blank', 'noopener,noreferrer');
-  if (!opened) {
-    downloadBlob(blobUrl, String(file.originalName || 'download'));
-  }
-  window.setTimeout(() => URL.revokeObjectURL(blobUrl), 60000);
+  await openBlobFile({
+    blob: await response.blob(),
+    filename: String(file.originalName || 'download'),
+  });
 };
