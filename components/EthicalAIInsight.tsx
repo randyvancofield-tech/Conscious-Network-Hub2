@@ -13,7 +13,7 @@ import { ApiError } from '../services/apiClient';
 import { securityService } from '../services/securityService';
 import { cacheService, ConversationEntry } from '../services/cacheService';
 import { analyticsService } from '../services/analyticsService';
-import { downloadTextFile } from '../services/downloadService';
+import { createTextDownloadHref } from '../services/downloadService';
 
 interface EthicalAIInsightProps {
   userEmail?: string;
@@ -426,19 +426,22 @@ const EthicalAIInsight: React.FC<EthicalAIInsightProps> = ({ userEmail, userId =
     setEngagementScore(score);
   };
 
-  const exportConversation = (format: 'markdown' | 'json') => {
+  const buildConversationDownload = (format: 'markdown' | 'json') => {
     const data = format === 'markdown'
       ? cacheService.exportConversationMarkdown(userId)
       : cacheService.exportConversationJSON(userId);
 
-    downloadTextFile({
-      content: data,
+    return {
+      href: createTextDownloadHref({
+        content: data,
+        mimeType: format === 'markdown' ? 'text/markdown;charset=utf-8' : 'application/json;charset=utf-8',
+      }),
       filename: `conversation.${format === 'markdown' ? 'md' : 'json'}`,
-      mimeType: format === 'markdown' ? 'text/markdown;charset=utf-8' : 'application/json;charset=utf-8',
-    });
-
-    analyticsService.trackExport(format);
+    };
   };
+
+  const markdownConversationDownload = buildConversationDownload('markdown');
+  const jsonConversationDownload = buildConversationDownload('json');
 
   if (isCollapsed) {
     return (
@@ -489,18 +492,22 @@ const EthicalAIInsight: React.FC<EthicalAIInsightProps> = ({ userEmail, userId =
           >
             <BarChart3 className="w-4 h-4 shrink-0" /> <span className="cnh-action-label">Analytics</span>
           </button>
-          <button
-            onClick={() => exportConversation('markdown')}
+          <a
+            href={markdownConversationDownload.href}
+            download={markdownConversationDownload.filename}
+            onClick={() => analyticsService.trackExport('markdown')}
             className="w-full px-3 py-2 bg-teal-600/10 hover:bg-teal-600/20 text-teal-400 rounded-lg text-[10px] font-bold uppercase tracking-widest transition-all flex items-center gap-2"
           >
             <Download className="w-4 h-4 shrink-0" /> <span className="cnh-action-label">Export MD</span>
-          </button>
-          <button
-            onClick={() => exportConversation('json')}
+          </a>
+          <a
+            href={jsonConversationDownload.href}
+            download={jsonConversationDownload.filename}
+            onClick={() => analyticsService.trackExport('json')}
             className="w-full px-3 py-2 bg-purple-600/10 hover:bg-purple-600/20 text-purple-400 rounded-lg text-[10px] font-bold uppercase tracking-widest transition-all flex items-center gap-2"
           >
             <Download className="w-4 h-4 shrink-0" /> <span className="cnh-action-label">Export JSON</span>
-          </button>
+          </a>
           <button
             onClick={() => {
               cacheService.clearConversationHistory(userId);

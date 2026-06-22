@@ -1,5 +1,5 @@
 
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect, useMemo } from 'react';
 import {
   Video, Calendar, Users, ShieldCheck, Zap,
   Clock, CheckCircle2,
@@ -39,7 +39,7 @@ import {
   PROVIDER_SESSION_TOKEN_KEY,
   setProviderControlSession,
 } from '../services/sessionService';
-import { downloadBlobFile, downloadTextFile } from '../services/downloadService';
+import { createTextDownloadHref } from '../services/downloadService';
 import {
   canUseMediaDevices,
   canUseWebGl,
@@ -1813,26 +1813,6 @@ const ConsciousMeetings: React.FC<ConsciousMeetingsProps> = ({ user }) => {
     }
   };
 
-  const downloadRecording = async () => {
-    const activeMeeting = meetings[0];
-    const canSaveRecording = Boolean(user?.id && activeMeeting && user.id === activeMeeting.hostUserId);
-    if (!canSaveRecording) {
-      setMeetingOpsStatus('Only the session initiator can download the local browser recording.');
-      return;
-    }
-
-    if (recordedChunks.length === 0) {
-      setMeetingOpsStatus('No local browser recording exists for this session.');
-      return;
-    }
-
-    await downloadBlobFile({
-      blob: new Blob(recordedChunks, { type: 'video/webm' }),
-      filename: `conscious-session-${new Date().toISOString().slice(0, 19).replace(/:/g, '-')}.webm`,
-    });
-    setMeetingOpsStatus('Local browser recording downloaded. No server archive or VOD was created.');
-  };
-
   const clearBackgroundEffect = () => {
     revokeCustomBackgroundObjectUrl(selectedBackground, customBackgroundFile);
     setSelectedBackground(null);
@@ -1895,11 +1875,7 @@ const ConsciousMeetings: React.FC<ConsciousMeetingsProps> = ({ user }) => {
     setMeetingOpsStatus('Reschedule is unavailable here. Providers update scheduled CNH rooms through host controls.');
   };
 
-  const downloadMeetingNotes = (meeting: Meeting) => {
-    if (!hasPersistedMeetingNotes(meeting)) {
-      setMeetingOpsStatus('Notes download is unavailable until real session notes are captured and stored for this meeting.');
-      return;
-    }
+  const getMeetingNotesDownload = (meeting: Meeting) => {
     const content = [
       `Meeting: ${meeting.title}`,
       `Status: ${meeting.status}`,
@@ -1915,11 +1891,13 @@ const ConsciousMeetings: React.FC<ConsciousMeetingsProps> = ({ user }) => {
         (item) => `- ${item.owner}: ${item.task} (Due: ${item.dueDate})`
       ),
     ].join('\n');
-    downloadTextFile({
-      content,
+    return {
+      href: createTextDownloadHref({
+        content,
+        mimeType: 'text/plain;charset=utf-8',
+      }),
       filename: `meeting-notes-${meeting.id}.txt`,
-      mimeType: 'text/plain;charset=utf-8',
-    });
+    };
   };
 
   const syncMeetingNotes = async (meeting: Meeting) => {
@@ -2530,7 +2508,20 @@ const ConsciousMeetings: React.FC<ConsciousMeetingsProps> = ({ user }) => {
   const activeMeeting = meetings[0] || null;
   const hasActiveMeetingNotes = hasPersistedMeetingNotes(activeMeeting);
   const canSaveRecording = Boolean(user?.id && activeMeeting && user.id === activeMeeting.hostUserId);
+  const localRecordingDownload = useMemo(() => {
+    if (recordedChunks.length === 0) return null;
+
+    return {
+      href: URL.createObjectURL(new Blob(recordedChunks, { type: 'video/webm' })),
+      filename: `conscious-session-${new Date().toISOString().slice(0, 19).replace(/:/g, '-')}.webm`,
+    };
+  }, [recordedChunks]);
   const canUseHostConsole = user?.role === 'admin' || isApprovedProviderUser(user);
+
+  useEffect(() => {
+    if (!localRecordingDownload?.href) return undefined;
+    return () => URL.revokeObjectURL(localRecordingDownload.href);
+  }, [localRecordingDownload?.href]);
 
   if (!canUseHostConsole) {
     return (
@@ -2974,14 +2965,26 @@ const ConsciousMeetings: React.FC<ConsciousMeetingsProps> = ({ user }) => {
 
                     {recordedChunks.length > 0 && (
                       <div className="flex items-center justify-center gap-4">
-                        <button
-                          onClick={downloadRecording}
-                          disabled={!canSaveRecording}
-                          className="px-6 sm:px-8 py-3 sm:py-4 bg-blue-600 hover:bg-blue-500 disabled:bg-slate-700 disabled:text-slate-500 text-white rounded-lg sm:rounded-xl font-black text-sm uppercase tracking-widest flex items-center gap-2 transition-all"
-                        >
-                          <Download className="w-5 h-5" />
-                          Download Local ({formatDuration(recordingDuration)})
-                        </button>
+                        {canSaveRecording && localRecordingDownload ? (
+                          <a
+                            href={localRecordingDownload.href}
+                            download={localRecordingDownload.filename}
+                            onClick={() => setMeetingOpsStatus('Local browser recording downloaded. No server archive or VOD was created.')}
+                            className="px-6 sm:px-8 py-3 sm:py-4 bg-blue-600 hover:bg-blue-500 text-white rounded-lg sm:rounded-xl font-black text-sm uppercase tracking-widest flex items-center gap-2 transition-all"
+                          >
+                            <Download className="w-5 h-5" />
+                            Download Local ({formatDuration(recordingDuration)})
+                          </a>
+                        ) : (
+                          <button
+                            type="button"
+                            disabled
+                            className="px-6 sm:px-8 py-3 sm:py-4 bg-slate-700 text-slate-500 rounded-lg sm:rounded-xl font-black text-sm uppercase tracking-widest flex items-center gap-2 transition-all cursor-not-allowed"
+                          >
+                            <Download className="w-5 h-5" />
+                            Download Local ({formatDuration(recordingDuration)})
+                          </button>
+                        )}
                       </div>
                     )}
                     <p className="text-center text-[9px] sm:text-[10px] uppercase tracking-widest text-slate-500">
@@ -3145,13 +3148,23 @@ const ConsciousMeetings: React.FC<ConsciousMeetingsProps> = ({ user }) => {
                       )}
                       {isSynthesizingNotes ? 'Generating Notes' : 'Initiate Agent Notes'}
                     </button>
-                    <button
-                      onClick={() => activeMeeting && downloadMeetingNotes(activeMeeting)}
-                      disabled={!hasActiveMeetingNotes}
-                      className="flex-1 px-4 sm:px-6 py-3 bg-white/5 hover:bg-white/10 disabled:bg-slate-800 disabled:text-slate-600 border border-white/10 text-slate-300 rounded-lg sm:rounded-xl text-[9px] sm:text-[10px] font-black uppercase tracking-widest transition-all flex items-center justify-center gap-2"
-                    >
-                      <Download className="w-4 h-4" /> Download Session Notes
-                    </button>
+                    {activeMeeting && hasActiveMeetingNotes ? (
+                      <a
+                        href={getMeetingNotesDownload(activeMeeting).href}
+                        download={getMeetingNotesDownload(activeMeeting).filename}
+                        className="flex-1 px-4 sm:px-6 py-3 bg-white/5 hover:bg-white/10 border border-white/10 text-slate-300 rounded-lg sm:rounded-xl text-[9px] sm:text-[10px] font-black uppercase tracking-widest transition-all flex items-center justify-center gap-2"
+                      >
+                        <Download className="w-4 h-4" /> Download Session Notes
+                      </a>
+                    ) : (
+                      <button
+                        type="button"
+                        disabled
+                        className="flex-1 px-4 sm:px-6 py-3 bg-slate-800 text-slate-600 border border-white/10 rounded-lg sm:rounded-xl text-[9px] sm:text-[10px] font-black uppercase tracking-widest transition-all flex items-center justify-center gap-2 cursor-not-allowed"
+                      >
+                        <Download className="w-4 h-4" /> Download Session Notes
+                      </button>
+                    )}
                   </div>
                 </div>
               )}
@@ -3777,12 +3790,13 @@ const ConsciousMeetings: React.FC<ConsciousMeetingsProps> = ({ user }) => {
                         </div>
 
                         <div className="flex flex-wrap gap-2 sm:gap-4">
-                          <button
-                            onClick={() => downloadMeetingNotes(meeting)}
+                          <a
+                            href={getMeetingNotesDownload(meeting).href}
+                            download={getMeetingNotesDownload(meeting).filename}
                             className="flex items-center gap-2 px-4 sm:px-5 py-2 sm:py-2.5 bg-white/5 hover:bg-white/10 rounded-lg sm:rounded-xl text-[8px] sm:text-[9px] font-black uppercase tracking-widest transition-all text-slate-400"
                           >
                             <Download className="w-3 h-3 sm:w-4 sm:h-4" /> Download Notes
-                          </button>
+                          </a>
                           <button
                             onClick={() => syncMeetingNotes(meeting)}
                             className="flex items-center gap-2 px-4 sm:px-5 py-2 sm:py-2.5 bg-white/5 hover:bg-white/10 rounded-lg sm:rounded-xl text-[8px] sm:text-[9px] font-black uppercase tracking-widest transition-all text-slate-400"

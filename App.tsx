@@ -73,9 +73,7 @@ type BeforeInstallPromptEvent = Event & {
   userChoice: Promise<{ outcome: 'accepted' | 'dismissed'; platform: string }>;
 };
 
-type InstallGuidancePanel = 'overview' | 'browser-menu' | 'supported-browser';
-
-const PWA_INSTALL_BASE_URL = 'https://conscious-network.org';
+type InstallGuidancePanel = 'overview' | 'browser-menu';
 
 type ProviderWalletChallenge = {
   challengeId: string;
@@ -741,7 +739,6 @@ const App: React.FC = () => {
   const [isStandaloneApp, setStandaloneApp] = useState(false);
   const [isInstallGuidanceOpen, setInstallGuidanceOpen] = useState(false);
   const [installGuidancePanel, setInstallGuidancePanel] = useState<InstallGuidancePanel>('overview');
-  const [installLinkCopied, setInstallLinkCopied] = useState(false);
 
   const setCurrentView = (
     view: AppView,
@@ -841,157 +838,19 @@ const App: React.FC = () => {
     setInstallPromptEvent(null);
   };
 
-  const installEnvironment = useMemo(() => {
-    if (typeof window === 'undefined') {
-      return {
-        browserLabel: 'Supported Browser',
-        platformLabel: 'Device',
-        isEmbeddedBrowser: false,
-        primaryActionLabel: 'Add to Home Screen',
-        menuGuideTitle: 'Browser Menu Guide',
-        menuGuideSummary: 'Use your browser menu to add Higher Conscious Network to your home screen.',
-        menuSteps: [
-          'Open the browser menu.',
-          'Choose Add to Home Screen or Install App.',
-          'Confirm the home screen icon.',
-        ],
-      };
-    }
-
-    const userAgent = window.navigator.userAgent.toLowerCase();
-    const isIos = /iphone|ipad|ipod/.test(userAgent);
-    const isAndroid = /android/.test(userAgent);
-    const isFirefox = /firefox|fxios/.test(userAgent);
-    const isEdge = /edg|edgios/.test(userAgent);
-    const isChrome = /chrome|crios|chromium/.test(userAgent) && !isEdge && !isFirefox;
-    const isSafari = /safari/.test(userAgent) && !isChrome && !isEdge && !isFirefox && !isAndroid;
-    const isEmbeddedBrowser =
-      /instagram|fban|fbav|fb_iab|line|twitter|linkedinapp|tiktok|wv/.test(userAgent) ||
-      (isIos && !isSafari && !isChrome && !isFirefox && !isEdge);
-
-    const platformLabel = isIos ? 'iOS' : isAndroid ? 'Android' : 'Desktop';
-    const browserLabel = isEmbeddedBrowser
-      ? 'In-App Browser'
-      : isSafari
-      ? 'Safari'
-      : isFirefox
-      ? 'Firefox'
-      : isEdge
-      ? 'Edge'
-      : isChrome
-      ? 'Chrome'
-      : 'Browser';
-
-    if (isEmbeddedBrowser) {
-      return {
-        browserLabel,
-        platformLabel,
-        isEmbeddedBrowser,
-        primaryActionLabel: 'Add to Home Screen',
-        menuGuideTitle: 'Open in Supported Browser',
-        menuGuideSummary:
-          'This in-app browser may hide install controls. Open the site in Safari, Chrome, or Edge first, then install.',
-        menuSteps: [
-          'Use the app menu to open conscious-network.org in your device browser.',
-          'If that option is unavailable, copy the site link.',
-          'Open the link in Safari, Chrome, or Edge and use Add to Home Screen or Install App.',
-        ],
-      };
-    }
-
-    if (isIos || isSafari) {
-      return {
-        browserLabel: isSafari ? 'Safari' : browserLabel,
-        platformLabel,
-        isEmbeddedBrowser,
-        primaryActionLabel: 'Add to Home Screen',
-        menuGuideTitle: 'Safari Share Guide',
-        menuGuideSummary:
-          'Safari installs web apps from the Share menu. HCN cannot open that browser menu for you, but this guide points to the exact action.',
-        menuSteps: [
-          'Tap the Share button in the browser toolbar.',
-          'Choose Add to Home Screen.',
-          'Confirm Add to place Higher Conscious Network on your home screen.',
-        ],
-      };
-    }
-
-    if (isFirefox) {
-      return {
-        browserLabel,
-        platformLabel,
-        isEmbeddedBrowser,
-        primaryActionLabel: 'Add to Home Screen',
-        menuGuideTitle: 'Firefox Menu Guide',
-        menuGuideSummary:
-          'Firefox install support varies by device. Use the menu guide first; if install is unavailable, use a supported browser.',
-        menuSteps: [
-          'Open the Firefox menu.',
-          'Choose Install, Add to Home Screen, or Add page shortcut if your Firefox version supports it.',
-          'If no install option appears, copy the link and open it in Safari, Chrome, or Edge.',
-        ],
-      };
-    }
-
-    if (isAndroid || isChrome || isEdge) {
-      return {
-        browserLabel,
-        platformLabel,
-        isEmbeddedBrowser,
-        primaryActionLabel: installPromptEvent ? 'Install App' : 'Add to Home Screen',
-        menuGuideTitle: `${browserLabel} Menu Guide`,
-        menuGuideSummary:
-          'Use the browser install icon or menu. If the native prompt is available, the Install App action will open it directly.',
-        menuSteps: [
-          'Tap the browser menu or install icon.',
-          'Choose Install App or Add to Home Screen.',
-          'Confirm the install prompt for Higher Conscious Network.',
-        ],
-      };
-    }
-
-    return {
-      browserLabel,
-      platformLabel,
-      isEmbeddedBrowser,
-      primaryActionLabel: installPromptEvent ? 'Install App' : 'Add to Home Screen',
-      menuGuideTitle: 'Browser Menu Guide',
-      menuGuideSummary:
-        'Use your browser install option if available. If no install option appears, open the site in Safari, Chrome, or Edge.',
-      menuSteps: [
-        'Open the browser menu or install icon.',
-        'Choose Install App or Add to Home Screen if available.',
-        'Confirm Higher Conscious Network as the app name.',
-      ],
-    };
-  }, [installPromptEvent]);
-
-  const handleCopyInstallLink = async () => {
-    if (typeof window === 'undefined') return;
-    const installUrl = PWA_INSTALL_BASE_URL;
-    if (window.navigator.clipboard) {
-      await window.navigator.clipboard.writeText(installUrl);
-    } else {
-      const textArea = document.createElement('textarea');
-      textArea.value = installUrl;
-      textArea.setAttribute('readonly', 'true');
-      textArea.style.position = 'fixed';
-      textArea.style.opacity = '0';
-      document.body.appendChild(textArea);
-      textArea.select();
-      document.execCommand('copy');
-      document.body.removeChild(textArea);
-    }
-    setInstallLinkCopied(true);
-  };
-
-  const handleOpenSupportedBrowserGuide = () => {
-    setInstallGuidanceOpen(false);
-    setInstallGuidancePanel('overview');
-    if (typeof window !== 'undefined') {
-      window.location.assign(PWA_INSTALL_BASE_URL);
-    }
-  };
+  const installEnvironment = useMemo(() => ({
+    browserLabel: installPromptEvent ? 'Native install available' : 'Browser menu',
+    platformLabel: 'This device',
+    primaryActionLabel: installPromptEvent ? 'Install App' : 'Add to Home Screen',
+    menuGuideTitle: 'Browser Menu Guide',
+    menuGuideSummary:
+      'Use your browser menu or share sheet to install Higher Conscious Network. If a native install prompt is available, the Install App action opens it directly.',
+    menuSteps: [
+      'Open the browser menu, share sheet, or install icon.',
+      'Choose Install App, Add to Home Screen, or Add page shortcut when your browser offers it.',
+      'Confirm Higher Conscious Network as the app name and open it from your home screen or app list.',
+    ],
+  }), [installPromptEvent]);
 
   const shouldShowInstallAffordance = !isStandaloneApp;
   const shouldShowFloatingInstallAffordance =
@@ -4303,33 +4162,11 @@ const App: React.FC = () => {
                         Open Browser Menu Guide
                       </span>
                       <span className="mt-1 block text-xs leading-5 text-slate-400">
-                        Shows the correct install path for {installEnvironment.browserLabel}.
+                        Opens install guidance without leaving the current page.
                       </span>
                     </span>
                     <ChevronRight className="h-5 w-5 shrink-0 text-cyan-200" />
                   </button>
-
-                  {installEnvironment.isEmbeddedBrowser && (
-                    <button
-                      type="button"
-                      onClick={handleOpenSupportedBrowserGuide}
-                      className="flex w-full items-center justify-between gap-4 rounded-2xl border border-amber-300/25 bg-amber-300/10 px-4 py-4 text-left text-amber-50 transition hover:bg-amber-300/15"
-                      aria-label="Open in supported browser guidance"
-                    >
-                      <span className="min-w-0">
-                        <span className="block text-[10px] font-black uppercase tracking-widest text-amber-200">
-                          Fallback
-                        </span>
-                        <span className="mt-1 block text-sm font-black uppercase leading-tight">
-                          Open in Supported Browser
-                        </span>
-                        <span className="mt-1 block text-xs leading-5 text-amber-100/75">
-                          Use only when an in-app browser hides install controls.
-                        </span>
-                      </span>
-                      <ChevronRight className="h-5 w-5 shrink-0 text-amber-200" />
-                    </button>
-                  )}
                 </div>
               )}
 
@@ -4348,9 +4185,7 @@ const App: React.FC = () => {
 
                   <div className="rounded-2xl border border-white/10 bg-white/[0.04] p-4">
                     <p className="text-[10px] font-black uppercase tracking-widest text-cyan-200">
-                      {installGuidancePanel === 'supported-browser'
-                        ? 'Supported Browser Fallback'
-                        : installEnvironment.menuGuideTitle}
+                      {installEnvironment.menuGuideTitle}
                     </p>
                     <p className="mt-3 text-sm leading-6 text-slate-300">{installEnvironment.menuGuideSummary}</p>
                   </div>
@@ -4369,15 +4204,6 @@ const App: React.FC = () => {
                     ))}
                   </ol>
 
-                  {installGuidancePanel === 'supported-browser' && (
-                    <button
-                      type="button"
-                      onClick={handleCopyInstallLink}
-                      className="w-full rounded-2xl border border-cyan-300/30 bg-cyan-400/10 px-4 py-3 text-xs font-black uppercase text-cyan-100 transition hover:bg-cyan-400/20"
-                    >
-                      {installLinkCopied ? 'Site Link Copied' : 'Copy Site Link'}
-                    </button>
-                  )}
                 </div>
               )}
 

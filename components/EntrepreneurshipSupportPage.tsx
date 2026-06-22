@@ -14,7 +14,7 @@ import {
   Sparkles,
 } from 'lucide-react';
 import { UserProfile } from '../types';
-import { downloadTextFile } from '../services/downloadService';
+import { createTextDownloadHref } from '../services/downloadService';
 import careersLogo from '../src/assets/brand/conscious-careers-logo.png';
 import foundationGatewayGuide from '../src/assets/brand/foundation-gateway-guide.jpg';
 
@@ -563,7 +563,7 @@ const EntrepreneurshipSupportPage: React.FC<EntrepreneurshipSupportPageProps> = 
       .replace(/"/g, '&quot;')
       .replace(/'/g, '&#39;');
 
-  const downloadConsciousPlan = () => {
+  const consciousPlanDownload = useMemo(() => {
     const generatedAt = new Date();
     const planResponses = consciousPlanSections
       .map((section) => `
@@ -651,12 +651,23 @@ const EntrepreneurshipSupportPage: React.FC<EntrepreneurshipSupportPageProps> = 
 </body>
 </html>`;
 
-    downloadTextFile({
-      content: reportHtml,
-      filename: `conscious-plan-${generatedAt.toISOString().slice(0, 10)}.html`,
-      mimeType: 'text/html;charset=utf-8',
-    });
-  };
+    const filename = `conscious-plan-${generatedAt.toISOString().slice(0, 10)}.html`;
+    return {
+      filename,
+      href: createTextDownloadHref({
+        content: reportHtml,
+        mimeType: 'text/html;charset=utf-8',
+      }),
+    };
+  }, [
+    emotionalIntelligenceAnswers,
+    emotionalIntelligenceLevel,
+    emotionalIntelligenceMax,
+    emotionalIntelligencePercent,
+    emotionalIntelligenceTotal,
+    planFields,
+    user?.email,
+  ]);
 
   if (portalMode === 'assessment') {
     return (
@@ -1178,13 +1189,13 @@ const EntrepreneurshipSupportPage: React.FC<EntrepreneurshipSupportPageProps> = 
                   </div>
 
                   <div className="grid gap-3">
-                    <button
-                      type="button"
-                      onClick={downloadConsciousPlan}
+                    <a
+                      href={consciousPlanDownload.href}
+                      download={consciousPlanDownload.filename}
                       className="inline-flex items-center justify-center gap-2 rounded-xl border border-teal-200/30 bg-teal-300/[0.12] px-4 py-3 text-xs font-black uppercase tracking-[0.14em] text-teal-50 transition-colors hover:bg-teal-300/[0.2] focus:outline-none focus-visible:ring-2 focus-visible:ring-teal-200"
                     >
                       Download Conscious Plan <Download className="h-4 w-4" />
-                    </button>
+                    </a>
                     <button
                       type="button"
                       onClick={user ? onReturnToPortal : onMembershipAccess}

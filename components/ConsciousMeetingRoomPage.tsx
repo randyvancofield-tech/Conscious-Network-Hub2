@@ -35,7 +35,6 @@ import {
   requestMeetingMediaStream,
   stopMediaStream,
 } from '../services/mediaDeviceSupport';
-import { downloadBlobFile } from '../services/downloadService';
 import { ActionButton, EmptyState, PageHeader, PageShell, SurfacePanel } from './ui/PlatformPrimitives';
 import MeetingBrandLoop from './ui/MeetingBrandLoop';
 import cnhLogo from '../src/assets/brand/conscious-network-hub-logo.png';
@@ -213,11 +212,24 @@ const ConsciousMeetingRoomPage: React.FC<ConsciousMeetingRoomPageProps> = ({ ses
   const canRecordLocally = Boolean(
     roomConfig?.recording.localParticipantRecordingAllowed && hasJoined && localStream
   );
+  const localRecordingDownload = useMemo(() => {
+    if (recordedChunks.length === 0) return null;
+
+    return {
+      href: URL.createObjectURL(new Blob(recordedChunks, { type: 'video/webm' })),
+      filename: `conscious-meeting-local-${new Date().toISOString().slice(0, 19).replace(/:/g, '-')}.webm`,
+    };
+  }, [recordedChunks]);
 
   const providerName = useMemo(
     () => session?.providerDisplayName || 'Verified Provider',
     [session?.providerDisplayName]
   );
+
+  useEffect(() => {
+    if (!localRecordingDownload?.href) return undefined;
+    return () => URL.revokeObjectURL(localRecordingDownload.href);
+  }, [localRecordingDownload?.href]);
 
   const handleJoin = async (mode: RoomMode) => {
     if (!session) return;
@@ -352,14 +364,6 @@ const ConsciousMeetingRoomPage: React.FC<ConsciousMeetingRoomPageProps> = ({ ses
   const stopLocalRecording = () => {
     mediaRecorderRef.current?.stop();
     setJoinStatus('Local recording stopped. Download is available only in this browser session.');
-  };
-
-  const downloadLocalRecording = async () => {
-    if (recordedChunks.length === 0) return;
-    await downloadBlobFile({
-      blob: new Blob(recordedChunks, { type: 'video/webm' }),
-      filename: `conscious-meeting-local-${new Date().toISOString().slice(0, 19).replace(/:/g, '-')}.webm`,
-    });
   };
 
   if (isLoading) {
@@ -577,15 +581,25 @@ const ConsciousMeetingRoomPage: React.FC<ConsciousMeetingRoomPageProps> = ({ ses
             >
               {recordingState === 'recording' ? `Stop ${recordingSeconds}s` : 'Record Locally'}
             </ActionButton>
-            <ActionButton
-              type="button"
-              variant="secondary"
-              onClick={downloadLocalRecording}
-              disabled={recordedChunks.length === 0}
-              icon={<Download className="h-4 w-4" />}
-            >
-              Download
-            </ActionButton>
+            {localRecordingDownload ? (
+              <a
+                href={localRecordingDownload.href}
+                download={localRecordingDownload.filename}
+                className="inline-flex min-h-11 min-w-0 items-center justify-center gap-2 rounded-xl border border-white/10 bg-white/8 px-4 py-3 text-center text-xs font-black uppercase tracking-widest text-slate-100 transition-all hover:bg-white/12 active:scale-[0.98]"
+              >
+                <Download className="h-4 w-4" />
+                <span className="cnh-action-label min-w-0">Download</span>
+              </a>
+            ) : (
+              <ActionButton
+                type="button"
+                variant="secondary"
+                disabled
+                icon={<Download className="h-4 w-4" />}
+              >
+                Download
+              </ActionButton>
+            )}
           </div>
 
           <div className="rounded-xl border border-white/10 bg-white/[0.03] p-4 text-xs leading-5 text-slate-400">
