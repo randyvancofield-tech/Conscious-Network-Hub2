@@ -10,6 +10,7 @@ export interface WalletProviderEnvironment {
   providerName: string | null;
   hasProvider: boolean;
   isMobile: boolean;
+  isStandaloneApp: boolean;
   isMetaMask: boolean;
   isMetaMaskMobileBrowser: boolean;
   state: WalletProviderState;
@@ -132,6 +133,14 @@ export const isLikelyMobileWalletDevice = (): boolean => {
   );
 };
 
+const isStandaloneDisplayMode = (): boolean => {
+  if (!canUseWindow()) return false;
+  return Boolean(
+    window.matchMedia?.('(display-mode: standalone)').matches ||
+      (window.navigator as Navigator & { standalone?: boolean }).standalone
+  );
+};
+
 export const buildMetaMaskDappDeepLink = (rawUrl?: string): string | null => {
   const href = String(rawUrl || (canUseWindow() ? window.location.href : '')).trim();
   if (!href) return null;
@@ -142,7 +151,7 @@ export const buildMetaMaskDappDeepLink = (rawUrl?: string): string | null => {
     if (['localhost', '127.0.0.1', '::1'].includes(parsed.hostname.toLowerCase())) {
       return null;
     }
-    return `https://metamask.app.link/dapp/${parsed.host}${parsed.pathname}${parsed.search}${parsed.hash}`;
+    return `https://link.metamask.io/dapp/${parsed.host}${parsed.pathname}${parsed.search}${parsed.hash}`;
   } catch {
     return null;
   }
@@ -154,6 +163,7 @@ export const detectWalletProviderEnvironment = (rawUrl?: string): WalletProvider
   const providerName = walletProviderName(provider, selectedProvider);
   const hasProvider = Boolean(provider?.request);
   const isMobile = isLikelyMobileWalletDevice();
+  const isStandaloneApp = isStandaloneDisplayMode();
   const userAgent = canUseWindow() ? navigator.userAgent || '' : '';
   const isMetaMask = isMetaMaskProvider(provider, selectedProvider);
   const isMetaMaskMobileBrowser =
@@ -166,6 +176,7 @@ export const detectWalletProviderEnvironment = (rawUrl?: string): WalletProvider
       providerName,
       hasProvider,
       isMobile,
+      isStandaloneApp,
       isMetaMask,
       isMetaMaskMobileBrowser,
       state: 'metamask_mobile_browser',
@@ -181,6 +192,7 @@ export const detectWalletProviderEnvironment = (rawUrl?: string): WalletProvider
       providerName,
       hasProvider,
       isMobile,
+      isStandaloneApp,
       isMetaMask,
       isMetaMaskMobileBrowser,
       state: 'mobile_provider_available',
@@ -196,6 +208,7 @@ export const detectWalletProviderEnvironment = (rawUrl?: string): WalletProvider
       providerName,
       hasProvider,
       isMobile,
+      isStandaloneApp,
       isMetaMask,
       isMetaMaskMobileBrowser,
       state: 'desktop_extension_available',
@@ -211,11 +224,14 @@ export const detectWalletProviderEnvironment = (rawUrl?: string): WalletProvider
       providerName,
       hasProvider,
       isMobile,
+      isStandaloneApp,
       isMetaMask,
       isMetaMaskMobileBrowser,
       state: 'mobile_missing_provider',
       guidance: deepLinkUrl
-        ? 'Open this page in the MetaMask browser to connect your wallet.'
+        ? isStandaloneApp
+          ? 'Open MetaMask to approve the wallet signature, then return to the installed HCN app.'
+          : 'Open this page in the MetaMask browser to connect your wallet.'
         : 'Open this page in a wallet-enabled mobile browser to connect your wallet.',
       actionLabel: deepLinkUrl ? 'Open In MetaMask Browser' : null,
       deepLinkUrl,
@@ -227,6 +243,7 @@ export const detectWalletProviderEnvironment = (rawUrl?: string): WalletProvider
     providerName,
     hasProvider,
     isMobile,
+    isStandaloneApp,
     isMetaMask,
     isMetaMaskMobileBrowser,
     state: 'desktop_missing_provider',

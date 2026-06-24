@@ -1,4 +1,4 @@
-const SHELL_CACHE = 'hcn-shell-v1';
+const SHELL_CACHE = 'hcn-shell-v2';
 const SHELL_ASSETS = [
   '/',
   '/index.html',
@@ -9,6 +9,7 @@ const SHELL_ASSETS = [
 ];
 
 const DYNAMIC_PREFIXES = [
+  '/.well-known/',
   '/api/',
   '/uploads/',
   '/health',

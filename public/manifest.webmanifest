@@ -1,13 +1,19 @@
 {
+  "id": "/",
   "name": "Higher Conscious Network",
   "short_name": "HCN",
   "description": "Higher Conscious Network provider, member, learning, and meeting portal.",
   "start_url": "/",
   "scope": "/",
   "display": "standalone",
+  "display_override": ["standalone", "browser"],
   "orientation": "portrait-primary",
   "theme_color": "#05070a",
   "background_color": "#05070a",
+  "lang": "en-US",
+  "dir": "ltr",
+  "categories": ["education", "health", "social"],
+  "prefer_related_applications": false,
   "icons": [
     {
       "src": "/brand/higher-conscious-network-icon-192.png",
@@ -20,6 +26,34 @@
       "sizes": "512x512",
       "type": "image/png",
       "purpose": "any maskable"
+    }
+  ],
+  "shortcuts": [
+    {
+      "name": "Administrative Access",
+      "short_name": "Admin",
+      "description": "Open Administrative Access.",
+      "url": "/administrative-access",
+      "icons": [
+        {
+          "src": "/brand/higher-conscious-network-icon-192.png",
+          "sizes": "192x192",
+          "type": "image/png"
+        }
+      ]
+    },
+    {
+      "name": "Provider Access",
+      "short_name": "Provider",
+      "description": "Open provider access.",
+      "url": "/provider-access",
+      "icons": [
+        {
+          "src": "/brand/higher-conscious-network-icon-192.png",
+          "sizes": "192x192",
+          "type": "image/png"
+        }
+      ]
     }
   ]
 }
