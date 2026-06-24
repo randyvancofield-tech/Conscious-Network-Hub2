@@ -52,9 +52,11 @@ import { getProfileAvatarMedia, isVideoMediaAsset } from './services/mediaAssets
 import { createNativeProviderControlSession } from './services/backendApiService';
 import {
   WALLET_PROVIDER_UPDATED_EVENT,
+  connectWalletProvider,
   detectWalletProviderEnvironment,
   readWalletChainId,
   walletErrorMessage,
+  type WalletConnection,
   type WalletProviderEnvironment,
 } from './services/walletProvider';
 
@@ -978,6 +980,28 @@ const App: React.FC = () => {
       return;
     }
     setError(next.guidance);
+  };
+
+  const requestWalletConnection = async (
+    updateStatus: (message: string) => void,
+    actionLabel: string
+  ): Promise<WalletConnection | null> => {
+    const walletEnv = refreshWalletEnvironment();
+    if (!walletEnv.canConnect) {
+      updateStatus(walletEnv.guidance);
+      setError(walletEnv.guidance);
+      return null;
+    }
+
+    updateStatus(
+      walletEnv.transport === 'metamask_connect'
+        ? `Opening MetaMask to ${actionLabel}.`
+        : `Requesting the wallet to ${actionLabel}.`
+    );
+
+    const connection = await connectWalletProvider();
+    setWalletEnvironment(detectWalletProviderEnvironment());
+    return connection;
   };
 
   const walletNetworkMismatchMessage = (
@@ -1945,24 +1969,17 @@ const App: React.FC = () => {
   const handleAdministrativeWalletVerification = async () => {
     setError('');
     setAdminWalletStatus('');
-    const walletEnv = refreshWalletEnvironment();
-    const ethereum = walletEnv.provider;
-    if (!ethereum?.request) {
-      setAdminWalletStatus(walletEnv.guidance);
-      setError(walletEnv.guidance);
-      return;
-    }
-
     setAdminWalletVerifying(true);
-    setAdminWalletStatus('Requesting the administrator wallet...');
 
     try {
-      const accounts = await ethereum.request({ method: 'eth_requestAccounts' });
-      const walletAddress = Array.isArray(accounts) ? String(accounts[0] || '').trim() : '';
-      if (!walletAddress) {
-        setError('No wallet address was returned by MetaMask.');
-        return;
-      }
+      const walletConnection = await requestWalletConnection(
+        setAdminWalletStatus,
+        'verify the administrator wallet'
+      );
+      if (!walletConnection) return;
+
+      const ethereum = walletConnection.provider;
+      const walletAddress = walletConnection.walletAddress;
 
       setAdminWalletStatus('Creating an Administrative Access challenge...');
       const challenge = await api<ProviderWalletChallenge>('/provider/auth/admin/wallet/nonce', {
@@ -1970,7 +1987,7 @@ const App: React.FC = () => {
         auth: false,
         body: { walletAddress },
       });
-      const walletChainId = await readWalletChainId(ethereum).catch(() => null);
+      const walletChainId = walletConnection.chainId || (await readWalletChainId(ethereum).catch(() => null));
       if (walletChainId && challenge.chainId && walletChainId !== challenge.chainId) {
         const message = walletNetworkMismatchMessage(walletChainId, challenge.chainId);
         setError(message);
@@ -2100,32 +2117,24 @@ const App: React.FC = () => {
       return;
     }
 
-    const walletEnv = refreshWalletEnvironment();
-    const ethereum = walletEnv.provider;
-    if (!ethereum?.request) {
-      setProviderWalletStatus(walletEnv.guidance);
-      setError(walletEnv.guidance);
-      return;
-    }
-
     setProviderWalletBinding(true);
     setError('');
-    setProviderWalletStatus('Requesting the wallet you want to bind...');
     try {
-      const accounts = await ethereum.request({ method: 'eth_requestAccounts' });
-      const walletAddress = Array.isArray(accounts) ? String(accounts[0] || '').trim() : '';
-      if (!walletAddress) {
-        setError('No wallet address was returned by MetaMask.');
-        setProviderWalletStatus('');
-        return;
-      }
+      const walletConnection = await requestWalletConnection(
+        setProviderWalletStatus,
+        'bind this provider wallet'
+      );
+      if (!walletConnection) return;
+
+      const ethereum = walletConnection.provider;
+      const walletAddress = walletConnection.walletAddress;
 
       setProviderWalletStatus('Preparing gasless wallet binding message...');
       const challenge = await api<ProviderWalletChallenge>('/provider/auth/wallet/bind/nonce', {
         method: 'POST',
         body: { walletAddress },
       });
-      const walletChainId = await readWalletChainId(ethereum).catch(() => null);
+      const walletChainId = walletConnection.chainId || (await readWalletChainId(ethereum).catch(() => null));
       if (walletChainId && challenge.chainId && walletChainId !== challenge.chainId) {
         const message = walletNetworkMismatchMessage(walletChainId, challenge.chainId);
         setError(message);
@@ -2184,32 +2193,24 @@ const App: React.FC = () => {
       return;
     }
 
-    const walletEnv = refreshWalletEnvironment();
-    const ethereum = walletEnv.provider;
-    if (!ethereum?.request) {
-      setProviderWalletStatus(walletEnv.guidance);
-      setError(walletEnv.guidance);
-      return;
-    }
-
     setProviderWalletVerifying(true);
     setError('');
-    setProviderWalletStatus('Requesting your provider wallet...');
     try {
-      const accounts = await ethereum.request({ method: 'eth_requestAccounts' });
-      const walletAddress = Array.isArray(accounts) ? String(accounts[0] || '').trim() : '';
-      if (!walletAddress) {
-        setError('No wallet address was returned by MetaMask.');
-        setProviderWalletStatus('');
-        return;
-      }
+      const walletConnection = await requestWalletConnection(
+        setProviderWalletStatus,
+        'verify your provider wallet'
+      );
+      if (!walletConnection) return;
+
+      const ethereum = walletConnection.provider;
+      const walletAddress = walletConnection.walletAddress;
 
       setProviderWalletStatus('Preparing gasless provider verification message...');
       const challenge = await api<ProviderWalletChallenge>('/provider/auth/wallet/nonce', {
         method: 'POST',
         body: { walletAddress },
       });
-      const walletChainId = await readWalletChainId(ethereum).catch(() => null);
+      const walletChainId = walletConnection.chainId || (await readWalletChainId(ethereum).catch(() => null));
       if (walletChainId && challenge.chainId && walletChainId !== challenge.chainId) {
         const message = walletNetworkMismatchMessage(walletChainId, challenge.chainId);
         setError(message);
@@ -3420,7 +3421,7 @@ const App: React.FC = () => {
                     disabled={
                       isAdminWalletVerifying ||
                       isAdminAccessStatusLoading ||
-                      !walletEnvironment.hasProvider ||
+                      !walletEnvironment.canConnect ||
                       adminAccessStatus?.walletConfigured === false ||
                       adminAccessStatus?.adminAccountReady === false
                     }
@@ -3432,8 +3433,8 @@ const App: React.FC = () => {
                         ? 'Wallet Not Configured'
                         : adminAccessStatus?.adminAccountReady === false
                           ? 'Admin Account Not Ready'
-                          : !walletEnvironment.hasProvider
-                            ? 'Wallet Browser Required'
+                          : !walletEnvironment.canConnect
+                            ? 'MetaMask Required'
                         : 'Verify Wallet & Enter Portal'}
                   </button>
                 </div>
@@ -3578,13 +3579,13 @@ const App: React.FC = () => {
                     <button
                       type="button"
                       onClick={() => void handleProviderWalletBinding()}
-                      disabled={isProviderWalletBinding || !walletEnvironment.hasProvider}
+                      disabled={isProviderWalletBinding || !walletEnvironment.canConnect}
                       className="w-full rounded-2xl bg-blue-600 px-5 py-4 text-xs font-black uppercase tracking-widest text-white shadow-xl shadow-blue-950/40 transition hover:bg-blue-500 disabled:opacity-60"
                     >
                       {isProviderWalletBinding
                         ? 'Binding Wallet...'
-                        : !walletEnvironment.hasProvider
-                          ? 'Wallet Browser Required'
+                        : !walletEnvironment.canConnect
+                          ? 'MetaMask Required'
                           : 'Bind Wallet'}
                     </button>
                     <button
@@ -3632,13 +3633,13 @@ const App: React.FC = () => {
                     <button
                       type="button"
                       onClick={() => void handleProviderWalletVerification()}
-                      disabled={isProviderWalletVerifying || !walletEnvironment.hasProvider}
+                      disabled={isProviderWalletVerifying || !walletEnvironment.canConnect}
                       className="w-full rounded-2xl bg-blue-600 px-5 py-4 text-xs font-black uppercase tracking-widest text-white shadow-xl shadow-blue-950/40 transition hover:bg-blue-500 disabled:opacity-60"
                     >
                       {isProviderWalletVerifying
                         ? 'Verifying Wallet...'
-                        : !walletEnvironment.hasProvider
-                          ? 'Wallet Browser Required'
+                        : !walletEnvironment.canConnect
+                          ? 'MetaMask Required'
                           : 'Verify Wallet & Open Tools'}
                     </button>
                   </div>

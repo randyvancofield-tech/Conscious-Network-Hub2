@@ -12,6 +12,7 @@
   },
   "dependencies": {
     "@mediapipe/selfie_segmentation": "^0.1.1675465747",
+    "@metamask/connect-evm": "^2.1.0",
     "@react-three/drei": "^10.7.7",
     "@react-three/fiber": "^9.4.2",
     "ethers": "^6.15.0",

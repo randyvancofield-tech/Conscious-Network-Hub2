@@ -1,14 +1,21 @@
+import type { Hex, MetamaskConnectEVM } from '@metamask/connect-evm';
+
 export type WalletProviderState =
   | 'desktop_extension_available'
   | 'mobile_provider_available'
+  | 'mobile_metamask_connect_available'
   | 'metamask_mobile_browser'
   | 'mobile_missing_provider'
   | 'desktop_missing_provider';
+
+export type WalletProviderTransport = 'injected' | 'metamask_connect' | 'none';
 
 export interface WalletProviderEnvironment {
   provider: any | null;
   providerName: string | null;
   hasProvider: boolean;
+  canConnect: boolean;
+  transport: WalletProviderTransport;
   isMobile: boolean;
   isStandaloneApp: boolean;
   isMetaMask: boolean;
@@ -19,11 +26,26 @@ export interface WalletProviderEnvironment {
   deepLinkUrl: string | null;
 }
 
+export interface WalletConnection {
+  provider: any;
+  accounts: string[];
+  walletAddress: string;
+  chainId: number | null;
+  transport: Exclude<WalletProviderTransport, 'none'>;
+  environment: WalletProviderEnvironment;
+}
+
 const MOBILE_USER_AGENT_PATTERN =
   /android|webos|iphone|ipad|ipod|blackberry|iemobile|opera mini/i;
 
 const METAMASK_MOBILE_USER_AGENT_PATTERN = /metamaskmobile/i;
 export const WALLET_PROVIDER_UPDATED_EVENT = 'cnh:wallet-provider-updated';
+
+const DEFAULT_PROVIDER_WALLET_CHAIN_ID = 1;
+const DEFAULT_ETHEREUM_MAINNET_RPC_URL = 'https://cloudflare-eth.com';
+const MAINNET_CHAIN_ID_HEX: Hex = '0x1';
+
+let metamaskConnectClientPromise: Promise<MetamaskConnectEVM> | null = null;
 
 interface Eip6963ProviderDetail {
   info?: {
@@ -141,6 +163,113 @@ const isStandaloneDisplayMode = (): boolean => {
   );
 };
 
+const isSecureOrLocalOrigin = (): boolean => {
+  if (!canUseWindow()) return false;
+  return (
+    window.location.protocol === 'https:' ||
+    ['localhost', '127.0.0.1', '::1'].includes(window.location.hostname.toLowerCase())
+  );
+};
+
+const canUseMetaMaskConnectTransport = (): boolean =>
+  canUseWindow() && isSecureOrLocalOrigin() && isLikelyMobileWalletDevice();
+
+const parsePositiveInteger = (value: unknown): number | null => {
+  const parsed = Number(value);
+  return Number.isInteger(parsed) && parsed > 0 ? parsed : null;
+};
+
+const toHexChainId = (chainId: number): Hex => `0x${Math.floor(chainId).toString(16)}` as Hex;
+
+const fromHexChainId = (chainId: unknown): number | null => {
+  const normalized = String(chainId || '').trim();
+  if (!normalized) return null;
+  const parsed = normalized.startsWith('0x') ? parseInt(normalized, 16) : Number(normalized);
+  return Number.isFinite(parsed) && parsed > 0 ? Math.floor(parsed) : null;
+};
+
+const getConfiguredProviderWalletChainId = (): number => {
+  return (
+    parsePositiveInteger(import.meta.env.VITE_PROVIDER_WALLET_CHAIN_ID) ||
+    DEFAULT_PROVIDER_WALLET_CHAIN_ID
+  );
+};
+
+const getConfiguredRpcUrl = (chainId: number): string => {
+  const explicitProviderRpcUrl = String(import.meta.env.VITE_PROVIDER_WALLET_RPC_URL || '').trim();
+  if (explicitProviderRpcUrl) return explicitProviderRpcUrl;
+
+  if (chainId === DEFAULT_PROVIDER_WALLET_CHAIN_ID) {
+    return (
+      String(import.meta.env.VITE_ETHEREUM_MAINNET_RPC_URL || '').trim() ||
+      DEFAULT_ETHEREUM_MAINNET_RPC_URL
+    );
+  }
+
+  return '';
+};
+
+const getSupportedNetworks = (): Record<Hex, string> => {
+  const configuredChainId = getConfiguredProviderWalletChainId();
+  const configuredRpcUrl = getConfiguredRpcUrl(configuredChainId);
+  const networks: Record<Hex, string> = {
+    [MAINNET_CHAIN_ID_HEX]: String(import.meta.env.VITE_ETHEREUM_MAINNET_RPC_URL || '').trim() ||
+      DEFAULT_ETHEREUM_MAINNET_RPC_URL,
+  };
+
+  if (configuredRpcUrl) {
+    networks[toHexChainId(configuredChainId)] = configuredRpcUrl;
+  }
+
+  return networks;
+};
+
+const getConnectChainIds = (): Hex[] => {
+  const configuredChainId = getConfiguredProviderWalletChainId();
+  const configuredChainIdHex = toHexChainId(configuredChainId);
+  const networks = getSupportedNetworks();
+  return networks[configuredChainIdHex] ? [configuredChainIdHex] : [MAINNET_CHAIN_ID_HEX];
+};
+
+const createMetaMaskConnectClient = async (): Promise<MetamaskConnectEVM> => {
+  if (!metamaskConnectClientPromise) {
+    metamaskConnectClientPromise = import('@metamask/connect-evm')
+      .then(({ createEVMClient }) =>
+        createEVMClient({
+          dapp: {
+            name: 'Higher Conscious Network',
+            url: canUseWindow() ? window.location.origin : 'https://conscious-network.org',
+            iconUrl: canUseWindow()
+              ? new URL('/brand/higher-conscious-network-icon-512.png', window.location.origin).href
+              : 'https://conscious-network.org/brand/higher-conscious-network-icon-512.png',
+          },
+          api: {
+            supportedNetworks: getSupportedNetworks(),
+          },
+          analytics: {
+            enabled: false,
+          },
+          ui: {
+            preferExtension: false,
+            showInstallModal: false,
+          },
+          eventHandlers: {
+            connect: notifyWalletProviderUpdated,
+            disconnect: notifyWalletProviderUpdated,
+            accountsChanged: notifyWalletProviderUpdated,
+            chainChanged: notifyWalletProviderUpdated,
+          },
+        })
+      )
+      .catch((error) => {
+        metamaskConnectClientPromise = null;
+        throw error;
+      });
+  }
+
+  return metamaskConnectClientPromise;
+};
+
 export const buildMetaMaskDappDeepLink = (rawUrl?: string): string | null => {
   const href = String(rawUrl || (canUseWindow() ? window.location.href : '')).trim();
   if (!href) return null;
@@ -164,6 +293,7 @@ export const detectWalletProviderEnvironment = (rawUrl?: string): WalletProvider
   const hasProvider = Boolean(provider?.request);
   const isMobile = isLikelyMobileWalletDevice();
   const isStandaloneApp = isStandaloneDisplayMode();
+  const hasMetaMaskConnectTransport = canUseMetaMaskConnectTransport();
   const userAgent = canUseWindow() ? navigator.userAgent || '' : '';
   const isMetaMask = isMetaMaskProvider(provider, selectedProvider);
   const isMetaMaskMobileBrowser =
@@ -175,6 +305,8 @@ export const detectWalletProviderEnvironment = (rawUrl?: string): WalletProvider
       provider,
       providerName,
       hasProvider,
+      canConnect: true,
+      transport: 'injected',
       isMobile,
       isStandaloneApp,
       isMetaMask,
@@ -191,6 +323,8 @@ export const detectWalletProviderEnvironment = (rawUrl?: string): WalletProvider
       provider,
       providerName,
       hasProvider,
+      canConnect: true,
+      transport: 'injected',
       isMobile,
       isStandaloneApp,
       isMetaMask,
@@ -207,6 +341,8 @@ export const detectWalletProviderEnvironment = (rawUrl?: string): WalletProvider
       provider,
       providerName,
       hasProvider,
+      canConnect: true,
+      transport: 'injected',
       isMobile,
       isStandaloneApp,
       isMetaMask,
@@ -218,11 +354,33 @@ export const detectWalletProviderEnvironment = (rawUrl?: string): WalletProvider
     };
   }
 
+  if (hasMetaMaskConnectTransport) {
+    return {
+      provider,
+      providerName: 'MetaMask',
+      hasProvider,
+      canConnect: true,
+      transport: 'metamask_connect',
+      isMobile,
+      isStandaloneApp,
+      isMetaMask: true,
+      isMetaMaskMobileBrowser,
+      state: 'mobile_metamask_connect_available',
+      guidance: isStandaloneApp
+        ? 'MetaMask mobile connection is ready. Approve in MetaMask, then HCN will finish this session here.'
+        : 'MetaMask mobile connection is ready. Approve in MetaMask to finish this session.',
+      actionLabel: null,
+      deepLinkUrl,
+    };
+  }
+
   if (isMobile) {
     return {
       provider,
       providerName,
       hasProvider,
+      canConnect: false,
+      transport: 'none',
       isMobile,
       isStandaloneApp,
       isMetaMask,
@@ -230,10 +388,10 @@ export const detectWalletProviderEnvironment = (rawUrl?: string): WalletProvider
       state: 'mobile_missing_provider',
       guidance: deepLinkUrl
         ? isStandaloneApp
-          ? 'Open MetaMask to approve the wallet signature, then return to the installed HCN app.'
-          : 'Open this page in the MetaMask browser to connect your wallet.'
+          ? 'MetaMask connection requires the secure installed HCN app or an HTTPS browser session.'
+          : 'Open HCN over HTTPS, then retry MetaMask connection.'
         : 'Open this page in a wallet-enabled mobile browser to connect your wallet.',
-      actionLabel: deepLinkUrl ? 'Open In MetaMask Browser' : null,
+      actionLabel: null,
       deepLinkUrl,
     };
   }
@@ -242,6 +400,8 @@ export const detectWalletProviderEnvironment = (rawUrl?: string): WalletProvider
     provider,
     providerName,
     hasProvider,
+    canConnect: false,
+    transport: 'none',
     isMobile,
     isStandaloneApp,
     isMetaMask,
@@ -277,12 +437,61 @@ export const walletErrorMessage = (
   return message || fallback;
 };
 
+const normalizeAccounts = (accounts: unknown): string[] => {
+  if (!Array.isArray(accounts)) return [];
+  return accounts.map((account) => String(account || '').trim()).filter(Boolean);
+};
+
+export const connectWalletProvider = async (): Promise<WalletConnection> => {
+  const environment = detectWalletProviderEnvironment();
+
+  if (environment.provider?.request) {
+    const accounts = normalizeAccounts(
+      await environment.provider.request({ method: 'eth_requestAccounts' })
+    );
+    const walletAddress = accounts[0] || '';
+    if (!walletAddress) {
+      throw new Error('No wallet address was returned by MetaMask.');
+    }
+
+    return {
+      provider: environment.provider,
+      accounts,
+      walletAddress,
+      chainId: await readWalletChainId(environment.provider).catch(() => null),
+      transport: 'injected',
+      environment,
+    };
+  }
+
+  if (environment.transport === 'metamask_connect' && environment.canConnect) {
+    const client = await createMetaMaskConnectClient();
+    const result = await client.connect({
+      chainIds: getConnectChainIds(),
+      forceRequest: false,
+    });
+    const provider = client.getProvider();
+    const accounts = normalizeAccounts(result.accounts);
+    const walletAddress = accounts[0] || '';
+    if (!walletAddress) {
+      throw new Error('No wallet address was returned by MetaMask.');
+    }
+
+    return {
+      provider,
+      accounts,
+      walletAddress,
+      chainId: fromHexChainId(result.chainId),
+      transport: 'metamask_connect',
+      environment,
+    };
+  }
+
+  throw new Error(environment.guidance);
+};
+
 export const readWalletChainId = async (provider: any): Promise<number | null> => {
   if (!provider?.request) return null;
   const rawChainId = await provider.request({ method: 'eth_chainId' });
-  const normalized = String(rawChainId || '').trim();
-  const parsed = normalized.startsWith('0x')
-    ? parseInt(normalized, 16)
-    : Number(normalized);
-  return Number.isFinite(parsed) && parsed > 0 ? Math.floor(parsed) : null;
+  return fromHexChainId(rawChainId);
 };

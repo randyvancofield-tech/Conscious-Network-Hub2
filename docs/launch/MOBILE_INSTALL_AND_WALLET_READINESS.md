@@ -6,22 +6,23 @@ Date captured: 2026-06-24
 
 - The active repo is a React/Vite web app with PWA install assets.
 - No Android, iOS, Capacitor, Cordova, Bubblewrap, TWA, APK, AAB, or IPA project is present in this checkout.
-- Admin/provider wallet authentication currently uses injected EIP-1193 providers when present.
-- Mobile fallback opens the HCN URL inside the MetaMask mobile in-app browser with a MetaMask deeplink.
-- Browser session storage is not shared between the installed PWA and the MetaMask in-app browser, so a wallet session completed inside MetaMask does not automatically transfer back into the installed PWA.
+- Admin/provider wallet authentication uses injected EIP-1193 providers when present.
+- Mobile standalone/browser authentication now uses MetaMask Connect EVM as the mobile-safe EIP-1193 transport.
+- The old mobile fallback that opened the entire HCN page inside MetaMask's in-app browser is no longer the primary authentication path.
 
 ## Root Cause Summary
 
 Desktop works because the MetaMask extension injects `window.ethereum` into the same browser context where HCN is already running. The pending JavaScript wallet request resolves in that same tab, then HCN stores the returned session tokens in that same tab's `sessionStorage`.
 
-Mobile does not have that same shared context. The current fallback opens MetaMask's in-app browser. Authentication can complete there, but it is a separate browser container from the installed PWA, with separate session storage. Without MetaMask Connect, WalletConnect, a native app callback, or a backend one-time handoff flow bound to a verified app link, the installed app cannot automatically receive the completed auth state.
+Mobile does not have that same shared injected-extension context. The former fallback opened MetaMask's in-app browser, where authentication could complete in a separate browser container from the installed PWA. HCN now uses MetaMask Connect EVM so the PWA keeps the wallet request promise and receives the resulting EIP-1193 account/signature response in the HCN context.
 
 ## Code-Level Readiness Added
 
 - Manifest identity is explicit with `id`, `scope`, `start_url`, language, categories, `display_override`, and app shortcuts.
 - Service worker cache version was bumped and `/.well-known/` is excluded from shell caching so future Android Digital Asset Links and Apple association files are fetched directly.
 - MetaMask mobile deeplinks now use the current MetaMask documented `https://link.metamask.io/dapp/...` host.
-- Installed-app MetaMask guidance now tells users to return to the installed HCN app after approval instead of implying a silent session transfer exists.
+- MetaMask Connect EVM was added for mobile-safe account connection and gasless SIWE-style signatures.
+- Installed-app wallet actions now enable the primary Verify/Bind button even without an injected provider when the MetaMask Connect transport is available.
 
 ## Platform Setup Required Outside This Repo
 
@@ -48,11 +49,11 @@ Install Higher Conscious Network from the secure website only: `https://consciou
 On Android or desktop Chrome/Edge, use the browser's Install app prompt or Add to Home Screen option.
 On iPhone or iPad, open the site in Safari, tap Share, then Add to Home Screen.
 Do not install HCN from a downloaded APK or file attachment unless operations has explicitly provided a signed internal testing build.
-For administrator or provider wallet verification on mobile, open the wallet step in MetaMask, approve the gasless signature, then return to the installed HCN app.
+For administrator or provider wallet verification on mobile, tap the HCN wallet verification button, approve the gasless MetaMask prompts, and let HCN complete the session after MetaMask returns.
 
 ## Recommended Launch Path
 
 1. PWA-only for the immediate web launch: safest and lowest operational risk.
 2. Trusted Web Activity on Android for store-trusted install once Play Console, signing, and Digital Asset Links are ready.
 3. TestFlight/App Store only if native iOS capabilities or universal-link callback behavior become required.
-4. Add MetaMask Connect or WalletConnect only as a scoped wallet-auth project, because it changes the authentication transport and should be tested across desktop extension, mobile browser, installed PWA, and provider/admin roles.
+4. Keep MetaMask Connect as the scoped wallet-auth transport and test it across desktop extension, mobile browser, installed PWA, and provider/admin roles before widening to other wallet families.
