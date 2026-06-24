@@ -1,20 +1,24 @@
 import { getAuthToken } from './sessionService';
 
 const PRODUCTION_BACKEND_FALLBACK_URL = 'https://conscious-network-backend.onrender.com';
+const LOCAL_BACKEND_URL_PATTERN = /^https?:\/\/(?:localhost|127\.0\.0\.1|\[::1\])(?::\d+)?(?:\/|$)/i;
+const LOCAL_BROWSER_HOSTNAMES = new Set(['localhost', '127.0.0.1', '::1']);
+const PRODUCTION_FRONTEND_HOSTNAMES = new Set(['conscious-network.org', 'www.conscious-network.org']);
+
 const configuredBaseUrl = String(import.meta.env.VITE_BACKEND_URL || '').trim();
 const currentBrowserHostname =
   typeof window !== 'undefined' ? String(window.location.hostname || '').trim().toLowerCase() : '';
+const isLocalBrowserHostname = LOCAL_BROWSER_HOSTNAMES.has(currentBrowserHostname);
+const isConfiguredLocalBackendUrl = LOCAL_BACKEND_URL_PATTERN.test(configuredBaseUrl);
 const shouldUseKnownProductionBackend =
-  !configuredBaseUrl &&
   import.meta.env.PROD &&
-  ['conscious-network.org', 'www.conscious-network.org'].includes(currentBrowserHostname);
+  ((!configuredBaseUrl && PRODUCTION_FRONTEND_HOSTNAMES.has(currentBrowserHostname)) ||
+    (isConfiguredLocalBackendUrl && !isLocalBrowserHostname));
 const resolvedBaseUrl = shouldUseKnownProductionBackend ? PRODUCTION_BACKEND_FALLBACK_URL : configuredBaseUrl;
 const allowRemoteBackendInDev =
   String(import.meta.env.VITE_ALLOW_REMOTE_BACKEND_IN_DEV || '').trim().toLowerCase() === 'true';
 const isRemoteHttpUrl = /^https?:\/\//i.test(resolvedBaseUrl);
-const isLocalBackendUrl = /^https?:\/\/(?:localhost|127\.0\.0\.1|\[::1\])(?::\d+)?(?:\/|$)/i.test(
-  resolvedBaseUrl
-);
+const isLocalBackendUrl = LOCAL_BACKEND_URL_PATTERN.test(resolvedBaseUrl);
 const shouldIgnoreRemoteDevBackend =
   import.meta.env.DEV && isRemoteHttpUrl && !isLocalBackendUrl && !allowRemoteBackendInDev;
 

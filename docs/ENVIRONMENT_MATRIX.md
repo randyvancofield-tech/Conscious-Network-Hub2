@@ -6,7 +6,8 @@ Canonical environment values for the current backend architecture.
 
 | File | Key | Default | Required | Notes |
 |---|---|---|---|---|
-| `.env.local` | `VITE_BACKEND_URL` | `http://localhost:3001` | Yes | Frontend API base URL. |
+| `.env.local` | `VITE_BACKEND_URL` | `http://localhost:3001` | Yes for local dev | Frontend API base URL for laptop-only development. Do not use for mobile/release builds. |
+| `.env.production.local` | `VITE_BACKEND_URL` | `https://conscious-network-backend.onrender.com` | Yes for mobile/release builds | Production HTTPS API base URL baked into Vite distribution builds. |
 | `.env.local` | `VITE_ALLOW_REMOTE_BACKEND_IN_DEV` | `false` | No | Keeps development writes on local backend unless explicitly overridden. |
 | `.env.example` | `VITE_BACKEND_URL` | `http://localhost:3001` | Yes | Template value for local development. |
 
