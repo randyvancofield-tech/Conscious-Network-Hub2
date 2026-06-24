@@ -38,7 +38,11 @@ export interface WalletConnection {
 const MOBILE_USER_AGENT_PATTERN =
   /android|webos|iphone|ipad|ipod|blackberry|iemobile|opera mini/i;
 
+const ANDROID_USER_AGENT_PATTERN = /android/i;
+const IOS_USER_AGENT_PATTERN = /iphone|ipad|ipod/i;
 const METAMASK_MOBILE_USER_AGENT_PATTERN = /metamaskmobile/i;
+const METAMASK_CONNECT_DEEPLINK_BASE = 'metamask://connect';
+const METAMASK_CONNECT_UNIVERSAL_LINK_BASE = 'https://metamask.app.link/connect';
 export const WALLET_PROVIDER_UPDATED_EVENT = 'cnh:wallet-provider-updated';
 
 const DEFAULT_PROVIDER_WALLET_CHAIN_ID = 1;
@@ -155,6 +159,12 @@ export const isLikelyMobileWalletDevice = (): boolean => {
   );
 };
 
+const isLikelyAndroidWalletDevice = (): boolean =>
+  canUseWindow() && ANDROID_USER_AGENT_PATTERN.test(navigator.userAgent || '');
+
+const isLikelyIosWalletDevice = (): boolean =>
+  canUseWindow() && IOS_USER_AGENT_PATTERN.test(navigator.userAgent || '');
+
 const isStandaloneDisplayMode = (): boolean => {
   if (!canUseWindow()) return false;
   return Boolean(
@@ -173,6 +183,20 @@ const isSecureOrLocalOrigin = (): boolean => {
 
 const canUseMetaMaskConnectTransport = (): boolean =>
   canUseWindow() && isSecureOrLocalOrigin() && isLikelyMobileWalletDevice();
+
+const toMetaMaskConnectUniversalLink = (deeplink: string): string => {
+  if (deeplink.startsWith(METAMASK_CONNECT_DEEPLINK_BASE)) {
+    return `${METAMASK_CONNECT_UNIVERSAL_LINK_BASE}${deeplink.slice(
+      METAMASK_CONNECT_DEEPLINK_BASE.length
+    )}`;
+  }
+  return deeplink;
+};
+
+const openMetaMaskConnectLink = (deeplink: string): void => {
+  if (!canUseWindow()) return;
+  window.location.assign(toMetaMaskConnectUniversalLink(deeplink));
+};
 
 const parsePositiveInteger = (value: unknown): number | null => {
   const parsed = Number(value);
@@ -252,6 +276,11 @@ const createMetaMaskConnectClient = async (): Promise<MetamaskConnectEVM> => {
           ui: {
             preferExtension: false,
             showInstallModal: false,
+            headless: true,
+          },
+          mobile: {
+            useDeeplink: false,
+            preferredOpenLink: openMetaMaskConnectLink,
           },
           eventHandlers: {
             connect: notifyWalletProviderUpdated,
@@ -292,6 +321,8 @@ export const detectWalletProviderEnvironment = (rawUrl?: string): WalletProvider
   const providerName = walletProviderName(provider, selectedProvider);
   const hasProvider = Boolean(provider?.request);
   const isMobile = isLikelyMobileWalletDevice();
+  const isAndroid = isLikelyAndroidWalletDevice();
+  const isIos = isLikelyIosWalletDevice();
   const isStandaloneApp = isStandaloneDisplayMode();
   const hasMetaMaskConnectTransport = canUseMetaMaskConnectTransport();
   const userAgent = canUseWindow() ? navigator.userAgent || '' : '';
@@ -312,7 +343,7 @@ export const detectWalletProviderEnvironment = (rawUrl?: string): WalletProvider
       isMetaMask,
       isMetaMaskMobileBrowser,
       state: 'metamask_mobile_browser',
-      guidance: 'MetaMask mobile browser is ready. Continue with the wallet signature.',
+      guidance: 'MetaMask browser is ready. Continue with the gasless wallet signature here.',
       actionLabel: null,
       deepLinkUrl,
     };
@@ -330,7 +361,7 @@ export const detectWalletProviderEnvironment = (rawUrl?: string): WalletProvider
       isMetaMask,
       isMetaMaskMobileBrowser,
       state: 'mobile_provider_available',
-      guidance: 'A wallet-enabled mobile browser is ready. Continue with the wallet signature.',
+      guidance: 'A wallet-enabled mobile browser is ready. Continue with the gasless wallet signature here.',
       actionLabel: null,
       deepLinkUrl,
     };
@@ -366,9 +397,11 @@ export const detectWalletProviderEnvironment = (rawUrl?: string): WalletProvider
       isMetaMask: true,
       isMetaMaskMobileBrowser,
       state: 'mobile_metamask_connect_available',
-      guidance: isStandaloneApp
-        ? 'MetaMask mobile connection is ready. Approve in MetaMask, then HCN will finish this session here.'
-        : 'MetaMask mobile connection is ready. Approve in MetaMask to finish this session.',
+      guidance: isIos
+        ? 'Continue with the MetaMask app. iOS may ask you to switch back to HCN after approval so this session can finish.'
+        : isStandaloneApp
+          ? 'Continue with the MetaMask app. After approval, return to this installed HCN app if your phone does not switch back automatically.'
+          : 'Continue with the MetaMask app. If MetaMask does not open, install or unlock it, then return to HCN and try again.',
       actionLabel: null,
       deepLinkUrl,
     };
@@ -386,11 +419,13 @@ export const detectWalletProviderEnvironment = (rawUrl?: string): WalletProvider
       isMetaMask,
       isMetaMaskMobileBrowser,
       state: 'mobile_missing_provider',
-      guidance: deepLinkUrl
-        ? isStandaloneApp
-          ? 'MetaMask connection requires the secure installed HCN app or an HTTPS browser session.'
-          : 'Open HCN over HTTPS, then retry MetaMask connection.'
-        : 'Open this page in a wallet-enabled mobile browser to connect your wallet.',
+      guidance: isSecureOrLocalOrigin()
+        ? isIos
+          ? 'Install MetaMask from the App Store, then return to HCN in Safari or the installed app and continue.'
+          : isAndroid
+            ? 'Install or unlock MetaMask Mobile, then return to HCN and continue.'
+            : 'Install MetaMask Mobile or use a wallet-enabled browser, then return to HCN and continue.'
+        : 'Open HCN over secure HTTPS, then retry MetaMask wallet verification.',
       actionLabel: null,
       deepLinkUrl,
     };
@@ -407,7 +442,7 @@ export const detectWalletProviderEnvironment = (rawUrl?: string): WalletProvider
     isMetaMask,
     isMetaMaskMobileBrowser,
     state: 'desktop_missing_provider',
-    guidance: 'Install or unlock MetaMask in this browser, then retry wallet verification.',
+    guidance: 'Install or unlock the MetaMask browser extension for this desktop browser, then retry wallet verification. To use the mobile app, open HCN on your phone.',
     actionLabel: null,
     deepLinkUrl,
   };

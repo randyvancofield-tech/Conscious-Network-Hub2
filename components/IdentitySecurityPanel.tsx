@@ -3,6 +3,7 @@ import { X, ShieldCheck, Copy, AlertTriangle, Lock } from 'lucide-react';
 import { ethers } from 'ethers';
 import { api } from '../services/apiClient';
 import {
+  connectWalletProvider,
   detectWalletProviderEnvironment,
   walletErrorMessage,
   type WalletProviderEnvironment,
@@ -240,10 +241,16 @@ const IdentitySecurityPanel: React.FC<IdentitySecurityPanelProps> = ({ isOpen, o
     }
   };
 
+  const walletUnavailableActionLabel = (): string =>
+    walletEnvironment.isMobile ? 'MetaMask App Required' : 'MetaMask Extension Required';
+
+  const walletReadyActionLabel = (fallback: string): string =>
+    walletEnvironment.transport === 'metamask_connect' ? 'Continue With MetaMask App' : fallback;
+
   const requireEthereum = (): boolean => {
     const nextWalletEnvironment = detectWalletProviderEnvironment();
     setWalletEnvironment(nextWalletEnvironment);
-    if (!nextWalletEnvironment.provider?.request) {
+    if (!nextWalletEnvironment.canConnect) {
       setToast(nextWalletEnvironment.guidance);
       return false;
     }
@@ -256,14 +263,12 @@ const IdentitySecurityPanel: React.FC<IdentitySecurityPanelProps> = ({ isOpen, o
     setToast('');
 
     try {
-      const ethereum = detectWalletProviderEnvironment().provider;
-      if (!ethereum?.request) throw new Error('Wallet provider is no longer available');
-      const accounts: string[] = await ethereum.request({ method: 'eth_requestAccounts' });
-      const address = normalizeAddress(accounts?.[0]);
+      const walletConnection = await connectWalletProvider();
+      setWalletEnvironment(walletConnection.environment);
+      const address = normalizeAddress(walletConnection.walletAddress);
       if (!address) throw new Error('No address returned by signer');
 
-      const chainHex = String(await ethereum.request({ method: 'eth_chainId' }));
-      const nextChainId = parseInt(chainHex, 16) || DEFAULT_CHAIN_ID;
+      const nextChainId = walletConnection.chainId || DEFAULT_CHAIN_ID;
 
       setConnectedAddress(address);
       setChainId(nextChainId);
@@ -312,12 +317,21 @@ const IdentitySecurityPanel: React.FC<IdentitySecurityPanelProps> = ({ isOpen, o
     setToast('');
 
     try {
+      const walletConnection = await connectWalletProvider();
+      setWalletEnvironment(walletConnection.environment);
+      const signerAddress = normalizeAddress(walletConnection.walletAddress);
+      if (!signerAddress) throw new Error('No address returned by signer');
+      if (signerAddress.toLowerCase() !== connectedAddress.toLowerCase()) {
+        throw new Error('Connected wallet does not match the address bound to this identity panel.');
+      }
+      const activeChainId = walletConnection.chainId || chainId || DEFAULT_CHAIN_ID;
+      const activeDid = did || toDidPkh(activeChainId, signerAddress);
       const challengeData = await api<any>('/identity-security/challenge', {
         method: 'POST',
         body: {
-          address: connectedAddress,
-          chainId: chainId || DEFAULT_CHAIN_ID,
-          did: identityDid,
+          address: signerAddress,
+          chainId: activeChainId,
+          did: activeDid,
         },
       });
 
@@ -327,11 +341,9 @@ const IdentitySecurityPanel: React.FC<IdentitySecurityPanelProps> = ({ isOpen, o
         throw new Error('Challenge payload missing signable message');
       }
 
-      const ethereum = detectWalletProviderEnvironment().provider;
-      if (!ethereum?.request) throw new Error('Wallet provider is no longer available');
-      const signature: string = await ethereum.request({
+      const signature: string = await walletConnection.provider.request({
         method: 'personal_sign',
-        params: [message, connectedAddress],
+        params: [message, signerAddress],
       });
 
       const verifyData = await api<any>('/identity-security/verify', {
@@ -339,15 +351,17 @@ const IdentitySecurityPanel: React.FC<IdentitySecurityPanelProps> = ({ isOpen, o
         body: {
           message,
           signature,
-          address: connectedAddress,
-          chainId: chainId || DEFAULT_CHAIN_ID,
-          did: identityDid,
+          address: signerAddress,
+          chainId: activeChainId,
+          did: activeDid,
           requestId: challenge.requestId,
         },
       });
 
       const session = verifyData?.session || {};
-      setDid(String(session.did || identityDid));
+      setConnectedAddress(signerAddress);
+      setChainId(activeChainId);
+      setDid(String(session.did || activeDid));
       setVerifyStatus('verified');
       setVerifiedAt(new Date().toLocaleString());
       setToast('Identity verification complete');
@@ -357,16 +371,6 @@ const IdentitySecurityPanel: React.FC<IdentitySecurityPanelProps> = ({ isOpen, o
     } finally {
       setBusyAction(null);
     }
-  };
-
-  const openMetaMaskMobileBrowser = (): void => {
-    const nextWalletEnvironment = detectWalletProviderEnvironment();
-    setWalletEnvironment(nextWalletEnvironment);
-    if (nextWalletEnvironment.deepLinkUrl) {
-      window.location.assign(nextWalletEnvironment.deepLinkUrl);
-      return;
-    }
-    setToast(nextWalletEnvironment.guidance);
   };
 
   const statusLabel = useMemo(() => {
@@ -466,15 +470,6 @@ const IdentitySecurityPanel: React.FC<IdentitySecurityPanelProps> = ({ isOpen, o
           <p className="text-[10px] font-bold uppercase tracking-widest text-slate-300">
             {walletEnvironment.guidance}
           </p>
-          {walletEnvironment.actionLabel && walletEnvironment.deepLinkUrl ? (
-            <button
-              type="button"
-              onClick={openMetaMaskMobileBrowser}
-              className="mt-3 w-full rounded-xl border border-blue-300/20 bg-blue-500/10 px-4 py-3 text-[10px] font-black uppercase tracking-widest text-blue-100 transition hover:bg-blue-500/20"
-            >
-              {walletEnvironment.actionLabel}
-            </button>
-          ) : null}
         </div>
 
         <section className="space-y-4 mb-8">
@@ -549,18 +544,26 @@ const IdentitySecurityPanel: React.FC<IdentitySecurityPanelProps> = ({ isOpen, o
             <div className="mt-4 grid grid-cols-1 gap-2 xs:grid-cols-3">
               <button
                 onClick={() => void connectIdentityAddress()}
-                disabled={busyAction !== null || !walletEnvironment.hasProvider}
+                disabled={busyAction !== null || !walletEnvironment.canConnect}
                 className="w-full py-3 bg-white/5 hover:bg-white/10 border border-white/10 rounded-2xl font-bold text-[11px] transition-all uppercase tracking-widest disabled:opacity-60"
               >
-                {busyAction === 'connect' ? 'Connecting...' : 'Connect'}
+                {busyAction === 'connect'
+                  ? 'Connecting...'
+                  : !walletEnvironment.canConnect
+                    ? walletUnavailableActionLabel()
+                    : walletReadyActionLabel('Connect')}
               </button>
 
               <button
                 onClick={() => void verifyIdentity()}
-                disabled={busyAction !== null || !connectedAddress}
+                disabled={busyAction !== null || !connectedAddress || !walletEnvironment.canConnect}
                 className="w-full py-3 bg-white/5 hover:bg-white/10 border border-white/10 rounded-2xl font-bold text-[11px] transition-all uppercase tracking-widest disabled:opacity-60"
               >
-                {busyAction === 'verify' ? 'Verifying...' : 'Verify'}
+                {busyAction === 'verify'
+                  ? 'Verifying...'
+                  : !walletEnvironment.canConnect
+                    ? walletUnavailableActionLabel()
+                    : walletReadyActionLabel('Verify')}
               </button>
 
               <button

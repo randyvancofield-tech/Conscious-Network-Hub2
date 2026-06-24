@@ -973,14 +973,11 @@ const App: React.FC = () => {
     return next;
   };
 
-  const openMetaMaskMobileBrowser = () => {
-    const next = refreshWalletEnvironment();
-    if (next.deepLinkUrl) {
-      window.location.assign(next.deepLinkUrl);
-      return;
-    }
-    setError(next.guidance);
-  };
+  const walletUnavailableActionLabel = (): string =>
+    walletEnvironment.isMobile ? 'MetaMask App Required' : 'MetaMask Extension Required';
+
+  const walletReadyActionLabel = (fallback: string): string =>
+    walletEnvironment.transport === 'metamask_connect' ? 'Continue With MetaMask App' : fallback;
 
   const requestWalletConnection = async (
     updateStatus: (message: string) => void,
@@ -995,7 +992,7 @@ const App: React.FC = () => {
 
     updateStatus(
       walletEnv.transport === 'metamask_connect'
-        ? `Opening MetaMask to ${actionLabel}.`
+        ? 'Opening MetaMask. Approve the secure wallet request, then return to HCN if your phone does not switch back automatically.'
         : `Requesting the wallet to ${actionLabel}.`
     );
 
@@ -3405,15 +3402,6 @@ const App: React.FC = () => {
                     <p className="text-[10px] font-black uppercase tracking-widest text-amber-100/80">
                       {walletEnvironment.guidance}
                     </p>
-                    {walletEnvironment.actionLabel && walletEnvironment.deepLinkUrl && (
-                      <button
-                        type="button"
-                        onClick={openMetaMaskMobileBrowser}
-                        className="mt-3 w-full rounded-xl border border-amber-200/20 bg-amber-500/10 px-4 py-3 text-[10px] font-black uppercase tracking-widest text-amber-100 transition hover:bg-amber-500/20"
-                      >
-                        {walletEnvironment.actionLabel}
-                      </button>
-                    )}
                   </div>
                   <button
                     type="button"
@@ -3434,8 +3422,8 @@ const App: React.FC = () => {
                         : adminAccessStatus?.adminAccountReady === false
                           ? 'Admin Account Not Ready'
                           : !walletEnvironment.canConnect
-                            ? 'MetaMask Required'
-                        : 'Verify Wallet & Enter Portal'}
+                            ? walletUnavailableActionLabel()
+                        : walletReadyActionLabel('Verify Wallet & Enter Portal')}
                   </button>
                 </div>
                 {adminAccessStatus?.passwordFallbackEnabled !== true ? (
@@ -3566,15 +3554,6 @@ const App: React.FC = () => {
                       <p className="text-[10px] font-black uppercase tracking-widest text-blue-100/80">
                         {walletEnvironment.guidance}
                       </p>
-                      {walletEnvironment.actionLabel && walletEnvironment.deepLinkUrl && (
-                        <button
-                          type="button"
-                          onClick={openMetaMaskMobileBrowser}
-                          className="mt-3 w-full rounded-xl border border-blue-300/20 bg-blue-500/10 px-4 py-3 text-[10px] font-black uppercase tracking-widest text-blue-100 transition hover:bg-blue-500/20"
-                        >
-                          {walletEnvironment.actionLabel}
-                        </button>
-                      )}
                     </div>
                     <button
                       type="button"
@@ -3585,8 +3564,8 @@ const App: React.FC = () => {
                       {isProviderWalletBinding
                         ? 'Binding Wallet...'
                         : !walletEnvironment.canConnect
-                          ? 'MetaMask Required'
-                          : 'Bind Wallet'}
+                          ? walletUnavailableActionLabel()
+                          : walletReadyActionLabel('Bind Wallet')}
                     </button>
                     <button
                       type="button"
@@ -3620,15 +3599,6 @@ const App: React.FC = () => {
                       <p className="text-[10px] font-black uppercase tracking-widest text-blue-100/80">
                         {walletEnvironment.guidance}
                       </p>
-                      {walletEnvironment.actionLabel && walletEnvironment.deepLinkUrl && (
-                        <button
-                          type="button"
-                          onClick={openMetaMaskMobileBrowser}
-                          className="mt-3 w-full rounded-xl border border-blue-300/20 bg-blue-500/10 px-4 py-3 text-[10px] font-black uppercase tracking-widest text-blue-100 transition hover:bg-blue-500/20"
-                        >
-                          {walletEnvironment.actionLabel}
-                        </button>
-                      )}
                     </div>
                     <button
                       type="button"
@@ -3639,8 +3609,8 @@ const App: React.FC = () => {
                       {isProviderWalletVerifying
                         ? 'Verifying Wallet...'
                         : !walletEnvironment.canConnect
-                          ? 'MetaMask Required'
-                          : 'Verify Wallet & Open Tools'}
+                          ? walletUnavailableActionLabel()
+                          : walletReadyActionLabel('Verify Wallet & Open Tools')}
                     </button>
                   </div>
                 ) : (

@@ -22,7 +22,22 @@ Mobile does not have that same shared injected-extension context. The former fal
 - Service worker cache version was bumped and `/.well-known/` is excluded from shell caching so future Android Digital Asset Links and Apple association files are fetched directly.
 - MetaMask mobile deeplinks now use the current MetaMask documented `https://link.metamask.io/dapp/...` host.
 - MetaMask Connect EVM was added for mobile-safe account connection and gasless SIWE-style signatures.
+- MetaMask Connect now runs in headless mode for HCN mobile/PWA wallet actions, so the app owns the user-facing wallet prompt instead of showing a generic connector modal.
+- Mobile MetaMask Connect handoff uses the MetaMask universal connect link, which opens the MetaMask app when available and gives users a clearer install path when it is not.
 - Installed-app wallet actions now enable the primary Verify/Bind button even without an injected provider when the MetaMask Connect transport is available.
+
+## Wallet Authentication UX Matrix
+
+| Environment | Primary HCN behavior |
+| --- | --- |
+| Desktop browser with MetaMask extension | Use the injected EIP-1193 provider directly. |
+| Desktop browser without MetaMask extension | Show desktop extension guidance; do not show mobile-first connector steps. |
+| Android mobile browser | Show a direct Continue with MetaMask app action through MetaMask Connect. |
+| Android installed PWA | Keep the session in HCN and hand off to MetaMask app through MetaMask Connect. |
+| iOS Safari browser | Use the MetaMask app handoff when possible and tell users iOS may require switching back to HCN. |
+| iOS installed PWA | Use the same MetaMask app handoff with explicit iOS return guidance. |
+| MetaMask in-app browser | Use the injected provider already present in the current browser context. |
+| Other mobile browser | Prefer MetaMask app handoff on secure HTTPS; guide install/unlock if the app does not open. |
 
 ## Platform Setup Required Outside This Repo
 
