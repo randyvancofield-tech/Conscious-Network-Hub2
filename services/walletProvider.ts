@@ -35,6 +35,40 @@ export interface WalletConnection {
   environment: WalletProviderEnvironment;
 }
 
+export type PendingWalletAuthFlow =
+  | 'admin_wallet_verify'
+  | 'provider_wallet_bind'
+  | 'provider_wallet_verify';
+
+export type PendingWalletAuthStage = 'connect' | 'sign' | 'verify';
+
+export interface PendingWalletChallenge {
+  challengeId: string;
+  domain: string;
+  address: string;
+  statement: string;
+  uri: string;
+  version: string;
+  chainId: number;
+  nonce: string;
+  issuedAt: string;
+  expirationTime: string;
+}
+
+export interface PendingWalletAuthIntent {
+  id: string;
+  flow: PendingWalletAuthFlow;
+  stage: PendingWalletAuthStage;
+  userId: string | null;
+  routePath: string | null;
+  walletAddress: string | null;
+  challenge: PendingWalletChallenge | null;
+  message: string | null;
+  createdAt: number;
+  updatedAt: number;
+  expiresAt: number;
+}
+
 const MOBILE_USER_AGENT_PATTERN =
   /android|webos|iphone|ipad|ipod|blackberry|iemobile|opera mini/i;
 
@@ -43,7 +77,11 @@ const IOS_USER_AGENT_PATTERN = /iphone|ipad|ipod/i;
 const METAMASK_MOBILE_USER_AGENT_PATTERN = /metamaskmobile/i;
 const METAMASK_CONNECT_DEEPLINK_BASE = 'metamask://connect';
 const METAMASK_CONNECT_UNIVERSAL_LINK_BASE = 'https://metamask.app.link/connect';
+const PENDING_WALLET_AUTH_INTENT_KEY = 'hcn_pending_wallet_auth_intent_v1';
+const DEFAULT_PENDING_WALLET_AUTH_TTL_MS = 10 * 60 * 1000;
+const METAMASK_NATIVE_LINK_FALLBACK_MS = 1100;
 export const WALLET_PROVIDER_UPDATED_EVENT = 'cnh:wallet-provider-updated';
+export const WALLET_AUTH_INTENT_UPDATED_EVENT = 'cnh:wallet-auth-intent-updated';
 
 const DEFAULT_PROVIDER_WALLET_CHAIN_ID = 1;
 const DEFAULT_ETHEREUM_MAINNET_RPC_URL = 'https://cloudflare-eth.com';
@@ -63,6 +101,157 @@ const announcedWalletProviders: Eip6963ProviderDetail[] = [];
 let eip6963DiscoveryInitialized = false;
 
 const canUseWindow = (): boolean => typeof window !== 'undefined';
+
+const walletAuthFlows = new Set<string>([
+  'admin_wallet_verify',
+  'provider_wallet_bind',
+  'provider_wallet_verify',
+]);
+
+const walletAuthStages = new Set<string>(['connect', 'sign', 'verify']);
+
+const newWalletAuthIntentId = (): string => {
+  try {
+    return globalThis.crypto?.randomUUID?.() || `${Date.now().toString(36)}-${Math.random().toString(36).slice(2)}`;
+  } catch {
+    return `${Date.now().toString(36)}-${Math.random().toString(36).slice(2)}`;
+  }
+};
+
+const asOptionalString = (value: unknown): string | null => {
+  const normalized = String(value || '').trim();
+  return normalized || null;
+};
+
+const asPositiveTimestamp = (value: unknown): number | null => {
+  const timestamp = Number(value);
+  return Number.isFinite(timestamp) && timestamp > 0 ? timestamp : null;
+};
+
+const normalizePendingChallenge = (value: unknown): PendingWalletChallenge | null => {
+  if (!value || typeof value !== 'object') return null;
+  const raw = value as Record<string, unknown>;
+  const challengeId = asOptionalString(raw.challengeId);
+  const domain = asOptionalString(raw.domain);
+  const address = asOptionalString(raw.address);
+  const statement = asOptionalString(raw.statement);
+  const uri = asOptionalString(raw.uri);
+  const version = asOptionalString(raw.version);
+  const nonce = asOptionalString(raw.nonce);
+  const issuedAt = asOptionalString(raw.issuedAt);
+  const expirationTime = asOptionalString(raw.expirationTime);
+  const chainId = Number(raw.chainId);
+
+  if (
+    !challengeId ||
+    !domain ||
+    !address ||
+    !statement ||
+    !uri ||
+    !version ||
+    !nonce ||
+    !issuedAt ||
+    !expirationTime ||
+    !Number.isFinite(chainId)
+  ) {
+    return null;
+  }
+
+  return {
+    challengeId,
+    domain,
+    address,
+    statement,
+    uri,
+    version,
+    chainId,
+    nonce,
+    issuedAt,
+    expirationTime,
+  };
+};
+
+const normalizePendingWalletAuthIntent = (value: unknown): PendingWalletAuthIntent | null => {
+  if (!value || typeof value !== 'object') return null;
+  const raw = value as Record<string, unknown>;
+  const flow = asOptionalString(raw.flow);
+  const stage = asOptionalString(raw.stage) || 'connect';
+  if (!flow || !walletAuthFlows.has(flow) || !walletAuthStages.has(stage)) return null;
+
+  const now = Date.now();
+  const expiresAt = asPositiveTimestamp(raw.expiresAt) || now + DEFAULT_PENDING_WALLET_AUTH_TTL_MS;
+  if (expiresAt <= now) return null;
+
+  return {
+    id: asOptionalString(raw.id) || newWalletAuthIntentId(),
+    flow: flow as PendingWalletAuthFlow,
+    stage: stage as PendingWalletAuthStage,
+    userId: asOptionalString(raw.userId),
+    routePath: asOptionalString(raw.routePath),
+    walletAddress: asOptionalString(raw.walletAddress),
+    challenge: normalizePendingChallenge(raw.challenge),
+    message: asOptionalString(raw.message),
+    createdAt: asPositiveTimestamp(raw.createdAt) || now,
+    updatedAt: asPositiveTimestamp(raw.updatedAt) || now,
+    expiresAt,
+  };
+};
+
+const notifyWalletAuthIntentUpdated = (): void => {
+  if (!canUseWindow()) return;
+  window.dispatchEvent(new Event(WALLET_AUTH_INTENT_UPDATED_EVENT));
+};
+
+export const getPendingWalletAuthIntent = (): PendingWalletAuthIntent | null => {
+  if (!canUseWindow()) return null;
+  try {
+    const intent = normalizePendingWalletAuthIntent(
+      JSON.parse(window.localStorage.getItem(PENDING_WALLET_AUTH_INTENT_KEY) || 'null')
+    );
+    if (!intent) {
+      window.localStorage.removeItem(PENDING_WALLET_AUTH_INTENT_KEY);
+    }
+    return intent;
+  } catch {
+    window.localStorage.removeItem(PENDING_WALLET_AUTH_INTENT_KEY);
+    return null;
+  }
+};
+
+export const setPendingWalletAuthIntent = (
+  intent: Partial<PendingWalletAuthIntent> & Pick<PendingWalletAuthIntent, 'flow'>
+): PendingWalletAuthIntent | null => {
+  if (!canUseWindow()) return null;
+  const now = Date.now();
+  const normalized = normalizePendingWalletAuthIntent({
+    ...intent,
+    id: intent.id || newWalletAuthIntentId(),
+    stage: intent.stage || 'connect',
+    routePath: intent.routePath || window.location.pathname,
+    createdAt: intent.createdAt || now,
+    updatedAt: now,
+    expiresAt: intent.expiresAt || now + DEFAULT_PENDING_WALLET_AUTH_TTL_MS,
+  });
+  if (!normalized) return null;
+
+  try {
+    window.localStorage.setItem(PENDING_WALLET_AUTH_INTENT_KEY, JSON.stringify(normalized));
+    notifyWalletAuthIntentUpdated();
+    return normalized;
+  } catch {
+    return null;
+  }
+};
+
+export const clearPendingWalletAuthIntent = (flow?: PendingWalletAuthFlow): void => {
+  if (!canUseWindow()) return;
+  if (flow) {
+    const current = getPendingWalletAuthIntent();
+    if (current && current.flow !== flow) return;
+  }
+  window.localStorage.removeItem(PENDING_WALLET_AUTH_INTENT_KEY);
+  notifyWalletAuthIntentUpdated();
+};
 
 const isUsableWalletProvider = (provider: any): boolean => Boolean(provider?.request);
 
@@ -193,9 +382,60 @@ const toMetaMaskConnectUniversalLink = (deeplink: string): string => {
   return deeplink;
 };
 
-const openMetaMaskConnectLink = (deeplink: string): void => {
+const openLinkInCurrentContext = (url: string, target = '_self'): void => {
   if (!canUseWindow()) return;
-  window.location.assign(toMetaMaskConnectUniversalLink(deeplink));
+  if (typeof document !== 'undefined' && /^https?:\/\//i.test(url)) {
+    const link = document.createElement('a');
+    link.href = url;
+    link.target = target;
+    link.rel = 'noreferrer';
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    return;
+  }
+  window.location.href = url;
+};
+
+const openMetaMaskConnectLink = (deeplink: string, target = '_self'): void => {
+  if (!canUseWindow()) return;
+  const nativeLink = deeplink.startsWith(METAMASK_CONNECT_DEEPLINK_BASE) ? deeplink : null;
+  const universalLink = toMetaMaskConnectUniversalLink(deeplink);
+
+  if (nativeLink && isLikelyMobileWalletDevice()) {
+    let leftPage = false;
+    let fallbackId: number | null = null;
+    const markLeftPage = () => {
+      leftPage = true;
+      cleanup();
+    };
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'hidden') {
+        markLeftPage();
+      }
+    };
+    const cleanup = () => {
+      window.removeEventListener('pagehide', markLeftPage);
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+      if (fallbackId !== null) {
+        window.clearTimeout(fallbackId);
+        fallbackId = null;
+      }
+    };
+
+    window.addEventListener('pagehide', markLeftPage, { once: true });
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    window.location.href = nativeLink;
+    fallbackId = window.setTimeout(() => {
+      cleanup();
+      if (!leftPage && document.visibilityState !== 'hidden') {
+        openLinkInCurrentContext(universalLink, target);
+      }
+    }, METAMASK_NATIVE_LINK_FALLBACK_MS);
+    return;
+  }
+
+  openLinkInCurrentContext(universalLink, target);
 };
 
 const parsePositiveInteger = (value: unknown): number | null => {
@@ -279,7 +519,7 @@ const createMetaMaskConnectClient = async (): Promise<MetamaskConnectEVM> => {
             headless: true,
           },
           mobile: {
-            useDeeplink: false,
+            useDeeplink: true,
             preferredOpenLink: openMetaMaskConnectLink,
           },
           eventHandlers: {

@@ -51,11 +51,17 @@ import { ApiError, api, apiHealth, backendAssetUrl } from './services/apiClient'
 import { getProfileAvatarMedia, isVideoMediaAsset } from './services/mediaAssets';
 import { createNativeProviderControlSession } from './services/backendApiService';
 import {
+  WALLET_AUTH_INTENT_UPDATED_EVENT,
   WALLET_PROVIDER_UPDATED_EVENT,
+  clearPendingWalletAuthIntent,
   connectWalletProvider,
   detectWalletProviderEnvironment,
+  getPendingWalletAuthIntent,
   readWalletChainId,
+  setPendingWalletAuthIntent as persistPendingWalletAuthIntent,
   walletErrorMessage,
+  type PendingWalletAuthFlow,
+  type PendingWalletAuthIntent,
   type WalletConnection,
   type WalletProviderEnvironment,
 } from './services/walletProvider';
@@ -89,6 +95,9 @@ type ProviderWalletChallenge = {
   issuedAt: string;
   expirationTime: string;
 };
+
+const MOBILE_WALLET_HANDOFF_TIMEOUT_MS = 2 * 60 * 1000;
+const WALLET_CHALLENGE_EXPIRY_SKEW_MS = 10 * 1000;
 
 type PlatformSearchResult = {
   id: string;
@@ -696,6 +705,8 @@ const App: React.FC = () => {
   const [walletEnvironment, setWalletEnvironment] = useState<WalletProviderEnvironment>(() =>
     detectWalletProviderEnvironment()
   );
+  const [pendingWalletAuthIntent, setPendingWalletAuthIntentState] =
+    useState<PendingWalletAuthIntent | null>(() => getPendingWalletAuthIntent());
   const [isAdminAccessStatusLoading, setAdminAccessStatusLoading] = useState(false);
   const [isPasswordResetRequestOpen, setPasswordResetRequestOpen] = useState(false);
   const [passwordResetEmailInput, setPasswordResetEmailInput] = useState('');
@@ -904,6 +915,24 @@ const App: React.FC = () => {
   }, [currentView, isProviderWalletVerificationRequired]);
 
   useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const syncPendingWalletIntent = () => {
+      setPendingWalletAuthIntentState(getPendingWalletAuthIntent());
+    };
+
+    syncPendingWalletIntent();
+    window.addEventListener('focus', syncPendingWalletIntent);
+    window.addEventListener('pageshow', syncPendingWalletIntent);
+    window.addEventListener(WALLET_AUTH_INTENT_UPDATED_EVENT, syncPendingWalletIntent);
+
+    return () => {
+      window.removeEventListener('focus', syncPendingWalletIntent);
+      window.removeEventListener('pageshow', syncPendingWalletIntent);
+      window.removeEventListener(WALLET_AUTH_INTENT_UPDATED_EVENT, syncPendingWalletIntent);
+    };
+  }, []);
+
+  useEffect(() => {
     const handleKeyboardScroll = (event: KeyboardEvent) => {
       if (
         event.defaultPrevented ||
@@ -979,9 +1008,112 @@ const App: React.FC = () => {
   const walletReadyActionLabel = (fallback: string): string =>
     walletEnvironment.transport === 'metamask_connect' ? 'Continue With MetaMask App' : fallback;
 
+  const refreshPendingWalletAuthIntent = (): PendingWalletAuthIntent | null => {
+    const next = getPendingWalletAuthIntent();
+    setPendingWalletAuthIntentState(next);
+    return next;
+  };
+
+  const rememberPendingWalletAuthIntent = (
+    flow: PendingWalletAuthFlow,
+    updates: Partial<PendingWalletAuthIntent> = {}
+  ): PendingWalletAuthIntent | null => {
+    const saved = persistPendingWalletAuthIntent({
+      ...updates,
+      flow,
+      userId: flow === 'admin_wallet_verify' ? null : user?.id || updates.userId || null,
+      routePath:
+        updates.routePath || (typeof window !== 'undefined' ? window.location.pathname : null),
+    });
+    setPendingWalletAuthIntentState(saved);
+    return saved;
+  };
+
+  const clearWalletAuthIntent = (flow: PendingWalletAuthFlow): void => {
+    clearPendingWalletAuthIntent(flow);
+    refreshPendingWalletAuthIntent();
+  };
+
+  const getUsablePendingWalletAuthIntent = (
+    flow: PendingWalletAuthFlow
+  ): PendingWalletAuthIntent | null => {
+    const intent = getPendingWalletAuthIntent();
+    if (!intent || intent.flow !== flow) {
+      setPendingWalletAuthIntentState(intent);
+      return null;
+    }
+    if (flow !== 'admin_wallet_verify' && intent.userId && intent.userId !== user?.id) {
+      clearWalletAuthIntent(flow);
+      return null;
+    }
+    setPendingWalletAuthIntentState(intent);
+    return intent;
+  };
+
+  const getPendingWalletChallenge = (
+    flow: PendingWalletAuthFlow,
+    walletAddress: string
+  ): { challenge: ProviderWalletChallenge; message: string } | null => {
+    const intent = getUsablePendingWalletAuthIntent(flow);
+    const challenge = intent?.challenge;
+    const message = intent?.message || '';
+    if (!challenge || !message) return null;
+
+    const expiresAt = Date.parse(challenge.expirationTime);
+    if (!Number.isFinite(expiresAt) || expiresAt <= Date.now() + WALLET_CHALLENGE_EXPIRY_SKEW_MS) {
+      clearWalletAuthIntent(flow);
+      return null;
+    }
+
+    if (
+      walletAddress &&
+      challenge.address &&
+      challenge.address.toLowerCase() !== walletAddress.toLowerCase()
+    ) {
+      clearWalletAuthIntent(flow);
+      return null;
+    }
+
+    return {
+      challenge: { ...challenge },
+      message,
+    };
+  };
+
+  const withMobileWalletHandoffTimeout = async <T,>(
+    promise: Promise<T>,
+    transport: WalletConnection['transport'] | WalletProviderEnvironment['transport'],
+    actionLabel: string
+  ): Promise<T> => {
+    if (transport !== 'metamask_connect' || typeof window === 'undefined') {
+      return promise;
+    }
+
+    let timeoutId: number | null = null;
+    try {
+      return await Promise.race([
+        promise,
+        new Promise<T>((_, reject) => {
+          timeoutId = window.setTimeout(() => {
+            reject(
+              new Error(
+                `${actionLabel} did not return from MetaMask. Return to HCN and tap Continue to resume.`
+              )
+            );
+          }, MOBILE_WALLET_HANDOFF_TIMEOUT_MS);
+        }),
+      ]);
+    } finally {
+      if (timeoutId !== null) {
+        window.clearTimeout(timeoutId);
+      }
+    }
+  };
+
   const requestWalletConnection = async (
     updateStatus: (message: string) => void,
-    actionLabel: string
+    actionLabel: string,
+    flow?: PendingWalletAuthFlow
   ): Promise<WalletConnection | null> => {
     const walletEnv = refreshWalletEnvironment();
     if (!walletEnv.canConnect) {
@@ -990,15 +1122,50 @@ const App: React.FC = () => {
       return null;
     }
 
+    if (flow) {
+      rememberPendingWalletAuthIntent(flow, { stage: 'connect' });
+    }
+
     updateStatus(
       walletEnv.transport === 'metamask_connect'
         ? 'Opening MetaMask. Approve the secure wallet request, then return to HCN if your phone does not switch back automatically.'
         : `Requesting the wallet to ${actionLabel}.`
     );
 
-    const connection = await connectWalletProvider();
+    const connection = await withMobileWalletHandoffTimeout(
+      connectWalletProvider(),
+      walletEnv.transport,
+      'MetaMask wallet connection'
+    );
     setWalletEnvironment(detectWalletProviderEnvironment());
     return connection;
+  };
+
+  const requestWalletSignature = async (
+    walletConnection: WalletConnection,
+    message: string,
+    walletAddress: string,
+    updateStatus: (message: string) => void
+  ): Promise<string> => {
+    if (walletConnection.transport === 'metamask_connect') {
+      updateStatus(
+        'Opening MetaMask for the gasless signature. Approve it, then return to HCN to finish.'
+      );
+    }
+
+    const signature = await withMobileWalletHandoffTimeout(
+      walletConnection.provider.request({
+        method: 'personal_sign',
+        params: [message, walletAddress],
+      }),
+      walletConnection.transport,
+      'MetaMask signature request'
+    );
+    const normalized = String(signature || '').trim();
+    if (!normalized) {
+      throw new Error('MetaMask did not return a wallet signature.');
+    }
+    return normalized;
   };
 
   const walletNetworkMismatchMessage = (
@@ -1606,6 +1773,36 @@ const App: React.FC = () => {
   }, [currentView, user?.id, user?.providerWalletAddressBound, user?.providerApproved, user?.providerApprovalStatus, user?.providerRevokedAt]);
 
   useEffect(() => {
+    if (!pendingWalletAuthIntent) return;
+    const resumeMessage =
+      pendingWalletAuthIntent.stage === 'sign'
+        ? 'Wallet challenge is ready. Tap Continue, approve the gasless MetaMask signature, then return to HCN.'
+        : 'Wallet handoff is in progress. Tap Continue to reopen MetaMask and resume.';
+
+    if (
+      pendingWalletAuthIntent.flow === 'admin_wallet_verify' &&
+      currentView === AppView.ADMIN_SIGN_IN
+    ) {
+      setAdminWalletStatus((current) => current || resumeMessage);
+      return;
+    }
+
+    if (
+      currentView === AppView.PROVIDER_SIGN_IN &&
+      pendingWalletAuthIntent.flow !== 'admin_wallet_verify' &&
+      (!pendingWalletAuthIntent.userId || pendingWalletAuthIntent.userId === user?.id)
+    ) {
+      setProviderWalletStatus((current) => current || resumeMessage);
+    }
+  }, [
+    currentView,
+    pendingWalletAuthIntent?.flow,
+    pendingWalletAuthIntent?.stage,
+    pendingWalletAuthIntent?.userId,
+    user?.id,
+  ]);
+
+  useEffect(() => {
     const hasAuthToken = Boolean(getAuthToken());
     if (!user && hasAuthToken) return;
     if (hasProviderOperationsAccess(user)) return;
@@ -1964,6 +2161,7 @@ const App: React.FC = () => {
   };
 
   const handleAdministrativeWalletVerification = async () => {
+    const flow: PendingWalletAuthFlow = 'admin_wallet_verify';
     setError('');
     setAdminWalletStatus('');
     setAdminWalletVerifying(true);
@@ -1971,35 +2169,64 @@ const App: React.FC = () => {
     try {
       const walletConnection = await requestWalletConnection(
         setAdminWalletStatus,
-        'verify the administrator wallet'
+        'verify the administrator wallet',
+        flow
       );
       if (!walletConnection) return;
 
       const ethereum = walletConnection.provider;
       const walletAddress = walletConnection.walletAddress;
 
-      setAdminWalletStatus('Creating an Administrative Access challenge...');
-      const challenge = await api<ProviderWalletChallenge>('/provider/auth/admin/wallet/nonce', {
-        method: 'POST',
-        auth: false,
-        body: { walletAddress },
-      });
-      const walletChainId = walletConnection.chainId || (await readWalletChainId(ethereum).catch(() => null));
-      if (walletChainId && challenge.chainId && walletChainId !== challenge.chainId) {
-        const message = walletNetworkMismatchMessage(walletChainId, challenge.chainId);
-        setError(message);
-        setAdminWalletStatus(message);
-        return;
+      const pendingChallenge = getPendingWalletChallenge(flow, walletAddress);
+      let challenge: ProviderWalletChallenge;
+      let message: string;
+
+      if (pendingChallenge) {
+        challenge = pendingChallenge.challenge;
+        message = pendingChallenge.message;
+        setAdminWalletStatus('Resuming the Administrative Access wallet challenge...');
+      } else {
+        setAdminWalletStatus('Creating an Administrative Access challenge...');
+        challenge = await api<ProviderWalletChallenge>('/provider/auth/admin/wallet/nonce', {
+          method: 'POST',
+          auth: false,
+          body: { walletAddress },
+        });
+        const walletChainId = walletConnection.chainId || (await readWalletChainId(ethereum).catch(() => null));
+        if (walletChainId && challenge.chainId && walletChainId !== challenge.chainId) {
+          const networkMessage = walletNetworkMismatchMessage(walletChainId, challenge.chainId);
+          setError(networkMessage);
+          setAdminWalletStatus(networkMessage);
+          clearWalletAuthIntent(flow);
+          return;
+        }
+
+        message = buildProviderSiweMessage(challenge);
+        const challengeExpiresAt = Date.parse(challenge.expirationTime);
+        rememberPendingWalletAuthIntent(flow, {
+          stage: 'sign',
+          walletAddress: challenge.address,
+          challenge,
+          message,
+          expiresAt: Number.isFinite(challengeExpiresAt) ? challengeExpiresAt : undefined,
+        });
       }
 
-      const message = buildProviderSiweMessage(challenge);
       setAdminWalletStatus('Confirm the gasless administrative signature in MetaMask.');
-      const signature = await ethereum.request({
-        method: 'personal_sign',
-        params: [message, challenge.address],
-      });
+      const signature = await requestWalletSignature(
+        walletConnection,
+        message,
+        challenge.address,
+        setAdminWalletStatus
+      );
 
       setAdminWalletStatus('Verifying administrator wallet and opening operations...');
+      rememberPendingWalletAuthIntent(flow, {
+        stage: 'verify',
+        walletAddress: challenge.address,
+        challenge,
+        message,
+      });
       const result = await api<any>('/provider/auth/admin/wallet/verify', {
         method: 'POST',
         auth: false,
@@ -2013,14 +2240,17 @@ const App: React.FC = () => {
 
       const canonicalUser = toPlatformUser(result.user);
       if (!hasAdminRole(canonicalUser)) {
+        clearWalletAuthIntent(flow);
         setError('Administrative wallet verification did not return an administrator session.');
         return;
       }
       if (!result.adminElevation?.token) {
+        clearWalletAuthIntent(flow);
         setError('Administrative wallet verified, but elevated admin console access was not issued.');
         return;
       }
 
+      clearWalletAuthIntent(flow);
       setUserAuthSession(result.token, canonicalUser);
       setAdminElevationToken(result.adminElevation.token);
       setUser(canonicalUser);
@@ -2039,6 +2269,7 @@ const App: React.FC = () => {
       setSidebarOpen(window.innerWidth >= 1024);
     } catch (error) {
       if (error instanceof ApiError) {
+        clearWalletAuthIntent(flow);
         setError(error.message || 'Administrative wallet verification failed.');
         return;
       }
@@ -2109,6 +2340,7 @@ const App: React.FC = () => {
   };
 
   const handleProviderWalletBinding = async () => {
+    const flow: PendingWalletAuthFlow = 'provider_wallet_bind';
     if (!user || !hasApprovedProviderProfile(user)) {
       setError('Sign in with an approved provider account before wallet binding.');
       return;
@@ -2119,34 +2351,63 @@ const App: React.FC = () => {
     try {
       const walletConnection = await requestWalletConnection(
         setProviderWalletStatus,
-        'bind this provider wallet'
+        'bind this provider wallet',
+        flow
       );
       if (!walletConnection) return;
 
       const ethereum = walletConnection.provider;
       const walletAddress = walletConnection.walletAddress;
 
-      setProviderWalletStatus('Preparing gasless wallet binding message...');
-      const challenge = await api<ProviderWalletChallenge>('/provider/auth/wallet/bind/nonce', {
-        method: 'POST',
-        body: { walletAddress },
-      });
-      const walletChainId = walletConnection.chainId || (await readWalletChainId(ethereum).catch(() => null));
-      if (walletChainId && challenge.chainId && walletChainId !== challenge.chainId) {
-        const message = walletNetworkMismatchMessage(walletChainId, challenge.chainId);
-        setError(message);
-        setProviderWalletStatus(message);
-        return;
+      const pendingChallenge = getPendingWalletChallenge(flow, walletAddress);
+      let challenge: ProviderWalletChallenge;
+      let message: string;
+
+      if (pendingChallenge) {
+        challenge = pendingChallenge.challenge;
+        message = pendingChallenge.message;
+        setProviderWalletStatus('Resuming the provider wallet binding challenge...');
+      } else {
+        setProviderWalletStatus('Preparing gasless wallet binding message...');
+        challenge = await api<ProviderWalletChallenge>('/provider/auth/wallet/bind/nonce', {
+          method: 'POST',
+          body: { walletAddress },
+        });
+        const walletChainId = walletConnection.chainId || (await readWalletChainId(ethereum).catch(() => null));
+        if (walletChainId && challenge.chainId && walletChainId !== challenge.chainId) {
+          const networkMessage = walletNetworkMismatchMessage(walletChainId, challenge.chainId);
+          setError(networkMessage);
+          setProviderWalletStatus(networkMessage);
+          clearWalletAuthIntent(flow);
+          return;
+        }
+
+        message = buildProviderSiweMessage(challenge);
+        const challengeExpiresAt = Date.parse(challenge.expirationTime);
+        rememberPendingWalletAuthIntent(flow, {
+          stage: 'sign',
+          walletAddress: challenge.address,
+          challenge,
+          message,
+          expiresAt: Number.isFinite(challengeExpiresAt) ? challengeExpiresAt : undefined,
+        });
       }
 
-      const message = buildProviderSiweMessage(challenge);
       setProviderWalletStatus('Confirm the gasless wallet binding signature in MetaMask.');
-      const signature = await ethereum.request({
-        method: 'personal_sign',
-        params: [message, challenge.address],
-      });
+      const signature = await requestWalletSignature(
+        walletConnection,
+        message,
+        challenge.address,
+        setProviderWalletStatus
+      );
 
       setProviderWalletStatus('Binding wallet to your approved provider account...');
+      rememberPendingWalletAuthIntent(flow, {
+        stage: 'verify',
+        walletAddress: challenge.address,
+        challenge,
+        message,
+      });
       const result = await api<any>('/provider/auth/wallet/bind/verify', {
         method: 'POST',
         body: {
@@ -2158,11 +2419,13 @@ const App: React.FC = () => {
       });
 
       if (!result?.walletBound) {
+        clearWalletAuthIntent(flow);
         setError('Wallet binding could not be confirmed.');
         setProviderWalletStatus('');
         return;
       }
 
+      clearWalletAuthIntent(flow);
       const updatedUser = { ...user, providerWalletAddressBound: true };
       const token = getAuthToken();
       setUser(updatedUser);
@@ -2174,6 +2437,7 @@ const App: React.FC = () => {
       setProviderWalletStatus('Wallet bound. Complete wallet verification to open Provider CRM.');
     } catch (error) {
       if (error instanceof ApiError) {
+        clearWalletAuthIntent(flow);
         setError(error.message || 'Provider wallet binding failed.');
       } else {
         setError(walletErrorMessage(error, 'Provider wallet binding failed.'));
