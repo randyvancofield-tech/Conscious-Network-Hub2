@@ -567,9 +567,14 @@ export const detectWalletProviderEnvironment = (rawUrl?: string): WalletProvider
   const hasMetaMaskConnectTransport = canUseMetaMaskConnectTransport();
   const userAgent = canUseWindow() ? navigator.userAgent || '' : '';
   const isMetaMask = isMetaMaskProvider(provider, selectedProvider);
-  const isMetaMaskMobileBrowser =
-    isMobile && (isMetaMask || METAMASK_MOBILE_USER_AGENT_PATTERN.test(userAgent));
+  const isMetaMaskMobileBrowser = isMobile && METAMASK_MOBILE_USER_AGENT_PATTERN.test(userAgent);
   const deepLinkUrl = buildMetaMaskDappDeepLink(rawUrl);
+  const hasNonMetaMaskInjectedProvider = hasProvider && !isMetaMask;
+  const shouldUseMetaMaskConnect =
+    isMobile &&
+    hasMetaMaskConnectTransport &&
+    !isMetaMaskMobileBrowser &&
+    !hasNonMetaMaskInjectedProvider;
 
   if (hasProvider && isMetaMaskMobileBrowser) {
     return {
@@ -584,6 +589,28 @@ export const detectWalletProviderEnvironment = (rawUrl?: string): WalletProvider
       isMetaMaskMobileBrowser,
       state: 'metamask_mobile_browser',
       guidance: 'MetaMask browser is ready. Continue with the gasless wallet signature here.',
+      actionLabel: null,
+      deepLinkUrl,
+    };
+  }
+
+  if (shouldUseMetaMaskConnect) {
+    return {
+      provider,
+      providerName: 'MetaMask',
+      hasProvider,
+      canConnect: true,
+      transport: 'metamask_connect',
+      isMobile,
+      isStandaloneApp,
+      isMetaMask: true,
+      isMetaMaskMobileBrowser,
+      state: 'mobile_metamask_connect_available',
+      guidance: isIos
+        ? 'Continue with the MetaMask app. iOS may ask you to switch back to HCN after approval so this session can finish.'
+        : isStandaloneApp
+          ? 'Continue with the MetaMask app. After approval, return to this installed HCN app if your phone does not switch back automatically.'
+          : 'Continue with the MetaMask app. If MetaMask does not open, install or unlock it, then return to HCN and try again.',
       actionLabel: null,
       deepLinkUrl,
     };
@@ -720,7 +747,7 @@ const normalizeAccounts = (accounts: unknown): string[] => {
 export const connectWalletProvider = async (): Promise<WalletConnection> => {
   const environment = detectWalletProviderEnvironment();
 
-  if (environment.provider?.request) {
+  if (environment.transport === 'injected' && environment.provider?.request) {
     const accounts = normalizeAccounts(
       await environment.provider.request({ method: 'eth_requestAccounts' })
     );

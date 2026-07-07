@@ -895,6 +895,7 @@ const App: React.FC = () => {
 
     refreshWalletEnvironment();
     window.addEventListener('focus', refreshWalletEnvironment);
+    window.addEventListener('pageshow', refreshWalletEnvironment);
     window.addEventListener('ethereum#initialized', refreshWalletEnvironment as EventListener);
     window.addEventListener(WALLET_PROVIDER_UPDATED_EVENT, refreshWalletEnvironment as EventListener);
     const ethereum = (window as any).ethereum;
@@ -905,6 +906,7 @@ const App: React.FC = () => {
 
     return () => {
       window.removeEventListener('focus', refreshWalletEnvironment);
+      window.removeEventListener('pageshow', refreshWalletEnvironment);
       window.removeEventListener('ethereum#initialized', refreshWalletEnvironment as EventListener);
       window.removeEventListener(WALLET_PROVIDER_UPDATED_EVENT, refreshWalletEnvironment as EventListener);
       ethereum?.removeListener?.('connect', refreshWalletEnvironment);
@@ -2449,6 +2451,7 @@ const App: React.FC = () => {
   };
 
   const handleProviderWalletVerification = async () => {
+    const flow: PendingWalletAuthFlow = 'provider_wallet_verify';
     if (!user || !hasApprovedProviderProfile(user)) {
       setError('Sign in with an approved provider account before wallet verification.');
       return;
@@ -2459,34 +2462,63 @@ const App: React.FC = () => {
     try {
       const walletConnection = await requestWalletConnection(
         setProviderWalletStatus,
-        'verify your provider wallet'
+        'verify your provider wallet',
+        flow
       );
       if (!walletConnection) return;
 
       const ethereum = walletConnection.provider;
       const walletAddress = walletConnection.walletAddress;
 
-      setProviderWalletStatus('Preparing gasless provider verification message...');
-      const challenge = await api<ProviderWalletChallenge>('/provider/auth/wallet/nonce', {
-        method: 'POST',
-        body: { walletAddress },
-      });
-      const walletChainId = walletConnection.chainId || (await readWalletChainId(ethereum).catch(() => null));
-      if (walletChainId && challenge.chainId && walletChainId !== challenge.chainId) {
-        const message = walletNetworkMismatchMessage(walletChainId, challenge.chainId);
-        setError(message);
-        setProviderWalletStatus(message);
-        return;
+      const pendingChallenge = getPendingWalletChallenge(flow, walletAddress);
+      let challenge: ProviderWalletChallenge;
+      let message: string;
+
+      if (pendingChallenge) {
+        challenge = pendingChallenge.challenge;
+        message = pendingChallenge.message;
+        setProviderWalletStatus('Resuming the provider wallet verification challenge...');
+      } else {
+        setProviderWalletStatus('Preparing gasless provider verification message...');
+        challenge = await api<ProviderWalletChallenge>('/provider/auth/wallet/nonce', {
+          method: 'POST',
+          body: { walletAddress },
+        });
+        const walletChainId = walletConnection.chainId || (await readWalletChainId(ethereum).catch(() => null));
+        if (walletChainId && challenge.chainId && walletChainId !== challenge.chainId) {
+          const networkMessage = walletNetworkMismatchMessage(walletChainId, challenge.chainId);
+          setError(networkMessage);
+          setProviderWalletStatus(networkMessage);
+          clearWalletAuthIntent(flow);
+          return;
+        }
+
+        message = buildProviderSiweMessage(challenge);
+        const challengeExpiresAt = Date.parse(challenge.expirationTime);
+        rememberPendingWalletAuthIntent(flow, {
+          stage: 'sign',
+          walletAddress: challenge.address,
+          challenge,
+          message,
+          expiresAt: Number.isFinite(challengeExpiresAt) ? challengeExpiresAt : undefined,
+        });
       }
-      const message = buildProviderSiweMessage(challenge);
 
       setProviderWalletStatus('Confirm the gasless signature in MetaMask.');
-      const signature = await ethereum.request({
-        method: 'personal_sign',
-        params: [message, challenge.address],
-      });
+      const signature = await requestWalletSignature(
+        walletConnection,
+        message,
+        challenge.address,
+        setProviderWalletStatus
+      );
 
       setProviderWalletStatus('Verifying provider wallet and opening tools...');
+      rememberPendingWalletAuthIntent(flow, {
+        stage: 'verify',
+        walletAddress: challenge.address,
+        challenge,
+        message,
+      });
       const providerSession = await api<any>('/provider/auth/wallet/verify', {
         method: 'POST',
         body: {
@@ -2498,11 +2530,13 @@ const App: React.FC = () => {
       });
 
       if (!providerSession?.token) {
+        clearWalletAuthIntent(flow);
         setError('Wallet verified, but provider host controls could not be initialized.');
         setProviderWalletStatus('');
         return;
       }
 
+      clearWalletAuthIntent(flow);
       setProviderControlSession(providerSession.token);
       setProviderWalletVerificationRequired(false);
       setProviderWalletStatus('');
@@ -2510,6 +2544,7 @@ const App: React.FC = () => {
       setSidebarOpen(window.innerWidth >= 1024);
     } catch (error) {
       if (error instanceof ApiError) {
+        clearWalletAuthIntent(flow);
         setError(error.message || 'Provider wallet verification failed.');
       } else {
         setError(walletErrorMessage(error, 'Provider wallet verification failed.'));
