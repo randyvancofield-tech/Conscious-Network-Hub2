@@ -697,11 +697,15 @@ const App: React.FC = () => {
   const [isAdminWalletVerifying, setAdminWalletVerifying] = useState(false);
   const [adminWalletStatus, setAdminWalletStatus] = useState('');
   const [adminAccessStatus, setAdminAccessStatus] = useState<{
+    adminEmail: string | null;
     walletConfigured: boolean;
     walletAddressMasked: string | null;
     adminAccountReady: boolean;
     passwordFallbackEnabled: boolean;
+    mobilePasswordFallbackEligible: boolean;
+    passwordFallbackMode: string | null;
   } | null>(null);
+  const [hasAdminWalletHandoffFailed, setAdminWalletHandoffFailed] = useState(false);
   const [walletEnvironment, setWalletEnvironment] = useState<WalletProviderEnvironment>(() =>
     detectWalletProviderEnvironment()
   );
@@ -1630,12 +1634,19 @@ const App: React.FC = () => {
           cache: 'no-store',
         });
         if (cancelled) return;
+        const adminEmail = String(status?.adminEmail || '').trim().toLowerCase();
         setAdminAccessStatus({
+          adminEmail: adminEmail || null,
           walletConfigured: status?.walletConfigured === true,
           walletAddressMasked: status?.walletAddressMasked || null,
           adminAccountReady: status?.adminAccountReady === true,
           passwordFallbackEnabled: status?.passwordFallbackEnabled === true,
+          mobilePasswordFallbackEligible: status?.mobilePasswordFallbackEligible === true,
+          passwordFallbackMode: status?.passwordFallbackMode ? String(status.passwordFallbackMode) : null,
         });
+        if (adminEmail) {
+          setEmailInput((current) => (current.trim() ? current : adminEmail));
+        }
       } catch {
         if (!cancelled) setAdminAccessStatus(null);
       } finally {
@@ -1960,6 +1971,7 @@ const App: React.FC = () => {
   }, [pendingCheckoutSessionId, user?.id]);
 
   const completeAdminPortalSignIn = async (token: string, canonicalUser: UserProfile): Promise<boolean> => {
+    setAdminWalletHandoffFailed(false);
     setUserAuthSession(token, canonicalUser);
     setUser(canonicalUser);
     setSelectedTier(canonicalUser.tier || 'Accelerated Tier');
@@ -2166,6 +2178,7 @@ const App: React.FC = () => {
     const flow: PendingWalletAuthFlow = 'admin_wallet_verify';
     setError('');
     setAdminWalletStatus('');
+    setAdminWalletHandoffFailed(false);
     setAdminWalletVerifying(true);
 
     try {
@@ -2275,7 +2288,17 @@ const App: React.FC = () => {
         setError(error.message || 'Administrative wallet verification failed.');
         return;
       }
-      setError(walletErrorMessage(error, 'Administrative wallet verification failed.'));
+      const message = walletErrorMessage(error, 'Administrative wallet verification failed.');
+      if (
+        walletEnvironment.isMobile &&
+        /did not return from metamask|return to hcn and tap continue/i.test(message)
+      ) {
+        setAdminWalletHandoffFailed(true);
+        setAdminWalletStatus(
+          'MetaMask did not return to HCN. Use the mobile emergency password option below, or retry wallet verification.'
+        );
+      }
+      setError(message);
     } finally {
       setAdminWalletVerifying(false);
     }
@@ -3397,6 +3420,14 @@ const App: React.FC = () => {
       );
     }
 
+    const adminPasswordFallbackVisible =
+      adminAccessStatus?.passwordFallbackEnabled === true &&
+      (adminAccessStatus.mobilePasswordFallbackEligible !== true || hasAdminWalletHandoffFailed);
+    const adminPasswordFallbackWaitingForMobileFailure =
+      adminAccessStatus?.passwordFallbackEnabled === true &&
+      adminAccessStatus.mobilePasswordFallbackEligible === true &&
+      !hasAdminWalletHandoffFailed;
+
     switch (currentView) {
       case AppView.RESET_PASSWORD: {
         const hasPasswordResetToken = Boolean(String(routeParams.token || '').trim());
@@ -3729,13 +3760,24 @@ const App: React.FC = () => {
                   <p className="rounded-2xl border border-amber-200/20 bg-amber-500/[0.04] p-4 text-[10px] font-black uppercase tracking-widest text-amber-100">
                     Emergency password access is disabled. Use wallet verification.
                   </p>
-                ) : (
+                ) : adminPasswordFallbackWaitingForMobileFailure ? (
+                  <p className="rounded-2xl border border-amber-200/20 bg-amber-500/[0.04] p-4 text-[10px] font-black uppercase tracking-widest text-amber-100">
+                    Mobile emergency password access appears if MetaMask does not return to HCN after a wallet request.
+                  </p>
+                ) : adminPasswordFallbackVisible ? (
                   <>
                     <div className="flex items-center gap-3 text-[9px] font-black uppercase tracking-[0.3em] text-slate-600">
                       <span className="h-px flex-1 bg-white/10" />
-                      Emergency Password Access
+                      {adminAccessStatus?.mobilePasswordFallbackEligible
+                        ? 'Mobile Emergency Password Access'
+                        : 'Emergency Password Access'}
                       <span className="h-px flex-1 bg-white/10" />
                     </div>
+                    {adminAccessStatus?.mobilePasswordFallbackEligible && (
+                      <p className="rounded-2xl border border-amber-200/20 bg-amber-500/[0.04] p-4 text-[10px] font-black uppercase tracking-widest text-amber-100">
+                        Use this only because MetaMask did not return on this mobile device. Desktop admin entry still requires wallet verification.
+                      </p>
+                    )}
                     <form onSubmit={handleAdministrativeSignIn} className="space-y-5">
                       <label className="block space-y-2">
                         <span className="text-[10px] font-black uppercase tracking-widest text-slate-500">
@@ -3747,7 +3789,7 @@ const App: React.FC = () => {
                           onChange={(event) => setEmailInput(event.target.value)}
                           className="w-full rounded-2xl border border-white/10 bg-white/[0.06] px-5 py-4 text-sm text-white outline-none transition focus:ring-2 focus:ring-amber-400/40"
                           required
-                          placeholder="admin@example.com"
+                          placeholder={adminAccessStatus?.adminEmail || 'admin@example.com'}
                         />
                       </label>
                       <label className="block space-y-2">
@@ -3781,6 +3823,10 @@ const App: React.FC = () => {
                       </button>
                     </form>
                   </>
+                ) : (
+                  <p className="rounded-2xl border border-amber-200/20 bg-amber-500/[0.04] p-4 text-[10px] font-black uppercase tracking-widest text-amber-100">
+                    Emergency password access is not available for this device.
+                  </p>
                 )}
               </div>
             </div>

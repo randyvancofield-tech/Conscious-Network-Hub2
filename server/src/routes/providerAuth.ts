@@ -267,19 +267,19 @@ router.post('/session', requireCanonicalIdentity, async (req: Request, res: Resp
       userAgent: req.get('user-agent'),
     });
     if (!isProviderCrmAdminPasswordFallbackEnabled() && !passwordFallbackAllowed) {
-    recordAuditEvent(req, {
-      domain: 'auth',
-      action: 'provider_native_session_create',
-      outcome: 'deny',
-      actorUserId,
-      statusCode: 403,
-      metadata: { reason: 'admin_wallet_verification_required', role },
-    });
-    res.status(403).json({
-      error: 'Administrative wallet verification is required before provider operations unlock',
-      code: 'ADMIN_WALLET_VERIFICATION_REQUIRED',
-    });
-    return;
+      recordAuditEvent(req, {
+        domain: 'auth',
+        action: 'provider_native_session_create',
+        outcome: 'deny',
+        actorUserId,
+        statusCode: 403,
+        metadata: { reason: 'admin_wallet_verification_required', role },
+      });
+      res.status(403).json({
+        error: 'Administrative wallet verification is required before provider operations unlock',
+        code: 'ADMIN_WALLET_VERIFICATION_REQUIRED',
+      });
+      return;
     }
   }
 
