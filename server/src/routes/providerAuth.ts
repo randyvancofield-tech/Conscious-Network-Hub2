@@ -16,8 +16,10 @@ import { localStore, type LocalUserRecord } from '../services/persistenceStore';
 import {
   PROVIDER_CRM_ADMIN_WALLET_ENV_KEYS,
   PROVIDER_CRM_SOLE_ADMIN_EMAIL,
+  canUseProviderCrmAdminPasswordFallback,
   getConfiguredProviderCrmAdminWalletAddress,
   isProviderCrmAdminPasswordFallbackEnabled,
+  isProviderCrmMobileAdminPasswordFallbackAllowed,
   isProviderCrmSoleAdmin,
   maskProviderCrmAdminWalletAddress,
 } from '../services/providerCrm';
@@ -258,7 +260,13 @@ router.post('/session', requireCanonicalIdentity, async (req: Request, res: Resp
     return;
   }
 
-  if (role === 'admin' && !isProviderCrmAdminPasswordFallbackEnabled()) {
+  if (role === 'admin') {
+    const adminUser = actorUserId ? await localStore.getUserById(actorUserId) : null;
+    const passwordFallbackAllowed = canUseProviderCrmAdminPasswordFallback({
+      email: adminUser?.email,
+      userAgent: req.get('user-agent'),
+    });
+    if (!isProviderCrmAdminPasswordFallbackEnabled() && !passwordFallbackAllowed) {
     recordAuditEvent(req, {
       domain: 'auth',
       action: 'provider_native_session_create',
@@ -272,6 +280,7 @@ router.post('/session', requireCanonicalIdentity, async (req: Request, res: Resp
       code: 'ADMIN_WALLET_VERIFICATION_REQUIRED',
     });
     return;
+    }
   }
 
   try {
@@ -326,13 +335,24 @@ router.get('/admin/wallet/status', async (req: Request, res: Response): Promise<
   try {
     const configuredWalletAddress = getConfiguredProviderCrmAdminWalletAddress();
     const adminUser = await getSoleProviderCrmAdminUser();
+    const userAgent = req.get('user-agent');
+    const passwordFallbackEnabled = canUseProviderCrmAdminPasswordFallback({
+      email: PROVIDER_CRM_SOLE_ADMIN_EMAIL,
+      userAgent,
+    });
+    const mobilePasswordFallbackEligible = isProviderCrmMobileAdminPasswordFallbackAllowed({
+      email: PROVIDER_CRM_SOLE_ADMIN_EMAIL,
+      userAgent,
+    });
     res.json({
       success: true,
       adminEmail: PROVIDER_CRM_SOLE_ADMIN_EMAIL,
       walletConfigured: Boolean(configuredWalletAddress),
       walletAddressMasked: maskProviderCrmAdminWalletAddress(configuredWalletAddress),
       adminAccountReady: Boolean(adminUser),
-      passwordFallbackEnabled: isProviderCrmAdminPasswordFallbackEnabled(),
+      passwordFallbackEnabled,
+      mobilePasswordFallbackEligible,
+      passwordFallbackMode: mobilePasswordFallbackEligible ? 'mobile_after_wallet_handoff_failure' : 'standard',
     });
   } catch (error) {
     console.error('[ProviderAuth] admin wallet status failed', error);

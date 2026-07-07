@@ -42,6 +42,29 @@ export const isProviderCrmAdminPasswordFallbackEnabled = (): boolean => {
   return true;
 };
 
+const MOBILE_USER_AGENT_PATTERN =
+  /android|webos|iphone|ipad|ipod|blackberry|iemobile|opera mini/i;
+
+export const isProviderCrmMobileAdminPasswordFallbackAllowed = (input: {
+  email?: string | null;
+  userAgent?: string | null;
+}): boolean => {
+  const configured = String(process.env.ENABLE_MOBILE_ADMIN_PASSWORD_FALLBACK || '').trim().toLowerCase();
+  if (['false', '0', 'off', 'no'].includes(configured)) return false;
+
+  const normalizedEmail = String(input.email || '').trim().toLowerCase();
+  if (normalizedEmail !== PROVIDER_CRM_SOLE_ADMIN_EMAIL) return false;
+
+  return MOBILE_USER_AGENT_PATTERN.test(String(input.userAgent || ''));
+};
+
+export const canUseProviderCrmAdminPasswordFallback = (input: {
+  email?: string | null;
+  userAgent?: string | null;
+}): boolean =>
+  isProviderCrmAdminPasswordFallbackEnabled() ||
+  isProviderCrmMobileAdminPasswordFallbackAllowed(input);
+
 export type ProviderCrmToolId =
   | 'home'
   | 'members'

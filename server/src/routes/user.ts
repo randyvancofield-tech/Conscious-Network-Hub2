@@ -16,7 +16,7 @@ import {
 } from '../middleware';
 import { recordAuditEvent } from '../services/auditTelemetry';
 import { localStore, TwoFactorMethod } from '../services/persistenceStore';
-import { isProviderCrmAdminPasswordFallbackEnabled } from '../services/providerCrm';
+import { canUseProviderCrmAdminPasswordFallback } from '../services/providerCrm';
 import { mirrorUserToGoogleSheets } from '../services/googleSheetsMirror';
 import { maskPhoneNumber, maskWalletDid } from '../services/sensitiveDataPolicy';
 import { createUserSession, revokeUserSession, revokeUserSessionsByUserId } from '../services/userSessionStore';
@@ -528,10 +528,18 @@ publicRouter.post('/signin', validateJsonBody(userSignInSchema), async (req: Req
       return res.status(401).json({ error: 'Invalid credentials' });
     }
 
-    if (normalizeRole(user.role) === 'admin' && !isProviderCrmAdminPasswordFallbackEnabled()) {
-      auditSignIn('deny', 403, 'admin_password_fallback_disabled', user.id);
+    if (
+      normalizeRole(user.role) === 'admin' &&
+      !canUseProviderCrmAdminPasswordFallback({
+        email: user.email,
+        userAgent: req.get('user-agent'),
+      })
+    ) {
+      auditSignIn('deny', 403, 'admin_password_fallback_disabled', user.id, {
+        mobileFallbackEligible: false,
+      });
       return res.status(403).json({
-        error: 'Administrative password access is disabled. Use wallet verification.',
+        error: 'Administrative password access is disabled on this device. Use wallet verification.',
         code: 'ADMIN_PASSWORD_FALLBACK_DISABLED',
       });
     }
