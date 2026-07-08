@@ -7,6 +7,7 @@ export type AdminMessageType =
   | 'report_issue'
   | 'support'
   | 'provider'
+  | 'grant_application'
   | 'safety'
   | 'billing'
   | 'technical'
@@ -111,6 +112,7 @@ const MESSAGE_TYPES: AdminMessageType[] = [
   'report_issue',
   'support',
   'provider',
+  'grant_application',
   'safety',
   'billing',
   'technical',

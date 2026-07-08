@@ -1,121 +1,76 @@
-# Blockchain Data Policy Draft - Conscious Network Hub
+# Blockchain and Wallet Data Policy - Conscious Network Hub
 
-**Effective Date:** January 1, 2026  
-**Last Updated:** January 19, 2026  
+**Effective Date:** July 8, 2026
+**Last Updated:** July 8, 2026
 
-Conscious Network Hub operates on a decentralized infrastructure that leverages blockchain technology for data integrity, provenance, and user sovereignty. This policy addresses the unique challenges of blockchain data management, balancing immutability with privacy rights under frameworks like GDPR, CCPA/CPRA, and emerging regulations.
+Conscious Network Hub ("CNH") may use wallet signatures and blockchain-related records for selected identity, provider, admin, provenance, or integrity workflows. Blockchain technology can be public, global, persistent, and difficult or impossible to erase. This policy explains how CNH handles blockchain and wallet-related data for national and global launch readiness.
 
-## 1. Data Architecture Overview
+## 1. Launch Wallet Boundaries
 
-### On-Chain Storage
-- **Purpose:** Immutable ledger for transaction records, identity verifications, and data provenance.
-- **Data Types:** Cryptographic hashes, public keys, timestamps, and metadata.
-- **Immutability:** Once recorded, on-chain data cannot be altered or deleted.
+- Regular users and members do not need wallet verification for normal account access.
+- Applicants do not need wallet verification before provider approval.
+- Approved providers may need wallet binding and wallet verification before Provider CRM or provider-control access.
+- Admins may be subject to stricter wallet, elevation, and security boundaries.
+- Provider wallet verification never grants admin permissions.
 
-### Off-Chain Storage
-- **Purpose:** Flexible storage for personal data requiring privacy and mutability.
-- **Data Types:** Personal identifiable information (PII), detailed records, and sensitive content.
-- **Technology:** Encrypted databases with access controls and erasure capabilities.
+## 2. What Wallet Data We Process
 
-## 2. Data Provenance and Integrity
+CNH may process:
+- Wallet address.
+- Signed authentication or verification challenge.
+- Challenge nonce, chain/network identifier, issue time, expiration time, and verification result.
+- Provider wallet binding status.
+- Admin wallet verification status where required.
+- Audit logs related to wallet challenge and verification attempts.
 
-### Hash-Based Verification
-- **Data Hashing:** All off-chain data is hashed and stored on-chain for integrity verification.
-- **Timestamping:** Blockchain provides tamper-proof timestamps for data creation and modifications.
-- **Audit Trails:** Complete history of data changes maintained through hash linkages.
+CNH does not request or store wallet private keys, seed phrases, or recovery phrases. Users should never share those secrets with CNH or anyone claiming to represent CNH.
 
-### Decentralized Identity
-- **Self-Sovereign Identity:** Users control their identity data through blockchain-based DID systems.
-- **Verifiable Credentials:** Blockchain enables issuance and verification of credentials without centralized authorities.
+## 3. On-Chain and Off-Chain Approach
 
-## 3. Right to Erasure and Data Deletion
+CNH favors off-chain storage for personal information.
 
-### Approach to Immutability vs. Erasure
-We acknowledge the inherent conflict between blockchain immutability and privacy rights like the "right to be forgotten" under GDPR Article 17 and CCPA Section 1798.110.
+- **Off-chain:** Account records, provider/application data, notifications, admin notes, recovery-code hashes, and private content should remain in controlled databases where access, retention, correction, and deletion can be managed.
+- **On-chain or wallet-visible:** Wallet addresses, transaction references, public network events, cryptographic hashes, or provenance records may be public or persistent depending on the network and feature.
 
-### Erasure Implementation
-- **Off-Chain Deletion:** PII and sensitive data deleted from off-chain storage upon request.
-- **Hash Invalidation:** Associated on-chain hashes marked as "invalidated" with timestamp and reason.
-- **Retention of Metadata:** Minimal metadata retained for legal compliance (e.g., deletion records).
-- **Blockchain Limitations:** Historical on-chain data remains immutable but is effectively "forgotten" through invalidation markers.
+Where blockchain proofs are used, CNH should avoid placing unnecessary personal information on-chain.
 
-### Timeframes
-- **Processing:** Erasure requests processed within 30 days.
-- **Notification:** Confirmation provided to user upon completion.
-- **Exceptions:** Data retained where required by law or for legitimate business purposes.
+## 4. Signature Safety
 
-## 4. Key Custody and Security
+Wallet signatures used by CNH should be clear, gasless authentication or verification messages unless the wallet itself presents a separate blockchain transaction. Users should review the domain, message, URI, chain ID, nonce, issued time, and expiration time before signing.
 
-### Private Key Management
-- **User Control:** Users maintain custody of their private keys for blockchain interactions.
-- **Backup and Recovery:** Secure, user-controlled backup mechanisms for key recovery.
-- **Multi-Signature:** Where applicable, multi-sig schemes for enhanced security.
+CNH will not ask users to sign blank, unexplained, or private-key-revealing messages.
 
-### Platform Responsibilities
-- **Key Generation:** Secure key generation tools provided, never stored by platform.
-- **Education:** User guidance on key security best practices.
-- **Recovery Support:** Non-custodial recovery options for lost keys.
+## 5. Immutability and Deletion Limits
 
-## 5. Smart Contracts and Automated Processes
+Privacy laws may provide rights to deletion, correction, objection, restriction, or portability. CNH can act on off-chain data where legally and technically feasible. Public blockchain records, third-party wallet records, and public network activity may remain outside CNH's ability to delete or alter.
 
-### Transparency
-- **Open Source:** Smart contract code is open-source and auditable.
-- **Audit Reports:** Regular security audits by independent firms.
-- **Upgrade Mechanisms:** Proxy patterns for contract upgrades when necessary.
+When deletion is requested, CNH may:
+- Delete or restrict off-chain personal data where feasible.
+- Revoke or invalidate provider/admin wallet bindings where appropriate.
+- Retain minimal audit records when needed for security, legal, fraud prevention, or dispute-resolution purposes.
 
-### Data Handling in Contracts
-- **Minimal Data:** Only essential data stored in contracts.
-- **Encryption:** Sensitive parameters encrypted before on-chain storage.
-- **Event Logging:** Off-chain data references logged via events.
+## 6. Security Controls
 
-## 6. Cross-Border and Jurisdictional Considerations
+Blockchain and wallet flows are included in CNH's NIST CSF 2.0-informed cybersecurity program:
+- **Govern:** Wallet use is limited to higher-assurance workflows and role-specific access boundaries.
+- **Identify:** Wallet-related assets, risks, and dependencies are tracked.
+- **Protect:** Nonces, expiration times, signed messages, wallet mismatch checks, and role checks reduce misuse.
+- **Detect:** Failed wallet attempts, mismatches, replay attempts, and unauthorized role attempts are logged.
+- **Respond:** Suspicious wallet activity may trigger denial, session revocation, access review, or provider/admin support.
+- **Recover:** Bound wallets may be reviewed or reset through secure operational processes when justified.
 
-### Data Localization
-- **Off-Chain Flexibility:** Data stored in user-selected or jurisdiction-appropriate locations.
-- **Blockchain Neutrality:** On-chain data not bound by geographic restrictions.
-- **Compliance Mapping:** Data flows mapped against requirements like GDPR Chapter V.
+## 7. Third-Party Wallets and Networks
 
-### International Transfers
-- **Blockchain Transfers:** Inherently cross-border; adequacy assessments conducted.
-- **Off-Chain Transfers:** Standard contractual clauses and consent mechanisms.
+Wallet software, wallet browsers, app stores, blockchain networks, RPC providers, and bridges are third-party systems. CNH does not control their uptime, prompts, interface, fees, network status, private-key handling, or transaction finality.
 
-## 7. Data Subject Rights in Blockchain Context
+Users are responsible for securing their wallet devices, private keys, seed phrases, and signed transactions.
 
-### Access Rights
-- **On-Chain Data:** Publicly accessible data provided in readable format.
-- **Off-Chain Data:** Controlled access with authentication.
-- **Provenance Proofs:** Cryptographic proofs of data authenticity.
+## 8. Cross-Border Considerations
 
-### Portability
-- **Export Tools:** Mechanisms to export user data and associated blockchain proofs.
-- **Interoperability:** Support for data portability to other blockchain-based systems.
+Blockchain networks may process and replicate data globally. Before launching new blockchain-based features in additional jurisdictions, CNH should review local privacy, financial, consumer-protection, digital asset, cybersecurity, sanctions, and data-transfer requirements.
 
-## 8. Incident Response and Breach Notification
+## 9. Incident Reporting
 
-### Blockchain-Specific Incidents
-- **51% Attacks:** Monitoring and response plans for consensus attacks.
-- **Smart Contract Vulnerabilities:** Emergency pause mechanisms and upgrade procedures.
-- **Key Compromise:** User notification and recovery assistance.
+Users should report suspected wallet compromise, suspicious signature prompts, unauthorized wallet binding, wrong-wallet denial, or provider/admin access concerns through platform support.
 
-### Notification Requirements
-- **Timelines:** Breaches involving personal data notified within 72 hours.
-- **Content:** Nature of breach, affected data, and mitigation steps.
-- **Regulatory Reporting:** Compliance with notification requirements under applicable laws.
-
-## 9. Future-Proofing and Emerging Technologies
-
-### Scalability Solutions
-- **Layer 2:** Evaluation of layer 2 solutions for improved privacy and mutability.
-- **Privacy-Preserving Tech:** Integration of zero-knowledge proofs and homomorphic encryption.
-
-### Regulatory Adaptation
-- **Monitoring:** Continuous monitoring of evolving blockchain regulations.
-- **Policy Updates:** Annual reviews and updates to align with new requirements.
-
-## 10. Contact and Oversight
-
-- **Data Steward:** Designated role for blockchain data governance.
-- **User Support:** Dedicated channels for blockchain-related inquiries.
-- **Governance Council:** Community-involved oversight of data policies.
-
-This draft addresses the unique intersection of blockchain technology and data privacy, designed for 2025/2026 regulatory compliance. Legal and technical review is recommended before implementation.
+This policy is a launch-readiness document and should be reviewed by qualified legal, blockchain, privacy, and security counsel before broader international activation of blockchain-dependent workflows.

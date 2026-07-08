@@ -39,6 +39,7 @@ import {
   listProviderApplicants,
   updateProviderApplicantReview,
 } from '../services/providerApplicantStore';
+import { listConsciousCareerGrantApplications } from '../services/consciousCareerGrantStore';
 import {
   markProviderAccessApproved,
   revokeProviderAccessForUser,
@@ -68,6 +69,82 @@ const normalizeRole = (value: unknown): AdminVisibleRole | null => {
   if (role === 'user' || role === 'applicant') return 'user';
   return null;
 };
+
+const toAdminSubmissionUser = (user: any) =>
+  user
+    ? {
+        id: String(user.id || ''),
+        email: String(user.email || ''),
+        name: user.name || null,
+        role: normalizeRole(user.role) || 'user',
+        tier: user.tier || null,
+      }
+    : null;
+
+const toAdminProviderApplicationSubmission = (applicant: any) => ({
+  id: String(applicant.id || ''),
+  type: 'provider_application',
+  status: String(applicant.status || 'submitted'),
+  submittedAt: applicant.submittedAt || applicant.createdAt || null,
+  updatedAt: applicant.updatedAt || null,
+  title: `${applicant.firstName || ''} ${applicant.lastName || ''}`.trim() || applicant.email || 'Provider application',
+  applicantName: `${applicant.firstName || ''} ${applicant.lastName || ''}`.trim() || null,
+  applicantEmail: applicant.email || null,
+  category: applicant.providerCategory || null,
+  summary: {
+    phone: applicant.phone || null,
+    communicationPreference: applicant.communicationPreference || null,
+    organizationName: applicant.organizationName || null,
+    professionalTitle: applicant.professionalTitle || null,
+    website: applicant.website || null,
+    serviceArea: applicant.serviceArea || null,
+    availabilityMode: applicant.availabilityMode || null,
+    experienceLevel: applicant.experienceLevel || null,
+    yearsExperience: applicant.yearsExperience ?? null,
+    practiceStatus: applicant.practiceStatus || null,
+    availabilityToServe: applicant.availabilityToServe || null,
+    credentialsText: applicant.credentialsText || null,
+    licenseNumber: applicant.licenseNumber || null,
+    issuingOrganization: applicant.issuingOrganization || null,
+    professionalReferences: applicant.professionalReferences || null,
+    servicesOffered: applicant.servicesOffered || [],
+    populationsServed: applicant.populationsServed || [],
+    targetAudience: applicant.targetAudience || null,
+    alignmentAnswers: applicant.alignmentAnswers || {},
+    integrityConsents: applicant.integrityConsents || {},
+    adminNotes: applicant.adminNotes || null,
+  },
+  files: {
+    resumeFile: applicant.resumeFile || null,
+    coverLetterFile: applicant.coverLetterFile || null,
+  },
+  user: toAdminSubmissionUser(applicant.user),
+});
+
+const toAdminGrantApplicationSubmission = (application: any) => ({
+  id: String(application.id || ''),
+  type: 'grant_application',
+  status: String(application.status || 'submitted'),
+  submittedAt: application.submittedAt || application.createdAt || null,
+  updatedAt: application.updatedAt || null,
+  title: application.legalName || application.user?.name || application.user?.email || 'Grant application',
+  applicantName: application.legalName || application.user?.name || null,
+  applicantEmail: application.user?.email || null,
+  category: application.applicantType || null,
+  summary: {
+    country: application.country || null,
+    region: application.region || null,
+    locality: application.locality || null,
+    postalCode: application.postalCode || null,
+    applicantType: application.applicantType || null,
+    ventureStage: application.ventureStage || null,
+    requestedAmountUsd: application.requestedAmountUsd ?? null,
+    useOfFunds: application.useOfFunds || {},
+    answers: application.answers || {},
+  },
+  files: {},
+  user: toAdminSubmissionUser(application.user),
+});
 
 const hasConfiguredElevationCode = (): boolean =>
   String(process.env.ADMIN_ELEVATION_CODE || '').trim().length > 0;
@@ -621,12 +698,14 @@ router.get('/dashboard', async (req: Request, res: Response): Promise<void> => {
     adminMessageSummary,
     recentAdminMessages,
     providerApplicants,
+    grantApplications,
   ] = await Promise.all([
     socialStore.listPosts({ limit: 50 }),
     buildAdminCourseGovernance(),
     getAdminMessageSummary(),
     listAdminMessages({ limit: 50 }),
     listProviderApplicants({ limit: 500 }),
+    listConsciousCareerGrantApplications({ limit: 500 }),
   ]);
   const recentAuditEvents = listRecentAuditEvents({ limit: 50 });
   const pendingProviderApplications = providerApplicants.filter((applicant) =>
@@ -692,6 +771,13 @@ router.get('/dashboard', async (req: Request, res: Response): Promise<void> => {
       adminMessagesUrgent: adminMessageSummary.urgent,
       providerApplicationsTotal: providerApplicants.length,
       providerApplicationsPending: pendingProviderApplications,
+      grantApplicationsTotal: grantApplications.length,
+      grantApplicationsPending: grantApplications.filter((application) =>
+        ['submitted', 'under_review', 'reviewing', 'needs_more_info'].includes(
+          String(application.status || '').trim().toLowerCase()
+        )
+      ).length,
+      submissionsTotal: providerApplicants.length + grantApplications.length + adminMessageSummary.total,
       auditEventsRecent: recentAuditEvents.length,
       auditDeniedRecent: recentAuditEvents.filter((event) => event.outcome === 'deny').length,
       auditErrorsRecent: recentAuditEvents.filter((event) => event.outcome === 'error').length,
@@ -705,6 +791,11 @@ router.get('/dashboard', async (req: Request, res: Response): Promise<void> => {
       recipientEmail: ADMIN_INBOX_RECIPIENT_EMAIL,
       summary: adminMessageSummary,
       recent: recentAdminMessages,
+    },
+    submissions: {
+      providerApplications: providerApplicants.map(toAdminProviderApplicationSubmission),
+      grantApplications: grantApplications.map(toAdminGrantApplicationSubmission),
+      adminMessages: recentAdminMessages,
     },
     recentAuditEvents,
   });

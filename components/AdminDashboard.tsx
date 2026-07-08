@@ -40,6 +40,9 @@ interface AdminDashboardPayload {
     adminMessagesUrgent?: number;
     providerApplicationsTotal?: number;
     providerApplicationsPending?: number;
+    grantApplicationsTotal?: number;
+    grantApplicationsPending?: number;
+    submissionsTotal?: number;
     auditEventsRecent?: number;
     auditDeniedRecent?: number;
     auditErrorsRecent?: number;
@@ -48,12 +51,13 @@ interface AdminDashboardPayload {
   recentSocialPosts?: AdminSocialPostSummary[];
   courseGovernance?: AdminCourseGovernance;
   adminInbox?: AdminInboxPayload;
+  submissions?: AdminSubmissionsPayload;
   recentAuditEvents?: AdminAuditEventRecord[];
 }
 
 type AdminMessageStatus = 'new' | 'reviewing' | 'in_progress' | 'resolved' | 'archived';
 type AdminMessagePriority = 'low' | 'normal' | 'high' | 'urgent';
-type AdminConsoleSection = 'overview' | 'messages' | 'courses' | 'users' | 'content' | 'audit';
+type AdminConsoleSection = 'overview' | 'submissions' | 'messages' | 'courses' | 'users' | 'content' | 'audit';
 
 interface AdminMessageSummary {
   total: number;
@@ -93,6 +97,33 @@ interface AdminInboxPayload {
   recipientEmail: string;
   summary: AdminMessageSummary;
   recent: AdminMessageRecord[];
+}
+
+interface AdminSubmissionRecord {
+  id: string;
+  type: 'provider_application' | 'grant_application';
+  status: string;
+  submittedAt: string | null;
+  updatedAt: string | null;
+  title: string;
+  applicantName: string | null;
+  applicantEmail: string | null;
+  category: string | null;
+  summary: Record<string, unknown>;
+  files?: Record<string, unknown>;
+  user: {
+    id: string;
+    email: string;
+    name: string | null;
+    role: AdminRole;
+    tier: string | null;
+  } | null;
+}
+
+interface AdminSubmissionsPayload {
+  providerApplications: AdminSubmissionRecord[];
+  grantApplications: AdminSubmissionRecord[];
+  adminMessages: AdminMessageRecord[];
 }
 
 interface AdminAuditEventRecord {
@@ -196,6 +227,43 @@ const formatAdminDateTime = (value: string | null): string => {
   return date.toLocaleString();
 };
 
+const formatAdminValue = (value: unknown): string => {
+  if (value === null || value === undefined || value === '') return 'Not provided';
+  if (Array.isArray(value)) {
+    return value.length ? value.map((entry) => formatAdminValue(entry)).join(', ') : 'None';
+  }
+  if (typeof value === 'object') {
+    return JSON.stringify(value, null, 2);
+  }
+  return String(value);
+};
+
+const renderDetailMap = (details: Record<string, unknown> | null | undefined): React.ReactNode => {
+  const entries = Object.entries(details || {}).filter(([, value]) => {
+    if (value === null || value === undefined || value === '') return false;
+    if (Array.isArray(value)) return value.length > 0;
+    if (typeof value === 'object') return Object.keys(value as Record<string, unknown>).length > 0;
+    return true;
+  });
+  if (entries.length === 0) {
+    return <p className="text-xs text-slate-500">No detail fields were supplied.</p>;
+  }
+  return (
+    <div className="grid gap-3 md:grid-cols-2">
+      {entries.map(([key, value]) => (
+        <div key={key} className="min-w-0 rounded-xl border border-white/10 bg-white/[0.03] p-3">
+          <p className="text-[10px] font-black uppercase tracking-widest text-slate-500">
+            {formatAdminLabel(key)}
+          </p>
+          <p className="mt-2 whitespace-pre-wrap break-words text-xs leading-5 text-slate-200">
+            {formatAdminValue(value)}
+          </p>
+        </div>
+      ))}
+    </div>
+  );
+};
+
 const isUserLocked = (user: AdminUserSummary): boolean => {
   if (user.locked === true) return true;
   if (!user.lockoutUntil) return false;
@@ -229,6 +297,17 @@ const AdminDashboard: React.FC = () => {
   const isElevated = useMemo(() => Boolean(getAdminElevationToken()), [dashboard, error]);
   const currentAdminId = getCachedAuthUser()?.id || null;
   const adminInbox = dashboard?.adminInbox;
+  const allSubmissionRecords = useMemo(
+    () => [
+      ...(dashboard?.submissions?.providerApplications || []),
+      ...(dashboard?.submissions?.grantApplications || []),
+    ].sort((a, b) => {
+      const aTime = a.submittedAt ? new Date(a.submittedAt).getTime() : 0;
+      const bTime = b.submittedAt ? new Date(b.submittedAt).getTime() : 0;
+      return bTime - aTime;
+    }),
+    [dashboard?.submissions?.providerApplications, dashboard?.submissions?.grantApplications]
+  );
   const visibleAdminMessages = useMemo(
     () =>
       (adminInbox?.recent || []).filter((message) =>
@@ -587,6 +666,8 @@ const AdminDashboard: React.FC = () => {
   const courseEnrollmentCount = dashboard.summary.courseEnrollmentsTotal || 0;
   const contentPostCount = dashboard.recentSocialPosts?.length || 0;
   const pendingProviderApplicationCount = dashboard.summary.providerApplicationsPending || 0;
+  const grantApplicationCount = dashboard.summary.grantApplicationsTotal || dashboard.submissions?.grantApplications.length || 0;
+  const submissionCount = dashboard.summary.submissionsTotal || allSubmissionRecords.length + openMessageCount;
   const auditAttentionCount = (dashboard.summary.auditDeniedRecent || 0) + (dashboard.summary.auditErrorsRecent || 0);
   const soleAdminEmail = String(dashboard.soleAdminEmail || 'higherconscious.network1@gmail.com').toLowerCase();
   const sectionNavItems: Array<{
@@ -609,6 +690,13 @@ const AdminDashboard: React.FC = () => {
       description: 'Contact and reports',
       count: openMessageCount,
       icon: <Inbox className="h-4 w-4" />,
+    },
+    {
+      id: 'submissions',
+      label: 'Submissions',
+      description: 'Applications and grants',
+      count: submissionCount,
+      icon: <MessageSquare className="h-4 w-4" />,
     },
     {
       id: 'courses',
@@ -642,7 +730,8 @@ const AdminDashboard: React.FC = () => {
   const overviewSignals: Array<{ label: string; value: number; section: AdminConsoleSection }> = [
     { label: 'Open messages', value: openMessageCount, section: 'messages' },
     { label: 'Urgent reports', value: urgentMessageCount, section: 'messages' },
-    { label: 'Provider applications', value: pendingProviderApplicationCount, section: 'users' },
+    { label: 'Provider applications', value: pendingProviderApplicationCount, section: 'submissions' },
+    { label: 'Grant applications', value: grantApplicationCount, section: 'submissions' },
     { label: 'Course enrollments', value: courseEnrollmentCount, section: 'courses' },
     { label: 'Audit attention', value: auditAttentionCount, section: 'audit' },
   ];
@@ -699,8 +788,8 @@ const AdminDashboard: React.FC = () => {
               ['Users', dashboard.summary.usersTotal],
               ['Members', dashboard.summary.roleCounts.user],
               ['Providers', dashboard.summary.roleCounts.provider],
-              ['Provider Apps', pendingProviderApplicationCount],
-              ['Courses', dashboard.summary.coursesTotal || 0],
+              ['Submissions', submissionCount],
+              ['Grant Apps', grantApplicationCount],
               ['Messages', openMessageCount],
             ].map(([label, value]) => (
               <SurfacePanel key={label} className="space-y-2">
@@ -735,6 +824,140 @@ const AdminDashboard: React.FC = () => {
             </div>
           </SurfacePanel>
         </>
+      )}
+
+      {activeSection === 'submissions' && (
+        <SurfacePanel className="overflow-hidden">
+          <div className="mb-5 flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
+            <div className="flex min-w-0 items-start gap-3">
+              <MessageSquare className="mt-0.5 h-5 w-5 shrink-0 text-blue-300" />
+              <div className="min-w-0">
+                <h2 className="text-sm font-black uppercase text-white">Submitted Work</h2>
+                <p className="mt-1 text-xs leading-5 text-slate-500">
+                  Provider applications, grant applications, contact forms, reports, and admin-routed submissions are collected here for founder review.
+                </p>
+              </div>
+            </div>
+            <ActionButton
+              type="button"
+              variant="secondary"
+              onClick={() => setActiveSection('messages')}
+              icon={<Inbox className="h-4 w-4" />}
+              className="min-h-10 px-3 py-2 text-[10px]"
+            >
+              Manage Inbox
+            </ActionButton>
+          </div>
+
+          <div className="mb-5 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+            {[
+              ['Provider Apps', dashboard.submissions?.providerApplications.length || 0],
+              ['Grant Apps', dashboard.submissions?.grantApplications.length || 0],
+              ['Inbox Items', dashboard.submissions?.adminMessages.length || 0],
+              ['Pending Provider Review', pendingProviderApplicationCount],
+            ].map(([label, value]) => (
+              <div key={label} className="rounded-xl border border-white/10 bg-black/20 p-3">
+                <p className="text-[10px] font-black uppercase text-slate-500">{label}</p>
+                <p className="mt-1 text-2xl font-black text-white">{value}</p>
+              </div>
+            ))}
+          </div>
+
+          {allSubmissionRecords.length === 0 && (dashboard.submissions?.adminMessages.length || 0) === 0 ? (
+            <p className="rounded-xl border border-white/10 bg-black/20 p-4 text-sm text-slate-400">
+              No submitted applications, grants, contact forms, or reports are available yet.
+            </p>
+          ) : (
+            <div className="space-y-4">
+              {allSubmissionRecords.map((submission) => (
+                <article key={`${submission.type}-${submission.id}`} className="min-w-0 rounded-xl border border-white/10 bg-black/20 p-4">
+                  <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
+                    <div className="min-w-0">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <span className="cnh-status-badge rounded-full border border-blue-300/20 bg-blue-400/10 px-3 py-1 text-[9px] font-black uppercase text-blue-100">
+                          {formatAdminLabel(submission.type)}
+                        </span>
+                        <span className="cnh-status-badge rounded-full border border-white/10 bg-white/5 px-3 py-1 text-[9px] font-black uppercase text-slate-300">
+                          {formatAdminLabel(submission.status)}
+                        </span>
+                        {submission.category && (
+                          <span className="cnh-status-badge rounded-full border border-white/10 bg-white/5 px-3 py-1 text-[9px] font-black uppercase text-slate-400">
+                            {submission.category}
+                          </span>
+                        )}
+                      </div>
+                      <h3 className="mt-3 break-words text-base font-black uppercase text-white">{submission.title}</h3>
+                      <p className="mt-2 break-words text-xs leading-5 text-slate-500">
+                        Submitted by {submission.applicantName || submission.user?.name || 'Unknown applicant'}
+                        {submission.applicantEmail || submission.user?.email ? ` / ${submission.applicantEmail || submission.user?.email}` : ''}
+                      </p>
+                    </div>
+                    <div className="shrink-0 text-left lg:text-right">
+                      <p className="text-[10px] font-black uppercase tracking-widest text-slate-600">Submitted</p>
+                      <p className="mt-1 text-xs font-bold text-slate-300">{formatAdminDateTime(submission.submittedAt)}</p>
+                      {submission.updatedAt && (
+                        <p className="mt-1 text-[10px] text-slate-600">Updated {formatAdminDateTime(submission.updatedAt)}</p>
+                      )}
+                    </div>
+                  </div>
+
+                  <div className="mt-4">
+                    <p className="mb-3 text-[10px] font-black uppercase tracking-widest text-slate-500">Submitted Details</p>
+                    {renderDetailMap(submission.summary)}
+                  </div>
+
+                  {submission.files && Object.keys(submission.files).length > 0 && (
+                    <div className="mt-4">
+                      <p className="mb-3 text-[10px] font-black uppercase tracking-widest text-slate-500">Attached File References</p>
+                      {renderDetailMap(submission.files)}
+                    </div>
+                  )}
+                </article>
+              ))}
+
+              {(dashboard.submissions?.adminMessages || []).map((message) => (
+                <article key={`submission-message-${message.id}`} className="min-w-0 rounded-xl border border-white/10 bg-black/20 p-4">
+                  <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
+                    <div className="min-w-0">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <span className="cnh-status-badge rounded-full border border-cyan-300/20 bg-cyan-400/10 px-3 py-1 text-[9px] font-black uppercase text-cyan-100">
+                          {formatAdminLabel(message.type)}
+                        </span>
+                        <span className="cnh-status-badge rounded-full border border-white/10 bg-white/5 px-3 py-1 text-[9px] font-black uppercase text-slate-300">
+                          {formatAdminLabel(message.status)}
+                        </span>
+                        <span className={`cnh-status-badge rounded-full border px-3 py-1 text-[9px] font-black uppercase ${
+                          message.priority === 'urgent'
+                            ? 'border-red-300/30 bg-red-400/10 text-red-100'
+                            : message.priority === 'high'
+                              ? 'border-amber-300/30 bg-amber-400/10 text-amber-100'
+                              : 'border-white/10 bg-white/5 text-slate-300'
+                        }`}>
+                          {formatAdminLabel(message.priority)}
+                        </span>
+                      </div>
+                      <h3 className="mt-3 break-words text-base font-black uppercase text-white">{message.subject}</h3>
+                      <p className="mt-2 break-words text-xs leading-5 text-slate-500">
+                        From {message.submitterName || 'Unknown'}{message.submitterEmail ? ` / ${message.submitterEmail}` : ''}
+                      </p>
+                      {message.route && <p className="mt-1 break-all text-[10px] leading-4 text-slate-600">{message.route}</p>}
+                    </div>
+                    <p className="shrink-0 text-xs font-bold text-slate-300">{formatAdminDateTime(message.createdAt)}</p>
+                  </div>
+                  <p className="mt-4 whitespace-pre-wrap break-words rounded-xl border border-white/10 bg-white/5 p-3 text-sm leading-6 text-slate-200">
+                    {message.message}
+                  </p>
+                  {message.metadata && (
+                    <div className="mt-4">
+                      <p className="mb-3 text-[10px] font-black uppercase tracking-widest text-slate-500">Submission Metadata</p>
+                      {renderDetailMap(message.metadata)}
+                    </div>
+                  )}
+                </article>
+              ))}
+            </div>
+          )}
+        </SurfacePanel>
       )}
 
       {activeSection === 'messages' && (
@@ -829,6 +1052,12 @@ const AdminDashboard: React.FC = () => {
                       <div className="mt-3 rounded-xl border border-cyan-300/10 bg-cyan-400/[0.04] p-3">
                         <p className="text-[10px] font-black uppercase text-cyan-200">AI Triage</p>
                         <p className="mt-2 whitespace-pre-wrap break-words text-xs leading-5 text-slate-300">{message.aiAnalysis}</p>
+                      </div>
+                    )}
+                    {message.metadata && (
+                      <div className="mt-3 rounded-xl border border-white/10 bg-white/[0.03] p-3">
+                        <p className="mb-3 text-[10px] font-black uppercase tracking-widest text-slate-500">Submission Details</p>
+                        {renderDetailMap(message.metadata)}
                       </div>
                     )}
                   </div>

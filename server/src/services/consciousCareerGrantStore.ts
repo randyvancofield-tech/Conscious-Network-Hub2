@@ -48,6 +48,23 @@ const revealGrantApplication = (row: any): any => {
   };
 };
 
+export const listConsciousCareerGrantApplications = async (
+  input: {
+    status?: string | null;
+    limit?: number;
+  } = {}
+): Promise<any[]> => {
+  const status = nullableString(input.status);
+  const limit = Math.min(Math.max(Number(input.limit || 250), 1), 500);
+  const rows = await grantModel().findMany({
+    where: status ? { status } : undefined,
+    include: { user: true },
+    orderBy: [{ submittedAt: 'desc' }, { createdAt: 'desc' }],
+    take: limit,
+  });
+  return rows.map(revealGrantApplication);
+};
+
 export const createConsciousCareerGrantApplication = async (
   input: ConsciousCareerGrantApplicationInput
 ): Promise<any> => {

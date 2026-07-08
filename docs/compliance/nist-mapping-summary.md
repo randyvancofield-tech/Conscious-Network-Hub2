@@ -1,155 +1,152 @@
-# NIST Mapping Summary - Conscious Network Hub
+# NIST CSF 2.0 Cybersecurity Mapping - Conscious Network Hub
 
-**Effective Date:** January 1, 2026  
-**Last Updated:** January 19, 2026  
+**Effective Date:** July 8, 2026
+**Last Updated:** July 8, 2026
 
-This document provides a mapping of Conscious Network Hub's security and AI governance practices to NIST Cybersecurity Framework (CSF) 2.0 (published February 26, 2024) and NIST AI Risk Management Framework (RMF) 1.0 (released January 26, 2023). The mapping demonstrates our commitment to industry-leading standards for cybersecurity and responsible AI.
+This document summarizes how Conscious Network Hub ("CNH") maps its cybersecurity and technology governance practices to the NIST Cybersecurity Framework ("CSF") 2.0. CNH is preparing for national and global launch, so this mapping is a practical operating guide, not a claim of certification.
 
-## 1. NIST Cybersecurity Framework 2.0 Mapping
+## 1. NIST CSF 2.0 Structure
 
-### Govern Function
-The Govern function provides the foundation for managing cybersecurity risk and includes the new "Govern" addition in CSF 2.0.
+NIST CSF 2.0 is structured around three primary elements:
 
-#### GV.GE - Governance Entities
-- **Implemented:** Established AI Ethics Committee and Data Protection Officer roles.
-- **Evidence:** docs/compliance/ai-transparency-policy-draft.md, privacy-policy-draft.md
-- **Maturity Level:** Advanced - Regular board-level reviews and stakeholder engagement.
+- **The CSF Core:** A taxonomy of high-level cybersecurity outcomes. In CSF 2.0, the Core is organized into six functions: Govern, Identify, Protect, Detect, Respond, and Recover.
+- **Organizational Profiles:** A way to compare the organization's current cybersecurity state against its desired target state, helping identify gaps and improvement priorities.
+- **Implementation Tiers:** Four levels that describe how thoroughly cybersecurity risk management is integrated into business practices: Tier 1 Partial, Tier 2 Risk Informed, Tier 3 Repeatable, and Tier 4 Adaptive.
 
-#### GV.RM - Risk Management
-- **Implemented:** Comprehensive risk assessment framework for third-party vendors and AI systems.
-- **Evidence:** docs/compliance/vendor-api-governance-policy-draft.md
-- **Maturity Level:** Advanced - Quantitative risk scoring and continuous monitoring.
+## 2. Launch Implementation Tier
 
-#### GV.OV - Oversight
-- **Implemented:** Annual audits, compliance monitoring, and incident response planning.
-- **Evidence:** All compliance policy drafts include audit trail and incident response sections.
-- **Maturity Level:** Advanced - Automated monitoring and reporting systems.
+CNH's launch target is **Tier 2 to Tier 3** depending on the function and system area:
 
-#### GV.IM - Information Management
-- **Implemented:** Data classification, retention policies, and provenance tracking.
-- **Evidence:** docs/compliance/blockchain-data-policy-draft.md
-- **Maturity Level:** Advanced - Blockchain-based immutable audit trails.
+- **Current Profile:** Risk-informed controls are implemented for authentication, admin access, provider access, notifications, recovery codes, session handling, payments, uploads, AI boundaries, and audit logging.
+- **Target Profile:** Repeatable security operations with documented review cycles, incident playbooks, vendor review, vulnerability management, backup/recovery tests, and privacy/security evidence tracking.
+- **Not Yet Claimed:** CNH does not claim SOC 2, ISO 27001, HIPAA, PCI certification, NIST certification, or EU AI Act certification unless separately completed and published.
 
-### Identify Function
+## 3. CSF Core Mapping
 
-#### ID.AM - Asset Management
-- **Implemented:** Comprehensive asset inventory including AI models, datasets, and API endpoints.
-- **Evidence:** Vendor API governance includes asset discovery and classification.
-- **Maturity Level:** Intermediate - Automated discovery tools in development.
+### Govern
 
-#### ID.RA - Risk Assessment
-- **Implemented:** Threat modeling for AI systems and privacy risk assessments.
-- **Evidence:** AI transparency policy includes bias and risk assessments.
-- **Maturity Level:** Advanced - Regular penetration testing and red team exercises.
+The Govern function establishes and monitors cybersecurity risk management strategy, policies, expectations, roles, and accountability.
 
-#### ID.RM - Risk Management Strategy
-- **Implemented:** Integrated risk management across cybersecurity and AI domains.
-- **Evidence:** Cross-references between all policy documents.
-- **Maturity Level:** Advanced - Risk-informed decision making processes.
+CNH launch controls include:
+- Role-aware access boundaries for guests, users, applicants, providers, and admins.
+- Separate provider and admin security boundaries.
+- Admin elevation requirements for sensitive administrative operations.
+- Security, privacy, AI, blockchain, vendor, and terms policies.
+- Audit logging for protected actions, denials, wallet flows, provider access, and admin actions.
+- Launch governance that treats frontend navigation as usability only, with backend authorization as the security boundary.
 
-### Protect Function
+Target improvements:
+- Formal incident-response owner assignment.
+- Documented vendor risk register.
+- Scheduled security and privacy reviews.
+- Written global jurisdiction review before additional country-specific launches.
 
-#### PR.IP - Information Protection Processes
-- **Implemented:** Data encryption, access controls, and privacy-by-design principles.
-- **Evidence:** Privacy policy and blockchain data policy detail protection measures.
-- **Maturity Level:** Advanced - Zero-trust architecture implementation.
+### Identify
 
-#### PR.AC - Identity Management and Access Control
-- **Implemented:** Decentralized identity systems and role-based access controls.
-- **Evidence:** Blockchain data policy covers key custody and access management.
-- **Maturity Level:** Advanced - Self-sovereign identity implementation.
+The Identify function develops organizational understanding of cybersecurity risk to systems, people, assets, data, and capabilities.
 
-#### PR.DS - Data Security
-- **Implemented:** Encryption at rest and in transit, tokenization, and secure deletion.
-- **Evidence:** All policies include data security measures.
-- **Maturity Level:** Advanced - Homomorphic encryption for AI processing.
+CNH launch controls include:
+- Backend route and service mapping for auth, user, membership, provider, admin, AI, upload, social, meetings, notifications, and Conscious Careers flows.
+- Account type mapping for guest, user/member, applicant, approved provider, and admin.
+- Data category awareness for profile data, provider applications, grant applications, reflections, uploads, notifications, audit logs, wallet identifiers, and payment metadata.
+- Recognition that provider/applicant documents, admin records, recovery codes, wallet private keys, passwords, and sensitive session tokens require heightened protection.
 
-### Detect Function
+Target improvements:
+- Maintain a formal data inventory and retention table.
+- Maintain a vendor/API inventory with processing purpose and region.
+- Perform recurring threat modeling for admin, wallet, provider, AI, upload, payment, and applicant workflows.
 
-#### DE.CM - Continuous Monitoring
-- **Implemented:** Real-time monitoring of AI outputs, API calls, and system health.
-- **Evidence:** Vendor API governance includes comprehensive logging and monitoring.
-- **Maturity Level:** Advanced - AI-powered anomaly detection systems.
+### Protect
 
-#### DE.DP - Detection Processes
-- **Implemented:** Automated alerting for security events and AI bias detection.
-- **Evidence:** AI transparency policy includes bias monitoring and incident reporting.
-- **Maturity Level:** Intermediate - Machine learning-based detection in pilot phase.
+The Protect function outlines safeguards to ensure service delivery and protect against cyber threats.
 
-### Respond Function
+CNH launch controls include:
+- HTTPS-only production expectation.
+- Helmet security headers, CORS allowlists, validation, and rate limiting.
+- Hashed passwords and hashed recovery codes.
+- Signed session tokens backed by persisted session records.
+- `sessionStorage`-oriented frontend auth behavior for active browser sessions.
+- Role-based backend middleware and canonical identity checks.
+- Admin-only and provider-only server checks.
+- Provider wallet binding and wallet verification before provider CRM/tool access.
+- No wallet verification for regular users or applicants.
+- Recovery code support when email delivery is unavailable.
+- Sensitive data minimization in AI, public listings, email, and notifications.
 
-#### RS.RP - Response Planning
-- **Implemented:** Comprehensive incident response plans for cybersecurity and AI incidents.
-- **Evidence:** All policies include incident response procedures.
-- **Maturity Level:** Advanced - Regular tabletop exercises and automated response playbooks.
+Target improvements:
+- Formal backup and restore drills.
+- Stronger secrets rotation schedule.
+- Dependency and vulnerability management cadence.
+- Security awareness guidance for admins and providers.
 
-#### RS.CO - Communications
-- **Implemented:** Stakeholder communication protocols and regulatory reporting.
-- **Evidence:** Privacy policy includes breach notification requirements.
-- **Maturity Level:** Advanced - Automated notification systems.
+### Detect
 
-### Recover Function
+The Detect function defines activities to identify the occurrence of cybersecurity events.
 
-#### RC.RP - Recovery Planning
-- **Implemented:** Business continuity and disaster recovery plans.
-- **Evidence:** Blockchain data policy includes recovery mechanisms for key compromise.
-- **Maturity Level:** Advanced - Multi-region redundancy and automated failover.
+CNH launch controls include:
+- Audit telemetry for auth, admin, provider wallet, social, provider CRM, support, and protected route actions.
+- Authentication denial logging for missing/invalid sessions, role mismatches, expired sessions, and unauthorized access.
+- Rate limiting and validation failures for suspicious request patterns.
+- Admin inbox/report paths for users to flag issues, unsafe content, AI concerns, or security problems.
 
-#### RC.IM - Improvements
-- **Implemented:** Post-incident reviews and continuous improvement processes.
-- **Evidence:** All policies include feedback loops and policy review cycles.
-- **Maturity Level:** Advanced - Metrics-driven improvement programs.
+Target improvements:
+- Centralized production log review and alerting.
+- Automated anomaly detection for admin attempts, provider wallet failures, repeated recovery attempts, upload misuse, and suspicious API activity.
+- Documented alert severity levels.
 
-## 2. NIST AI Risk Management Framework 1.0 Mapping
+### Respond
 
-### Govern Function
-- **Contextualize:** AI systems inventoried and categorized by risk level.
-- **Evidence:** AI transparency policy includes system disclosure and risk assessments.
-- **Implementation:** High-risk AI systems identified per EU AI Act alignment.
+The Respond function takes action regarding detected cybersecurity incidents, including containment, mitigation, communication, and forensics.
 
-### Map Function
-- **Model Mapping:** AI models documented with data sources, training methods, and limitations.
-- **Evidence:** AI transparency policy requires explainability and bias mitigation.
-- **Implementation:** Open-source model documentation and version control.
+CNH launch controls include:
+- Session revocation on password/recovery reset.
+- Account lockout/unlock flows.
+- Admin ability to review users, roles, provider states, messages, submissions, audit events, and issue reports.
+- Provider access revocation support.
+- Graceful email-failure handling so critical database transactions are not broken by communication failures.
+- In-app notifications and portals as launch-primary communication paths.
 
-### Measure Function
-- **Performance Measurement:** Accuracy, fairness, and safety metrics tracked.
-- **Evidence:** AI transparency policy includes monitoring and reporting requirements.
-- **Implementation:** Automated measurement dashboards and quarterly reporting.
+Target improvements:
+- Written incident response playbooks.
+- Evidence preservation checklist.
+- Regulatory notification matrix by jurisdiction.
+- Tabletop exercises for admin compromise, provider wallet mismatch, data exposure, AI incident, payment incident, and vendor outage.
 
-### Manage Function
-- **Risk Management:** Mitigation strategies for identified AI risks.
-- **Evidence:** AI transparency policy details bias mitigation and user rights.
-- **Implementation:** Continuous monitoring and improvement cycles.
+### Recover
 
-## 3. Integration and Maturity Assessment
+The Recover function restores capabilities or services impaired by cybersecurity incidents and improves resilience.
 
-### CSF 2.0 Govern Addition
-The new "Govern" function in CSF 2.0 is fully addressed through our governance structures:
-- **Governance Entities:** Dedicated AI and privacy governance bodies.
-- **Risk Management:** Integrated risk framework covering cybersecurity and AI.
-- **Oversight:** Comprehensive audit and compliance programs.
+CNH launch controls include:
+- Recovery codes for non-admin account recovery when email is unavailable.
+- Manual/stricter admin recovery expectations.
+- Session revocation after account recovery.
+- Portal and notification-based communication for applicants/providers when email is disabled.
+- Build/test verification gates before launch phase transitions.
 
-### Overall Maturity Level
-- **Current State:** Advanced across most functions, with targeted improvements in Detect processes.
-- **Target State:** Optimize maturity through automation and AI-enhanced security tools.
-- **Measurement:** Annual NIST CSF assessments with third-party validation.
+Target improvements:
+- Documented backup recovery objectives.
+- Disaster recovery tests.
+- Post-incident review templates.
+- Formal continuity plan for email provider outage, payment provider outage, wallet provider failure, hosting outage, and database restore.
 
-### Gaps and Remediation
-- **Detect Function Enhancement:** Implement AI-powered threat detection (Q2 2026).
-- **Supply Chain Security:** Extend vendor risk management to fourth-party risks (Q3 2026).
-- **Metrics Standardization:** Develop unified KPIs across all CSF functions (Q4 2026).
+## 4. AI Risk Management Alignment
 
-## 4. Compliance Evidence and Auditing
+CNH also uses NIST AI RMF concepts: Govern, Map, Measure, and Manage.
 
-### Documentation
-- All mappings supported by detailed policy documents in docs/compliance/.
-- Implementation evidence maintained in version-controlled repositories.
-- Audit trails provided through blockchain-based logging.
+- **Govern:** AI is a support layer, not the authority for provider approval, admin permission changes, payment decisions, safety-critical decisions, medical/legal/financial advice, or emergency response.
+- **Map:** AI use cases are identified by context, role, user impact, and data sensitivity.
+- **Measure:** Harmful, biased, unsafe, misleading, or privacy-invasive outputs should be reportable and reviewed.
+- **Manage:** AI prompts, knowledge sources, access boundaries, and response behavior should be corrected when incidents or risks are found.
 
-### Certification Goals
-- **SOC 2 Type II:** Target Q1 2026 completion.
-- **ISO 27001:** AI-specific controls added for 2026 certification.
-- **NIST CSF Assessment:** Annual external validation starting 2026.
+## 5. Global Launch Considerations
 
-This mapping demonstrates Conscious Network Hub's commitment to cybersecurity excellence and responsible AI governance, positioning us for 2025/2026 regulatory compliance and beyond.
+For global launch, CNH should treat cybersecurity as a cross-border trust requirement:
+- Apply least privilege to admin, provider, applicant, and member access.
+- Avoid emailing sensitive documents, private wallet/session tokens, passwords, or recovery codes.
+- Respect regional privacy rights and data transfer requirements.
+- Review local rules before activating regulated provider, wellness, funding, education, youth, payment, or employment-related workflows in a new jurisdiction.
+- Preserve evidence of security decisions, incident reviews, and policy updates.
+
+## 6. Review Cadence
+
+This mapping should be reviewed before launch, after material security changes, after major incidents, when adding a new country/region, and at least annually.

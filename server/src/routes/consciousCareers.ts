@@ -4,7 +4,9 @@ import {
   requireCanonicalIdentity,
 } from '../middleware';
 import { recordAuditEvent } from '../services/auditTelemetry';
+import { createAdminMessage } from '../services/adminMessageStore';
 import { createConsciousCareerGrantApplication } from '../services/consciousCareerGrantStore';
+import { localStore } from '../services/persistenceStore';
 
 const router = Router();
 router.use(requireCanonicalIdentity);
@@ -118,6 +120,47 @@ router.post('/grant-applications', async (req: Request, res: Response): Promise<
       },
       answers,
     });
+    const user = await localStore.getUserById(userId);
+
+    try {
+      await createAdminMessage({
+        type: 'grant_application',
+        subject: `Conscious Careers Grant Application: ${application.legalName || user?.name || user?.email || application.id}`,
+        message: [
+          `Requested amount: $${Number(application.requestedAmountUsd || 0).toLocaleString()}`,
+          `Applicant type: ${application.applicantType}`,
+          `Venture stage: ${application.ventureStage}`,
+          `Country: ${application.country}`,
+          application.region ? `Region: ${application.region}` : null,
+          application.locality ? `Locality: ${application.locality}` : null,
+          '',
+          'Narrative responses:',
+          ...Object.entries(application.answers || {}).map(
+            ([key, value]) => `${key}: ${String(value || '')}`
+          ),
+        ]
+          .filter((line): line is string => line !== null)
+          .join('\n'),
+        priority: requestedAmountUsd >= 5000 ? 'high' : 'normal',
+        submitterName: user?.name || application.legalName || null,
+        submitterEmail: user?.email || null,
+        submitterUserId: userId,
+        route: '/conscious-careers/grant-application',
+        category: 'conscious_careers_grant',
+        source: 'conscious_careers_grant_application',
+        metadata: {
+          applicationId: application.id,
+          status: application.status,
+          requestedAmountUsd: application.requestedAmountUsd,
+          useOfFunds: application.useOfFunds,
+          submittedAt: application.submittedAt,
+        },
+      });
+    } catch (messageError) {
+      console.error('[CONSCIOUS_CAREERS][WARN] Grant application saved but admin inbox message failed', {
+        name: messageError instanceof Error ? messageError.name : 'UnknownError',
+      });
+    }
 
     audit('success', 201, 'grant_application_submitted');
     res.status(201).json({

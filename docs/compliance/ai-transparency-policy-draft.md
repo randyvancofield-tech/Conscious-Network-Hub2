@@ -1,93 +1,77 @@
-# AI Transparency Policy Draft - Conscious Network Hub
+# AI Transparency Policy - Conscious Network Hub
 
-**Effective Date:** January 1, 2026  
-**Last Updated:** January 19, 2026  
+**Effective Date:** July 8, 2026
+**Last Updated:** July 8, 2026
 
-At Conscious Network Hub, we are committed to transparent, ethical, and responsible use of artificial intelligence (AI) in our decentralized social learning platform. This policy aligns with emerging AI regulations, including the EU AI Act (entered into force August 1, 2024; fully applicable August 2, 2026), NIST AI RMF 1.0 (released January 26, 2023), and principles from global frameworks like GDPR Article 22 on automated decision-making.
+Conscious Network Hub ("CNH") uses artificial intelligence to support education, navigation, reflection, issue reporting, content assistance, and approved operational workflows. AI is a support tool. It is not the final authority for identity, admin permissions, provider approval, payments, funding, healthcare, legal, employment, emergency, or safety-critical decisions.
 
-## 1. AI Systems in Our Platform
+This policy is designed for national and global launch readiness and is informed by NIST AI RMF 1.0, NIST CSF 2.0, EU AI Act risk-management concepts, OECD AI principles, GDPR automated decision-making principles, and other emerging AI governance expectations.
 
-We utilize AI for:
-- **Wisdom Node:** Multimodal intelligence for reasoning, search, and visualization.
-- **Personalization:** Tailored learning pathways and content recommendations.
-- **Community Insights:** Analysis of engagement patterns for platform improvement.
-- **Automated Moderation:** Content filtering and safety measures.
+## 1. AI Features Covered
 
-## 2. Transparency Commitments
+CNH AI features may include:
+- Platform guidance and educational support.
+- Daily Wisdom and reflective prompts.
+- AI-assisted issue reporting or support triage.
+- Knowledge search over approved platform materials.
+- Admin-visible triage summaries for submitted reports or support requests.
+- Future meeting, provider, or operational AI features only when separately implemented with notice, access controls, and consent where required.
 
-### System Disclosure
-- **AI Identification:** All AI-generated content is clearly labeled as such.
-- **Purpose Explanation:** Users are informed when AI is used in their interactions.
-- **Data Sources:** We disclose the types of data used to train and operate our AI systems.
+## 2. Disclosure and Labeling
 
-### Explainability
-- **Request Process:** Users can request explanations for AI decisions affecting them.
-- **Simplified Explanations:** Explanations are provided in clear, non-technical language.
-- **Limitations Disclosure:** We acknowledge that full explainability may not always be possible for complex AI systems.
+CNH will make reasonable efforts to identify AI-assisted features and avoid presenting AI output as human professional judgment. Users should treat AI output as informational and should independently verify important information.
 
-## 3. User Rights Regarding Automated Decisions
+AI outputs may be incomplete, inaccurate, outdated, biased, or unsuitable for a user's specific circumstances.
 
-### Right to Human Intervention
-- **Opt-Out:** Users can opt out of AI-driven personalization at any time.
-- **Human Review:** Significant decisions (e.g., content recommendations, access determinations) can be reviewed by human moderators upon request.
-- **Alternative Options:** Non-AI alternatives are provided where feasible.
+## 3. Data Boundaries
 
-### Data Subject Rights
-- **Access:** Request information about how your data is used in AI processing.
-- **Correction:** Challenge and correct inaccurate data used by AI systems.
-- **Erasure:** Request removal of data from AI training sets (subject to technical feasibility).
+AI must not use or reveal:
+- Passwords, recovery codes, session tokens, admin elevation tokens, wallet private keys, or seed phrases.
+- Private documents, private uploads, private reflections, applicant documents, provider CRM records, admin-only records, or another user's private data.
+- Full wallet identifiers, private emails, or sensitive personal data unless the user is authorized and the use is necessary for the requested feature.
 
-## 4. Bias Mitigation and Fairness
+AI context should use the minimum data needed for the feature and must respect user role, membership tier, applicant status, provider status, admin status, and backend access controls.
 
-### Proactive Measures
-- **Diverse Data:** Training data is curated to represent diverse populations and perspectives.
-- **Bias Audits:** Regular audits using tools like AI Fairness 360.
-- **Feedback Loops:** User feedback on AI outputs informs continuous improvement.
+## 4. Human Review
 
-### Monitoring and Reporting
-- **Performance Metrics:** We track AI accuracy, fairness, and bias indicators.
-- **Incident Reporting:** Users can report biased or harmful AI outputs.
+Human review is required before any material action involving:
+- Provider approval, rejection, suspension, or revocation.
+- Admin permission changes.
+- Account restrictions or disciplinary decisions.
+- Payment, refund, membership exception, grant, or funding decisions.
+- Legal, medical, mental-health, tax, financial, employment, or safety-critical outcomes.
+- Any decision that materially affects a person's rights, access, reputation, livelihood, or safety.
 
-## 5. Data Protection in AI Processing
+## 5. User Controls and Complaints
 
-### Minimization
-- **Purpose Limitation:** AI processing is limited to stated purposes.
-- **Retention Limits:** AI training data is retained only as long as necessary.
+Users may report AI concerns through platform support or issue-report paths. Reports may include unsafe output, bias, hallucination, privacy concern, harmful recommendation, technical error, or inappropriate access to data.
 
-### Security
-- **Encryption:** AI models and data are protected with encryption.
-- **Access Controls:** Strict controls on who can access AI systems and data.
+Where legally required, users may request information about significant AI-assisted decisions, ask for correction of inaccurate data, and request human review.
 
-## 6. High-Risk AI Applications
+## 6. Bias, Fairness, and Dignity
 
-For AI systems classified as high-risk under the EU AI Act:
-- **Risk Assessments:** Comprehensive assessments conducted before deployment.
-- **Conformity Declarations:** Public declarations of conformity available upon request.
-- **Post-Market Monitoring:** Continuous monitoring for risks and effectiveness.
+CNH AI should support dignity, autonomy, accessibility, and fairness. It must avoid predatory claims, stereotyping, unsupported guarantees, manipulative persuasion, discrimination, or language that treats members or providers as products.
 
-## 7. Accountability and Governance
+CNH should review user reports and observed patterns to improve prompts, retrieval sources, safety rules, and feature design.
 
-### Governance Structure
-- **AI Ethics Committee:** Oversees AI development and deployment.
-- **External Audits:** Periodic third-party audits of AI systems.
-- **Whistleblower Protection:** Mechanisms for reporting AI-related concerns.
+## 7. Security and Cybersecurity
 
-### Continuous Improvement
-- **Version Control:** AI models are versioned with change logs.
-- **User Involvement:** Beta testing and feedback programs for new AI features.
+AI systems are included in CNH's cybersecurity program mapped to NIST CSF 2.0:
+- **Govern:** AI responsibilities, rules, and risk expectations are documented.
+- **Identify:** AI use cases, data sources, vendors, risks, and access boundaries are tracked.
+- **Protect:** Access controls, data minimization, prompt boundaries, redaction, and secure vendor practices are applied.
+- **Detect:** Unsafe, biased, privacy-invasive, or suspicious outputs can be reported and reviewed.
+- **Respond:** Incidents are triaged, evidence is preserved, exposure can be restricted, and prompts or data sources can be corrected.
+- **Recover:** Lessons learned should improve AI controls, documentation, and user communication.
 
-## 8. International Compliance
+## 8. Global Readiness
 
-This policy considers:
-- **EU AI Act:** Risk-based approach to AI regulation.
-- **NIST AI RMF:** Govern, Map, Measure, Manage functions for AI risk management.
-- **Global Standards:** Alignment with IEEE Ethically Aligned Design and OECD AI Principles.
+AI regulation differs by jurisdiction. CNH does not claim EU AI Act certification, medical-device status, HIPAA compliance, regulated professional advice, or independent AI certification unless separately completed and published.
 
-## 9. Contact and Complaints
+Before activating higher-risk AI features in a new region, CNH should review local AI, privacy, consumer protection, employment, education, wellness, accessibility, and data-transfer requirements.
 
-For AI-related inquiries or complaints:
-- **Contact Form:** Available through the platform's "Connect with us" feature.
-- **Response Time:** Acknowledgment within 5 business days, resolution within 30 days.
-- **Escalation:** Independent review for unresolved issues.
+## 9. Contact
 
-This draft is designed for 2025/2026 AI regulatory readiness and should be finalized with legal and technical expertise.
+AI questions, concerns, and complaints can be submitted through the platform contact/support paths.
+
+This policy is a launch-readiness document and should be reviewed by qualified legal, privacy, AI governance, and security counsel before broad public release in additional jurisdictions.

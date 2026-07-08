@@ -1,94 +1,121 @@
-# Privacy Policy Draft - Conscious Network Hub
+# Privacy Policy - Conscious Network Hub
 
-**Effective Date:** January 1, 2026  
-**Last Updated:** January 19, 2026  
+**Effective Date:** July 8, 2026
+**Last Updated:** July 8, 2026
 
-This Privacy Policy outlines how Conscious Network Hub ("we," "us," or "our") collects, uses, discloses, and safeguards your information when you use our decentralized social learning platform. This policy is designed to comply with global privacy frameworks, including the EU General Data Protection Regulation (GDPR, Regulation (EU) 2016/679), California Consumer Privacy Act (CCPA) as amended by the California Privacy Rights Act (CPRA), India's Digital Personal Data Protection Act (DPDP Act, 2023), China's Personal Information Protection Law (PIPL, effective November 1, 2021), Brazil's Lei Geral de Proteção de Dados (LGPD, in force since September 18, 2020), and Vietnam's Personal Data Protection Decree (effective January 1, 2026). As of January 1, 2026, comprehensive privacy laws are also effective in Indiana, Kentucky, and Rhode Island, which we acknowledge and incorporate herein.
+Conscious Network Hub ("CNH," "we," "us," or "our") provides a global learning, community, provider, membership, and entrepreneurship support platform. This Privacy Policy explains how we collect, use, protect, disclose, and retain information when people use CNH from the United States or other countries.
+
+This policy is written for global launch readiness and is designed to align with privacy principles reflected in GDPR, UK GDPR, CCPA/CPRA, other U.S. state privacy laws, Brazil LGPD, India's DPDP Act, China's PIPL where applicable, and other regional privacy and cybersecurity requirements. Legal rights vary by location, and some rights apply only where a law gives them to you.
 
 ## 1. Information We Collect
 
-### Personal Information
-- **Account Data:** Email addresses, usernames, and profile information provided during registration.
-- **Usage Data:** Interaction logs, course progress, community engagements, and device information.
-- **Communication Data:** Messages sent through our platform, including AI interactions.
+### Account and Profile Data
+- Email address, password hash, display name, membership tier, profile settings, role, and account status.
+- Optional profile fields such as location, bio, interests, learning progress, provider status, and community preferences.
 
-### Sensitive Information
-- **Health and Wellness Data:** Information related to mental health, emotional wellness, or personal development shared in secure sessions.
-- **Identity Verification:** Biometric or identity data used for decentralized identity verification.
+### Application and Provider Data
+- Provider application responses, credentials supplied by the applicant, review status, admin review notes, and applicant portal status messages.
+- Conscious Careers or grant application responses, requested amount, use-of-funds information, and status records.
+- We do not ask applicants to send unnecessary sensitive documents, and we do not send private documents by email.
 
-### Automated Data Collection
-- **Cookies and Tracking:** We use cookies to enhance user experience and analytics.
-- **AI-Generated Insights:** Data processed by our AI systems for personalized recommendations.
+### Platform Activity
+- Course activity, reflections, community/social activity, notifications, support requests, issue reports, admin inbox messages, and security/audit events.
+- Device, browser, approximate location, IP-derived security signals, request metadata, and log data needed for fraud prevention, abuse detection, service reliability, and troubleshooting.
 
-## 2. How We Use Your Information
+### Payments and Membership
+- Membership tier, payment state, checkout/session identifiers, and limited transaction metadata from payment processors.
+- We do not store full payment card numbers.
 
-- **Service Provision:** To deliver decentralized learning experiences, community connections, and AI-assisted guidance.
-- **Personalization:** To tailor content, pathways, and interactions based on user preferences.
-- **Security:** To protect against unauthorized access and ensure platform integrity.
-- **Compliance:** To meet legal obligations under applicable privacy laws.
-- **Research and Improvement:** To analyze usage patterns and improve our services (anonymized where possible).
+### Wallet and Blockchain Data
+- Wallet address, wallet verification status, signed wallet challenge results, and blockchain references when a wallet-enabled flow is used.
+- Regular users and applicants are not required to use wallet verification. Approved providers and admins may be required to verify a wallet for higher-permission access.
 
-## 3. Information Sharing and Disclosure
+### AI Interaction Data
+- Prompts, feedback, AI safety reports, and context needed to operate AI features.
+- AI systems must not use or reveal passwords, recovery codes, private documents, private reflections, admin-only records, or another user's private records.
 
-We do not sell personal information. Disclosures are limited to:
-- **Service Providers:** Third-party vendors who assist in operations, bound by data processing agreements.
-- **Legal Requirements:** When required by law or to protect rights and safety.
-- **User Consent:** With explicit permission for specific purposes.
-- **Blockchain Storage:** Certain data hashes are stored on immutable blockchain ledgers for provenance and transparency.
+## 2. How We Use Information
 
-## 4. Blockchain and Data Immutability
+We use information to:
+- Create, authenticate, secure, and recover accounts.
+- Provide membership, courses, community features, AI support, provider marketplace access, notifications, and entrepreneurship support.
+- Process provider, applicant, grant, support, and administrative workflows.
+- Show users their own status, notifications, access requirements, and next steps.
+- Prevent fraud, abuse, unauthorized access, credential attacks, wallet misuse, and cross-user data exposure.
+- Maintain audit logs, respond to incidents, debug services, and improve reliability.
+- Comply with legal, tax, payment, safety, and regulatory obligations.
 
-We acknowledge the tension between blockchain technology's immutability and the "right to erasure" under laws like GDPR and CCPA. Our approach:
-- **Off-Chain Storage:** Personal identifiable information (PII) is stored off-chain in encrypted, erasable databases.
-- **On-Chain Hashes:** Only cryptographic hashes of data are stored on-chain for verification and provenance.
-- **Erasure Process:** Upon request, we delete PII from our systems and mark associated hashes as invalidated, though blockchain immutability means historical hashes remain.
-- **Data Provenance:** Blockchain ensures data integrity and prevents unauthorized alterations.
+We do not sell personal information.
 
-## 5. AI Transparency and Rights
+## 3. Legal Bases and Global Privacy Rights
 
-Our AI systems, including the Wisdom Node, are designed with transparency and user rights in mind:
-- **Explainability:** Users can request explanations for AI-generated recommendations or decisions.
-- **Bias Mitigation:** We employ techniques to reduce bias in AI outputs, including diverse training data and regular audits.
-- **User Rights:** You have the right to opt-out of AI personalization, correct inaccurate AI-derived data, and request human review of automated decisions.
-- **Data Minimization:** AI processing is limited to necessary data for service delivery.
+Depending on your location, we may process personal information based on contract necessity, consent, legitimate interests, legal obligations, vital interests, or public-interest requirements. Where required, you may have rights to:
+- Access, confirm, or receive a copy of your personal information.
+- Correct inaccurate information.
+- Delete information, subject to legal, security, blockchain, audit, or operational retention limits.
+- Restrict or object to some processing.
+- Withdraw consent where processing depends on consent.
+- Request portability of certain data.
+- Appeal or complain to a regulator where local law provides that right.
 
-## 6. Cross-Border Data Transfers
+To exercise rights, use the platform contact or support path. We may need to verify your identity before acting on a request.
 
-Data may be transferred internationally for service provision. We ensure:
-- **Adequacy Decisions:** Transfers to countries with adequate protection (e.g., EU-US Data Privacy Framework where applicable).
-- **Standard Contractual Clauses:** Used for transfers to non-adequate countries.
-- **Consent and Transparency:** Clear notices and consent for international transfers.
+## 4. Sharing and Disclosure
 
-## 7. Your Rights
+We may share limited information with:
+- Service providers that host, secure, process payments, support communications, operate AI/vendor services, or provide analytics.
+- Legal, compliance, safety, or regulatory parties where required by law or necessary to protect rights and safety.
+- Administrators and reviewers who need the information to operate provider, applicant, grant, support, account, or safety workflows.
+- Other users only where you choose to publish or share information through platform features.
 
-Depending on your jurisdiction, you may have the following rights:
-- **Access:** Request a copy of your personal data.
-- **Rectification:** Correct inaccurate or incomplete data.
-- **Erasure:** Request deletion of your data (subject to blockchain limitations).
-- **Portability:** Receive your data in a structured format.
-- **Restriction:** Limit processing in certain circumstances.
-- **Objection:** Object to processing based on legitimate interests.
-- **Withdraw Consent:** Revoke consent for processing based on consent.
+Vendors are expected to use information only for approved purposes and to apply appropriate security and privacy safeguards.
 
-To exercise these rights, contact us at [contact information].
+## 5. Cross-Border Processing
 
-## 8. Data Security
+CNH is intended for national and global use. Information may be processed in countries other than your own. Where required, we use safeguards such as data processing agreements, standard contractual clauses, transfer impact assessments, vendor review, access controls, and data minimization.
 
-We implement industry-standard security measures:
-- **Encryption:** Data in transit and at rest.
-- **Access Controls:** Role-based access and regular audits.
-- **Incident Response:** Procedures for data breaches, with notification within 72 hours where required.
+## 6. Security Program
 
-## 9. Children's Privacy
+CNH uses a risk-based cybersecurity program informed by NIST Cybersecurity Framework 2.0. The NIST CSF is organized around the CSF Core, Organizational Profiles, and Implementation Tiers. The CSF Core includes six functions:
+- **Govern:** Establish and monitor cybersecurity risk strategy, policies, responsibilities, and expectations.
+- **Identify:** Understand systems, people, assets, data, dependencies, and risks.
+- **Protect:** Apply safeguards such as encryption, access control, secure configuration, training, and data minimization.
+- **Detect:** Monitor for suspicious activity, security events, abuse, and anomalies.
+- **Respond:** Investigate, contain, communicate, mitigate, and document incidents.
+- **Recover:** Restore affected capabilities, improve resilience, and apply lessons learned.
 
-Our services are not intended for children under 13 (or equivalent age in your jurisdiction). We do not knowingly collect data from minors.
+Current safeguards include signed session tokens, persisted session records, role-aware backend authorization, admin elevation controls, provider wallet verification boundaries, hashed password and recovery-code storage, rate limiting, audit logs, security headers, CORS allowlists, data minimization, and restricted admin/provider access. No online service can guarantee complete security.
 
-## 10. Changes to This Policy
+## 7. Account Recovery and Communications
 
-We may update this policy periodically. Significant changes will be communicated via platform notifications or email.
+Email may be used when configured, but CNH is designed so launch-critical account recovery and applicant/provider status communications can work without external email. In-app notifications, portals, status timelines, recovery codes, and admin-assisted workflows may be used depending on the account type and risk level.
 
-## 11. Contact Us
+Recovery codes are shown only once, stored hashed, intended for one-time use, and should be kept private. CNH will never ask you to send a password, recovery code, wallet private key, or seed phrase through email or chat.
 
-For privacy inquiries, contact our Data Protection Officer at [email] or through the platform's contact form.
+## 8. Blockchain and Wallet Privacy
 
-This draft is prepared for 2025/2026 compliance readiness and should be reviewed by legal counsel before finalization.
+Blockchain records can be public, global, and difficult or impossible to delete. CNH keeps personal data off-chain where feasible and uses wallet verification only for flows that need higher assurance. We do not ask users to share wallet private keys or seed phrases.
+
+If deletion is requested, we can delete or restrict off-chain personal data where legally and operationally possible, but public blockchain entries may remain outside our ability to erase.
+
+## 9. AI Privacy
+
+AI features support education, navigation, drafting, and issue triage. AI is not the authority for provider approval, admin permission changes, payments, legal decisions, medical decisions, emergency response, or other sensitive determinations. Human review is required for material access, safety, provider, or administrative actions.
+
+## 10. Retention
+
+We retain information only as long as needed for the purpose collected, platform operation, user access, compliance, dispute resolution, security, audit, payment, and legal obligations. Security and audit logs may be retained longer when needed to protect users and the platform.
+
+## 11. Children's Privacy
+
+CNH is not intended for children under 13 or the equivalent minimum age in a user's jurisdiction. Youth-facing, school, or parent/guardian workflows require separate review before activation.
+
+## 12. Changes
+
+We may update this policy as the platform, laws, security practices, and global launch needs evolve. Material changes will be communicated through the platform and, when email is enabled and appropriate, by email.
+
+## 13. Contact
+
+Privacy, security, AI, applicant, provider, or account questions can be submitted through the platform contact/support paths. If a dedicated privacy or data protection contact is later published, that contact will also be available through the platform.
+
+This policy is a launch-readiness document and should be reviewed by qualified legal and security counsel before broad public release in additional jurisdictions.
