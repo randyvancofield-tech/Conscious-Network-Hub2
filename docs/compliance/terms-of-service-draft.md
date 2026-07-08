@@ -1,92 +1,89 @@
-# Terms of Service - Conscious Network Hub
+# TERMS OF SERVICE: CONSCIOUS NETWORK HUB (SaaS PLATFORM)
 
-**Effective Date:** July 8, 2026
-**Last Updated:** July 8, 2026
+Effective Date: July 7, 2026
 
-These Terms of Service ("Terms") govern use of Conscious Network Hub ("CNH," "we," "us," or "our"). By creating an account, submitting an application, joining a membership tier, using provider or applicant portals, using AI tools, or accessing community features, you agree to these Terms and the related policies linked from the platform.
+Welcome to Conscious Network Hub (“the SaaS Platform”, “we”, “us”, “our”), a multi-tiered software-as-a-service infrastructure operated as a subsidiary platform of Higher Conscious Network LLC (HCN). These Terms of Service (“Terms”) establish a legally binding agreement governing access to and utilization of our decentralized social learning spaces, custom provider CRM, course portals, and immersive WebXR/5D interactive modules.
 
-CNH is launching nationally and globally. Some services, providers, payments, eligibility rules, privacy rights, and legal requirements may vary by country, state, province, or region.
+By accessing the SaaS Platform, submitting a provider application, or utilizing any integrated features, you agree to be unconditionally bound by these Terms, our Privacy Policy, and all posted community safety requirements.
 
-## 1. Eligibility and Accounts
+## 1. Platform Infrastructure & Cryptographic Authentication
 
-You must provide accurate information and keep your account credentials secure. You are responsible for activity under your account unless the activity resulted from CNH's failure to apply reasonable security safeguards.
+The SaaS Platform relies on a decentralized, self-sovereign authentication layer designed to maximize user data control:
 
-You may not share passwords, recovery codes, admin tokens, provider session tokens, wallet private keys, or seed phrases. CNH will never ask for wallet private keys or seed phrases.
+Web3 Identity Integration: Users and providers gain access to platform layers exclusively via cryptographic browser wallet signatures and Decentralized Identifiers (DIDs).
 
-## 2. Roles and Access
+Self-Custody Mandate: You are entirely responsible for the security of your private keys, hardware wallets, and seed phrases. The SaaS Platform does not maintain credentials, store passwords, or possess the capability to recover or reset a compromised account layer.
 
-CNH has separate access paths for guests, users/members, applicants, approved providers, and admins.
+Device Portability: The platform infrastructure is built to remain securely accessible on the go across all devices. You are responsible for ensuring your local device architecture maintains compatibility.
 
-- Regular users and members do not use wallet verification for normal access.
-- Applicants do not receive provider tools before approval.
-- Approved providers may need wallet verification before Provider CRM or provider-control access.
-- Admin access is more privileged and may require stricter sign-in, elevation, wallet/security checks, and audit logging.
-- Membership tiers may control access to courses, AI, meetings, community, provider marketplace, entrepreneurship support, and other features without requiring separate sign-ins.
+## 2. Provider Applications, Vetting, & Access Separation
 
-Attempting to bypass role, wallet, tier, payment, session, or admin controls is prohibited.
+We host mission-aligned professionals, including religious leaders, spiritualists, holistic experts, coaches, mental wellness experts, and cultural enthusiasts. To preserve network integrity, strict onboarding rules apply:
 
-## 3. Memberships and Payments
+Application Review Process: Submitting an application does not guarantee platform access. We reserves the right to review professional credentials, references, alignment responses, and communication history.
 
-Membership availability, pricing, refunds, trials, and feature access may change. Payment processing may be handled by third-party providers. CNH does not store full payment card numbers.
+Data Utilization Rules: Sensitive verification materials submitted during the application process are used solely for eligibility review, safety screening, structural compliance, and platform trust.
 
-Membership access may be suspended or limited for failed payment, chargeback, suspected fraud, policy violations, or security risk. If a feature is not available in a jurisdiction or device environment, CNH may provide alternate access where feasible.
+Separation of Roles: To guarantee network security, the system maintains strict architectural isolation between applicant, provider, user member, and system administrator environments. Specialized provider tools and CRM spaces remain locked until an application is approved and the cryptographic provider login flow is executed.
 
-## 4. Provider and Applicant Terms
+Instant Session Termination: In compliance with zero-trust access principles, if a provider's approval status is denied or subsequently revoked by administration, all active platform sessions will undergo immediate termination.
 
-Submitting a provider, grant, Conscious Careers, or other application does not guarantee approval, funding, employment, certification, marketplace placement, client volume, income, or platform access.
+## 3. Commercial Terms, Billing, & Stripe Integration
 
-Applicants must submit accurate, relevant information. CNH may review application materials, credentials, references, alignment responses, communications, applicant status events, and admin notes. CNH may approve, reject, request more information, pause review, or revoke access based on safety, integrity, operational, legal, or platform needs.
+The SaaS Platform facilitates commercial operations, premium course distributions, and multi-dimensional sessions for paying users:
 
-Providers remain responsible for their own licenses, insurance, professional obligations, taxes, disclosures, services, pricing, scheduling, and legal compliance in every jurisdiction where they operate.
+Fiat Processing Gateways: All traditional currency transactions, platform subscription fees, and provider tier payments are securely managed via our Stripe integration. All billing details adhere strictly to Stripe's legal processing frameworks.
 
-## 5. Community and Content
+On-Chain Settlement Verification: For billing pathways utilizing stablecoins or specific cryptographic assets, transactions are processed peer-to-peer on public blockchains. Users bear full accountability for local gas fees.
 
-You may not use CNH to harass, exploit, impersonate, defraud, threaten, dox, spam, upload malware, infringe rights, promote illegal activity, or disclose another person's private information.
+Refund Architecture: Due to the instant delivery of digital course materials, immediate CRM feature unlocking, and the immutability of public blockchain verification, all transactions are strictly non-refundable.
 
-You retain ownership of content you submit, but grant CNH the rights needed to host, display, secure, moderate, process, back up, and operate that content in connection with the platform. Public or community-visible content may be seen by others according to your settings and platform rules.
+## 4. Ethical AI Use & Algorithmic Protections
 
-## 6. AI Features
+The SaaS Platform features a proprietary internal AI designed to provide administrative assistance and build a next-generation wellness algorithm from opted-in platform data:
 
-AI features support learning, navigation, drafting, reflection, and issue triage. AI output may be incomplete, outdated, biased, or incorrect. You should independently evaluate important outputs.
+Internal Isolation: Our AI systems function within a secure, closed-loop technical framework. We explicitly prohibit open, public commercial AI APIs.
 
-AI does not provide emergency response, medical diagnosis, legal advice, tax advice, financial advice, therapy, employment guarantees, funding guarantees, provider approval guarantees, or automated adverse decisions without human review. Sensitive decisions require human review and applicable role-based controls.
+The Mechanical Bypass Toggle: Users and providers have access to a prominent mechanical toggle within their dashboard. Disabling this toggle instantly drops all AI personalization features and ensures your content posts are entirely bypassed by algorithmic training data.
 
-## 7. Security and Cybersecurity
+Visual Presentation Compliance: Every visual output or response generated or altered by internal machine intelligence will display an unmissable on-screen indicator.
 
-CNH uses a cybersecurity program informed by NIST CSF 2.0, including Govern, Identify, Protect, Detect, Respond, and Recover functions. Users must not test, scan, attack, reverse engineer, scrape, overload, or bypass security controls without written authorization.
+Reverse-Engineering Ban: Users are strictly prohibited from utilizing automated scraping scripts, bots, or decompile parameters to capture underlying training frameworks or extract metadata from our developing spiritual-educational algorithm.
 
-Report suspected vulnerabilities, account compromise, privacy incidents, unsafe AI behavior, or unauthorized access through the platform support/contact path.
+## 5. Institutional & Governmental Restrictions
 
-## 8. Blockchain and Wallet Use
+Consumer Licenses Restricted: Individual consumer user or individual provider tiers are strictly restricted to personal use.
 
-Wallet signatures used by CNH are intended for authentication or verification only unless a separate transaction is clearly presented by the wallet. CNH will not ask you to sign blank or unexplained transactions.
+Enterprise Channel Mandate: Universities, healthcare organizations, non-profit entities, or state bodies seeking organizational platform access, cross-network licensing, or programmatic space deployment are directed to execute an independent contract layout. All institutional inquiries must be sent directly to: guidance@higherconscious.network.
 
-Blockchain activity may be public, cross-border, irreversible, and controlled by external networks. CNH is not responsible for wallet loss, private-key loss, blockchain network failure, third-party wallet behavior, gas fees, or user-approved external transactions.
+## 6. Professional Disclaimers & Work Profile Exclusions
 
-## 9. Third-Party Services
+Educational and Reflective Focus: The SaaS Platform delivers social learning, CRM, reflective study spaces, and business support tools for practitioners. It does not provide legal, tax, financial, accounting, lending, or guaranteed funding advice.
 
-CNH may rely on hosting, payment, AI, analytics, email, wallet, blockchain, storage, and other vendors. Third-party terms and privacy policies may apply. CNH is not responsible for third-party services outside its control, but we seek vendors with appropriate privacy, security, reliability, and compliance practices.
+Clinical Disclaimer: To protect human autonomy and respect personal space boundaries, we explicitly exclude clinical professional definitions and medical counseling categories from our platform's provider profiles. Content, AI reflections, and multi-dimensional sessions do not constitute medical, clinical, psychiatric, or healthcare treatment.
 
-## 10. Suspension and Termination
+## 7. Limitation of Liability
 
-CNH may limit, suspend, or terminate access for security risk, fraud, abuse, nonpayment, illegal conduct, policy violation, provider integrity concerns, account compromise, or operational necessity. Where feasible and safe, CNH may provide notice or an opportunity to resolve the issue.
+As-Is Platform Runtime: Services are delivered on an "As-Is" and "As-Available" baseline without explicit or implied performance guarantees.
 
-## 11. Disclaimers
+Blockchain Fault Disclaimer: We bear no liability for transaction failures, loss of self-custodied digital keys, or operational service outages originating from underlying layer-1 or layer-2 public blockchain protocols or node connectivity issues.
 
-CNH is provided "as is" and "as available" to the fullest extent allowed by law. We do not guarantee uninterrupted service, error-free operation, specific outcomes, income, healing, business success, funding, employment, provider approval, or availability in every region.
+## 8. Structural Changes & Policy Amendments
 
-## 12. Limitation of Liability
+We reserve the right to modify these Terms as our global infrastructure matures. Any structural updates—including fee updates, additional blockchain integrations, or expanded CRM features—will be announced on our platform interfaces with an updated effective date. Continued usage of the network following an amendment constitutes binding acceptance of the updated terms.
 
-To the fullest extent allowed by law, CNH is not liable for indirect, incidental, special, consequential, exemplary, or punitive damages, or for lost profits, lost data, lost opportunities, wallet loss, third-party outages, or unauthorized activity not caused by CNH's failure to apply reasonable safeguards.
+## 9. Platform Corporate Communications
 
-Some jurisdictions do not allow certain limitations, so some terms may not apply to you.
+For legal notifications, operational questions, or custom institutional contract negotiations, please contact our administrative desk:
 
-## 13. Changes
+SaaS Inbound Intake: guidance@higherconscious.network
 
-We may update these Terms as laws, features, security practices, memberships, provider workflows, and global launch requirements evolve. Material changes will be communicated through the platform and, when email is enabled and appropriate, by email.
+Primary Corporate Gateways: Higher Conscious Network | Conscious Network
 
-## 14. Contact
+## Launch FAQ Snippet for Focus Group Members
 
-Questions about these Terms can be submitted through the platform contact/support paths.
+Here is the promotional snippet you requested to share with your upcoming focus group to clear up how the platform protects their space:
 
-These Terms are launch-readiness terms and should be reviewed by qualified legal counsel before broad public release in additional jurisdictions.
+How does the Conscious Network Hub respect my autonomy during this pilot?
+
+We believe you own your mind and your data. Unlike older platforms that track your behavior to sell ads, our platform operates a Mechanical AI Toggle. If you do not want your focus group feedback or course reflections to help train our upcoming spiritual and wellness algorithm, simply turn the toggle switch OFF inside your profile dashboard at any time. Your platform features will remain fully functional, and your data stays completely private. Furthermore, we use a fully closed-loop internal AI, meaning your private information never touches third-party commercial databases.
