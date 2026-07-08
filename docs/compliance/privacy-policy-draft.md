@@ -1,121 +1,97 @@
-# Privacy Policy - Conscious Network Hub
+# PRIVACY POLICY: CONSCIOUS NETWORK HUB (SaaS PLATFORM)
 
-**Effective Date:** July 8, 2026
-**Last Updated:** July 8, 2026
+Effective Date: July 7, 2026
 
-Conscious Network Hub ("CNH," "we," "us," or "our") provides a global learning, community, provider, membership, and entrepreneurship support platform. This Privacy Policy explains how we collect, use, protect, disclose, and retain information when people use CNH from the United States or other countries.
+The Conscious Network Hub (“the SaaS Platform”, “we”, “us”, “our”), a subsidiary platform of Higher Conscious Network LLC (HCN), provides a decentralized social learning, CRM, and multi-dimensional ecosystem designed specifically for vetted providers and users. This Privacy Policy details how we collect, process, isolate, and safeguard data within our software-as-a-service infrastructure.
 
-This policy is written for global launch readiness and is designed to align with privacy principles reflected in GDPR, UK GDPR, CCPA/CPRA, other U.S. state privacy laws, Brazil LGPD, India's DPDP Act, China's PIPL where applicable, and other regional privacy and cybersecurity requirements. Legal rights vary by location, and some rights apply only where a law gives them to you.
+We operate under strict Privacy-by-Design, Data Minimization, and Data Sovereignty models. This framework ensures complete compliance with global privacy standards, including the EU General Data Protection Regulation (GDPR), California Consumer Privacy Act/California Privacy Rights Act (CCPA/CPRA), India's DPDP Act, China's PIPL, and Brazil's LGPD.
 
-## 1. Information We Collect
+## 1. Decentralized Identity & Authentication (No Centralized Credentials)
 
-### Account and Profile Data
-- Email address, password hash, display name, membership tier, profile settings, role, and account status.
-- Optional profile fields such as location, bio, interests, learning progress, provider status, and community preferences.
+The SaaS Platform replaces centralized account tracking with self-sovereign authentication:
 
-### Application and Provider Data
-- Provider application responses, credentials supplied by the applicant, review status, admin review notes, and applicant portal status messages.
-- Conscious Careers or grant application responses, requested amount, use-of-funds information, and status records.
-- We do not ask applicants to send unnecessary sensitive documents, and we do not send private documents by email.
+Wallet-Based Logins: Users and providers authenticate access exclusively via Web3 cryptographic wallet signatures and Decentralized Identifiers (DIDs).
 
-### Platform Activity
-- Course activity, reflections, community/social activity, notifications, support requests, issue reports, admin inbox messages, and security/audit events.
-- Device, browser, approximate location, IP-derived security signals, request metadata, and log data needed for fraud prevention, abuse detection, service reliability, and troubleshooting.
+Zero Password Storage: We do not collect, hash, or store traditional passwords or private cryptographic keys. You control your digital credentials entirely.
 
-### Payments and Membership
-- Membership tier, payment state, checkout/session identifiers, and limited transaction metadata from payment processors.
-- We do not store full payment card numbers.
+Vetted Provider Wallet Mapping: For verified business providers, cryptographic profiles securely register metadata (name, email, unique identifier) without mapping personal behavioral histories.
 
-### Wallet and Blockchain Data
-- Wallet address, wallet verification status, signed wallet challenge results, and blockchain references when a wallet-enabled flow is used.
-- Regular users and applicants are not required to use wallet verification. Approved providers and admins may be required to verify a wallet for higher-permission access.
+## 2. Information We Collect & Data Minimization
 
-### AI Interaction Data
-- Prompts, feedback, AI safety reports, and context needed to operate AI features.
-- AI systems must not use or reveal passwords, recovery codes, private documents, private reflections, admin-only records, or another user's private records.
+We collect only the essential technical and structural data required to execute SaaS operations, maintain cross-device platform responsiveness, and validate access:
 
-## 2. How We Use Information
+Cryptographic & Operational Data: Public wallet addresses, wallet DIDs, provider external IDs, blockchain transaction records verifying subscription status, and platform course portal progress.
 
-We use information to:
-- Create, authenticate, secure, and recover accounts.
-- Provide membership, courses, community features, AI support, provider marketplace access, notifications, and entrepreneurship support.
-- Process provider, applicant, grant, support, and administrative workflows.
-- Show users their own status, notifications, access requirements, and next steps.
-- Prevent fraud, abuse, unauthorized access, credential attacks, wallet misuse, and cross-user data exposure.
-- Maintain audit logs, respond to incidents, debug services, and improve reliability.
-- Comply with legal, tax, payment, safety, and regulatory obligations.
+Account Integration Data: Explicitly provided organizational contact details, emails, and usernames for administrative and billing coordination.
 
-We do not sell personal information.
+Immersive Telemetry Data (WebXR / 5D): Volatile, short-term spatial processing metrics necessary to render real-time interactive virtual session spaces. This data is never logged long-term or stored centrally.
 
-## 3. Legal Bases and Global Privacy Rights
+Focus Group Inputs: Feedback metrics, surveys, and optimization suggestions contributed by users who explicitly volunteer for our ongoing platform readiness focus groups.
 
-Depending on your location, we may process personal information based on contract necessity, consent, legitimate interests, legal obligations, vital interests, or public-interest requirements. Where required, you may have rights to:
-- Access, confirm, or receive a copy of your personal information.
-- Correct inaccurate information.
-- Delete information, subject to legal, security, blockchain, audit, or operational retention limits.
-- Restrict or object to some processing.
-- Withdraw consent where processing depends on consent.
-- Request portability of certain data.
-- Appeal or complain to a regulator where local law provides that right.
+Closed-Loop AI Inputs: Chat logs, text inputs, and materials provided directly to our internal automated systems.
 
-To exercise rights, use the platform contact or support path. We may need to verify your identity before acting on a request.
+## 3. Absolute Prohibitions on Sensitive Data & Surveillance
 
-## 4. Sharing and Disclosure
+No External Data Leaks: We explicitly reject the use of open, public commercial AI APIs. All machine assistance is entirely local and internal to the SaaS Platform.
 
-We may share limited information with:
-- Service providers that host, secure, process payments, support communications, operate AI/vendor services, or provide analytics.
-- Legal, compliance, safety, or regulatory parties where required by law or necessary to protect rights and safety.
-- Administrators and reviewers who need the information to operate provider, applicant, grant, support, account, or safety workflows.
-- Other users only where you choose to publish or share information through platform features.
+No Biometric Data Harvesting: We do not capture or store biometric templates, eye-tracking patterns, or facial data from WebXR hardware.
 
-Vendors are expected to use information only for approved purposes and to apply appropriate security and privacy safeguards.
+No Surveillance Tracking: We strictly prohibit behavioral cross-site cookies, third-party data broker pixels, and tracking software designed for predictive user manipulation.
 
-## 5. Cross-Border Processing
+No Financial Custody: We use trusted payment processors for traditional currency subscriptions and on-chain infrastructure validation. We never hold custody of your digital assets or personal banking files.
 
-CNH is intended for national and global use. Information may be processed in countries other than your own. Where required, we use safeguards such as data processing agreements, standard contractual clauses, transfer impact assessments, vendor review, access controls, and data minimization.
+## 4. How Information Is Processed & Next-Generation Algorithm Development
 
-## 6. Security Program
+The SaaS Platform uses collected data to run your operations and develop ethical wellness tools:
 
-CNH uses a risk-based cybersecurity program informed by NIST Cybersecurity Framework 2.0. The NIST CSF is organized around the CSF Core, Organizational Profiles, and Implementation Tiers. The CSF Core includes six functions:
-- **Govern:** Establish and monitor cybersecurity risk strategy, policies, responsibilities, and expectations.
-- **Identify:** Understand systems, people, assets, data, dependencies, and risks.
-- **Protect:** Apply safeguards such as encryption, access control, secure configuration, training, and data minimization.
-- **Detect:** Monitor for suspicious activity, security events, abuse, and anomalies.
-- **Respond:** Investigate, contain, communicate, mitigate, and document incidents.
-- **Recover:** Restore affected capabilities, improve resilience, and apply lessons learned.
+SaaS Delivery: Authenticating users, authorizing cross-device on-the-go access, managing provider CRM fields, and updating live upcoming session timetables.
 
-Current safeguards include signed session tokens, persisted session records, role-aware backend authorization, admin elevation controls, provider wallet verification boundaries, hashed password and recovery-code storage, rate limiting, audit logs, security headers, CORS allowlists, data minimization, and restricted admin/provider access. No online service can guarantee complete security.
+Next-Generation Algorithm Curation: We are engineering a revolutionary content algorithm rooted strictly in spiritual, mental wellness, and educational frameworks. This algorithm trains exclusively on data from users who explicitly choose to opt-in.
 
-## 7. Account Recovery and Communications
+The Mechanical AI Bypass: Every account interface features a clear, accessible toggle switch. By turning it off, you can bypass all AI personalization features, ensuring your content and prompts are entirely excluded from our algorithmic model.
 
-Email may be used when configured, but CNH is designed so launch-critical account recovery and applicant/provider status communications can work without external email. In-app notifications, portals, status timelines, recovery codes, and admin-assisted workflows may be used depending on the account type and risk level.
+Visual AI Indicators: In accordance with global laws like the EU AI Act, a distinctive visual notification will always appear on-screen when you interact with or view content modified by our internal AI.
 
-Recovery codes are shown only once, stored hashed, intended for one-time use, and should be kept private. CNH will never ask you to send a password, recovery code, wallet private key, or seed phrase through email or chat.
+## 5. Off-Chain Storage vs. Blockchain Immutability
 
-## 8. Blockchain and Wallet Privacy
+To balance the immutability of public blockchains with global consumer protection regulations (such as the GDPR "Right to Be Forgotten"), the platform operates a hybrid data environment:
 
-Blockchain records can be public, global, and difficult or impossible to delete. CNH keeps personal data off-chain where feasible and uses wallet verification only for flows that need higher assurance. We do not ask users to share wallet private keys or seed phrases.
+Off-Chain Erasable Storage: All personally identifiable information (PII), such as account coordination emails or focus group notes, is stored in encrypted, erasable databases separated from public infrastructure nodes.
 
-If deletion is requested, we can delete or restrict off-chain personal data where legally and operationally possible, but public blockchain entries may remain outside our ability to erase.
+On-Chain Cryptographic Hashes: Only anonymized cryptographic data hashes are written to the blockchain to guarantee data integrity, absolute security, and provenance.
 
-## 9. AI Privacy
+Erasure Clean Slate: Upon a deletion request, all off-chain PII is erased from our central systems, and the associated historical on-chain hashes are systematically marked as invalidated within our active software layer.
 
-AI features support education, navigation, drafting, and issue triage. AI is not the authority for provider approval, admin permission changes, payments, legal decisions, medical decisions, emergency response, or other sensitive determinations. Human review is required for material access, safety, provider, or administrative actions.
+## 6. No Commercial Sharing or Data Monetization
 
-## 10. Retention
+The Conscious Network Hub does not sell, trade, rent, or lease personal data, provider portfolios, or focus group metrics to any third party. Information is disclosed only under these strict parameters:
 
-We retain information only as long as needed for the purpose collected, platform operation, user access, compliance, dispute resolution, security, audit, payment, and legal obligations. Security and audit logs may be retained longer when needed to protect users and the platform.
+Contractual Service Providers: Specialized backend entities bound by rigid data processing agreements used strictly to maintain platform runtime stability.
 
-## 11. Children's Privacy
+Absolute Legal Obligations: Under compliance with a binding judicial order or legally verified global statutory mandate.
 
-CNH is not intended for children under 13 or the equivalent minimum age in a user's jurisdiction. Youth-facing, school, or parent/guardian workflows require separate review before activation.
+## 7. Global Data Rights & Compliance Enforcement
 
-## 12. Changes
+Regardless of your geographic location, we respect comprehensive data rights:
 
-We may update this policy as the platform, laws, security practices, and global launch needs evolve. Material changes will be communicated through the platform and, when email is enabled and appropriate, by email.
+Right to Access & Portability: Request structured copies of your centralized communication records or focus group notes.
 
-## 13. Contact
+Right to Total Deletion: Complete removal of off-chain data fields from all internal SaaS platform infrastructure.
 
-Privacy, security, AI, applicant, provider, or account questions can be submitted through the platform contact/support paths. If a dedicated privacy or data protection contact is later published, that contact will also be available through the platform.
+Bypass Automated Profiling: The unconditional right to toggle off internal AI parsing and algorithmic training systems.
 
-This policy is a launch-readiness document and should be reviewed by qualified legal and security counsel before broad public release in additional jurisdictions.
+## 8. Security Framework & Incident Response
+
+Adhering to the NIST Cybersecurity Framework (CSF 2.0) core guidelines, we enforce maximum technical isolation:
+
+Encryption Mandate: Advanced encryption for all data flowing between localized cross-device endpoints, WebXR spaces, and our closed-loop internal AI architecture.
+
+Breach Notification: In the event of a critical database anomaly, we deploy automated data protection responses and notify relevant global supervisory entities within 72 hours.
+
+## 9. Platform Corporate Contacts
+
+For all privacy rights validation, technical data protection questions, or institutional deployment inquiries, direct your communications to our global support queue:
+
+Inquiry Intake Email: guidance@higherconscious.network
+
+Parent Architecture Domains: https://higherconscious.network
