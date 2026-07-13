@@ -12,8 +12,8 @@ import {
 } from '../middleware';
 import { recordAuditEvent } from '../services/auditTelemetry';
 import { localStore } from '../services/persistenceStore';
-import { createUserSession } from '../services/userSessionStore';
 import { persistUploadObject } from '../services/uploadBlobStore';
+import { applyAuthResponseHeaders, issueCanonicalSession } from '../services/sessionLifecycle';
 import { getBackendPublicBaseUrl } from '../services/publicUrl';
 import emailService from '../services/emailService';
 import {
@@ -454,11 +454,8 @@ publicRouter.post(
         calendlyShownAt: new Date(),
       });
 
-      const persistedSession = await createUserSession(user.id);
-      const session = createSessionToken(user.id, {
-        sessionId: persistedSession.id,
-        expiresAt: persistedSession.expiresAt.getTime(),
-      });
+      const session = await issueCanonicalSession(user.id);
+      applyAuthResponseHeaders(res);
       const recoveryCodes = await createRecoveryCodesForUser(user.id);
       const applicantPortalUrl = buildFrontendUrl(req, '/provider/applicant-sign-in');
       const providerAccessUrl = buildFrontendUrl(req, '/provider-access');

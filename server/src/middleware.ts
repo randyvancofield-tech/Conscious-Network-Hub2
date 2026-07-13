@@ -104,13 +104,15 @@ export function requireCanonicalIdentity(
 ): Promise<void> {
   return (async (): Promise<void> => {
     const authHeader = req.headers.authorization;
-    if (!authHeader || !authHeader.startsWith('Bearer ')) {
+    const bearerMatch =
+      typeof authHeader === 'string' ? authHeader.match(/^Bearer\s+(.+)$/i) : null;
+    if (!bearerMatch) {
       logIdentityValidationFailure(req, 'missing_or_invalid_authorization_header');
       res.status(401).json({ error: 'Authentication required' });
       return;
     }
 
-    const token = authHeader.slice('Bearer '.length).trim();
+    const token = bearerMatch[1].trim();
     const payload = verifySessionToken(token);
     if (!payload) {
       logIdentityValidationFailure(req, 'invalid_or_expired_session_token');

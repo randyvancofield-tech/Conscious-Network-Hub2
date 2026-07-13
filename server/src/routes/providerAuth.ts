@@ -24,7 +24,11 @@ import {
   maskProviderCrmAdminWalletAddress,
 } from '../services/providerCrm';
 import { createProviderSession } from '../services/providerSessionStore';
-import { createUserSession } from '../services/userSessionStore';
+import {
+  applyAuthResponseHeaders,
+  buildCanonicalSessionFailure,
+  issueCanonicalSession,
+} from '../services/sessionLifecycle';
 
 const router = Router();
 
@@ -673,13 +677,31 @@ router.post('/admin/wallet/verify', async (req: Request, res: Response): Promise
       return;
     }
 
-    const persistedSession = await createUserSession(adminUser.id);
-    const authSession = createSessionToken(adminUser.id, {
-      sessionId: persistedSession.id,
-      expiresAt: persistedSession.expiresAt.getTime(),
-    });
+    let authSession;
+    try {
+      authSession = await issueCanonicalSession(adminUser.id);
+    } catch (sessionError) {
+      const sessionFailure = buildCanonicalSessionFailure(sessionError);
+      recordAuditEvent(req, {
+        domain: 'auth',
+        action: 'admin_wallet_verify',
+        outcome: 'error',
+        actorUserId: adminUser.id,
+        statusCode: 503,
+        metadata: {
+          reason: 'session_establish_failed',
+          sessionFailureCode: sessionFailure.code,
+        },
+      });
+      res.status(503).json({
+        error: sessionFailure.message,
+        code: sessionFailure.code,
+        retryable: sessionFailure.retryable,
+      });
+      return;
+    }
     const adminElevation = createAdminElevationToken(adminUser.id, {
-      sessionId: persistedSession.id,
+      sessionId: authSession.sessionId,
     });
     const providerSession = await createNativeProviderSessionPayload(req, adminUser.id, 'admin');
 
@@ -692,13 +714,14 @@ router.post('/admin/wallet/verify', async (req: Request, res: Response): Promise
       statusCode: 200,
       metadata: {
         challengeId,
-        authSessionId: persistedSession.id,
+        authSessionId: authSession.sessionId,
         providerSessionId: providerSession.session.id,
         adminElevationExpiresAt: new Date(adminElevation.expiresAt).toISOString(),
         scopesCount: providerSession.session.scopes.length,
       },
     });
 
+    applyAuthResponseHeaders(res);
     res.json({
       success: true,
       walletVerified: true,

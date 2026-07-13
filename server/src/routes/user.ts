@@ -19,7 +19,12 @@ import { localStore, TwoFactorMethod } from '../services/persistenceStore';
 import { canUseProviderCrmAdminPasswordFallback } from '../services/providerCrm';
 import { mirrorUserToGoogleSheets } from '../services/googleSheetsMirror';
 import { maskPhoneNumber, maskWalletDid } from '../services/sensitiveDataPolicy';
-import { createUserSession, revokeUserSession, revokeUserSessionsByUserId } from '../services/userSessionStore';
+import { revokeUserSession, revokeUserSessionsByUserId } from '../services/userSessionStore';
+import {
+  applyAuthResponseHeaders,
+  buildCanonicalSessionFailure,
+  issueCanonicalSession,
+} from '../services/sessionLifecycle';
 import emailService from '../services/emailService';
 import { buildPasswordResetEmail } from '../services/emailTemplates';
 import { createNotification } from '../services/notificationStore';
@@ -140,11 +145,7 @@ const safeLogHash = (value: string): string =>
   crypto.createHash('sha256').update(value, 'utf8').digest('hex').slice(0, 16);
 
 const setAuthResponseNoStore = (res: Response): void => {
-  res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, private');
-  res.setHeader('Pragma', 'no-cache');
-  res.setHeader('Expires', '0');
-  res.vary('Authorization');
-  res.vary('Cookie');
+  applyAuthResponseHeaders(res);
 };
 
 const hashPasswordResetToken = (token: string): string =>
@@ -599,11 +600,7 @@ publicRouter.post('/signin', validateJsonBody(userSignInSchema), async (req: Req
         pendingPhoneOtpAttempts: 0,
       })) || user;
 
-    const persistedSession = await createUserSession(user.id);
-    const session = createSessionToken(user.id, {
-      sessionId: persistedSession.id,
-      expiresAt: persistedSession.expiresAt.getTime(),
-    });
+    const session = await issueCanonicalSession(user.id);
     auditSignIn('success', 200, 'signin_completed', user.id, {
       twoFactorMethod: user.twoFactorMethod || 'none',
       additionalVerificationRequired: false,
@@ -752,23 +749,25 @@ publicRouter.post('/create', validateJsonBody(userCreateSchema), async (req: Req
     });
     const recoveryCodes = await createRecoveryCodesForUser(persisted.id);
 
-    let persistedSession;
+    let session;
     try {
-      persistedSession = await createUserSession(persisted.id);
+      session = await issueCanonicalSession(persisted.id);
     } catch (sessionError) {
+      const sessionFailure = buildCanonicalSessionFailure(sessionError);
       logAuthFlowError(req, 'create', 'session_establish_failed', sessionError, {
         statusCode: 503,
         userId: persisted.id,
         emailHash,
+        sessionFailureCode: sessionFailure.code,
       });
       auditCreate('error', 503, 'session_establish_failed', persisted.id);
-      return res.status(503).json(PROFILE_SESSION_ESTABLISH_FAILED_RESPONSE);
+      return res.status(503).json({
+        ...PROFILE_SESSION_ESTABLISH_FAILED_RESPONSE,
+        message: sessionFailure.message,
+        code: sessionFailure.code,
+        retryable: sessionFailure.retryable,
+      });
     }
-
-    const session = createSessionToken(persisted.id, {
-      sessionId: persistedSession.id,
-      expiresAt: persistedSession.expiresAt.getTime(),
-    });
     auditCreate('success', 200, 'create_completed', persisted.id);
 
     return res.json({

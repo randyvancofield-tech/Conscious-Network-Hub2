@@ -41,14 +41,14 @@ This checkout uses root-level `App.tsx`/`index.tsx`, root `components/` and `ser
   - Validates payload and password policy
   - Creates user in persistence store
   - Verifies persistence read-back
-  - Creates persisted user session
+  - Issues a canonical signed session through `server/src/services/sessionLifecycle.ts`
   - Returns signed token + canonical user payload
 - Signin frontend entry: `App.tsx` (`handleSignIn`) -> `POST /api/user/signin`
 - Signin backend handler: `server/src/routes/user.ts`:
   - Resolves user by email
   - Verifies password hash
   - Enforces password lockout and provider/admin role rules without phone, SMS, email-code, or email-link verification gates in the default launch path
-  - Creates persisted session + signed token
+  - Issues a persisted session and signed token through the shared helper
 - Password recovery: `POST /api/user/password-reset/request` sends native reset links for user/applicant/provider/admin accounts, and `POST /api/user/password-reset/confirm` rotates the password and revokes active sessions
 - Token creation/verification helpers: `server/src/auth.ts` (`createSessionToken`, `verifySessionToken`)
 - Persisted session store: `server/src/services/userSessionStore.ts`, backed by local/persistence store implementations
@@ -57,6 +57,18 @@ This checkout uses root-level `App.tsx`/`index.tsx`, root `components/` and `ser
 - Logout endpoint: `POST /api/user/logout` revokes the active persisted session
 - Admin elevation: `server/src/routes/admin.ts` requires canonical identity, admin role, password verification, and short-lived elevation token checks for sensitive operations
 - Provider auth is separate from member auth: approved providers sign in with email/password for a canonical user session, then native provider session routes in `server/src/routes/providerAuth.ts` and `providerSession.ts` initialize provider-scoped controls.
+
+## Current Refactor Baseline
+
+- The backend auth flow is being hardened through a phased, non-breaking refactor.
+- Session issuance is now centralized in `server/src/services/sessionLifecycle.ts` so create/signin paths share the same canonical behavior.
+- Regression coverage exists for canonical identity enforcement, user-session lifecycle, provider/admin access guards, and the shared session helper.
+
+## Current Phase Status
+
+- The current phase preserves the existing public auth routes and response contracts for member sign-in, account creation, logout, provider applicant onboarding, and provider/admin wallet verification.
+- The shared helper now standardizes session issuance, auth response headers, and session-failure reporting without removing or renaming any existing entry points.
+- The implementation is intentionally additive and backward-compatible, with regression tests covering the main auth and provider flows before each phase is considered complete.
 
 ## Current Workspace Structure
 
