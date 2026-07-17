@@ -50,6 +50,7 @@ import { canTierAccessNavItem, canTierAccessView } from './services/tierAccess';
 import { ApiError, api, apiHealth, backendAssetUrl } from './services/apiClient';
 import { getProfileAvatarMedia, isVideoMediaAsset } from './services/mediaAssets';
 import { createNativeProviderControlSession } from './services/backendApiService';
+import { getPwaInstallabilityState } from './services/pwaInstallSupport';
 import {
   WALLET_AUTH_INTENT_UPDATED_EVENT,
   WALLET_PROVIDER_UPDATED_EVENT,
@@ -754,6 +755,16 @@ const App: React.FC = () => {
   const [navAvatarFailed, setNavAvatarFailed] = useState(false);
   const [installPromptEvent, setInstallPromptEvent] = useState<BeforeInstallPromptEvent | null>(null);
   const [isStandaloneApp, setStandaloneApp] = useState(false);
+  const [installSupportState, setInstallSupportState] = useState(() => {
+    if (typeof window === 'undefined') {
+      return null;
+    }
+
+    return getPwaInstallabilityState({
+      navigator: window.navigator,
+      location: window.location,
+    });
+  });
   const [isInstallGuidanceOpen, setInstallGuidanceOpen] = useState(false);
   const [installGuidancePanel, setInstallGuidancePanel] = useState<InstallGuidancePanel>('overview');
 
@@ -794,19 +805,31 @@ const App: React.FC = () => {
   useEffect(() => {
     if (typeof window === 'undefined') return;
 
+    const syncInstallSupportState = () => {
+      setInstallSupportState(
+        getPwaInstallabilityState({
+          navigator: window.navigator,
+          location: window.location,
+        })
+      );
+    };
+
     const isStandalone =
       window.matchMedia('(display-mode: standalone)').matches ||
       Boolean((window.navigator as Navigator & { standalone?: boolean }).standalone);
 
     setStandaloneApp(isStandalone);
+    syncInstallSupportState();
     if (isStandalone) return;
 
     const handleBeforeInstallPrompt = (event: Event) => {
       event.preventDefault();
+      syncInstallSupportState();
       setInstallPromptEvent(event as BeforeInstallPromptEvent);
     };
 
     const handleAppInstalled = () => {
+      syncInstallSupportState();
       setInstallPromptEvent(null);
       setStandaloneApp(true);
     };
@@ -824,7 +847,8 @@ const App: React.FC = () => {
     if (
       typeof window === 'undefined' ||
       !('serviceWorker' in navigator) ||
-      import.meta.env.DEV
+      import.meta.env.DEV ||
+      !installSupportState?.isSecureContext
     ) {
       return;
     }
@@ -840,7 +864,7 @@ const App: React.FC = () => {
 
     window.addEventListener('load', registerServiceWorker, { once: true });
     return () => window.removeEventListener('load', registerServiceWorker);
-  }, []);
+  }, [installSupportState?.isSecureContext]);
 
   const handleInstallApp = async () => {
     if (!installPromptEvent) {
@@ -855,19 +879,18 @@ const App: React.FC = () => {
     setInstallPromptEvent(null);
   };
 
-  const installEnvironment = useMemo(() => ({
-    browserLabel: installPromptEvent ? 'Native install available' : 'Browser menu',
-    platformLabel: 'This device',
-    primaryActionLabel: installPromptEvent ? 'Install App' : 'Add to Home Screen',
-    menuGuideTitle: 'Browser Menu Guide',
-    menuGuideSummary:
-      'Use your browser menu or share sheet to install Higher Conscious Network. If a native install prompt is available, the Install App action opens it directly.',
-    menuSteps: [
-      'Open the browser menu, share sheet, or install icon.',
-      'Choose Install App, Add to Home Screen, or Add page shortcut when your browser offers it.',
-      'Confirm Higher Conscious Network as the app name and open it from your home screen or app list.',
-    ],
-  }), [installPromptEvent]);
+  const installEnvironment = useMemo(() => {
+    const fallbackState = installSupportState ?? getPwaInstallabilityState();
+
+    return {
+      browserLabel: installPromptEvent ? 'Native install available' : fallbackState.browserLabel,
+      platformLabel: fallbackState.platformLabel,
+      primaryActionLabel: installPromptEvent ? 'Install App' : fallbackState.primaryActionLabel,
+      menuGuideTitle: fallbackState.menuGuideTitle,
+      menuGuideSummary: fallbackState.menuGuideSummary,
+      menuSteps: fallbackState.menuSteps,
+    };
+  }, [installPromptEvent, installSupportState]);
 
   const shouldShowInstallAffordance = !isStandaloneApp;
   const shouldShowFloatingInstallAffordance =

@@ -8,7 +8,8 @@
     "build": "vite build",
     "check": "npm run build && npm --prefix server run build && npm --prefix server test && npm --prefix contracts run compile",
     "preview": "vite preview",
-    "deploy:contracts": "npm --prefix contracts run deploy"
+    "deploy:contracts": "npm --prefix contracts run deploy",
+    "test:pwa": "vitest run services/pwaInstallSupport.test.ts"
   },
   "dependencies": {
     "@mediapipe/selfie_segmentation": "^0.1.1675465747",
@@ -25,6 +26,7 @@
     "@types/node": "^22.14.0",
     "@vitejs/plugin-react": "^5.0.0",
     "typescript": "~5.8.2",
-    "vite": "^6.2.0"
+    "vite": "^6.2.0",
+    "vitest": "^2.1.4"
   }
 }

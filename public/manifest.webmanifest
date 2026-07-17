@@ -1,10 +1,10 @@
 {
-  "id": "/",
+  "id": "https://conscious-network.org/",
   "name": "Higher Conscious Network",
   "short_name": "HCN",
   "description": "Higher Conscious Network provider, member, learning, and meeting portal.",
-  "start_url": "/",
-  "scope": "/",
+  "start_url": "https://conscious-network.org/?source=pwa",
+  "scope": "https://conscious-network.org/",
   "display": "standalone",
   "display_override": ["standalone", "browser"],
   "orientation": "portrait-primary",
@@ -16,13 +16,13 @@
   "prefer_related_applications": false,
   "icons": [
     {
-      "src": "/brand/higher-conscious-network-icon-192.png",
+      "src": "https://conscious-network.org/brand/higher-conscious-network-icon-192.png",
       "sizes": "192x192",
       "type": "image/png",
       "purpose": "any maskable"
     },
     {
-      "src": "/brand/higher-conscious-network-icon-512.png",
+      "src": "https://conscious-network.org/brand/higher-conscious-network-icon-512.png",
       "sizes": "512x512",
       "type": "image/png",
       "purpose": "any maskable"
@@ -33,10 +33,10 @@
       "name": "Administrative Access",
       "short_name": "Admin",
       "description": "Open Administrative Access.",
-      "url": "/administrative-access",
+      "url": "https://conscious-network.org/administrative-access",
       "icons": [
         {
-          "src": "/brand/higher-conscious-network-icon-192.png",
+          "src": "https://conscious-network.org/brand/higher-conscious-network-icon-192.png",
           "sizes": "192x192",
           "type": "image/png"
         }
@@ -46,10 +46,10 @@
       "name": "Provider Access",
       "short_name": "Provider",
       "description": "Open provider access.",
-      "url": "/provider-access",
+      "url": "https://conscious-network.org/provider-access",
       "icons": [
         {
-          "src": "/brand/higher-conscious-network-icon-192.png",
+          "src": "https://conscious-network.org/brand/higher-conscious-network-icon-192.png",
           "sizes": "192x192",
           "type": "image/png"
         }
