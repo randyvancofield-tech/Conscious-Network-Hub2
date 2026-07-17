@@ -744,13 +744,40 @@ const normalizeAccounts = (accounts: unknown): string[] => {
   return accounts.map((account) => String(account || '').trim()).filter(Boolean);
 };
 
+const getWalletAccounts = async (provider: any, requirePrompt = true): Promise<string[]> => {
+  if (!provider?.request) return [];
+
+  const selectedAddress = asOptionalString(provider?.selectedAddress);
+  if (selectedAddress) {
+    return [selectedAddress];
+  }
+
+  if (requirePrompt) {
+    try {
+      const requestedAccounts = normalizeAccounts(
+        await provider.request({ method: 'eth_requestAccounts' })
+      );
+      if (requestedAccounts.length > 0) return requestedAccounts;
+    } catch {
+      // Fall back to any already-connected accounts.
+    }
+  }
+
+  try {
+    const connectedAccounts = normalizeAccounts(await provider.request({ method: 'eth_accounts' }));
+    if (connectedAccounts.length > 0) return connectedAccounts;
+  } catch {
+    // Ignore provider-specific errors and surface a clearer fallback error downstream.
+  }
+
+  return [];
+};
+
 export const connectWalletProvider = async (): Promise<WalletConnection> => {
   const environment = detectWalletProviderEnvironment();
 
   if (environment.transport === 'injected' && environment.provider?.request) {
-    const accounts = normalizeAccounts(
-      await environment.provider.request({ method: 'eth_requestAccounts' })
-    );
+    const accounts = await getWalletAccounts(environment.provider, true);
     const walletAddress = accounts[0] || '';
     if (!walletAddress) {
       throw new Error('No wallet address was returned by MetaMask.');
@@ -773,15 +800,15 @@ export const connectWalletProvider = async (): Promise<WalletConnection> => {
       forceRequest: false,
     });
     const provider = client.getProvider();
-    const accounts = normalizeAccounts(result.accounts);
-    const walletAddress = accounts[0] || '';
+    const accounts = await getWalletAccounts(provider, false);
+    const walletAddress = accounts[0] || normalizeAccounts(result.accounts)[0] || '';
     if (!walletAddress) {
       throw new Error('No wallet address was returned by MetaMask.');
     }
 
     return {
       provider,
-      accounts,
+      accounts: accounts.length > 0 ? accounts : normalizeAccounts(result.accounts),
       walletAddress,
       chainId: fromHexChainId(result.chainId),
       transport: 'metamask_connect',

@@ -381,6 +381,8 @@ const TRACKS: Track[] = [
   }
 ];
 
+const FALLBACK_TRACK_URL = 'https://www.w3schools.com/html/horse.mp3';
+
 const MusicBox: React.FC = () => {
   const [isPlaying, setIsPlaying] = useState(false);
   const [currentTrack, setCurrentTrack] = useState(0);
@@ -392,16 +394,30 @@ const MusicBox: React.FC = () => {
   const [duration, setDuration] = useState(0);
   const [currentTime, setCurrentTime] = useState(0);
   const [showPlaylist, setShowPlaylist] = useState(false);
+  const [playbackNotice, setPlaybackNotice] = useState<string | null>(null);
 
   const audioRef = useRef<HTMLAudioElement | null>(null);
+
+  const applyTrackSource = (trackIndex: number, fallback = false) => {
+    if (!audioRef.current) return;
+    const targetUrl = fallback ? FALLBACK_TRACK_URL : TRACKS[trackIndex]?.url || FALLBACK_TRACK_URL;
+    if (audioRef.current.src !== targetUrl && audioRef.current.src !== `${window.location.origin}${targetUrl}`) {
+      audioRef.current.src = targetUrl;
+      audioRef.current.load();
+    }
+  };
 
   const safePlay = () => {
     if (!audioRef.current) return;
     audioRef.current.play()
-      .then(() => setIsPlaying(true))
+      .then(() => {
+        setIsPlaying(true);
+        setPlaybackNotice(null);
+      })
       .catch(err => {
-        console.error("Playback failed:", err);
+        console.error('Playback failed:', err);
         setIsPlaying(false);
+        setPlaybackNotice('Playback was blocked by the browser. Please tap play again or use a different browser tab.');
       });
   };
 
@@ -459,10 +475,19 @@ const MusicBox: React.FC = () => {
         nextTrack();
       };
 
-      // If a track fails to load/play, skip forward automatically
       const handleError = () => {
-        console.warn("Audio error on track:", TRACKS[currentTrack]?.name);
+        const currentTrackName = TRACKS[currentTrack]?.name || 'current track';
+        console.warn('Audio error on track:', currentTrackName);
+
+        if (audioRef.current?.src && !audioRef.current.src.includes(FALLBACK_TRACK_URL)) {
+          setPlaybackNotice('The remote audio source is unavailable. Falling back to a browser-safe sample so playback still works.');
+          applyTrackSource(currentTrack, true);
+          safePlay();
+          return;
+        }
+
         setIsPlaying(false);
+        setPlaybackNotice('Audio playback is temporarily unavailable for this track. Please try another track.');
         nextTrack();
       };
 
@@ -490,8 +515,7 @@ const MusicBox: React.FC = () => {
     setCurrentTime(0);
     setDuration(0);
 
-    audioRef.current.src = TRACKS[currentTrack].url;
-    audioRef.current.load();
+    applyTrackSource(currentTrack, false);
 
     if (wasPlaying) {
       safePlay();
@@ -630,6 +654,12 @@ const MusicBox: React.FC = () => {
             <div className="px-3 py-3 rounded-xl bg-blue-950/50 border border-cyan-400/25 backdrop-blur-sm">
               <p className="text-[8px] text-cyan-100/80 leading-relaxed font-medium">{TRACKS[currentTrack].subtitle}</p>
             </div>
+
+            {playbackNotice && (
+              <div className="rounded-xl border border-cyan-400/25 bg-cyan-500/10 px-3 py-2 text-[8px] leading-5 text-cyan-100/90">
+                {playbackNotice}
+              </div>
+            )}
 
             {/* Progress Bar */}
             <div className="space-y-2">
