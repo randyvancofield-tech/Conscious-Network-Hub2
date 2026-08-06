@@ -3,6 +3,7 @@ import { X, ShieldCheck, Copy, AlertTriangle, Lock } from 'lucide-react';
 import { ethers } from 'ethers';
 import { api } from '../services/apiClient';
 import {
+  attachWalletProviderListeners,
   connectWalletProvider,
   detectWalletProviderEnvironment,
   walletErrorMessage,
@@ -137,40 +138,35 @@ const IdentitySecurityPanel: React.FC<IdentitySecurityPanelProps> = ({ isOpen, o
     const nextWalletEnvironment = detectWalletProviderEnvironment();
     setWalletEnvironment(nextWalletEnvironment);
     if (!nextWalletEnvironment.provider) return;
-    const ethereum = nextWalletEnvironment.provider;
 
-    const handleAccountsChanged = (accounts: string[]) => {
-      const normalized = normalizeAddress(accounts?.[0]);
-      if (!normalized) {
-        setConnectedAddress('');
-        setChainId(0);
-        setDid('');
-        setVerifyStatus('unverified');
-        setVerifiedAt('');
-        return;
-      }
-      setConnectedAddress(normalized);
-      setDid(toDidPkh(chainId || DEFAULT_CHAIN_ID, normalized));
-      setVerifyStatus((prev) => (prev === 'verified' ? 'verified' : 'connected'));
-    };
-
-    const handleChainChanged = (hexChainId: string) => {
-      const nextChainId = parseInt(hexChainId, 16) || DEFAULT_CHAIN_ID;
-      setChainId(nextChainId);
-      if (connectedAddress) {
-        setDid(toDidPkh(nextChainId, connectedAddress));
+    const cleanupListeners = attachWalletProviderListeners(
+      nextWalletEnvironment.provider,
+      (accounts) => {
+        const normalized = normalizeAddress(accounts?.[0]);
+        if (!normalized) {
+          setConnectedAddress('');
+          setChainId(0);
+          setDid('');
+          setVerifyStatus('unverified');
+          setVerifiedAt('');
+          return;
+        }
+        setConnectedAddress(normalized);
+        setDid(toDidPkh(chainId || DEFAULT_CHAIN_ID, normalized));
         setVerifyStatus((prev) => (prev === 'verified' ? 'verified' : 'connected'));
+      },
+      (hexChainId) => {
+        const nextChainId = parseInt(hexChainId, 16) || DEFAULT_CHAIN_ID;
+        setChainId(nextChainId);
+        if (connectedAddress) {
+          setDid(toDidPkh(nextChainId, connectedAddress));
+          setVerifyStatus((prev) => (prev === 'verified' ? 'verified' : 'connected'));
+        }
       }
-    };
+    );
 
-    ethereum.on?.('accountsChanged', handleAccountsChanged);
-    ethereum.on?.('chainChanged', handleChainChanged);
-
-    return () => {
-      ethereum.removeListener?.('accountsChanged', handleAccountsChanged);
-      ethereum.removeListener?.('chainChanged', handleChainChanged);
-    };
-  }, [connectedAddress, chainId]);
+    return () => cleanupListeners();
+  }, [connectedAddress, chainId, walletEnvironment.provider]);
 
   useEffect(() => {
     if (!userId) return;

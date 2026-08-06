@@ -54,6 +54,7 @@ import { getPwaInstallabilityState } from './services/pwaInstallSupport';
 import {
   WALLET_AUTH_INTENT_UPDATED_EVENT,
   WALLET_PROVIDER_UPDATED_EVENT,
+  attachWalletProviderListeners,
   clearPendingWalletAuthIntent,
   connectWalletProvider,
   detectWalletProviderEnvironment,
@@ -925,11 +926,17 @@ const App: React.FC = () => {
     window.addEventListener('pageshow', refreshWalletEnvironment);
     window.addEventListener('ethereum#initialized', refreshWalletEnvironment as EventListener);
     window.addEventListener(WALLET_PROVIDER_UPDATED_EVENT, refreshWalletEnvironment as EventListener);
+
+    const provider = walletEnvironment.provider || (window as any).ethereum || null;
+    const cleanupWalletListeners = attachWalletProviderListeners(
+      provider,
+      () => refreshWalletEnvironment(),
+      () => refreshWalletEnvironment()
+    );
+
     const ethereum = (window as any).ethereum;
     ethereum?.on?.('connect', refreshWalletEnvironment);
     ethereum?.on?.('disconnect', refreshWalletEnvironment);
-    ethereum?.on?.('accountsChanged', refreshWalletEnvironment);
-    ethereum?.on?.('chainChanged', refreshWalletEnvironment);
 
     return () => {
       window.removeEventListener('focus', refreshWalletEnvironment);
@@ -938,10 +945,9 @@ const App: React.FC = () => {
       window.removeEventListener(WALLET_PROVIDER_UPDATED_EVENT, refreshWalletEnvironment as EventListener);
       ethereum?.removeListener?.('connect', refreshWalletEnvironment);
       ethereum?.removeListener?.('disconnect', refreshWalletEnvironment);
-      ethereum?.removeListener?.('accountsChanged', refreshWalletEnvironment);
-      ethereum?.removeListener?.('chainChanged', refreshWalletEnvironment);
+      cleanupWalletListeners();
     };
-  }, [currentView, isProviderWalletVerificationRequired]);
+  }, [currentView, isProviderWalletVerificationRequired, walletEnvironment.provider]);
 
   useEffect(() => {
     if (typeof window === 'undefined') return;
