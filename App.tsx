@@ -51,6 +51,7 @@ import { ApiError, api, apiHealth, backendAssetUrl } from './services/apiClient'
 import { getProfileAvatarMedia, isVideoMediaAsset } from './services/mediaAssets';
 import { createNativeProviderControlSession } from './services/backendApiService';
 import { getPwaInstallabilityState } from './services/pwaInstallSupport';
+import { fetchClientSideOpenSearchResults } from './services/openSearchBridge';
 import {
   WALLET_AUTH_INTENT_UPDATED_EVENT,
   WALLET_PROVIDER_UPDATED_EVENT,
@@ -731,6 +732,9 @@ const App: React.FC = () => {
   const [isContactSubmitting, setContactSubmitting] = useState(false);
   const [globalSearchQuery, setGlobalSearchQuery] = useState('');
   const [isGlobalSearchOpen, setGlobalSearchOpen] = useState(false);
+  const [globalSearchResults, setGlobalSearchResults] = useState<PlatformSearchResult[]>([]);
+  const [globalSearchExternalResults, setGlobalSearchExternalResults] = useState<Array<{ id: string; title: string; description: string; url: string; source: string }>>([]);
+  const [globalSearchLoading, setGlobalSearchLoading] = useState(false);
   
   // Membership checkout states
   const [isSelectingTier, setIsSelectingTier] = useState(false);
@@ -3104,16 +3108,27 @@ const App: React.FC = () => {
     return canTierAccessView(user.tier, view);
   };
 
-  const globalSearchResults = useMemo(() => {
+  useEffect(() => {
     const query = globalSearchQuery.trim().toLowerCase();
-    if (query.length < 2) return [];
-    return PLATFORM_SEARCH_CATALOG
-      .filter((result) => isPlatformSearchResultAllowed(result))
-      .filter((result) => {
-        const searchable = `${result.title} ${result.description} ${result.keywords.join(' ')}`.toLowerCase();
-        return searchable.includes(query);
-      })
-      .slice(0, 6);
+    if (query.length < 2) {
+      setGlobalSearchResults([]);
+      setGlobalSearchExternalResults([]);
+      setGlobalSearchLoading(false);
+      return;
+    }
+
+    const localResults = PLATFORM_SEARCH_CATALOG.filter((result) => isPlatformSearchResultAllowed(result)).filter((result) => {
+      const searchable = `${result.title} ${result.description} ${result.keywords.join(' ')}`.toLowerCase();
+      return searchable.includes(query);
+    }).slice(0, 6);
+
+    setGlobalSearchResults(localResults);
+    setGlobalSearchLoading(true);
+    void fetchClientSideOpenSearchResults(query).then((externalResults) => {
+      setGlobalSearchExternalResults(externalResults);
+    }).finally(() => {
+      setGlobalSearchLoading(false);
+    });
   }, [globalSearchQuery, user]);
 
   const openPlatformSearchResult = (result: PlatformSearchResult) => {
@@ -5330,6 +5345,12 @@ const App: React.FC = () => {
                     />
                     {isGlobalSearchOpen && globalSearchQuery.trim().length >= 2 && (
                       <div className="absolute left-0 right-0 top-[calc(100%+0.5rem)] z-50 overflow-hidden rounded-2xl border border-white/10 bg-slate-950/95 shadow-2xl backdrop-blur-2xl">
+                        <div className="border-b border-white/5 px-4 py-2 text-[9px] uppercase tracking-[0.3em] text-slate-500">
+                          Browser-only open-web lookup • no central query logging
+                        </div>
+                        {globalSearchLoading && (
+                          <div className="px-4 py-3 text-[10px] font-black uppercase tracking-widest text-slate-400">Checking open-web results…</div>
+                        )}
                         {globalSearchResults.length > 0 ? (
                           globalSearchResults.map((result) => (
                             <button
@@ -5343,7 +5364,20 @@ const App: React.FC = () => {
                               <span className="mt-1 block text-[10px] leading-4 text-slate-400">{result.description}</span>
                             </button>
                           ))
-                        ) : (
+                        ) : null}
+                        {globalSearchExternalResults.map((result) => (
+                          <a
+                            key={result.id}
+                            href={result.url}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="block w-full border-b border-white/5 px-4 py-3 text-left last:border-b-0 hover:bg-white/5"
+                          >
+                            <span className="block text-[10px] font-black uppercase tracking-widest text-cyan-300">{result.title}</span>
+                            <span className="mt-1 block text-[10px] leading-4 text-slate-400">{result.description}</span>
+                          </a>
+                        ))}
+                        {globalSearchResults.length === 0 && globalSearchExternalResults.length === 0 && !globalSearchLoading && (
                           <div className="px-4 py-3 text-[10px] font-black uppercase tracking-widest text-slate-500">
                             No accessible results
                           </div>

@@ -6,6 +6,7 @@
  * to the frontend.
  */
 import { ApiError, api, getBackendBaseUrl } from './apiClient';
+import { enforceClientWisdomCompliance, sanitizeExternalRequestPayload } from './wisdomCompliance';
 
 export interface GroundingChunk {
   text?: string;
@@ -590,13 +591,16 @@ class BackendAPIService {
       // Ensure we load the correct user-scoped history
       this.loadConversationHistory(context?.userId);
 
+      const outboundPayload = sanitizeExternalRequestPayload({
+        message: question,
+        context,
+        conversationHistory: this.conversationHistory,
+      });
+      enforceClientWisdomCompliance(outboundPayload);
+
       const data = await api<any>('/ai/chat', {
         method: 'POST',
-        body: {
-          message: question,
-          context,
-          conversationHistory: this.conversationHistory,
-        },
+        body: outboundPayload,
       });
 
       if (!data) {

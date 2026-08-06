@@ -42,6 +42,14 @@ No Financial Custody: We use trusted payment processors for traditional currency
 
 ## 4. How Information Is Processed & Next-Generation Algorithm Development
 
+### 4.1 Client-Side Search & Zero-Knowledge Processing
+
+The Conscious Network Hub platform uses ephemeral, client-side execution contexts for external search and AI assistance. Search queries, browser-visible open-web context, and temporary AI input data are processed locally in the user's runtime session and are not persisted to central servers for analytics, model training, or behavioral profiling. The platform does not maintain query metrics, search histories, or user-activity telemetry for open-web exploration on its central infrastructure.
+
+### 4.2 Anti-Harvesting & Big Tech Guardrails
+
+Conscious Network Hub actively sanitizes outbound payloads before any external request can leave the client environment. The platform blocks the transmission of internal file paths, runtime variable names, environment markers, server-side configuration strings, and other non-user content from being forwarded to third-party scrapers, LLM providers, or external AI endpoints. These safeguards are applied to protect ecosystem data from unauthorized harvesting, model training, or leakage.
+
 The SaaS Platform uses collected data to run your operations and develop ethical wellness tools:
 
 SaaS Delivery: Authenticating users, authorizing cross-device on-the-go access, managing provider CRM fields, and updating live upcoming session timetables.

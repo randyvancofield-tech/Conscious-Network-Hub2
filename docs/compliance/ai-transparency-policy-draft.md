@@ -25,6 +25,10 @@ AI outputs may be incomplete, inaccurate, outdated, biased, or unsuitable for a 
 
 ## 3. Data Boundaries
 
+Conscious Network Hub's Top Search Bar and WISDOM AI features use zero-knowledge, client-side execution contexts. Search queries and temporary external context are processed locally in the browser and are not logged, stored, or transmitted to central servers for analytics or model training. The platform also prevents internal paths, runtime variables, environment indicators, and server context from being sent to external scrapers or AI endpoints.
+
+This architecture is intended to preserve user data sovereignty, reduce centralized telemetry, and prevent third-party LLM providers from harvesting platform ecosystem content or using it to improve their systems.
+
 AI must not use or reveal:
 - Passwords, recovery codes, session tokens, admin elevation tokens, wallet private keys, or seed phrases.
 - Private documents, private uploads, private reflections, applicant documents, provider CRM records, admin-only records, or another user's private data.

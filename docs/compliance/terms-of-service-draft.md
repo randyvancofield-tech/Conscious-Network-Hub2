@@ -40,6 +40,14 @@ Refund Architecture: Due to the instant delivery of digital course materials, im
 
 ## 4. Ethical AI Use & Algorithmic Protections
 
+### 4.1 Client-Side Isolation for Search & Wisdom
+
+The Top Search Bar and WISDOM AI components operate in ephemeral, client-side execution contexts during this MVP pilot. External search content and temporary AI context are processed only within the user's browser runtime and are not logged, tracked, or stored on central servers. The platform does not use these runtime inputs to build centralized user profiles or external training datasets.
+
+### 4.2 Anti-Scraping & Third-Party Model Guardrails
+
+Users agree not to attempt to extract, scrape, or reverse engineer platform data, prompts, model boundaries, or internal training scaffolding. Conscious Network Hub also deploys client-side payload sanitization and interception controls to prevent third-party LLM providers, scrapers, or harvesting services from receiving proprietary platform identifiers, internal paths, environment strings, or other non-public technical context.
+
 The SaaS Platform features a proprietary internal AI designed to provide administrative assistance and build a next-generation wellness algorithm from opted-in platform data:
 
 Internal Isolation: Our AI systems function within a secure, closed-loop technical framework. We explicitly prohibit open, public commercial AI APIs.

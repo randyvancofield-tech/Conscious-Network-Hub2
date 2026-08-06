@@ -14,6 +14,13 @@ import { securityService } from '../services/securityService';
 import { cacheService, ConversationEntry } from '../services/cacheService';
 import { analyticsService } from '../services/analyticsService';
 import { createTextDownloadHref } from '../services/downloadService';
+import {
+  buildClientSideWisdomPayload,
+  clearClientWisdomContext,
+  createClientIsolatedSearchContext,
+  enforceClientWisdomCompliance,
+  getClientWisdomContext,
+} from '../services/wisdomCompliance';
 
 interface EthicalAIInsightProps {
   userEmail?: string;
@@ -160,6 +167,7 @@ const EthicalAIInsight: React.FC<EthicalAIInsightProps> = ({ userEmail, userId =
   const [qaMessages, setQaMessages] = useState<MessageWithMeta[]>([]);
   const [qaInput, setQaInput] = useState('');
   const [qaLoading, setQaLoading] = useState(false);
+  const [externalSearchContext, setExternalSearchContext] = useState('');
   const [selectedQACategory, setSelectedQACategory] = useState<'platform' | 'wellness' | 'general'>('general');
   const [suggestedQuestions, setSuggestedQuestions] = useState<string[]>([]);
   const [isVoiceInput, setIsVoiceInput] = useState(false);
@@ -253,6 +261,11 @@ const EthicalAIInsight: React.FC<EthicalAIInsightProps> = ({ userEmail, userId =
 
     const sanitized = securityService.sanitizeInput(qaInput, 5000);
     const suspicious = securityService.detectSuspiciousInput(sanitized);
+    const clientPayload = buildClientSideWisdomPayload({
+      message: sanitized,
+      contextText: externalSearchContext || getClientWisdomContext(),
+    });
+    enforceClientWisdomCompliance(clientPayload);
     if (suspicious.suspicious) {
       setInsightError('Suspicious input detected. Please rephrase.');
       return;
@@ -283,6 +296,7 @@ const EthicalAIInsight: React.FC<EthicalAIInsightProps> = ({ userEmail, userId =
         route: typeof window !== 'undefined' ? window.location.pathname : undefined,
         pageTitle: typeof document !== 'undefined' ? document.title : undefined,
         viewMode: 'dashboard-ai-insight',
+        externalSearchContext: clientPayload.externalSearchContext,
       });
       const responseTime = Date.now() - startTime;
 
@@ -320,6 +334,8 @@ const EthicalAIInsight: React.FC<EthicalAIInsightProps> = ({ userEmail, userId =
       }]);
     } finally {
       setQaLoading(false);
+      clearClientWisdomContext();
+      setExternalSearchContext('');
     }
   };
 
