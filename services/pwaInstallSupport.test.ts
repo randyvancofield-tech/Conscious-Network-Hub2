@@ -1,5 +1,11 @@
+import { readFileSync } from 'node:fs';
+import { dirname, resolve } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
 import { getPwaInstallabilityState } from './pwaInstallSupport';
+
+const manifestPath = resolve(dirname(fileURLToPath(import.meta.url)), '../public/manifest.webmanifest');
+const manifestContents = readFileSync(manifestPath, 'utf8');
 
 describe('getPwaInstallabilityState', () => {
   it('identifies iOS Safari guidance for home screen installation', () => {
@@ -23,5 +29,12 @@ describe('getPwaInstallabilityState', () => {
     expect(state.isSecureContext).toBe(false);
     expect(state.primaryActionLabel).toBe('Open install guide');
     expect(state.menuGuideSummary).toContain('HTTPS');
+  });
+
+  it('uses same-origin manifest paths so installation works across devices and hostnames', () => {
+    expect(manifestContents).toContain('"start_url": "/?source=pwa"');
+    expect(manifestContents).toContain('"scope": "/"');
+    expect(manifestContents).toContain('"src": "/brand/higher-conscious-network-icon-192.png"');
+    expect(manifestContents).toContain('"src": "/brand/higher-conscious-network-icon-512.png"');
   });
 });

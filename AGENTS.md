@@ -2,139 +2,110 @@
 
 ## Project Snapshot
 
-Conscious Network Hub is a full-stack TypeScript application with a React + Vite frontend and an Express backend. Authentication and user persistence are implemented in the backend with signed session tokens, persisted session records, Prisma, and PostgreSQL.
+Conscious Network Hub is a full-stack TypeScript application with a React + Vite frontend and an Express backend. The workspace supports member sign-in, profile persistence, provider applications, approved-provider access, administrative wallet verification, and a PWA/mobile install experience.
 
-This checkout uses root-level `App.tsx`/`index.tsx`, root `components/` and `services/`, and a separate `server/` package.
+The active codebase uses root-level frontend entry points in App.tsx and index.tsx, shared UI in components/, browser-side helpers in services/, and the backend package in server/.
 
 ## Tech Stack
 
 - Frontend: React + TypeScript + Vite
 - Backend: Node.js + Express + TypeScript
-- Database: PostgreSQL via Prisma ORM
-- Authentication: Custom signed session tokens + persisted session records
-- Security: Helmet, CORS allowlist, request validation, rate limiting
-- Testing: Jest (integration tests for core persistence/auth loops)
-- Deployment: Render backend currently; legacy Google Cloud Run scripts/docs may still exist
-- Contracts: Solidity contract package under `contracts/`
-- Provider launch support: native CNH provider applicant/auth/admin routes are authoritative for active flows
+- Database: Prisma ORM with PostgreSQL-backed persistence
+- Authentication: signed session tokens, persisted session records, and wallet-based admin/provider verification
+- Security: canonical identity middleware, role-aware route guards, request validation, rate limiting, audit logging, and PWA-safe install guidance
+- Testing: Jest for auth, persistence, provider access, and wallet flow regression coverage
+- Deployment: Render-oriented backend deployment with additional legacy deployment notes under docs/
+- Contracts: Solidity package under contracts/
 
 ## Architecture
 
-1. Frontend sends requests to backend API routes (`/api/*`) using `fetch`.
-2. `services/apiClient.ts` attaches the stored auth token as `Authorization: Bearer ...` unless a caller opts out.
-3. Signup/signin calls hit backend user routes and return a signed auth token plus canonical user data.
-4. Frontend session state is managed in `services/sessionService.ts` using localStorage-backed token and user cache keys.
-5. Backend validates the signed token plus persisted session before protected route access.
-6. User/profile/post/session/provider writes flow through backend services, with Prisma/PostgreSQL as the canonical persistent store.
-
-## Naming Conventions
-
-- Variables/functions: `camelCase`
-- Types/interfaces/classes: `PascalCase`
-- Constants/env keys: `UPPER_SNAKE_CASE`
-- Route files/services: concise descriptive names (e.g., `user.ts`, `persistenceStore.ts`)
+1. The frontend sends browser requests to backend routes under /api/* through fetch-based helpers.
+2. services/apiClient.ts attaches the stored auth token as an Authorization header unless a caller opts out.
+3. Member signup and sign-in flow through App.tsx into the user routes, which issue a canonical signed session and return user data.
+4. The frontend persists session state in services/sessionService.ts and wallet flow state in services/walletProvider.ts, including pending wallet auth intents and mobile rehydration support.
+5. The backend validates canonical identity before protected routes execute, with shared helpers in server/src/middleware.ts and server/src/services/sessionLifecycle.ts.
+6. Provider and admin access rely on separate wallet challenge routes in server/src/routes/providerAuth.ts, while native provider controls are issued through server/src/routes/providerSession.ts.
 
 ## Current Authentication Flow Summary
 
-- Signup frontend entry: `App.tsx` (`handleCreateProfile`) -> `POST /api/user/create`
-- Signup backend handler: `server/src/routes/user.ts`:
-  - Validates payload and password policy
-  - Creates user in persistence store
-  - Verifies persistence read-back
-  - Issues a canonical signed session through `server/src/services/sessionLifecycle.ts`
-  - Returns signed token + canonical user payload
-- Signin frontend entry: `App.tsx` (`handleSignIn`) -> `POST /api/user/signin`
-- Signin backend handler: `server/src/routes/user.ts`:
-  - Resolves user by email
-  - Verifies password hash
-  - Enforces password lockout and provider/admin role rules without phone, SMS, email-code, or email-link verification gates in the default launch path
-  - Issues a persisted session and signed token through the shared helper
-- Password recovery: `POST /api/user/password-reset/request` sends native reset links for user/applicant/provider/admin accounts, and `POST /api/user/password-reset/confirm` rotates the password and revokes active sessions
-- Token creation/verification helpers: `server/src/auth.ts` (`createSessionToken`, `verifySessionToken`)
-- Persisted session store: `server/src/services/userSessionStore.ts`, backed by local/persistence store implementations
-- Session validation middleware: `server/src/middleware.ts` (`requireCanonicalIdentity`)
-- Protected-route identity helpers: `getAuthenticatedUserId(req)` and `enforceAuthenticatedUserMatch(...)`
-- Logout endpoint: `POST /api/user/logout` revokes the active persisted session
-- Admin elevation: `server/src/routes/admin.ts` requires canonical identity, admin role, password verification, and short-lived elevation token checks for sensitive operations
-- Provider auth is separate from member auth: approved providers sign in with email/password for a canonical user session, then native provider session routes in `server/src/routes/providerAuth.ts` and `providerSession.ts` initialize provider-scoped controls.
+- Member sign-up and sign-in: App.tsx -> POST /api/user/create and POST /api/user/signin.
+- Backend user handlers live in server/src/routes/user.ts and use the shared session lifecycle helper to issue canonical sessions and auth headers.
+- Session creation and failure handling are centralized in server/src/services/sessionLifecycle.ts.
+- Protected routes depend on requireCanonicalIdentity and getAuthenticatedUserId from server/src/middleware.ts.
+- Password recovery remains available through the user routes for member, applicant, provider, and admin accounts.
+- Admin and provider wallet entry is intentionally separate from the member sign-in path:
+  - Administrative access uses /api/provider/auth/admin/wallet/nonce and /api/provider/auth/admin/wallet/verify.
+  - Provider wallet binding and verification use /api/provider/auth/wallet/bind/* and /api/provider/auth/wallet/*.
+  - Approved providers must complete wallet verification before native provider CRM tools are unlocked.
+- Wallet continuity for mobile handoff is handled in services/walletProvider.ts, which preserves provider state across reconnects and supports MetaMask deep-link recovery.
+- Provider and admin sessions are persisted and refreshed through services/sessionService.ts and the backend provider session store.
 
 ## Current Refactor Baseline
 
-- The backend auth flow is being hardened through a phased, non-breaking refactor.
-- Session issuance is now centralized in `server/src/services/sessionLifecycle.ts` so create/signin paths share the same canonical behavior.
-- Regression coverage exists for canonical identity enforcement, user-session lifecycle, provider/admin access guards, and the shared session helper.
-
-## Current Phase Status
-
-- The current phase preserves the existing public auth routes and response contracts for member sign-in, account creation, logout, provider applicant onboarding, and provider/admin wallet verification.
-- The shared helper now standardizes session issuance, auth response headers, and session-failure reporting without removing or renaming any existing entry points.
-- The implementation is intentionally additive and backward-compatible, with regression tests covering the main auth and provider flows before each phase is considered complete.
+- The auth flow is being hardened through additive, non-breaking refactors rather than breaking existing public routes.
+- Session issuance and header handling are centralized so the create/sign-in/logout flows share one canonical path.
+- Regression tests cover canonical identity enforcement, user session lifecycle, provider access guards, and wallet verification behavior.
 
 ## Current Workspace Structure
 
-- `App.tsx`, `index.tsx`, `constants.tsx`, `types.ts`: root frontend entry and shared app types/constants
-- `components/`: React UI screens and shared UI primitives
-- `services/`: browser-side API, session, cache, analytics, tier access, security, and platform data helpers
-- `src/assets/`: frontend static assets such as brand imagery
-- `src/knowledge/`: packaged knowledge data used by the app
-- `server/`: Express API package, Prisma schema/migrations, tests, deployment scripts, backend services, and routes
-- `contracts/`: Solidity contract package and deployment/compile tooling
-- Legacy generated provider launch scaffolds have been removed from the active workspace; native CNH provider application and review routes are authoritative
-- `docs/`: architecture, privacy, compliance, cleanup, backend mapping, and archived implementation notes
-- `public/`: public images and video assets
-- `.agents/`: local Codex skills/plugins and agent configuration
+- App.tsx, index.tsx, constants.tsx, types.ts: root frontend entry points and shared app state/types
+- components/: React screens and UI primitives for dashboard, membership, provider access, meetings, profile, and admin tools
+- services/: browser-side API, session, wallet, cache, analytics, tier access, installation, and security helpers
+- src/: frontend static assets, packaged knowledge data, and app-level resources
+- server/: Express API package with Prisma schema, migrations, tests, backend routes, services, and deployment scripts
+- contracts/: Solidity contract package and tooling
+- docs/: architecture, privacy, security, migration, and launch notes
+- public/: PWA manifest, service worker, and static assets
+- .agents/: local Codex skills, plugins, and workspace guidance
 
-## Auth/Persistence-Relevant Files
+## Auth and Persistence Relevant Files
 
-- `App.tsx`
-- `services/apiClient.ts`
-- `services/sessionService.ts`
-- `server/src/index.ts`
-- `server/src/middleware.ts`
-- `server/src/auth.ts`
-- `server/src/auth/identitySession.ts`
-- `server/src/auth/providerToken.ts`
-- `server/src/routes/user.ts`
-- `server/src/routes/admin.ts`
-- `server/src/routes/providerAuth.ts`
-- `server/src/routes/providerSession.ts`
-- `server/src/services/persistenceStore.ts`
-- `server/src/services/localStore.ts`
-- `server/src/services/userSessionStore.ts`
-- `server/src/services/providerSessionStore.ts`
-- `server/src/services/providerAccess.ts`
-- `server/src/services/auditTelemetry.ts`
-- `server/prisma/schema.prisma`
+- App.tsx
+- services/apiClient.ts
+- services/sessionService.ts
+- services/walletProvider.ts
+- server/src/index.ts
+- server/src/middleware.ts
+- server/src/auth.ts
+- server/src/auth/providerToken.ts
+- server/src/routes/user.ts
+- server/src/routes/admin.ts
+- server/src/routes/providerAuth.ts
+- server/src/routes/providerSession.ts
+- server/src/services/sessionLifecycle.ts
+- server/src/services/persistenceStore.ts
+- server/src/services/localStore.ts
+- server/src/services/userSessionStore.ts
+- server/src/services/providerSessionStore.ts
+- server/src/services/providerAccess.ts
+- server/src/services/auditTelemetry.ts
+- server/prisma/schema.prisma
 
 ## Backend Route Map
 
-- Identity/auth/user: `user.ts`, `admin.ts`, `identitySecurity.ts`, `integrity.ts`
-- Provider flows: `providers.ts`, `providerAuth.ts`, `providerSession.ts`
-- Member features: `membership.ts`, `courses.ts`, `userCourses.ts`, `reflection.ts`, `social.ts`, `meeting.ts`
-- Platform services: `ai.ts`, `immersive.ts`, `upload.ts`
+- Identity and user auth: user.ts, admin.ts, identitySecurity.ts, integrity.ts
+- Provider flows: providers.ts, providerAuth.ts, providerSession.ts, providerCrm.ts
+- Member features: membership.ts, courses.ts, userCourses.ts, reflection.ts, social.ts, meeting.ts
+- Platform services: ai.ts, immersive.ts, upload.ts
 
 ## Backend Service Map
 
-- Persistence/session: `persistenceStore.ts`, `localStore.ts`, `prismaClient.ts`, `userSessionStore.ts`, `providerSessionStore.ts`
-- Provider governance: `providerAccess.ts`, `providerDid.ts`
-- Security/privacy: `auditTelemetry.ts`, `privacyGuard.ts`, `sensitiveDataPolicy.ts`, `profileNormalization.ts`, `userProfilePatch.ts`
-- Integrations/content: `openAiService.ts`, `vertexAiService.ts`, `emailService.ts`, `googleSheetsMirror.ts`, `knowledgeService.ts`, `socialStore.ts`, `uploadBlobStore.ts`
+- Persistence and sessions: persistenceStore.ts, localStore.ts, prismaClient.ts, userSessionStore.ts, providerSessionStore.ts
+- Provider governance: providerAccess.ts, providerDid.ts
+- Security and privacy: auditTelemetry.ts, privacyGuard.ts, sensitiveDataPolicy.ts, profileNormalization.ts, userProfilePatch.ts
+- Integrations and content: openAiService.ts, vertexAiService.ts, emailService.ts, googleSheetsMirror.ts, knowledgeService.ts, socialStore.ts, uploadBlobStore.ts
 
-## Security Conventions For AI-Assisted Development
+## Security Conventions for AI-Assisted Development
 
-- Treat backend identity as canonical. Protected routes must use `requireCanonicalIdentity` and derive the acting user from `getAuthenticatedUserId(req)`, not from request bodies.
-- Enforce tenant isolation on every route that accepts a user identifier. Use `enforceAuthenticatedUserMatch` for self-owned routes, or explicitly verify ownership before read/write/delete.
-- Role checks belong on the server. Frontend route hiding is only a usability layer and must never be treated as authorization.
-- Admin/Superuser access must require `role === 'admin'` plus a short-lived elevated admin token for administrative reads, role changes, and future destructive actions.
-- Role changes must be audited through `recordAuditEvent` with actor, target, previous role, next role, and reason metadata.
-- Standard members must not access admin endpoints, provider queues, provider sessions, or another user's private profile/reflection/course data.
-- Provider access must remain provider-scoped. Provider request queues should verify the authenticated provider owns the queue or request before returning or mutating records.
-- Default member/provider launch sign-in must not require phone, SMS, email-code, email-link, or 2FA verification unless explicitly redesigned. Legacy 2FA/database fields may remain, but they must stay non-blocking for normal authenticated access.
-- Do not expose private contact data in public discovery APIs. Public provider/member listings should avoid raw email addresses, tokens, phone numbers, wallet identifiers, and secrets.
-- Never commit real secrets. Keep `.env`, `.env.*`, and local production overrides out of source control; only commit `.env.example` style templates with placeholder values.
-- Audit logs are persistent security records. They should redact secrets and sensitive identifiers, and new sensitive operations should emit success and denial events.
-- When adding new dependencies, run the relevant `npm audit` command and prefer maintained packages with a clear need.
+- Treat backend identity as canonical. Protected routes should use requireCanonicalIdentity and derive the acting user from getAuthenticatedUserId(req), not from request bodies.
+- Enforce tenant isolation on every route that accepts a user identifier. Use enforceAuthenticatedUserMatch for self-owned routes or explicitly verify ownership before read/write/delete.
+- Role checks belong on the server. Frontend route hiding is a usability layer and must never be treated as authorization.
+- Admin and provider access must remain gated by canonical identity, role checks, and wallet verification where required.
+- Wallet verification must match the configured wallet addresses and should handle mobile re-entry and deep-link handoff gracefully.
+- Sensitive operations should emit audit events and redact secrets, tokens, and private identifiers.
+- Do not commit real secrets. Keep .env files out of source control and rely on .env.example style templates.
+- Prefer additive changes that preserve existing launch paths and public route contracts while hardening the underlying auth flow.
 
 ## Codex Task
 
-"Analyze my current workspace and update AGENTS.md with a summary of the existing authentication flow and file structure."
+Analyze the current workspace and update this guide with a summary of the existing authentication flow, wallet-backed provider/admin access, and the current file structure.
