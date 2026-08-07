@@ -21,6 +21,8 @@ import AdminProviderApplicantsPage from './components/AdminProviderApplicantsPag
 import ProviderCrmShell from './components/ProviderCrmShell';
 import GrantApplicationPage from './components/GrantApplicationPage';
 import EntrepreneurshipSupportPage from './components/EntrepreneurshipSupportPage';
+import JeruselaBroadcastTicker from './components/ui/JeruselaBroadcastTicker';
+import JeruselaPortalView from './components/pages/JeruselaPortalView';
 import { ConsciousIdentity } from './components/community/CommunityLayout';
 import { AppView, UserProfile, Course } from './types';
 import { NAVIGATION_ITEMS } from './constants';
@@ -258,6 +260,8 @@ const routePathForView = (view: AppView, params: Record<string, string> = {}): s
       return '/conscious-meetings/upcoming';
     case AppView.CONSCIOUS_MEETINGS_PORTAL:
       return '/conscious-meetings/portal';
+    case AppView.JERUSELA_PORTAL:
+      return '/jerusela';
     case AppView.MEETING_DETAIL:
       return `/conscious-meetings/session/${encodeURIComponent(params.id || '')}`;
     case AppView.MY_COURSES:
@@ -337,6 +341,7 @@ const resolveRoute = (pathname: string, search = ''): RouteState => {
     '/conscious-meetings/upcoming': AppView.CONSCIOUS_MEETINGS_UPCOMING,
     '/meetings/portal': AppView.CONSCIOUS_MEETINGS_PORTAL,
     '/conscious-meetings/portal': AppView.CONSCIOUS_MEETINGS_PORTAL,
+    '/jerusela': AppView.JERUSELA_PORTAL,
     '/my-courses': AppView.MY_COURSES,
     '/courses': AppView.KNOWLEDGE_PATHWAYS,
     '/profile': AppView.MY_CONSCIOUS_IDENTITY,
@@ -4191,6 +4196,28 @@ const App: React.FC = () => {
             />
           </React.Suspense>
         );
+      case AppView.JERUSELA_PORTAL:
+        if (!user) {
+          return (
+            <div className="mx-auto flex min-h-[60vh] max-w-3xl items-center justify-center px-4 py-12">
+              <div className="w-full rounded-3xl border border-white/10 bg-white/[0.04] p-8 text-center shadow-2xl backdrop-blur-xl">
+                <p className="text-[10px] font-black uppercase tracking-[0.35em] text-cyan-200">Protected access</p>
+                <h2 className="mt-3 text-2xl font-black uppercase tracking-[0.2em] text-white">Authentication required</h2>
+                <p className="mx-auto mt-4 max-w-xl text-sm leading-7 text-slate-300">
+                  The Book of Jerusela portal is reserved for authenticated members and providers. Sign in to enter the preview experience.
+                </p>
+                <button
+                  type="button"
+                  onClick={() => setCurrentView(AppView.ENTRY)}
+                  className="mt-6 rounded-full bg-cyan-500 px-5 py-3 text-[10px] font-black uppercase tracking-[0.3em] text-slate-950 transition hover:bg-cyan-400"
+                >
+                  Return to entry
+                </button>
+              </div>
+            </div>
+          );
+        }
+        return <JeruselaPortalView onBack={() => setCurrentView(AppView.DASHBOARD)} />;
       case AppView.MEETING_DETAIL:
         return (
           <React.Suspense fallback={<div className="rounded-2xl border border-white/10 bg-white/[0.04] p-6 text-sm text-slate-300">Loading meeting room...</div>}>
@@ -4447,6 +4474,7 @@ const App: React.FC = () => {
       )}
 
       <div className="relative z-10 w-full min-h-screen flex flex-col overflow-x-hidden">
+        <JeruselaBroadcastTicker />
         {shouldShowMusicBox && <MusicBox />}
 
         {isInstallGuidanceOpen && (
