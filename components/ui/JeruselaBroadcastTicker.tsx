@@ -1,6 +1,6 @@
 import React from 'react';
 
-const TICKER_TEXT = 'THE BOOK OF JERUSELA • A premiere in motion • A story that unfolds beyond the visible • Enter the portal and step inside';
+const TICKER_TEXT = 'NOW STREAMING: THE BOOK OF JERUSELA • An Exclusive Cognitive Development Game • Bridging global culture through immersive, choice-driven narrative cinema • Authenticate your membership below to interact ➔';
 
 export const JeruselaBroadcastTicker: React.FC = () => {
   return (
