@@ -4475,7 +4475,7 @@ const App: React.FC = () => {
       )}
 
       <div className="relative z-10 w-full min-h-screen flex flex-col overflow-x-hidden">
-        <JeruselaBroadcastTicker />
+        {currentView === AppView.ENTRY && <JeruselaBroadcastTicker />}
         {shouldShowMusicBox && <MusicBox />}
 
         {isInstallGuidanceOpen && (
