@@ -3049,6 +3049,7 @@ const App: React.FC = () => {
 
   const navViewMap: Record<string, AppView> = {
     dashboard: AppView.DASHBOARD,
+    jerusela: AppView.JERUSELA_PORTAL,
     'social-learning': AppView.CONSCIOUS_SOCIAL_LEARNING,
     community: AppView.COMMUNITY,
     meetings: AppView.CONSCIOUS_MEETINGS,
@@ -3075,14 +3076,14 @@ const App: React.FC = () => {
       return NAVIGATION_ITEMS.filter(
         (item) =>
           item.id !== 'admin' &&
-          (item.id === 'provider-crm' || canTierAccessNavItem(user.tier, item.id))
+          (item.id === 'provider-crm' || item.id === 'jerusela' || canTierAccessNavItem(user.tier, item.id))
       );
     }
     if (!hasConfirmedMembership(user)) {
-      return NAVIGATION_ITEMS.filter((item) => item.id === 'membership' || item.id === 'careers');
+      return NAVIGATION_ITEMS.filter((item) => item.id === 'membership' || item.id === 'careers' || item.id === 'jerusela');
     }
     return NAVIGATION_ITEMS.filter(
-      (item) => item.id !== 'admin' && item.id !== 'provider-crm' && canTierAccessNavItem(user.tier, item.id)
+      (item) => item.id !== 'admin' && item.id !== 'provider-crm' && (item.id === 'jerusela' || canTierAccessNavItem(user.tier, item.id))
     );
   }, [user]);
 

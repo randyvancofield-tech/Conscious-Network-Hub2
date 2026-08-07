@@ -1,7 +1,8 @@
-import { Shield, Brain, GraduationCap, Building2, Layout, UserCircle, CreditCard, BookOpen, MessageSquareShare, Video, Users, ShieldCheck, Rocket, Handshake } from 'lucide-react';
+import { Shield, Brain, GraduationCap, Building2, Layout, UserCircle, CreditCard, BookOpen, MessageSquareShare, Video, Users, ShieldCheck, Rocket, Handshake, Sparkles } from 'lucide-react';
 
 export const NAVIGATION_ITEMS = [
   { id: 'dashboard', label: 'Portal Home', icon: <Layout className="w-5 h-5" /> },
+  { id: 'jerusela', label: 'The Book of Jerusela', icon: <Sparkles className="w-5 h-5" /> },
   { id: 'social-learning', label: 'Social Learning', icon: <MessageSquareShare className="w-5 h-5" /> },
   { id: 'community', label: 'Community', icon: <Users className="w-5 h-5" /> },
   { id: 'meetings', label: 'Conscious Meetings', icon: <Video className="w-5 h-5" /> },
