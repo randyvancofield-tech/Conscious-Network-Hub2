@@ -22,9 +22,9 @@ function Invoke-HttpJson {
 
   try {
     if ($Body) {
-      $resp = Invoke-WebRequest -Method $Method -Uri $Url -Headers $Headers -Body $Body -TimeoutSec 60
+      $resp = Invoke-WebRequest -UseBasicParsing -Method $Method -Uri $Url -Headers $Headers -Body $Body -TimeoutSec 60
     } else {
-      $resp = Invoke-WebRequest -Method $Method -Uri $Url -Headers $Headers -TimeoutSec 60
+      $resp = Invoke-WebRequest -UseBasicParsing -Method $Method -Uri $Url -Headers $Headers -TimeoutSec 60
     }
 
     [pscustomobject]@{
