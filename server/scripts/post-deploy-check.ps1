@@ -67,6 +67,22 @@ if ($health.Headers["access-control-allow-origin"] -ne $Origin) {
   throw "Health CORS header mismatch. Expected '$Origin', got '$($health.Headers["access-control-allow-origin"])'"
 }
 
+$preflightHeaders = @{
+  Origin = $Origin
+  "Access-Control-Request-Method" = "POST"
+  "Access-Control-Request-Headers" = "Content-Type,Authorization,X-Provider-Control-Token"
+}
+$preflight = Invoke-HttpJson -Method "OPTIONS" -Url "$trimmedBackend/api/admin/elevate" -Headers $preflightHeaders
+
+if ($preflight.StatusCode -ne 204) {
+  throw "Provider-control CORS preflight failed with status $($preflight.StatusCode): $($preflight.Body)"
+}
+
+$allowedHeaders = [string]$preflight.Headers["access-control-allow-headers"]
+if ($allowedHeaders -notmatch "(?i)(^|,)\s*X-Provider-Control-Token\s*(,|$)") {
+  throw "Provider-control CORS preflight missing X-Provider-Control-Token. Got '$allowedHeaders'"
+}
+
 $chatHeaders = @{
   Origin = $Origin
   "Content-Type" = "application/json"
@@ -262,6 +278,7 @@ if ($RequireSharedStore) {
 
 Write-Host "Checks passed."
 Write-Host "Health: 200 with CORS allow-origin $Origin"
+Write-Host "Provider-control CORS preflight: X-Provider-Control-Token allowed"
 Write-Host "AI Chat: 401 when unauthenticated (auth enforcement confirmed)"
 Write-Host "Membership tiers: 200 (public endpoint confirmed)"
 Write-Host "User create: 400 for empty payload (validation confirmed)"

@@ -251,6 +251,7 @@ app.use(
       'Authorization',
       'X-Admin-Elevation-Token',
       'X-Admin-Secure-Token',
+      'X-Provider-Control-Token',
     ],
     credentials: true,
     maxAge: 86400, // 24 hours
