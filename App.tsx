@@ -432,6 +432,7 @@ const isGuestAllowedView = (view: AppView): boolean =>
     AppView.CONSCIOUS_MEETINGS_UPCOMING,
     AppView.CONSCIOUS_MEETINGS_PORTAL,
     AppView.MEETING_DETAIL,
+    AppView.JERUSELA_PORTAL,
     AppView.KNOWLEDGE_PATHWAYS,
     AppView.COURSE_DETAIL,
     AppView.PRIVACY_POLICY,
@@ -463,6 +464,7 @@ const isNoTierSignedInAllowedView = (view: AppView): boolean =>
     AppView.ENTREPRENEURSHIP_SUPPORT,
     AppView.CONSCIOUS_MEETINGS_UPCOMING,
     AppView.CONSCIOUS_MEETINGS_PORTAL,
+    AppView.JERUSELA_PORTAL,
     AppView.MEMBERSHIP,
     AppView.PRIVACY_POLICY,
     AppView.TERMS_OF_SERVICE,
@@ -4202,6 +4204,10 @@ const App: React.FC = () => {
           <JeruselaPortalView
             user={user}
             onBack={handleReturnToHub}
+            onSignIn={() => {
+              resetSignInChallengeInputs();
+              setSigninModalOpen(true);
+            }}
             onMembership={() => {
               setMembershipNotice('Choose an active membership to enter Jerusela.');
               setCurrentView(AppView.MEMBERSHIP);

@@ -9,6 +9,7 @@ type EnvironmentEntityKind = 'human' | 'bird' | 'terrestrial' | 'aquatic' | 'veg
 interface JeruselaPortalViewProps {
   user: UserProfile | null;
   onBack: () => void;
+  onSignIn: () => void;
   onMembership: () => void;
 }
 
@@ -175,17 +176,18 @@ const createJeruselaAudioLayer = (onNarrationEnd: () => void): JeruselaAudioLaye
 
 const worldConfig: SpatialConfig = {
   horizon: 0.48,
-  player: { x: 0.5, y: 0.68, scale: 1 },
+  player: { x: 0.5, y: 0.67, scale: 1.18 },
   rules: [
     { label: 'SERVE', x: 0.24, y: 0.3, delay: 0 },
     { label: 'SHINE', x: 0.5, y: 0.24, delay: 900 },
     { label: 'ENDURE', x: 0.76, y: 0.32, delay: 1800 },
   ],
   entities: [
-    { id: 'elder-teacher', kind: 'human', x: 0.18, y: 0.62, z: 0.7, speed: 0.18, scale: 0.72, motion: 'walk', palette: ['#7a4f37', '#f5f0d6', '#335c67'], variant: 'older' },
-    { id: 'runner', kind: 'human', x: 0.72, y: 0.66, z: 0.8, speed: -0.22, scale: 0.68, motion: 'walk', palette: ['#2f1f18', '#d6a77a', '#8ecae6'], variant: 'coily' },
-    { id: 'artisan', kind: 'human', x: 0.84, y: 0.58, z: 0.5, speed: 0.12, scale: 0.58, motion: 'walk', palette: ['#c7895c', '#172a3a', '#e9c46a'], variant: 'wavy' },
-    { id: 'traveler', kind: 'human', x: 0.31, y: 0.72, z: 0.9, speed: -0.1, scale: 0.64, motion: 'walk', palette: ['#51311d', '#5f0f40', '#e0fbfc'], variant: 'straight' },
+    { id: 'elder-teacher', kind: 'human', x: 0.18, y: 0.62, z: 0.7, speed: 0.18, scale: 0.82, motion: 'walk', palette: ['#7a4f37', '#f5f0d6', '#335c67'], variant: 'older' },
+    { id: 'runner', kind: 'human', x: 0.72, y: 0.66, z: 0.8, speed: -0.22, scale: 0.78, motion: 'walk', palette: ['#2f1f18', '#d6a77a', '#8ecae6'], variant: 'coily' },
+    { id: 'artisan', kind: 'human', x: 0.84, y: 0.58, z: 0.5, speed: 0.12, scale: 0.68, motion: 'walk', palette: ['#c7895c', '#172a3a', '#e9c46a'], variant: 'wavy' },
+    { id: 'traveler', kind: 'human', x: 0.31, y: 0.72, z: 0.9, speed: -0.1, scale: 0.74, motion: 'walk', palette: ['#51311d', '#5f0f40', '#e0fbfc'], variant: 'straight' },
+    { id: 'child-guide', kind: 'human', x: 0.43, y: 0.6, z: 0.62, speed: 0.15, scale: 0.56, motion: 'walk', palette: ['#9f6b4d', '#0f766e', '#fde68a'], variant: 'young-adult' },
     { id: 'heron', kind: 'bird', x: 0.65, y: 0.18, z: 0.3, speed: -0.28, scale: 0.75, motion: 'glide', palette: ['#dce7ef', '#0b3954'] },
     { id: 'small-flock', kind: 'bird', x: 0.3, y: 0.22, z: 0.25, speed: 0.34, scale: 0.48, motion: 'glide', palette: ['#1f2937', '#e5e7eb'] },
     { id: 'deer-like-grazer', kind: 'terrestrial', x: 0.12, y: 0.78, z: 0.95, speed: 0.08, scale: 0.62, motion: 'walk', palette: ['#8b5e34', '#e6ccb2'] },
@@ -211,6 +213,10 @@ const drawHuman = (
   context.beginPath();
   context.roundRect(x - 7 * scale, y - 25 * scale, 14 * scale, 26 * scale, 6 * scale);
   context.fill();
+  context.fillStyle = accent;
+  context.beginPath();
+  context.arc(x + 4 * scale, y - 12 * scale, 2.4 * scale, 0, Math.PI * 2);
+  context.fill();
   context.strokeStyle = accent;
   context.lineWidth = 2 * scale;
   context.beginPath();
@@ -229,11 +235,20 @@ const drawHuman = (
   context.beginPath();
   context.arc(x, y - 34 * scale, 8 * scale, 0, Math.PI * 2);
   context.fill();
-  context.fillStyle = entity.variant === 'coily' ? '#111827' : entity.variant === 'wavy' ? '#3f2417' : '#24140d';
-  for (let i = -2; i <= 2; i += 1) {
+  context.fillStyle = entity.variant === 'straight' ? '#21130c' : entity.variant === 'wavy' ? '#3f2417' : '#111827';
+  const hairCount = entity.variant === 'straight' ? 3 : entity.variant === 'older' ? 4 : 5;
+  for (let i = -Math.floor(hairCount / 2); i <= Math.floor(hairCount / 2); i += 1) {
     context.beginPath();
-    context.arc(x + i * 4 * scale, y - 41 * scale + Math.sin(time * 0.003 + i) * scale, 4 * scale, 0, Math.PI * 2);
+    context.arc(x + i * 4 * scale, y - 41 * scale + Math.sin(time * 0.003 + i) * scale, entity.variant === 'straight' ? 3 * scale : 4.4 * scale, 0, Math.PI * 2);
     context.fill();
+  }
+  if (entity.variant === 'older') {
+    context.strokeStyle = '#e5e7eb';
+    context.lineWidth = 1.4 * scale;
+    context.beginPath();
+    context.moveTo(x + 10 * scale, y - 12 * scale);
+    context.lineTo(x + 14 * scale, y + 18 * scale);
+    context.stroke();
   }
 };
 
@@ -387,7 +402,7 @@ const JeruselaVoidCanvas: React.FC<{
       const cy = height / 2;
       const energy = getAudioEnergy();
       const breath = 0.5 + Math.sin(frame * 0.034) * 0.5;
-      const coreBoost = phase === 'calling' || phase === 'initiation' || phase === 'checking' ? 1.55 : 1.18;
+      const coreBoost = phase === 'calling' || phase === 'initiation' || phase === 'checking' ? 1.85 : 1.45;
       const core = (66 + breath * 38 + energy * 112) * coreBoost;
 
       context.fillStyle = 'rgba(1, 3, 9, 0.28)';
@@ -418,7 +433,7 @@ const JeruselaVoidCanvas: React.FC<{
       const halo = context.createRadialGradient(cx, cy, 0, cx, cy, core * 6.4);
       halo.addColorStop(0, 'rgba(255, 255, 232, 1)');
       halo.addColorStop(0.08, 'rgba(255, 249, 184, 0.94)');
-      halo.addColorStop(0.24, `rgba(105, 232, 241, ${0.32 + energy * 0.2})`);
+      halo.addColorStop(0.24, `rgba(105, 232, 241, ${0.42 + energy * 0.24})`);
       halo.addColorStop(0.54, 'rgba(70, 81, 150, 0.14)');
       halo.addColorStop(1, 'rgba(0, 0, 0, 0)');
       context.fillStyle = halo;
@@ -428,7 +443,7 @@ const JeruselaVoidCanvas: React.FC<{
 
       context.fillStyle = 'rgba(255, 255, 245, 0.98)';
       context.beginPath();
-      context.arc(cx, cy, Math.max(18, core * 0.48), 0, Math.PI * 2);
+      context.arc(cx, cy, Math.max(28, core * 0.54), 0, Math.PI * 2);
       context.fill();
     };
 
@@ -470,6 +485,17 @@ const JeruselaVoidCanvas: React.FC<{
       context.beginPath();
       context.ellipse(width * 0.83, height * 0.89, width * 0.26, height * 0.11, -0.08, 0, Math.PI * 2);
       context.fill();
+      context.strokeStyle = 'rgba(186, 230, 253, 0.42)';
+      context.lineWidth = 2;
+      for (let wave = 0; wave < 4; wave += 1) {
+        context.beginPath();
+        for (let x = width * 0.62; x <= width; x += 18) {
+          const y = height * (0.83 + wave * 0.028) + Math.sin(time * 0.002 + x * 0.03 + wave) * 4;
+          if (x === width * 0.62) context.moveTo(x, y);
+          else context.lineTo(x, y);
+        }
+        context.stroke();
+      }
 
       worldConfig.entities
         .slice()
@@ -479,6 +505,22 @@ const JeruselaVoidCanvas: React.FC<{
       const playerX = width * (worldConfig.player.x + (reducedMotion ? 0 : Math.sin(time * 0.00035) * 0.012));
       const playerY = height * worldConfig.player.y + Math.max(0, 1 - progress) * height * 0.12;
       if (player) drawPlayer(context, player.form, playerX, playerY, worldConfig.player.scale, time);
+
+      const mechanicsProgress = Math.min(1, Math.max(0, (time - start - 2300) / 900));
+      if (mechanicsProgress > 0) {
+        context.globalAlpha = mechanicsProgress;
+        context.textAlign = 'center';
+        context.font = `900 ${Math.max(13, Math.min(18, width * 0.018))}px Orbitron, sans-serif`;
+        context.fillStyle = '#cffafe';
+        context.shadowColor = 'rgba(8, 145, 178, 0.9)';
+        context.shadowBlur = 18;
+        context.fillText('Core Rules / Spatial Mechanics', playerX, playerY - 146 * worldConfig.player.scale);
+        context.font = `700 ${Math.max(12, Math.min(16, width * 0.014))}px Inter, sans-serif`;
+        context.fillStyle = '#f8fafc';
+        context.fillText('Move through darkness by how you serve, shine, and endure.', playerX, playerY - 122 * worldConfig.player.scale);
+        context.shadowBlur = 0;
+        context.globalAlpha = 1;
+      }
 
       worldConfig.rules.forEach((rule) => {
         const ruleProgress = Math.min(1, Math.max(0, (time - start - rule.delay) / 800));
@@ -510,16 +552,18 @@ const JeruselaVoidCanvas: React.FC<{
     };
   }, [getAudioEnergy, phase, player, reducedMotion]);
 
-  return <canvas ref={canvasRef} className="fixed inset-0 h-screen w-screen bg-[#010309]" aria-hidden="true" />;
+  return <canvas ref={canvasRef} className="pointer-events-none fixed inset-0 h-screen w-screen bg-[#010309]" aria-hidden="true" />;
 };
 
-const JeruselaPortalView: React.FC<JeruselaPortalViewProps> = ({ user, onBack, onMembership }) => {
+const JeruselaPortalView: React.FC<JeruselaPortalViewProps> = ({ user, onBack, onSignIn, onMembership }) => {
   const [phase, setPhase] = useState<JeruselaPhase>('void');
   const [choice, setChoice] = useState<JeruselaChoice | null>(null);
   const [audioReady, setAudioReady] = useState(false);
   const [player, setPlayer] = useState<PlayerState | null>(null);
   const [acknowledged, setAcknowledged] = useState(false);
+  const [eligibilityResolving, setEligibilityResolving] = useState(false);
   const audioLayerRef = useRef<JeruselaAudioLayer | null>(null);
+  const choiceLockRef = useRef(false);
 
   const reducedMotion = useMemo(
     () => typeof window !== 'undefined' && window.matchMedia('(prefers-reduced-motion: reduce)').matches,
@@ -548,6 +592,8 @@ const JeruselaPortalView: React.FC<JeruselaPortalViewProps> = ({ user, onBack, o
   }, []);
 
   const chooseForm = (nextChoice: JeruselaChoice) => {
+    if (choiceLockRef.current) return;
+    choiceLockRef.current = true;
     setChoice(nextChoice);
     setPlayer({ name: playerName, form: nextChoice });
     setAcknowledged(false);
@@ -556,11 +602,12 @@ const JeruselaPortalView: React.FC<JeruselaPortalViewProps> = ({ user, onBack, o
   };
 
   const resolveEligibility = async () => {
-    if (!choice) return;
-    setAcknowledged(true);
+    if (!choice || !acknowledged || eligibilityResolving) return;
+    setEligibilityResolving(true);
     setPhase('checking');
     audioLayerRef.current?.playChime();
     await new Promise((resolve) => window.setTimeout(resolve, 900));
+    setEligibilityResolving(false);
 
     if (isEligibleJeruselaPlayer(user)) {
       audioLayerRef.current?.whisperChosen();
@@ -604,20 +651,36 @@ const JeruselaPortalView: React.FC<JeruselaPortalViewProps> = ({ user, onBack, o
             <div
               className={`transition duration-1000 ${
                 choiceVisible ? 'translate-y-0 opacity-100' : 'pointer-events-none translate-y-4 opacity-0'
-              }`}
+              } pointer-events-auto relative z-20`}
               aria-hidden={!choiceVisible}
             >
               <p className="mb-6 text-base font-black uppercase text-white sm:text-xl">
                 Choose how you will enter Jerusela.
               </p>
-              <div className="flex flex-wrap items-center justify-center gap-4">
+              <div
+                data-jerusela-choice-group="true"
+                className="flex flex-wrap items-center justify-center gap-4"
+                onMouseDown={(event) => {
+                  if (!choiceVisible || choice) return;
+                  const bounds = event.currentTarget.getBoundingClientRect();
+                  chooseForm(event.clientX < bounds.left + bounds.width / 2 ? 'man' : 'woman');
+                }}
+              >
                 {(['man', 'woman'] as const).map((entry) => (
                   <button
                     key={entry}
                     type="button"
-                    onClick={() => chooseForm(entry)}
+                    data-jerusela-choice={entry}
+                    onMouseDown={(event) => {
+                      event.stopPropagation();
+                      chooseForm(entry);
+                    }}
+                    onClick={(event) => {
+                      event.stopPropagation();
+                      chooseForm(entry);
+                    }}
                     disabled={!choiceVisible}
-                    className="min-h-14 min-w-36 rounded-full border border-white/15 bg-white/10 px-8 py-4 text-sm font-black uppercase text-white shadow-2xl shadow-cyan-950/30 backdrop-blur-xl transition hover:border-cyan-200/40 hover:bg-cyan-200/15 focus:outline-none focus:ring-2 focus:ring-cyan-200/60 disabled:pointer-events-none"
+                    className="pointer-events-auto relative z-30 min-h-14 min-w-36 rounded-full border border-white/15 bg-white/10 px-8 py-4 text-sm font-black uppercase text-white shadow-2xl shadow-cyan-950/30 backdrop-blur-xl transition hover:border-cyan-200/40 hover:bg-cyan-200/15 focus:outline-none focus:ring-2 focus:ring-cyan-200/60 disabled:pointer-events-none"
                   >
                     {entry === 'man' ? 'Man' : 'Woman'}
                   </button>
@@ -641,13 +704,26 @@ const JeruselaPortalView: React.FC<JeruselaPortalViewProps> = ({ user, onBack, o
                     </div>
                   ))}
                 </div>
+                <label className="mx-auto mt-7 flex max-w-2xl cursor-pointer items-start gap-3 rounded-2xl border border-white/10 bg-white/[0.06] p-4 text-left text-sm leading-6 text-slate-100 transition hover:bg-white/[0.09]">
+                  <input
+                    type="checkbox"
+                    data-jerusela-acknowledgement="true"
+                    checked={acknowledged}
+                    onChange={(event) => setAcknowledged(event.target.checked)}
+                    className="mt-1 h-5 w-5 shrink-0 rounded border-white/30 bg-black/40 text-cyan-300 focus:ring-2 focus:ring-cyan-200/70"
+                  />
+                  <span>
+                    I understand the three guiding principles of Jerusela - Serve, Shine, and Endure - and I am ready to enter.
+                  </span>
+                </label>
                 <button
                   type="button"
+                  data-jerusela-enter="true"
                   onClick={() => void resolveEligibility()}
-                  disabled={acknowledged}
+                  disabled={!acknowledged || eligibilityResolving}
                   className="mt-7 inline-flex min-h-12 max-w-2xl items-center justify-center rounded-full bg-cyan-300 px-5 py-3 text-xs font-black uppercase leading-5 text-slate-950 transition hover:bg-cyan-200 focus:outline-none focus:ring-2 focus:ring-white/80 disabled:opacity-70"
                 >
-                  I understand the three guiding principles of Jerusela - Serve, Shine, and Endure - and I am ready to enter.
+                  Enter Jerusela
                 </button>
               </div>
             )}
@@ -659,12 +735,9 @@ const JeruselaPortalView: React.FC<JeruselaPortalViewProps> = ({ user, onBack, o
             )}
 
             {phase === 'arrival' && player && (
-              <div className="pointer-events-none fixed bottom-8 left-1/2 z-10 w-[min(92vw,44rem)] -translate-x-1/2 rounded-[1.5rem] border border-white/10 bg-black/30 p-4 text-center shadow-2xl backdrop-blur-xl">
-                <p className="text-[10px] font-black uppercase text-cyan-100">Core Rules & Spatial Mechanics</p>
-                <p className="mt-2 text-sm leading-6 text-slate-100">
-                  {player.name} enters as the {player.form}. The first light is behavior: serve, shine, endure.
-                </p>
-              </div>
+              <p className="sr-only">
+                {player.name} enters Jerusela as the {player.form}. Core Rules and Spatial Mechanics begin in the world: Serve, Shine, Endure.
+              </p>
             )}
           </div>
         </section>
@@ -678,20 +751,33 @@ const JeruselaPortalView: React.FC<JeruselaPortalViewProps> = ({ user, onBack, o
             </div>
             <h2 className="text-2xl font-black uppercase text-white">Eligible Membership Required</h2>
             <p className="mx-auto mt-4 max-w-lg text-sm leading-7 text-slate-300">
-              Jerusela requires an eligible Conscious Network Hub membership before your dashboard journey and ethical scores can synchronize with this world.
+              {user
+                ? 'Jerusela requires an eligible Conscious Network Hub membership before your dashboard journey and ethical scores can synchronize with this world.'
+                : 'Sign in to your Conscious Network Hub account so Jerusela can verify whether your membership, provider, or administrator access is eligible.'}
             </p>
             <div className="mt-6 flex flex-col justify-center gap-3 sm:flex-row">
-              <a
-                href={membershipUrl}
-                onClick={(event) => {
-                  event.preventDefault();
-                  onMembership();
-                }}
-                className="inline-flex min-h-12 items-center justify-center gap-2 rounded-full bg-cyan-300 px-5 py-3 text-xs font-black uppercase text-slate-950 transition hover:bg-cyan-200 focus:outline-none focus:ring-2 focus:ring-white/80"
-              >
-                <Crown className="h-4 w-4" />
-                Membership
-              </a>
+              {user ? (
+                <a
+                  href={membershipUrl}
+                  onClick={(event) => {
+                    event.preventDefault();
+                    onMembership();
+                  }}
+                  className="inline-flex min-h-12 items-center justify-center gap-2 rounded-full bg-cyan-300 px-5 py-3 text-xs font-black uppercase text-slate-950 transition hover:bg-cyan-200 focus:outline-none focus:ring-2 focus:ring-white/80"
+                >
+                  <Crown className="h-4 w-4" />
+                  Membership
+                </a>
+              ) : (
+                <button
+                  type="button"
+                  onClick={onSignIn}
+                  className="inline-flex min-h-12 items-center justify-center gap-2 rounded-full bg-cyan-300 px-5 py-3 text-xs font-black uppercase text-slate-950 transition hover:bg-cyan-200 focus:outline-none focus:ring-2 focus:ring-white/80"
+                >
+                  <Crown className="h-4 w-4" />
+                  Sign In
+                </button>
+              )}
               <button
                 type="button"
                 onClick={onBack}
