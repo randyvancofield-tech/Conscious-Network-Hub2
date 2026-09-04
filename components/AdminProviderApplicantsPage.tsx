@@ -62,6 +62,7 @@ const documentLabels: Record<ApplicantDocumentKind, string> = {
   'cover-letter': 'Cover Letter',
 };
 
+const protectedApplicantBaseUrl = String(BASE_URL || '').replace(/\/+$/, '');
 const previewableDocumentMimeTypes = new Set(['application/pdf', 'text/plain']);
 
 const mimeEssence = (mimeType?: string): string =>
@@ -75,7 +76,7 @@ const buildApplicantDocumentUrl = (
   documentKind: ApplicantDocumentKind,
   disposition: ApplicantDocumentDisposition
 ): string =>
-  `${BASE_URL}/api/admin/provider-applicants/${encodeURIComponent(applicantId)}/documents/${encodeURIComponent(documentKind)}?disposition=${encodeURIComponent(disposition)}`;
+  `${protectedApplicantBaseUrl}/api/admin/provider-applicants/${encodeURIComponent(applicantId)}/documents/${encodeURIComponent(documentKind)}?disposition=${encodeURIComponent(disposition)}`;
 
 const filenameFromContentDisposition = (value: string | null): string | null => {
   const header = String(value || '').trim();

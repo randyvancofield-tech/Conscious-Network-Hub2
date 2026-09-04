@@ -251,3 +251,20 @@ export const updateProviderApplicantReview = async (
   });
   return revealProviderApplicant(row);
 };
+
+export const deleteProviderApplicantById = async (id: string): Promise<any | null> => {
+  const normalized = String(id || '').trim();
+  if (!normalized) return null;
+
+  const existing = await providerApplicantModel().findUnique({
+    where: { id: normalized },
+    include: { user: true },
+  });
+  if (!existing) return null;
+
+  await providerApplicantModel().delete({
+    where: { id: normalized },
+  });
+
+  return revealProviderApplicant(existing);
+};

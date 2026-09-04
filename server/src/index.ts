@@ -253,6 +253,12 @@ app.use(
       'X-Admin-Secure-Token',
       'X-Provider-Control-Token',
     ],
+    exposedHeaders: [
+      'Content-Disposition',
+      'Content-Length',
+      'Content-Type',
+      'X-Content-Type-Options',
+    ],
     credentials: true,
     maxAge: 86400, // 24 hours
   })

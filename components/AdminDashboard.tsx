@@ -1,7 +1,8 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { Activity, BookOpen, EyeOff, Inbox, KeyRound, LockKeyhole, MessageSquare, RefreshCw, ShieldCheck, Trash2, UnlockKeyhole, UserPlus, Users } from 'lucide-react';
-import { api, ApiError } from '../services/apiClient';
+import { Activity, BookOpen, Download, Eye, EyeOff, FileArchive, FileText, Inbox, KeyRound, LockKeyhole, MessageSquare, RefreshCw, ShieldCheck, Trash2, UnlockKeyhole, UserPlus, Users } from 'lucide-react';
+import { BASE_URL, api, ApiError } from '../services/apiClient';
 import {
+  getAuthToken,
   getAdminElevationToken,
   getCachedAuthUser,
   getProviderControlSession,
@@ -99,6 +100,13 @@ interface AdminInboxPayload {
   recent: AdminMessageRecord[];
 }
 
+interface AdminSubmissionFileSummary {
+  originalName?: string | null;
+  mimeType?: string | null;
+  sizeBytes?: number | null;
+  storageProvider?: string | null;
+}
+
 interface AdminSubmissionRecord {
   id: string;
   type: 'provider_application' | 'grant_application';
@@ -110,7 +118,7 @@ interface AdminSubmissionRecord {
   applicantEmail: string | null;
   category: string | null;
   summary: Record<string, unknown>;
-  files?: Record<string, unknown>;
+  files?: Record<string, AdminSubmissionFileSummary | null | unknown>;
   user: {
     id: string;
     email: string;
@@ -204,6 +212,147 @@ const adminHeaders = (): HeadersInit => {
   return token ? { 'X-Admin-Elevation-Token': token } : {};
 };
 
+type ProviderApplicantDocumentKind = 'resume' | 'cover-letter';
+type ProviderApplicantDocumentDisposition = 'inline' | 'attachment';
+
+const PROVIDER_APPLICANT_DELETE_CONFIRMATION = 'DELETE PROVIDER SUBMISSION';
+const protectedAdminBaseUrl = String(BASE_URL || '').replace(/\/+$/, '');
+const providerApplicantDocumentLabels: Record<ProviderApplicantDocumentKind, string> = {
+  resume: 'Resume',
+  'cover-letter': 'Cover Letter',
+};
+const previewableProviderApplicantDocumentMimeTypes = new Set(['application/pdf', 'text/plain']);
+
+const mimeEssence = (mimeType?: string | null): string =>
+  String(mimeType || '').split(';')[0].trim().toLowerCase();
+
+const asAdminSubmissionFileSummary = (value: unknown): AdminSubmissionFileSummary | null => {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return null;
+  const file = value as AdminSubmissionFileSummary;
+  if (!file.originalName && !file.mimeType && file.sizeBytes === undefined && !file.storageProvider) {
+    return null;
+  }
+  return file;
+};
+
+const canPreviewProviderApplicantDocument = (file: AdminSubmissionFileSummary | null): boolean =>
+  previewableProviderApplicantDocumentMimeTypes.has(mimeEssence(file?.mimeType));
+
+const providerApplicantDocumentsForSubmission = (submission: AdminSubmissionRecord): Array<{
+  kind: ProviderApplicantDocumentKind;
+  label: string;
+  file: AdminSubmissionFileSummary | null;
+}> => {
+  if (submission.type !== 'provider_application') return [];
+  return ([
+    ['resume', providerApplicantDocumentLabels.resume, asAdminSubmissionFileSummary(submission.files?.resumeFile)],
+    [
+      'cover-letter',
+      providerApplicantDocumentLabels['cover-letter'],
+      asAdminSubmissionFileSummary(submission.files?.coverLetterFile),
+    ],
+  ] as const).map(([kind, label, file]) => ({ kind, label, file }));
+};
+
+const buildProtectedAdminUrl = (path: string): string =>
+  `${protectedAdminBaseUrl}/api${path.startsWith('/') ? path : `/${path}`}`;
+
+const buildProviderApplicantDocumentUrl = (
+  submissionId: string,
+  documentKind: ProviderApplicantDocumentKind,
+  disposition: ProviderApplicantDocumentDisposition
+): string =>
+  buildProtectedAdminUrl(
+    `/admin/provider-applicants/${encodeURIComponent(submissionId)}/documents/${encodeURIComponent(documentKind)}?disposition=${encodeURIComponent(disposition)}`
+  );
+
+const filenameFromContentDisposition = (value: string | null): string | null => {
+  const header = String(value || '').trim();
+  if (!header) return null;
+
+  const encodedMatch = /filename\*=UTF-8''([^;]+)/i.exec(header);
+  if (encodedMatch?.[1]) {
+    try {
+      return decodeURIComponent(encodedMatch[1]);
+    } catch {
+      return encodedMatch[1];
+    }
+  }
+
+  const quotedMatch = /filename="([^"]+)"/i.exec(header);
+  if (quotedMatch?.[1]) return quotedMatch[1];
+  return null;
+};
+
+const sanitizeDownloadFilename = (value: string, fallback: string): string => {
+  const filename = String(value || '')
+    .replace(/[\x00-\x1f\x7f\\/:*?"<>|]+/g, '_')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .slice(0, 160);
+  return filename || fallback;
+};
+
+const triggerBlobDownload = (blob: Blob, filename: string): void => {
+  const objectUrl = URL.createObjectURL(blob);
+  const anchor = document.createElement('a');
+  anchor.href = objectUrl;
+  anchor.download = filename || 'download';
+  anchor.rel = 'noopener noreferrer';
+  anchor.style.position = 'fixed';
+  anchor.style.left = '-9999px';
+  anchor.style.top = '0';
+  document.body.appendChild(anchor);
+  anchor.click();
+  anchor.remove();
+  window.setTimeout(() => URL.revokeObjectURL(objectUrl), 60000);
+};
+
+const parseProtectedBlobError = async (response: Response): Promise<string> => {
+  const fallback = `Protected document request failed with HTTP ${response.status}`;
+  try {
+    const text = await response.text();
+    if (!text) return fallback;
+    const parsed = JSON.parse(text) as { error?: unknown; message?: unknown };
+    return String(parsed.error || parsed.message || fallback);
+  } catch {
+    return fallback;
+  }
+};
+
+const fetchProtectedAdminBlob = async (
+  url: string,
+  fallbackFilename: string
+): Promise<{ blob: Blob; filename: string; mimeType: string; contentDisposition: string }> => {
+  const authToken = getAuthToken();
+  const elevationToken = getAdminElevationToken();
+  if (!authToken || !elevationToken) {
+    throw new Error('Admin authorization and elevation are required for protected submission documents.');
+  }
+
+  const headers = new Headers();
+  headers.set('Authorization', `Bearer ${authToken}`);
+  headers.set('X-Admin-Elevation-Token', elevationToken);
+
+  const response = await fetch(url, {
+    cache: 'no-store',
+    credentials: 'include',
+    headers,
+  });
+
+  if (!response.ok) {
+    throw new Error(await parseProtectedBlobError(response));
+  }
+
+  const contentDisposition = response.headers.get('Content-Disposition') || '';
+  return {
+    blob: await response.blob(),
+    filename: filenameFromContentDisposition(contentDisposition) || fallbackFilename,
+    mimeType: response.headers.get('Content-Type') || 'application/octet-stream',
+    contentDisposition,
+  };
+};
+
 const adminMessageStatusOptions: Array<{ value: AdminMessageStatus | 'all'; label: string }> = [
   { value: 'all', label: 'All' },
   { value: 'new', label: 'New' },
@@ -292,6 +441,10 @@ const AdminDashboard: React.FC = () => {
   const [messagePriorityDrafts, setMessagePriorityDrafts] = useState<Record<string, AdminMessagePriority>>({});
   const [messageNoteDrafts, setMessageNoteDrafts] = useState<Record<string, string>>({});
   const [messageResolutionDrafts, setMessageResolutionDrafts] = useState<Record<string, string>>({});
+  const [submissionDocumentAction, setSubmissionDocumentAction] = useState<string | null>(null);
+  const [submissionExportActionId, setSubmissionExportActionId] = useState<string | null>(null);
+  const [submissionDeleteActionId, setSubmissionDeleteActionId] = useState<string | null>(null);
+  const [deleteConfirmSubmissionId, setDeleteConfirmSubmissionId] = useState<string | null>(null);
   const [activeSection, setActiveSection] = useState<AdminConsoleSection>('overview');
 
   const isElevated = useMemo(() => Boolean(getAdminElevationToken()), [dashboard, error]);
@@ -441,6 +594,114 @@ const AdminDashboard: React.FC = () => {
       setError(error instanceof Error ? error.message : 'Unable to delete post.');
     } finally {
       setContentActionPostId(null);
+    }
+  };
+
+  const openProviderApplicantDocument = async (
+    submission: AdminSubmissionRecord,
+    documentKind: ProviderApplicantDocumentKind,
+    disposition: ProviderApplicantDocumentDisposition,
+    file: AdminSubmissionFileSummary | null
+  ): Promise<void> => {
+    const label = providerApplicantDocumentLabels[documentKind];
+    if (submission.type !== 'provider_application' || !file) {
+      setError(`${label} is not available for this provider submission.`);
+      return;
+    }
+
+    const actionKey = `${submission.id}:${documentKind}:${disposition}`;
+    let previewWindow: Window | null = null;
+    if (disposition === 'inline') {
+      previewWindow = window.open('', '_blank');
+      if (!previewWindow) {
+        setError('Unable to open the preview tab. Allow pop-ups for this site and try again.');
+        return;
+      }
+      previewWindow.opener = null;
+    }
+
+    setSubmissionDocumentAction(actionKey);
+    setDeleteConfirmSubmissionId(null);
+    setError('');
+
+    try {
+      const document = await fetchProtectedAdminBlob(
+        buildProviderApplicantDocumentUrl(submission.id, documentKind, disposition),
+        sanitizeDownloadFilename(String(file.originalName || label), label)
+      );
+      const shouldPreview =
+        disposition === 'inline' &&
+        previewWindow &&
+        !document.contentDisposition.toLowerCase().startsWith('attachment') &&
+        previewableProviderApplicantDocumentMimeTypes.has(mimeEssence(document.mimeType));
+
+      if (shouldPreview && previewWindow) {
+        const objectUrl = URL.createObjectURL(document.blob);
+        previewWindow.location.href = objectUrl;
+        window.setTimeout(() => URL.revokeObjectURL(objectUrl), 60000);
+        return;
+      }
+
+      if (previewWindow) {
+        previewWindow.close();
+      }
+      triggerBlobDownload(document.blob, document.filename);
+    } catch (error) {
+      if (previewWindow) {
+        previewWindow.close();
+      }
+      setError(error instanceof Error ? error.message : `Unable to open ${label.toLowerCase()}.`);
+    } finally {
+      setSubmissionDocumentAction(null);
+    }
+  };
+
+  const exportProviderApplicantSubmission = async (submission: AdminSubmissionRecord): Promise<void> => {
+    if (submission.type !== 'provider_application') return;
+
+    setSubmissionExportActionId(submission.id);
+    setDeleteConfirmSubmissionId(null);
+    setError('');
+    try {
+      const exportBlob = await fetchProtectedAdminBlob(
+        buildProtectedAdminUrl(`/admin/provider-applicants/${encodeURIComponent(submission.id)}/export`),
+        sanitizeDownloadFilename(`${submission.title || 'provider'}-provider-submission.zip`, 'provider-submission.zip')
+      );
+      triggerBlobDownload(exportBlob.blob, exportBlob.filename);
+    } catch (error) {
+      setError(error instanceof Error ? error.message : 'Unable to export provider submission.');
+    } finally {
+      setSubmissionExportActionId(null);
+    }
+  };
+
+  const deleteProviderApplicantSubmission = async (submission: AdminSubmissionRecord): Promise<void> => {
+    if (submission.type !== 'provider_application') return;
+
+    if (deleteConfirmSubmissionId !== submission.id) {
+      setDeleteConfirmSubmissionId(submission.id);
+      setError(
+        `Click Delete Submission again to permanently remove ${submission.title || 'this provider submission'} and its uploaded documents.`
+      );
+      return;
+    }
+
+    setSubmissionDeleteActionId(submission.id);
+    setError('');
+    try {
+      await api(`/admin/provider-applicants/${encodeURIComponent(submission.id)}`, {
+        method: 'DELETE',
+        headers: adminHeaders(),
+        body: {
+          confirm: PROVIDER_APPLICANT_DELETE_CONFIRMATION,
+        },
+      });
+      setDeleteConfirmSubmissionId(null);
+      await loadDashboard();
+    } catch (error) {
+      setError(error instanceof Error ? error.message : 'Unable to delete provider submission.');
+    } finally {
+      setSubmissionDeleteActionId(null);
     }
   };
 
@@ -869,7 +1130,11 @@ const AdminDashboard: React.FC = () => {
             </p>
           ) : (
             <div className="space-y-4">
-              {allSubmissionRecords.map((submission) => (
+              {allSubmissionRecords.map((submission) => {
+                const providerDocuments = providerApplicantDocumentsForSubmission(submission);
+                const isProviderSubmission = submission.type === 'provider_application';
+
+                return (
                 <article key={`${submission.type}-${submission.id}`} className="min-w-0 rounded-xl border border-white/10 bg-black/20 p-4">
                   <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
                     <div className="min-w-0">
@@ -906,14 +1171,110 @@ const AdminDashboard: React.FC = () => {
                     {renderDetailMap(submission.summary)}
                   </div>
 
-                  {submission.files && Object.keys(submission.files).length > 0 && (
+                  {isProviderSubmission && (
+                    <div className="mt-4 rounded-xl border border-blue-300/15 bg-blue-500/[0.06] p-4">
+                      <div className="mb-4 flex flex-col gap-3 xl:flex-row xl:items-start xl:justify-between">
+                        <div className="min-w-0">
+                          <p className="text-[10px] font-black uppercase tracking-widest text-blue-200">
+                            Provider Submission Documents
+                          </p>
+                          <p className="mt-1 text-xs leading-5 text-slate-500">
+                            Protected retrieval uses the applicant record and admin elevation.
+                          </p>
+                        </div>
+                        <div className="flex min-w-0 flex-wrap gap-2">
+                          <ActionButton
+                            type="button"
+                            variant="secondary"
+                            onClick={() => void exportProviderApplicantSubmission(submission)}
+                            disabled={submissionExportActionId === submission.id}
+                            icon={<FileArchive className="h-4 w-4" />}
+                            className="min-h-10 px-3 py-2 text-[10px]"
+                          >
+                            {submissionExportActionId === submission.id ? 'Exporting' : 'Export Submission'}
+                          </ActionButton>
+                          <ActionButton
+                            type="button"
+                            variant="ghost"
+                            onClick={() => void deleteProviderApplicantSubmission(submission)}
+                            disabled={submissionDeleteActionId === submission.id}
+                            icon={<Trash2 className="h-4 w-4" />}
+                            className={`min-h-10 px-3 py-2 text-[10px] ${
+                              deleteConfirmSubmissionId === submission.id
+                                ? 'border-red-300/40 bg-red-500/15 text-red-100'
+                                : 'text-red-200 hover:bg-red-500/10'
+                            }`}
+                          >
+                            {submissionDeleteActionId === submission.id
+                              ? 'Deleting'
+                              : deleteConfirmSubmissionId === submission.id
+                                ? 'Confirm Delete'
+                                : 'Delete Submission'}
+                          </ActionButton>
+                        </div>
+                      </div>
+                      <div className="grid gap-3 lg:grid-cols-2">
+                        {providerDocuments.map(({ kind, label, file }) => {
+                          const previewActionKey = `${submission.id}:${kind}:inline`;
+                          const downloadActionKey = `${submission.id}:${kind}:attachment`;
+                          const canPreview = canPreviewProviderApplicantDocument(file);
+                          return (
+                            <div
+                              key={`${submission.id}:${kind}`}
+                              className="min-w-0 rounded-xl border border-white/10 bg-black/20 p-3"
+                            >
+                              <div className="flex min-w-0 items-start gap-3">
+                                <FileText className="mt-0.5 h-4 w-4 shrink-0 text-blue-200" />
+                                <div className="min-w-0 flex-1">
+                                  <p className="text-[10px] font-black uppercase text-slate-300">{label}</p>
+                                  <p className="mt-1 break-words text-xs font-bold text-white">
+                                    {file?.originalName || 'Missing file'}
+                                  </p>
+                                  <p className="mt-1 break-words text-[10px] text-slate-500">
+                                    {file?.mimeType || 'No MIME type recorded'}
+                                  </p>
+                                </div>
+                              </div>
+                              <div className="mt-3 flex min-w-0 flex-wrap gap-2">
+                                <ActionButton
+                                  type="button"
+                                  variant="secondary"
+                                  onClick={() => void openProviderApplicantDocument(submission, kind, 'inline', file)}
+                                  disabled={!file || !canPreview || submissionDocumentAction === previewActionKey}
+                                  icon={<Eye className="h-4 w-4" />}
+                                  className="min-h-10 px-3 py-2 text-[10px]"
+                                  title={canPreview ? `Preview ${label}` : `${label} must be downloaded`}
+                                >
+                                  {submissionDocumentAction === previewActionKey ? 'Opening' : 'Preview'}
+                                </ActionButton>
+                                <ActionButton
+                                  type="button"
+                                  variant="secondary"
+                                  onClick={() => void openProviderApplicantDocument(submission, kind, 'attachment', file)}
+                                  disabled={!file || submissionDocumentAction === downloadActionKey}
+                                  icon={<Download className="h-4 w-4" />}
+                                  className="min-h-10 px-3 py-2 text-[10px]"
+                                  title={`Download ${label}`}
+                                >
+                                  {submissionDocumentAction === downloadActionKey ? 'Saving' : 'Download'}
+                                </ActionButton>
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  )}
+
+                  {!isProviderSubmission && submission.files && Object.keys(submission.files).length > 0 && (
                     <div className="mt-4">
-                      <p className="mb-3 text-[10px] font-black uppercase tracking-widest text-slate-500">Attached File References</p>
+                      <p className="mb-3 text-[10px] font-black uppercase tracking-widest text-slate-500">Attached File Summary</p>
                       {renderDetailMap(submission.files)}
                     </div>
                   )}
                 </article>
-              ))}
+                );
+              })}
 
               {(dashboard.submissions?.adminMessages || []).map((message) => (
                 <article key={`submission-message-${message.id}`} className="min-w-0 rounded-xl border border-white/10 bg-black/20 p-4">

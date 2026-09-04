@@ -35,6 +35,7 @@ import {
 } from '../validation/requestSchemas';
 import {
   PROVIDER_APPLICANT_STATUSES,
+  deleteProviderApplicantById,
   getProviderApplicantById,
   listProviderApplicants,
   type ProviderApplicantFileRef,
@@ -54,6 +55,7 @@ import {
   getUploadObjectAccessMetadata,
   resolveUploadObjectByKey,
 } from '../services/uploadBlobStore';
+import { buildZipArchive, type ZipArchiveEntry } from '../services/zipArchive';
 import { revokeUserSessionsByUserId } from '../services/userSessionStore';
 import { hasTierAccess, TIER_VALUES, type TierValue } from '../tierPolicy';
 import {
@@ -85,6 +87,22 @@ const toAdminSubmissionUser = (user: any) =>
         tier: user.tier || null,
       }
     : null;
+
+const toAdminApplicantFileSummary = (file: any) =>
+  file && typeof file === 'object'
+    ? {
+        originalName: file.originalName || null,
+        mimeType: file.mimeType || null,
+        sizeBytes: file.sizeBytes ?? null,
+        storageProvider: file.storageProvider || null,
+      }
+    : null;
+
+const toAdminProviderApplicantRecord = (applicant: any) => ({
+  ...applicant,
+  resumeFile: toAdminApplicantFileSummary(applicant?.resumeFile),
+  coverLetterFile: toAdminApplicantFileSummary(applicant?.coverLetterFile),
+});
 
 const toAdminProviderApplicationSubmission = (applicant: any) => ({
   id: String(applicant.id || ''),
@@ -120,8 +138,8 @@ const toAdminProviderApplicationSubmission = (applicant: any) => ({
     adminNotes: applicant.adminNotes || null,
   },
   files: {
-    resumeFile: applicant.resumeFile || null,
-    coverLetterFile: applicant.coverLetterFile || null,
+    resumeFile: toAdminApplicantFileSummary(applicant.resumeFile),
+    coverLetterFile: toAdminApplicantFileSummary(applicant.coverLetterFile),
   },
   user: toAdminSubmissionUser(applicant.user),
 });
@@ -603,7 +621,16 @@ type ProviderApplicantDocumentType = 'resume' | 'cover-letter';
 type ProviderApplicantDocumentDisposition = 'inline' | 'attachment';
 
 const PROVIDER_APPLICATION_UPLOAD_CATEGORY = 'provider-application';
+const PROVIDER_APPLICANT_DELETE_CONFIRMATION = 'DELETE PROVIDER SUBMISSION';
+const PROVIDER_APPLICANT_DOCUMENT_TYPES: ProviderApplicantDocumentType[] = [
+  'resume',
+  'cover-letter',
+];
 const INLINE_PROVIDER_APPLICANT_DOCUMENT_MIME_TYPES = new Set(['application/pdf', 'text/plain']);
+const PROVIDER_APPLICANT_DOCUMENT_LABELS: Record<ProviderApplicantDocumentType, string> = {
+  resume: 'Resume',
+  'cover-letter': 'Cover Letter',
+};
 
 const normalizeProviderApplicantDocumentType = (
   value: unknown
@@ -659,6 +686,230 @@ const getProviderApplicantDocumentRef = (
   const objectKey = String((ref as Partial<ProviderApplicantFileRef>).objectKey || '').trim();
   if (!objectKey) return null;
   return ref as ProviderApplicantFileRef;
+};
+
+interface ValidatedProviderApplicantDocument {
+  documentType: ProviderApplicantDocumentType;
+  label: string;
+  fileRef: ProviderApplicantFileRef;
+  objectKey: string;
+  mimeType: string;
+  originalName: string;
+  sizeBytes: number | null;
+}
+
+const validateProviderApplicantDocument = (
+  applicant: any,
+  documentType: ProviderApplicantDocumentType
+):
+  | { ok: true; document: ValidatedProviderApplicantDocument }
+  | { ok: false; statusCode: number; error: string; reason: string } => {
+  const fileRef = getProviderApplicantDocumentRef(applicant, documentType);
+  if (!fileRef) {
+    return {
+      ok: false,
+      statusCode: 404,
+      error: 'Provider applicant document not found',
+      reason: 'document_reference_missing',
+    };
+  }
+
+  const objectKey = String(fileRef.objectKey || '').trim();
+  const metadata = getUploadObjectAccessMetadata(objectKey);
+  if (
+    !metadata ||
+    metadata.storageProvider !== 'postgres_large_object' ||
+    metadata.access !== 'private' ||
+    metadata.ownerUserId !== String(applicant.userId || '').trim() ||
+    metadata.category !== PROVIDER_APPLICATION_UPLOAD_CATEGORY
+  ) {
+    return {
+      ok: false,
+      statusCode: 404,
+      error: 'Provider applicant document not found',
+      reason: 'upload_object_metadata_mismatch',
+    };
+  }
+
+  return {
+    ok: true,
+    document: {
+      documentType,
+      label: PROVIDER_APPLICANT_DOCUMENT_LABELS[documentType],
+      fileRef,
+      objectKey,
+      mimeType: normalizeDocumentMimeType(fileRef.mimeType),
+      originalName: sanitizeProviderApplicantDocumentFilename(
+        fileRef.originalName,
+        documentType === 'resume' ? 'resume' : 'cover-letter'
+      ),
+      sizeBytes: Number.isFinite(Number(fileRef.sizeBytes)) ? Number(fileRef.sizeBytes) : null,
+    },
+  };
+};
+
+const validateExistingProviderApplicantDocuments = (
+  applicant: any
+):
+  | { ok: true; documents: ValidatedProviderApplicantDocument[] }
+  | { ok: false; documentType: ProviderApplicantDocumentType; statusCode: number; error: string; reason: string } => {
+  const documents: ValidatedProviderApplicantDocument[] = [];
+  for (const documentType of PROVIDER_APPLICANT_DOCUMENT_TYPES) {
+    if (!getProviderApplicantDocumentRef(applicant, documentType)) continue;
+    const validation = validateProviderApplicantDocument(applicant, documentType);
+    if (validation.ok === false) {
+      return { ...validation, documentType };
+    }
+    documents.push(validation.document);
+  }
+  return { ok: true, documents };
+};
+
+const validateRequiredProviderApplicantDocuments = (
+  applicant: any
+):
+  | { ok: true; documents: ValidatedProviderApplicantDocument[] }
+  | { ok: false; documentType: ProviderApplicantDocumentType; statusCode: number; error: string; reason: string } => {
+  const documents: ValidatedProviderApplicantDocument[] = [];
+  for (const documentType of PROVIDER_APPLICANT_DOCUMENT_TYPES) {
+    const validation = validateProviderApplicantDocument(applicant, documentType);
+    if (validation.ok === false) {
+      return { ...validation, documentType };
+    }
+    documents.push(validation.document);
+  }
+  return { ok: true, documents };
+};
+
+const extensionFromMimeType = (mimeType: string): string => {
+  const essence = getDocumentMimeEssence(mimeType);
+  if (essence === 'application/pdf') return '.pdf';
+  if (essence === 'text/plain') return '.txt';
+  if (essence === 'application/rtf') return '.rtf';
+  if (essence === 'application/msword') return '.doc';
+  if (essence === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document') {
+    return '.docx';
+  }
+  return '';
+};
+
+const ensureFilenameHasExtension = (filename: string, mimeType: string): string => {
+  const extension = extensionFromMimeType(mimeType);
+  if (!extension || filename.toLowerCase().endsWith(extension)) return filename;
+  if (/\.[a-z0-9]{1,8}$/i.test(filename)) return filename;
+  return `${filename}${extension}`;
+};
+
+const sanitizeZipSegment = (value: unknown, fallback: string): string => {
+  const sanitized = sanitizeProviderApplicantDocumentFilename(value, fallback)
+    .replace(/[^a-z0-9._ -]+/gi, '_')
+    .replace(/\s+/g, ' ')
+    .trim();
+  return sanitized || fallback;
+};
+
+const buildProviderApplicantExportFilename = (applicant: any): string => {
+  const name = `${applicant.firstName || ''} ${applicant.lastName || ''}`.trim() ||
+    applicant.email ||
+    applicant.id ||
+    'provider-submission';
+  const slug = sanitizeZipSegment(name, 'provider-submission')
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '') || 'provider-submission';
+  return `${slug}-provider-submission.zip`;
+};
+
+const buildProviderApplicantExportJson = (
+  applicant: any,
+  documents: ValidatedProviderApplicantDocument[]
+): string =>
+  JSON.stringify(
+    {
+      exportedAt: new Date().toISOString(),
+      submission: {
+        id: applicant.id,
+        userId: applicant.userId,
+        email: applicant.email,
+        firstName: applicant.firstName,
+        lastName: applicant.lastName,
+        phone: applicant.phone || null,
+        communicationPreference: applicant.communicationPreference || null,
+        providerCategory: applicant.providerCategory,
+        organizationName: applicant.organizationName || null,
+        professionalTitle: applicant.professionalTitle || null,
+        website: applicant.website || null,
+        socialLinks: applicant.socialLinks || [],
+        serviceArea: applicant.serviceArea || null,
+        availabilityMode: applicant.availabilityMode || null,
+        servicesOffered: applicant.servicesOffered || [],
+        targetAudience: applicant.targetAudience || null,
+        populationsServed: applicant.populationsServed || [],
+        experienceLevel: applicant.experienceLevel || null,
+        yearsExperience: applicant.yearsExperience ?? null,
+        practiceStatus: applicant.practiceStatus || null,
+        availabilityToServe: applicant.availabilityToServe || null,
+        credentialsText: applicant.credentialsText || null,
+        licenseNumber: applicant.licenseNumber || null,
+        issuingOrganization: applicant.issuingOrganization || null,
+        credentialExpiration: applicant.credentialExpiration || null,
+        professionalReferences: applicant.professionalReferences || null,
+        alignmentAnswers: applicant.alignmentAnswers || {},
+        integrityConsents: applicant.integrityConsents || {},
+        consentAudit: applicant.consentAudit || null,
+        status: applicant.status,
+        adminNotes: applicant.adminNotes || null,
+        submittedAt: applicant.submittedAt || null,
+        reviewedAt: applicant.reviewedAt || null,
+        calendlyShownAt: applicant.calendlyShownAt || null,
+        createdAt: applicant.createdAt || null,
+        updatedAt: applicant.updatedAt || null,
+      },
+      documents: documents.map((document) => ({
+        type: document.documentType,
+        label: document.label,
+        originalName: document.originalName,
+        mimeType: document.mimeType,
+        sizeBytes: document.sizeBytes,
+        archivePath: `documents/${document.documentType}/${ensureFilenameHasExtension(document.originalName, document.mimeType)}`,
+      })),
+    },
+    null,
+    2
+  );
+
+const buildProviderApplicantExportText = (
+  applicant: any,
+  documents: ValidatedProviderApplicantDocument[]
+): string => {
+  const lines = [
+    'Provider Submission Export',
+    '',
+    `Applicant: ${`${applicant.firstName || ''} ${applicant.lastName || ''}`.trim() || 'Unknown'}`,
+    `Email: ${applicant.email || 'Not provided'}`,
+    `Category: ${applicant.providerCategory || 'Not provided'}`,
+    `Status: ${formatApplicantStatus(applicant.status)}`,
+    `Submitted: ${applicant.submittedAt || 'Unknown'}`,
+    '',
+    'Professional Summary',
+    `Title: ${applicant.professionalTitle || 'Not provided'}`,
+    `Organization: ${applicant.organizationName || 'Not provided'}`,
+    `Service Area: ${applicant.serviceArea || 'Not provided'}`,
+    `Website: ${applicant.website || 'Not provided'}`,
+    '',
+    'Credentials',
+    applicant.credentialsText || 'Not provided',
+    '',
+    'Documents',
+    ...documents.map(
+      (document) =>
+        `${document.label}: documents/${document.documentType}/${ensureFilenameHasExtension(document.originalName, document.mimeType)}`
+    ),
+    '',
+    'Admin Notes',
+    applicant.adminNotes || 'None',
+  ];
+  return `${lines.join('\n')}\n`;
 };
 
 router.use(requireCanonicalIdentity);
@@ -1578,7 +1829,7 @@ router.get('/provider-applicants', async (req: Request, res: Response): Promise<
   res.json({
     success: true,
     statuses: PROVIDER_APPLICANT_STATUSES,
-    applicants,
+    applicants: applicants.map(toAdminProviderApplicantRecord),
   });
 });
 
@@ -1607,21 +1858,8 @@ router.get(
       return;
     }
 
-    const fileRef = getProviderApplicantDocumentRef(applicant, documentType);
-    if (!fileRef) {
-      res.status(404).json({ error: 'Provider applicant document not found' });
-      return;
-    }
-
-    const objectKey = String(fileRef.objectKey || '').trim();
-    const metadata = getUploadObjectAccessMetadata(objectKey);
-    if (
-      !metadata ||
-      metadata.storageProvider !== 'postgres_large_object' ||
-      metadata.access !== 'private' ||
-      metadata.ownerUserId !== String(applicant.userId || '').trim() ||
-      metadata.category !== PROVIDER_APPLICATION_UPLOAD_CATEGORY
-    ) {
+    const validation = validateProviderApplicantDocument(applicant, documentType);
+    if (validation.ok === false) {
       recordAuditEvent(req, {
         domain: 'admin',
         action: 'provider_applicant_document_view',
@@ -1632,30 +1870,27 @@ router.get(
         metadata: {
           applicantId: applicant.id,
           documentType,
-          reason: 'upload_object_metadata_mismatch',
+          reason: validation.reason,
         },
       });
-      res.status(404).json({ error: 'Provider applicant document not found' });
+      res.status(validation.statusCode).json({ error: validation.error });
       return;
     }
+    const { document } = validation;
 
     try {
-      const resolved = await resolveUploadObjectByKey(objectKey);
+      const resolved = await resolveUploadObjectByKey(document.objectKey);
       if (!resolved) {
         res.status(404).json({ error: 'Provider applicant document not found' });
         return;
       }
 
-      const mimeType = normalizeDocumentMimeType(fileRef.mimeType || resolved.mimeType);
+      const mimeType = normalizeDocumentMimeType(document.mimeType || resolved.mimeType);
       const finalDisposition =
         requestedDisposition === 'inline' && canInlineProviderApplicantDocument(mimeType)
           ? 'inline'
           : 'attachment';
-      const fallbackFilename = documentType === 'resume' ? 'resume' : 'cover-letter';
-      const originalName = sanitizeProviderApplicantDocumentFilename(
-        fileRef.originalName || resolved.originalName,
-        fallbackFilename
-      );
+      const originalName = document.originalName;
 
       res.setHeader('Content-Type', mimeType);
       res.setHeader(
@@ -1697,6 +1932,108 @@ router.get(
   }
 );
 
+router.get('/provider-applicants/:id/export', async (req: Request, res: Response): Promise<void> => {
+  const actorUserId = getAuthenticatedUserId(req);
+  const id = String(req.params.id || '').trim();
+  const applicant = await getProviderApplicantById(id);
+  if (!applicant) {
+    res.status(404).json({ error: 'Provider applicant not found' });
+    return;
+  }
+
+  const validation = validateRequiredProviderApplicantDocuments(applicant);
+  if (validation.ok === false) {
+    recordAuditEvent(req, {
+      domain: 'admin',
+      action: 'provider_applicant_export',
+      outcome: 'deny',
+      actorUserId,
+      targetUserId: applicant.userId,
+      statusCode: 409,
+      metadata: {
+        applicantId: applicant.id,
+        documentType: validation.documentType,
+        reason: validation.reason,
+      },
+    });
+    res.status(409).json({
+      error: 'Provider applicant export cannot be created until document references are valid',
+    });
+    return;
+  }
+
+  try {
+    const resolvedDocuments = [];
+    for (const document of validation.documents) {
+      const resolved = await resolveUploadObjectByKey(document.objectKey);
+      if (!resolved) {
+        res.status(404).json({
+          error: `${document.label} file could not be found for this provider applicant`,
+        });
+        return;
+      }
+      resolvedDocuments.push({ document, resolved });
+    }
+
+    const entries: ZipArchiveEntry[] = [
+      {
+        path: 'submission.json',
+        data: buildProviderApplicantExportJson(applicant, validation.documents),
+        modifiedAt: applicant.updatedAt || applicant.submittedAt,
+      },
+      {
+        path: 'submission.txt',
+        data: buildProviderApplicantExportText(applicant, validation.documents),
+        modifiedAt: applicant.updatedAt || applicant.submittedAt,
+      },
+      ...resolvedDocuments.map(({ document, resolved }) => ({
+        path: `documents/${document.documentType}/${sanitizeZipSegment(
+          ensureFilenameHasExtension(document.originalName, document.mimeType),
+          `${document.documentType}${extensionFromMimeType(document.mimeType)}`
+        )}`,
+        data: resolved.buffer,
+        modifiedAt: applicant.updatedAt || applicant.submittedAt,
+      })),
+    ];
+    const archive = buildZipArchive(entries);
+    const exportFilename = buildProviderApplicantExportFilename(applicant);
+
+    res.setHeader('Content-Type', 'application/zip');
+    res.setHeader(
+      'Content-Disposition',
+      buildProviderApplicantDocumentDisposition('attachment', exportFilename)
+    );
+    res.setHeader('Cache-Control', 'private, no-store');
+    res.setHeader('X-Content-Type-Options', 'nosniff');
+    res.setHeader('Content-Length', String(archive.length));
+
+    recordAuditEvent(req, {
+      domain: 'admin',
+      action: 'provider_applicant_export',
+      outcome: 'success',
+      actorUserId,
+      targetUserId: applicant.userId,
+      statusCode: 200,
+      metadata: {
+        applicantId: applicant.id,
+        documents: validation.documents.map((document) => document.documentType),
+      },
+    });
+
+    res.send(archive);
+  } catch (error) {
+    const code = (error as Error & { code?: string })?.code;
+    if (code === 'STORE_UNAVAILABLE') {
+      res.status(503).json({
+        error: 'Upload storage is temporarily unavailable. Retry shortly.',
+      });
+      return;
+    }
+    console.error('[Admin] provider applicant export failed', error);
+    res.status(500).json({ error: 'Failed to create provider applicant export' });
+  }
+});
+
 router.get('/provider-applicants/:id', async (req: Request, res: Response): Promise<void> => {
   const actorUserId = getAuthenticatedUserId(req);
   const id = String(req.params.id || '').trim();
@@ -1716,7 +2053,93 @@ router.get('/provider-applicants/:id', async (req: Request, res: Response): Prom
     metadata: { applicantId: applicant.id, status: applicant.status },
   });
 
-  res.json({ success: true, applicant });
+  res.json({ success: true, applicant: toAdminProviderApplicantRecord(applicant) });
+});
+
+router.delete('/provider-applicants/:id', async (req: Request, res: Response): Promise<void> => {
+  const actorUserId = getAuthenticatedUserId(req);
+  const id = String(req.params.id || '').trim();
+  const confirm = String(req.body?.confirm || '').trim();
+  if (confirm !== PROVIDER_APPLICANT_DELETE_CONFIRMATION) {
+    res.status(400).json({
+      error: `Deletion requires confirm="${PROVIDER_APPLICANT_DELETE_CONFIRMATION}"`,
+    });
+    return;
+  }
+
+  const applicant = await getProviderApplicantById(id);
+  if (!applicant) {
+    res.status(404).json({ error: 'Provider applicant not found' });
+    return;
+  }
+
+  const validation = validateRequiredProviderApplicantDocuments(applicant);
+  if (validation.ok === false) {
+    recordAuditEvent(req, {
+      domain: 'admin',
+      action: 'provider_applicant_delete',
+      outcome: 'deny',
+      actorUserId,
+      targetUserId: applicant.userId,
+      statusCode: 409,
+      metadata: {
+        applicantId: applicant.id,
+        documentType: validation.documentType,
+        reason: validation.reason,
+      },
+    });
+    res.status(409).json({
+      error: 'Provider applicant cannot be deleted until document references are valid',
+    });
+    return;
+  }
+
+  try {
+    const documentResults = [];
+    for (const document of validation.documents) {
+      const deleted = await deleteUploadObjectByKey(document.objectKey);
+      documentResults.push({
+        documentType: document.documentType,
+        originalName: document.originalName,
+        deleted,
+      });
+    }
+
+    const deletedApplicant = await deleteProviderApplicantById(id);
+    if (!deletedApplicant) {
+      res.status(404).json({ error: 'Provider applicant not found' });
+      return;
+    }
+
+    recordAuditEvent(req, {
+      domain: 'admin',
+      action: 'provider_applicant_delete',
+      outcome: 'success',
+      actorUserId,
+      targetUserId: applicant.userId,
+      statusCode: 200,
+      metadata: {
+        applicantId: applicant.id,
+        documents: documentResults,
+      },
+    });
+
+    res.json({
+      success: true,
+      deletedApplicantId: deletedApplicant.id,
+      deletedDocuments: documentResults,
+    });
+  } catch (error) {
+    const code = (error as Error & { code?: string })?.code;
+    if (code === 'STORE_UNAVAILABLE') {
+      res.status(503).json({
+        error: 'Upload storage is temporarily unavailable. Retry shortly.',
+      });
+      return;
+    }
+    console.error('[Admin] provider applicant delete failed', error);
+    res.status(500).json({ error: 'Failed to delete provider applicant' });
+  }
 });
 
 router.patch('/provider-applicants/:id', async (req: Request, res: Response): Promise<void> => {
@@ -1861,7 +2284,7 @@ router.patch('/provider-applicants/:id', async (req: Request, res: Response): Pr
 
   res.json({
     success: true,
-    applicant: updated,
+    applicant: toAdminProviderApplicantRecord(updated),
     communication: {
       emailConfigured: emailService.configured(),
       emailAttempted: shouldSendStatusEmail,

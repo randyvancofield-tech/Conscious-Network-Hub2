@@ -17,12 +17,25 @@ const mockLocalStore = {
 };
 
 const mockGetProviderApplicantById = jest.fn(async (id: string) => mockApplicants.get(id) || null);
+const mockListProviderApplicants = jest.fn(async () => Array.from(mockApplicants.values()));
+const mockDeleteProviderApplicantById = jest.fn(async (id: string) => {
+  const applicant = mockApplicants.get(id) || null;
+  if (applicant) {
+    mockApplicants.delete(id);
+  }
+  return applicant;
+});
 const mockResolveUploadObjectByKey = jest.fn(async (objectKey: string) =>
   mockUploadObjects.get(objectKey) || null
 );
 const mockGetUploadObjectAccessMetadata = jest.fn((objectKey: string) =>
   mockUploadMetadata.get(objectKey) || null
 );
+const mockDeleteUploadObjectByKey = jest.fn(async (objectKey: string) => {
+  const existed = mockUploadObjects.delete(objectKey);
+  mockUploadMetadata.delete(objectKey);
+  return existed;
+});
 
 jest.mock('../services/persistenceStore', () => ({
   localStore: mockLocalStore,
@@ -41,13 +54,14 @@ jest.mock('../services/providerApplicantStore', () => ({
     'rejected',
     'needs_more_info',
   ],
+  deleteProviderApplicantById: mockDeleteProviderApplicantById,
   getProviderApplicantById: mockGetProviderApplicantById,
-  listProviderApplicants: jest.fn(async () => []),
+  listProviderApplicants: mockListProviderApplicants,
   updateProviderApplicantReview: jest.fn(async () => null),
 }));
 
 jest.mock('../services/uploadBlobStore', () => ({
-  deleteUploadObjectByKey: jest.fn(async () => false),
+  deleteUploadObjectByKey: mockDeleteUploadObjectByKey,
   getUploadObjectAccessMetadata: mockGetUploadObjectAccessMetadata,
   resolveUploadObjectByKey: mockResolveUploadObjectByKey,
 }));
@@ -77,10 +91,12 @@ const memberUser = {
   providerRevokedAt: null,
 };
 
-const requestDocument = async (options: {
+const requestAdmin = async (options: {
   path: string;
+  method?: 'GET' | 'DELETE';
   token?: string;
   elevationToken?: string;
+  body?: Record<string, unknown>;
 }): Promise<{
   status: number;
   headers: Headers;
@@ -90,10 +106,12 @@ const requestDocument = async (options: {
   const headers: Record<string, string> = {};
   if (options.token) headers.Authorization = `Bearer ${options.token}`;
   if (options.elevationToken) headers['X-Admin-Elevation-Token'] = options.elevationToken;
+  if (options.body) headers['Content-Type'] = 'application/json';
 
   const response = await fetch(`${baseUrl}${options.path}`, {
-    method: 'GET',
+    method: options.method || 'GET',
     headers,
+    body: options.body ? JSON.stringify(options.body) : undefined,
   });
   const bodyBuffer = Buffer.from(await response.arrayBuffer());
   return {
@@ -104,6 +122,31 @@ const requestDocument = async (options: {
   };
 };
 
+const requestDocument = requestAdmin;
+
+const readZipEntries = (archive: Buffer): Map<string, Buffer> => {
+  const entries = new Map<string, Buffer>();
+  let offset = 0;
+
+  while (offset + 30 <= archive.length && archive.readUInt32LE(offset) === 0x04034b50) {
+    const compressionMethod = archive.readUInt16LE(offset + 8);
+    const compressedSize = archive.readUInt32LE(offset + 18);
+    const filenameLength = archive.readUInt16LE(offset + 26);
+    const extraLength = archive.readUInt16LE(offset + 28);
+    expect(compressionMethod).toBe(0);
+
+    const filenameStart = offset + 30;
+    const filenameEnd = filenameStart + filenameLength;
+    const dataStart = filenameEnd + extraLength;
+    const dataEnd = dataStart + compressedSize;
+    const filename = archive.subarray(filenameStart, filenameEnd).toString('utf8');
+    entries.set(filename, archive.subarray(dataStart, dataEnd));
+    offset = dataEnd;
+  }
+
+  return entries;
+};
+
 const adminToken = (): string => createSessionToken(founderAdmin.id).token;
 const adminElevationToken = (): string => createAdminElevationToken(founderAdmin.id).token;
 
@@ -112,6 +155,9 @@ const registerDefaultApplicant = (overrides: Record<string, unknown> = {}): void
     id: 'applicant-1',
     userId: 'applicant-user-1',
     email: 'applicant@example.com',
+    firstName: 'Randy',
+    lastName: 'Cofield',
+    providerCategory: 'wellness',
     status: 'submitted',
     resumeFile: {
       originalName: 'Randy Resume.pdf',
@@ -202,8 +248,11 @@ describe('admin provider applicant document access', () => {
     mockUploadMetadata.clear();
     mockUploadObjects.clear();
     mockGetProviderApplicantById.mockClear();
+    mockListProviderApplicants.mockClear();
+    mockDeleteProviderApplicantById.mockClear();
     mockResolveUploadObjectByKey.mockClear();
     mockGetUploadObjectAccessMetadata.mockClear();
+    mockDeleteUploadObjectByKey.mockClear();
     mockUsers.set(founderAdmin.id, founderAdmin);
     mockUsers.set(memberUser.id, memberUser);
     registerDefaultApplicant();
@@ -353,5 +402,147 @@ describe('admin provider applicant document access', () => {
     expect(response.headers.get('Content-Disposition')).toContain('attachment');
     expect(response.headers.get('Content-Disposition')).toContain('filename="Cover Letter.docx"');
     expect(response.bodyBuffer.toString('utf8')).toBe('docx bytes');
+  });
+
+  it('does not expose private upload object keys or URLs in applicant API responses', async () => {
+    const listResponse = await requestAdmin({
+      path: '/api/admin/provider-applicants',
+      token: adminToken(),
+      elevationToken: adminElevationToken(),
+    });
+    const detailResponse = await requestAdmin({
+      path: '/api/admin/provider-applicants/applicant-1',
+      token: adminToken(),
+      elevationToken: adminElevationToken(),
+    });
+
+    expect(listResponse.status).toBe(200);
+    expect(detailResponse.status).toBe(200);
+    expect(listResponse.bodyText).not.toContain('resume-key');
+    expect(listResponse.bodyText).not.toContain('cover-key');
+    expect(listResponse.bodyText).not.toContain('example.invalid');
+    expect(detailResponse.bodyText).not.toContain('resume-key');
+    expect(detailResponse.bodyText).not.toContain('cover-key');
+    expect(detailResponse.bodyText).not.toContain('example.invalid');
+
+    const parsed = JSON.parse(detailResponse.bodyText) as { applicant: any };
+    expect(parsed.applicant.resumeFile).toEqual({
+      originalName: 'Randy Resume.pdf',
+      mimeType: 'application/pdf',
+      sizeBytes: 20,
+      storageProvider: 'postgres_large_object',
+    });
+    expect(parsed.applicant.coverLetterFile).toEqual({
+      originalName: 'Cover Letter.docx',
+      mimeType: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+      sizeBytes: 12,
+      storageProvider: 'postgres_large_object',
+    });
+  });
+
+  it('requires active admin elevation for provider submission export', async () => {
+    const response = await requestAdmin({
+      path: '/api/admin/provider-applicants/applicant-1/export',
+      token: adminToken(),
+    });
+
+    expect(response.status).toBe(403);
+    expect(response.bodyText).toContain('Admin elevation required');
+  });
+
+  it('exports submission data and uploaded documents in a private zip attachment', async () => {
+    const response = await requestAdmin({
+      path: '/api/admin/provider-applicants/applicant-1/export',
+      token: adminToken(),
+      elevationToken: adminElevationToken(),
+    });
+
+    expect(response.status).toBe(200);
+    expect(response.headers.get('Content-Type')).toContain('application/zip');
+    expect(response.headers.get('Cache-Control')).toBe('private, no-store');
+    expect(response.headers.get('X-Content-Type-Options')).toBe('nosniff');
+    expect(response.headers.get('Content-Disposition')).toContain('attachment');
+    expect(response.headers.get('Content-Disposition')).toContain('filename="randy-cofield-provider-submission.zip"');
+
+    const entries = readZipEntries(response.bodyBuffer);
+    expect(Array.from(entries.keys()).sort()).toEqual([
+      'documents/cover-letter/Cover Letter.docx',
+      'documents/resume/Randy Resume.pdf',
+      'submission.json',
+      'submission.txt',
+    ]);
+    expect(entries.get('documents/resume/Randy Resume.pdf')?.toString('utf8')).toBe(
+      '%PDF applicant resume'
+    );
+    expect(entries.get('documents/cover-letter/Cover Letter.docx')?.toString('utf8')).toBe(
+      'docx bytes'
+    );
+
+    const submissionJson = JSON.parse(String(entries.get('submission.json') || '{}')) as any;
+    expect(submissionJson.submission.id).toBe('applicant-1');
+    expect(submissionJson.documents).toContainEqual(
+      expect.objectContaining({
+        type: 'resume',
+        originalName: 'Randy Resume.pdf',
+      })
+    );
+    expect(JSON.stringify(submissionJson)).not.toContain('resume-key');
+    expect(JSON.stringify(submissionJson)).not.toContain('example.invalid');
+  });
+
+  it('does not export when a required document reference is missing', async () => {
+    registerDefaultApplicant({ resumeFile: null });
+
+    const response = await requestAdmin({
+      path: '/api/admin/provider-applicants/applicant-1/export',
+      token: adminToken(),
+      elevationToken: adminElevationToken(),
+    });
+
+    expect(response.status).toBe(409);
+    expect(response.bodyText).toContain(
+      'Provider applicant export cannot be created until document references are valid'
+    );
+    expect(mockResolveUploadObjectByKey).not.toHaveBeenCalled();
+  });
+
+  it('requires deliberate confirmation before deleting a provider submission', async () => {
+    const response = await requestAdmin({
+      path: '/api/admin/provider-applicants/applicant-1',
+      method: 'DELETE',
+      token: adminToken(),
+      elevationToken: adminElevationToken(),
+      body: { confirm: 'DELETE' },
+    });
+
+    expect(response.status).toBe(400);
+    expect(response.bodyText).toContain('DELETE PROVIDER SUBMISSION');
+    expect(mockDeleteProviderApplicantById).not.toHaveBeenCalled();
+    expect(mockApplicants.has('applicant-1')).toBe(true);
+  });
+
+  it('deletes a confirmed provider submission and its applicant-owned documents', async () => {
+    const response = await requestAdmin({
+      path: '/api/admin/provider-applicants/applicant-1',
+      method: 'DELETE',
+      token: adminToken(),
+      elevationToken: adminElevationToken(),
+      body: { confirm: 'DELETE PROVIDER SUBMISSION' },
+    });
+
+    expect(response.status).toBe(200);
+    expect(mockDeleteUploadObjectByKey).toHaveBeenCalledWith('resume-key');
+    expect(mockDeleteUploadObjectByKey).toHaveBeenCalledWith('cover-key');
+    expect(mockDeleteProviderApplicantById).toHaveBeenCalledWith('applicant-1');
+    expect(mockApplicants.has('applicant-1')).toBe(false);
+    expect(mockUploadObjects.has('resume-key')).toBe(false);
+    expect(mockUploadObjects.has('cover-key')).toBe(false);
+
+    const parsed = JSON.parse(response.bodyText) as any;
+    expect(parsed.deletedApplicantId).toBe('applicant-1');
+    expect(parsed.deletedDocuments).toEqual([
+      { documentType: 'resume', originalName: 'Randy Resume.pdf', deleted: true },
+      { documentType: 'cover-letter', originalName: 'Cover Letter.docx', deleted: true },
+    ]);
   });
 });
