@@ -55,6 +55,11 @@ import {
   getUploadObjectAccessMetadata,
   resolveUploadObjectByKey,
 } from '../services/uploadBlobStore';
+import {
+  absolutizeBackendUrl,
+  buildBackendUploadObjectUrl,
+  extractUploadObjectKeyFromUrl,
+} from '../services/publicUrl';
 import { buildZipArchive, type ZipArchiveEntry } from '../services/zipArchive';
 import { revokeUserSessionsByUserId } from '../services/userSessionStore';
 import { hasTierAccess, TIER_VALUES, type TierValue } from '../tierPolicy';
@@ -303,21 +308,84 @@ const cleanupSocialPostMedia = async (post: SocialPostRecord): Promise<number> =
   return cleanupKeys.size;
 };
 
+const canonicalUploadObjectUrl = (req: Request, objectKey: string | null): string | null => {
+  if (!objectKey) return null;
+  const metadata = getUploadObjectAccessMetadata(objectKey);
+  if (!metadata) return null;
+  if (metadata.access === 'public') {
+    return buildBackendUploadObjectUrl(req, objectKey, 'public');
+  }
+  if (metadata.access === 'private') {
+    return buildBackendUploadObjectUrl(req, objectKey, 'private');
+  }
+  return null;
+};
+
+const absolutizeUploadAwareUrl = (
+  req: Request,
+  value: unknown,
+  objectKey?: unknown
+): string | null => {
+  const resolvedObjectKey =
+    extractUploadObjectKeyFromUrl(typeof objectKey === 'string' ? objectKey : null) ||
+    extractUploadObjectKeyFromUrl(typeof value === 'string' ? value : null);
+  return (
+    canonicalUploadObjectUrl(req, resolvedObjectKey) ||
+    absolutizeBackendUrl(req, typeof value === 'string' ? value : null) ||
+    null
+  );
+};
+
+const authorAvatarMediaForAdmin = (req: Request, author?: LocalUserRecord | null) => {
+  const avatar = author?.profileMedia?.avatar && typeof author.profileMedia.avatar === 'object'
+    ? author.profileMedia.avatar
+    : null;
+  const avatarRecord = avatar as Record<string, unknown> | null;
+  const objectKey = avatar?.objectKey || null;
+  return {
+    url: absolutizeUploadAwareUrl(req, avatar?.url || author?.avatarUrl, objectKey),
+    storageProvider:
+      typeof avatar?.storageProvider === 'string'
+        ? avatar.storageProvider.trim() || null
+        : null,
+    objectKey:
+      typeof objectKey === 'string'
+        ? objectKey.trim() || null
+        : null,
+    mimeType:
+      typeof avatar?.mimeType === 'string'
+        ? avatar.mimeType.trim().toLowerCase() || null
+        : null,
+    mediaType:
+      typeof avatarRecord?.mediaType === 'string'
+        ? avatarRecord.mediaType.trim().toLowerCase() || null
+        : null,
+  };
+};
+
 const toAdminSocialPostSummary = (
+  req: Request,
   post: SocialPostRecord,
   author?: LocalUserRecord | null
-) => ({
-  id: post.id,
-  authorId: post.authorId,
-  authorName: author?.name || author?.handle || author?.email || 'Unknown user',
-  authorEmail: author?.email || null,
-  text: post.text,
-  visibility: post.visibility,
-  mediaCount: post.media.length,
-  likeCount: post.likeCount,
-  createdAt: post.createdAt,
-  updatedAt: post.updatedAt,
-});
+) => {
+  const authorAvatarMedia = authorAvatarMediaForAdmin(req, author);
+  return {
+    id: post.id,
+    authorId: post.authorId,
+    authorName: author?.name || author?.handle || author?.email || 'Unknown user',
+    authorEmail: author?.email || null,
+    authorRole: author?.role || null,
+    authorTier: author?.tier || null,
+    authorAvatarUrl: authorAvatarMedia.url,
+    authorAvatarMedia,
+    text: post.text,
+    visibility: post.visibility,
+    mediaCount: post.media.length,
+    likeCount: post.likeCount,
+    createdAt: post.createdAt,
+    updatedAt: post.updatedAt,
+  };
+};
 
 const courseTierToMembershipTier = (courseTier: unknown): TierValue => {
   const normalized = String(courseTier || '').trim().toLowerCase();
@@ -1102,7 +1170,7 @@ router.get('/dashboard', async (req: Request, res: Response): Promise<void> => {
     },
     recentUsers: users.slice(0, 500).map(toAdminUserSummary),
     recentSocialPosts: recentSocialPosts.map((post) =>
-      toAdminSocialPostSummary(post, userById.get(post.authorId))
+      toAdminSocialPostSummary(req, post, userById.get(post.authorId))
     ),
     courseGovernance,
     adminInbox: {
@@ -1539,7 +1607,7 @@ router.post('/social/posts/:postId/hide', async (req: Request, res: Response): P
 
   res.json({
     success: true,
-    post: toAdminSocialPostSummary(updated, author),
+    post: toAdminSocialPostSummary(req, updated, author),
   });
 });
 

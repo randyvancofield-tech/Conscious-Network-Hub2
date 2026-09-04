@@ -15,8 +15,20 @@ interface MockUser {
   avatarUrl: string | null;
   bannerUrl: string | null;
   profileMedia: {
-    avatar: { url: string | null; storageProvider: string | null; objectKey: string | null };
-    cover: { url: string | null; storageProvider: string | null; objectKey: string | null };
+    avatar: {
+      url: string | null;
+      storageProvider: string | null;
+      objectKey: string | null;
+      mimeType?: string | null;
+      mediaType?: string | null;
+    };
+    cover: {
+      url: string | null;
+      storageProvider: string | null;
+      objectKey: string | null;
+      mimeType?: string | null;
+      mediaType?: string | null;
+    };
   };
   interests: string[];
   twitterUrl: string | null;
@@ -34,6 +46,9 @@ interface MockUser {
   subscriptionStatus: string;
   subscriptionStartDate: Date | null;
   subscriptionEndDate: Date | null;
+  providerApproved: boolean;
+  providerApprovalStatus: string | null;
+  providerRevokedAt: Date | null;
   profileBackgroundVideo: string | null;
   phoneNumber: string | null;
   twoFactorMethod: TwoFactorMethod;
@@ -73,6 +88,7 @@ const cloneUser = (user: MockUser): MockUser => ({
   },
   subscriptionStartDate: cloneDate(user.subscriptionStartDate),
   subscriptionEndDate: cloneDate(user.subscriptionEndDate),
+  providerRevokedAt: cloneDate(user.providerRevokedAt),
   pendingPhoneOtpExpiresAt: cloneDate(user.pendingPhoneOtpExpiresAt),
   initialTwoFactorRequiredAt: cloneDate(user.initialTwoFactorRequiredAt),
   initialTwoFactorCompletedAt: cloneDate(user.initialTwoFactorCompletedAt),
@@ -120,6 +136,9 @@ const createMockUser = (
     subscriptionStatus: 'inactive',
     subscriptionStartDate: null,
     subscriptionEndDate: null,
+    providerApproved: false,
+    providerApprovalStatus: null,
+    providerRevokedAt: null,
     profileBackgroundVideo: null,
     phoneNumber: null,
     twoFactorMethod: 'none',
@@ -425,6 +444,103 @@ describe('Phase 4 integration boundaries', () => {
     resetState();
     users.set('viewer', createMockUser('viewer', 'viewer@example.com', { name: 'Viewer' }));
     users.set('target', createMockUser('target', 'target@example.com', { name: 'Target' }));
+  });
+
+  it('includes normalized author avatar media for user, provider, and admin social posts', async () => {
+    users.set('provider', createMockUser('provider', 'provider@example.com', {
+      name: 'Provider Poster',
+      role: 'provider',
+      tier: 'Provider',
+      providerApproved: true,
+      providerApprovalStatus: 'approved',
+      providerRevokedAt: null,
+      avatarUrl: '/uploads/object/provider-avatar-fallback',
+      profileMedia: {
+        avatar: {
+          url: '/uploads/object/provider-avatar-key',
+          storageProvider: 'local',
+          objectKey: 'provider-avatar-key',
+          mimeType: 'video/mp4',
+          mediaType: 'video',
+        },
+        cover: { url: null, storageProvider: null, objectKey: null },
+      },
+    }));
+    users.set('admin', createMockUser('admin', 'admin@example.com', {
+      name: 'Admin Poster',
+      role: 'admin',
+      tier: 'Admin',
+      avatarUrl: 'https://cdn.example.test/admin-avatar.png',
+      profileMedia: {
+        avatar: {
+          url: 'https://cdn.example.test/admin-avatar.png',
+          storageProvider: 'external',
+          objectKey: null,
+          mimeType: 'image/png',
+          mediaType: 'image',
+        },
+        cover: { url: null, storageProvider: null, objectKey: null },
+      },
+    }));
+    users.set('viewer', createMockUser('viewer', 'viewer@example.com', {
+      name: 'Viewer',
+      profileMedia: {
+        avatar: {
+          url: '/uploads/object/viewer-avatar-key',
+          storageProvider: 'local',
+          objectKey: 'viewer-avatar-key',
+          mimeType: 'image/gif',
+          mediaType: 'image',
+        },
+        cover: { url: null, storageProvider: null, objectKey: null },
+      },
+    }));
+
+    for (const authorId of ['viewer', 'provider', 'admin']) {
+      const createdPost = await requestJson({
+        method: 'POST',
+        path: '/api/social/posts',
+        token: tokenFor(authorId),
+        body: {
+          text: `${authorId} public update`,
+          visibility: 'public',
+        },
+      });
+      expect(createdPost.status).toBe(200);
+      expect(createdPost.body?.post?.authorAvatarMedia?.url).toBeTruthy();
+    }
+
+    const feedResponse = await requestJson({
+      method: 'GET',
+      path: '/api/social/newsfeed?limit=10',
+      token: tokenFor('viewer'),
+    });
+
+    expect(feedResponse.status).toBe(200);
+    const postsByAuthorId = new Map<string, any>(
+      (feedResponse.body?.posts || []).map((post: any) => [post.authorId, post])
+    );
+
+    expect(postsByAuthorId.get('viewer')?.authorAvatarMedia).toMatchObject({
+      objectKey: 'viewer-avatar-key',
+      storageProvider: 'local',
+      mimeType: 'image/gif',
+      mediaType: 'image',
+    });
+    expect(postsByAuthorId.get('provider')?.authorAvatarMedia).toMatchObject({
+      objectKey: 'provider-avatar-key',
+      storageProvider: 'local',
+      mimeType: 'video/mp4',
+      mediaType: 'video',
+    });
+    expect(postsByAuthorId.get('provider')?.authorRole).toBe('provider');
+    expect(postsByAuthorId.get('admin')?.authorAvatarMedia).toMatchObject({
+      url: 'https://cdn.example.test/admin-avatar.png',
+      storageProvider: 'external',
+      mimeType: 'image/png',
+      mediaType: 'image',
+    });
+    expect(postsByAuthorId.get('admin')?.authorRole).toBe('admin');
   });
 
   it('enforces privacy block boundaries in social profile access', async () => {

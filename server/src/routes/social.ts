@@ -84,6 +84,38 @@ const enrichPostMediaForResponse = (req: Request, media: unknown) =>
       }))
     : [];
 
+const authorAvatarMediaForResponse = (req: Request, author: any) => {
+  const avatar = author?.profileMedia?.avatar && typeof author.profileMedia.avatar === 'object'
+    ? author.profileMedia.avatar
+    : null;
+  const objectKey = avatar?.objectKey || author?.profileMedia?.avatar?.objectKey;
+  const url = absolutizeUploadAwareUrl(
+    req,
+    avatar?.url || author?.avatarUrl,
+    objectKey
+  );
+
+  return {
+    url,
+    storageProvider:
+      typeof avatar?.storageProvider === 'string'
+        ? avatar.storageProvider.trim() || null
+        : null,
+    objectKey:
+      typeof objectKey === 'string'
+        ? objectKey.trim() || null
+        : null,
+    mimeType:
+      typeof avatar?.mimeType === 'string'
+        ? avatar.mimeType.trim().toLowerCase() || null
+        : null,
+    mediaType:
+      typeof avatar?.mediaType === 'string'
+        ? avatar.mediaType.trim().toLowerCase() || null
+        : null,
+  };
+};
+
 const normalizePostVisibility = (value: unknown): SocialPostVisibility =>
   String(value || '').trim().toLowerCase() === 'private' ? 'private' : 'public';
 
@@ -139,12 +171,18 @@ const validatePostMediaAccess = (
   return null;
 };
 
-const enrichPostForResponse = (req: Request, post: SocialPostRecord, author: any) => ({
-  ...post,
-  media: enrichPostMediaForResponse(req, post.media),
-  authorName: author?.name || 'Node',
-  authorAvatarUrl: absolutizeUploadAwareUrl(req, author?.avatarUrl, author?.profileMedia?.avatar?.objectKey),
-});
+const enrichPostForResponse = (req: Request, post: SocialPostRecord, author: any) => {
+  const authorAvatarMedia = authorAvatarMediaForResponse(req, author);
+  return {
+    ...post,
+    media: enrichPostMediaForResponse(req, post.media),
+    authorName: author?.name || 'Node',
+    authorRole: author?.role || null,
+    authorTier: author?.tier || null,
+    authorAvatarUrl: authorAvatarMedia.url,
+    authorAvatarMedia,
+  };
+};
 
 const canViewPostForViewer = async (
   viewerUser: any,
@@ -288,16 +326,7 @@ router.get('/profile/:userId', async (req: Request, res: Response): Promise<any>
   const visiblePosts = posts.filter(
     (post) => post.visibility === 'public' || post.authorId === authUserId || isFollowing || isOwner
   );
-  const enrichedPosts = visiblePosts.map((post) => ({
-    ...post,
-    media: enrichPostMediaForResponse(req, post.media),
-    authorName: targetUser.name || 'Node',
-    authorAvatarUrl: absolutizeUploadAwareUrl(
-      req,
-      targetUser.avatarUrl,
-      targetUser.profileMedia?.avatar?.objectKey
-    ),
-  }));
+  const enrichedPosts = visiblePosts.map((post) => enrichPostForResponse(req, post, targetUser));
 
   return res.json({
     success: true,
@@ -434,16 +463,7 @@ router.post('/posts', validateJsonBody(socialCreatePostSchema), async (req: Requ
       media,
     });
     const author = await localStore.getUserById(authUserId);
-    const enrichedPost = {
-      ...post,
-      media: enrichPostMediaForResponse(req, post.media),
-      authorName: author?.name || 'Node',
-      authorAvatarUrl: absolutizeUploadAwareUrl(
-        req,
-        author?.avatarUrl,
-        author?.profileMedia?.avatar?.objectKey
-      ),
-    };
+    const enrichedPost = enrichPostForResponse(req, post, author);
     recordAuditEvent(req, {
       domain: 'social',
       action: 'post_create',
@@ -686,16 +706,7 @@ router.patch('/posts/:postId', async (req: Request, res: Response): Promise<any>
   const author = await localStore.getUserById(updated.authorId);
   return res.json({
     success: true,
-    post: {
-      ...updated,
-      media: enrichPostMediaForResponse(req, updated.media),
-      authorName: author?.name || 'Node',
-      authorAvatarUrl: absolutizeUploadAwareUrl(
-        req,
-        author?.avatarUrl,
-        author?.profileMedia?.avatar?.objectKey
-      ),
-    },
+    post: enrichPostForResponse(req, updated, author),
   });
 });
 
@@ -934,19 +945,7 @@ router.get('/newsfeed', async (req: Request, res: Response): Promise<any> => {
   });
 
   const paged = visiblePosts.slice(0, limit);
-  const enrichedPosts = paged.map((post) => {
-    const author = usersById.get(post.authorId);
-    return {
-      ...post,
-      media: enrichPostMediaForResponse(req, post.media),
-      authorName: author?.name || 'Node',
-      authorAvatarUrl: absolutizeUploadAwareUrl(
-        req,
-        author?.avatarUrl,
-        author?.profileMedia?.avatar?.objectKey
-      ),
-    };
-  });
+  const enrichedPosts = paged.map((post) => enrichPostForResponse(req, post, usersById.get(post.authorId)));
   return res.json({
     success: true,
     posts: enrichedPosts,

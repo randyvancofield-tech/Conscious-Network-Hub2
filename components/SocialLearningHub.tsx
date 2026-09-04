@@ -93,24 +93,76 @@ const toRelativeTimestamp = (value: string): string => {
 const defaultAvatarUrl = (seed: string): string =>
   `https://api.dicebear.com/7.x/avataaars/svg?seed=${encodeURIComponent(seed || 'node')}`;
 
-const renderAvatarMedia = (media: NormalizedMediaAsset, name: string, className: string) => {
-  if (media.url) {
-    if (isVideoMediaAsset(media)) {
-      return (
-        <video
-          src={media.url}
-          className={className}
-          muted
-          loop
-          autoPlay
-          playsInline
-        />
-      );
-    }
-    return <img src={media.url} className={className} alt={name} />;
+const toInitials = (value: string): string => {
+  const parts = String(value || '')
+    .trim()
+    .split(/\s+/)
+    .filter(Boolean);
+  if (parts.length === 0) return 'N';
+  return parts
+    .slice(0, 2)
+    .map((part) => part.charAt(0).toUpperCase())
+    .join('');
+};
+
+const AvatarMediaFrame: React.FC<{
+  media: NormalizedMediaAsset;
+  name: string;
+  className: string;
+}> = ({ media, name, className }) => {
+  const [failed, setFailed] = useState(false);
+
+  useEffect(() => {
+    setFailed(false);
+  }, [media.url]);
+
+  if (media.url && !failed) {
+    return isVideoMediaAsset(media) ? (
+      <video
+        src={media.url}
+        className={className}
+        muted
+        loop
+        autoPlay
+        playsInline
+        onError={() => setFailed(true)}
+      />
+    ) : (
+      <img
+        src={media.url}
+        className={className}
+        alt={name}
+        onError={(event) => {
+          const fallback = defaultAvatarUrl(name);
+          if (event.currentTarget.src !== fallback) {
+            event.currentTarget.src = fallback;
+            return;
+          }
+          setFailed(true);
+        }}
+      />
+    );
   }
 
-  return <img src={defaultAvatarUrl(name)} className={className} alt={name} />;
+  return (
+    <div className={`${className} flex items-center justify-center bg-slate-950 text-xs font-black text-blue-200`}>
+      {toInitials(name)}
+    </div>
+  );
+};
+
+const resolveAuthorAvatarMedia = (post: any, fallbackAvatar: string): NormalizedMediaAsset => {
+  const authorMedia = post?.authorAvatarMedia || post?.author?.profileMedia?.avatar || post?.profileMedia?.avatar;
+  return normalizeMediaAsset(
+    authorMedia || {
+      url: post?.authorAvatarUrl || post?.author?.avatarUrl,
+      objectKey: post?.authorAvatarObjectKey || post?.author?.profileMedia?.avatar?.objectKey,
+      storageProvider: post?.authorAvatarStorageProvider,
+      mimeType: post?.authorAvatarMimeType,
+      mediaType: post?.authorAvatarMediaType,
+    },
+    fallbackAvatar
+  );
 };
 
 const SocialMediaFrame: React.FC<{
@@ -176,7 +228,7 @@ const mapSocialPostToNode = (post: any): NodeContent => {
   const mediaAsset = media ? normalizeMediaAsset(media, media?.url) : null;
   const type = media?.mediaType === 'video' ? 'video' : media?.mediaType === 'file' ? 'file' : media ? 'image' : 'text';
   const fallbackAvatar = defaultAvatarUrl(String(post?.authorId || 'node'));
-  const authorAvatarMedia = normalizeMediaAsset({ url: post?.authorAvatarUrl }, fallbackAvatar);
+  const authorAvatarMedia = resolveAuthorAvatarMedia(post, fallbackAvatar);
   return {
     id: String(post?.id || Date.now()),
     authorId: String(post?.authorId || post?.author?.id || ''),
@@ -955,11 +1007,11 @@ const SocialLearningHubContent: React.FC<SocialLearningHubProps> = ({
                           onClick={() => void openProfileView(node.authorId)}
                           className="flex min-w-0 items-center gap-4 sm:gap-5 text-left group/author"
                         >
-                          {renderAvatarMedia(
-                            node.avatarMedia || normalizeMediaAsset({ url: node.avatar }),
-                            node.author,
-                            'w-12 h-12 sm:w-14 sm:h-14 rounded-2xl object-cover ring-4 ring-white/5 shadow-2xl'
-                          )}
+                          <AvatarMediaFrame
+                            media={node.avatarMedia || normalizeMediaAsset({ url: node.avatar })}
+                            name={node.author}
+                            className="h-12 w-12 shrink-0 rounded-2xl object-cover object-center ring-4 ring-white/5 shadow-2xl sm:h-14 sm:w-14"
+                          />
                           <div className="min-w-0">
                             <h4 className="cnh-person-name text-base sm:text-lg font-black text-white uppercase tracking-tighter leading-tight group-hover/author:text-blue-300 transition-colors">{node.author}</h4>
                             <p className="text-[9px] sm:text-[10px] text-blue-400/60 font-black uppercase tracking-widest mt-1.5">{node.timestamp}</p>

@@ -8,6 +8,11 @@ import {
   getProviderControlSession,
   setAdminElevationToken,
 } from '../services/sessionService';
+import {
+  isVideoMediaAsset,
+  normalizeMediaAsset,
+  type NormalizedMediaAsset,
+} from '../services/mediaAssets';
 import { ActionButton, EmptyState, PageHeader, PageShell, SurfacePanel } from './ui/PlatformPrimitives';
 
 type AdminRole = 'user' | 'provider' | 'admin';
@@ -158,6 +163,16 @@ interface AdminSocialPostSummary {
   authorId: string;
   authorName: string;
   authorEmail: string | null;
+  authorRole?: string | null;
+  authorTier?: string | null;
+  authorAvatarUrl?: string | null;
+  authorAvatarMedia?: {
+    url?: string | null;
+    storageProvider?: string | null;
+    objectKey?: string | null;
+    mimeType?: string | null;
+    mediaType?: string | null;
+  } | null;
   text: string;
   visibility: 'public' | 'private';
   mediaCount: number;
@@ -225,6 +240,55 @@ const previewableProviderApplicantDocumentMimeTypes = new Set(['application/pdf'
 
 const mimeEssence = (mimeType?: string | null): string =>
   String(mimeType || '').split(';')[0].trim().toLowerCase();
+
+const authorInitials = (value: string): string => {
+  const parts = String(value || '')
+    .trim()
+    .split(/\s+/)
+    .filter(Boolean);
+  if (parts.length === 0) return 'U';
+  return parts
+    .slice(0, 2)
+    .map((part) => part.charAt(0).toUpperCase())
+    .join('');
+};
+
+const AdminAuthorAvatar: React.FC<{ media: NormalizedMediaAsset; name: string }> = ({ media, name }) => {
+  const [failed, setFailed] = useState(false);
+
+  useEffect(() => {
+    setFailed(false);
+  }, [media.url]);
+
+  const className = 'h-11 w-11 shrink-0 rounded-xl object-cover object-center ring-1 ring-white/10';
+
+  if (media.url && !failed) {
+    return isVideoMediaAsset(media) ? (
+      <video
+        src={media.url}
+        className={className}
+        muted
+        loop
+        autoPlay
+        playsInline
+        onError={() => setFailed(true)}
+      />
+    ) : (
+      <img
+        src={media.url}
+        className={className}
+        alt={name}
+        onError={() => setFailed(true)}
+      />
+    );
+  }
+
+  return (
+    <div className={`${className} grid place-items-center bg-slate-950 text-xs font-black text-blue-200`}>
+      {authorInitials(name)}
+    </div>
+  );
+};
 
 const asAdminSubmissionFileSummary = (value: unknown): AdminSubmissionFileSummary | null => {
   if (!value || typeof value !== 'object' || Array.isArray(value)) return null;
@@ -1796,6 +1860,9 @@ const AdminDashboard: React.FC = () => {
           <div className="space-y-3">
             {(dashboard.recentSocialPosts || []).map((post) => {
               const actionBusy = contentActionPostId === post.id;
+              const authorAvatarMedia = normalizeMediaAsset(
+                post.authorAvatarMedia || { url: post.authorAvatarUrl }
+              );
               return (
                 <article
                   key={post.id}
@@ -1812,8 +1879,18 @@ const AdminDashboard: React.FC = () => {
                   </div>
                   <div className="min-w-0">
                     <p className="text-[10px] font-black uppercase text-slate-500">Author</p>
-                    <p className="cnh-person-name mt-2 font-bold text-white">{post.authorName}</p>
-                    <p className="break-words text-xs text-slate-500">{post.authorEmail || post.authorId}</p>
+                    <div className="mt-2 flex min-w-0 items-center gap-3">
+                      <AdminAuthorAvatar media={authorAvatarMedia} name={post.authorName} />
+                      <div className="min-w-0">
+                        <p className="cnh-person-name truncate font-bold text-white">{post.authorName}</p>
+                        <p className="break-words text-xs text-slate-500">{post.authorEmail || post.authorId}</p>
+                        {(post.authorRole || post.authorTier) && (
+                          <p className="mt-1 truncate text-[10px] font-black uppercase tracking-widest text-blue-300/70">
+                            {[post.authorRole, post.authorTier].filter(Boolean).join(' / ')}
+                          </p>
+                        )}
+                      </div>
+                    </div>
                   </div>
                   <div className="min-w-0">
                     <p className="text-[10px] font-black uppercase text-slate-500">Visibility</p>
