@@ -37,6 +37,7 @@ import {
   PROVIDER_APPLICANT_STATUSES,
   getProviderApplicantById,
   listProviderApplicants,
+  type ProviderApplicantFileRef,
   updateProviderApplicantReview,
 } from '../services/providerApplicantStore';
 import { listConsciousCareerGrantApplications } from '../services/consciousCareerGrantStore';
@@ -48,7 +49,11 @@ import { getPrisma } from '../services/prismaClient';
 import { normalizeCourseSyllabusMetadata } from '../services/courseMetadata';
 import { getProviderSessionById, revokeProviderSessionsByDid } from '../services/providerSessionStore';
 import { type SocialPostRecord, socialStore } from '../services/socialStore';
-import { deleteUploadObjectByKey } from '../services/uploadBlobStore';
+import {
+  deleteUploadObjectByKey,
+  getUploadObjectAccessMetadata,
+  resolveUploadObjectByKey,
+} from '../services/uploadBlobStore';
 import { revokeUserSessionsByUserId } from '../services/userSessionStore';
 import { hasTierAccess, TIER_VALUES, type TierValue } from '../tierPolicy';
 import {
@@ -592,6 +597,68 @@ const formatApplicantStatus = (status: unknown): string => {
     needs_more_info: 'More information requested',
   };
   return labels[normalized] || 'Updated';
+};
+
+type ProviderApplicantDocumentType = 'resume' | 'cover-letter';
+type ProviderApplicantDocumentDisposition = 'inline' | 'attachment';
+
+const PROVIDER_APPLICATION_UPLOAD_CATEGORY = 'provider-application';
+const INLINE_PROVIDER_APPLICANT_DOCUMENT_MIME_TYPES = new Set(['application/pdf', 'text/plain']);
+
+const normalizeProviderApplicantDocumentType = (
+  value: unknown
+): ProviderApplicantDocumentType | null => {
+  const normalized = String(value || '').trim().toLowerCase();
+  if (normalized === 'resume' || normalized === 'cover-letter') return normalized;
+  return null;
+};
+
+const normalizeProviderApplicantDocumentDisposition = (
+  value: unknown
+): ProviderApplicantDocumentDisposition | null => {
+  const normalized = String(value || 'attachment').trim().toLowerCase();
+  if (normalized === 'inline' || normalized === 'attachment') return normalized;
+  return null;
+};
+
+const normalizeDocumentMimeType = (value: unknown): string => {
+  const normalized = String(value || '').replace(/[\r\n\u0000-\u001F\u007F]/g, '').trim();
+  return normalized || 'application/octet-stream';
+};
+
+const getDocumentMimeEssence = (mimeType: string): string =>
+  mimeType.split(';')[0].trim().toLowerCase();
+
+const canInlineProviderApplicantDocument = (mimeType: string): boolean =>
+  INLINE_PROVIDER_APPLICANT_DOCUMENT_MIME_TYPES.has(getDocumentMimeEssence(mimeType));
+
+const sanitizeProviderApplicantDocumentFilename = (
+  value: unknown,
+  fallback: string
+): string => {
+  const raw = String(value || fallback || '').trim();
+  const basename = raw.split(/[\\/]/).filter(Boolean).pop() || fallback || 'document';
+  return basename.replace(/[\r\n"\u0000-\u001F\u007F]/g, '_').trim() || fallback || 'document';
+};
+
+const buildProviderApplicantDocumentDisposition = (
+  type: ProviderApplicantDocumentDisposition,
+  filename: string
+): string => {
+  const safeFilename = sanitizeProviderApplicantDocumentFilename(filename, 'document');
+  const asciiFilename = safeFilename.replace(/[^\x20-\x7E]/g, '_');
+  return `${type}; filename="${asciiFilename}"; filename*=UTF-8''${encodeURIComponent(safeFilename)}`;
+};
+
+const getProviderApplicantDocumentRef = (
+  applicant: any,
+  documentType: ProviderApplicantDocumentType
+): ProviderApplicantFileRef | null => {
+  const ref = documentType === 'resume' ? applicant?.resumeFile : applicant?.coverLetterFile;
+  if (!ref || typeof ref !== 'object') return null;
+  const objectKey = String((ref as Partial<ProviderApplicantFileRef>).objectKey || '').trim();
+  if (!objectKey) return null;
+  return ref as ProviderApplicantFileRef;
 };
 
 router.use(requireCanonicalIdentity);
@@ -1514,6 +1581,121 @@ router.get('/provider-applicants', async (req: Request, res: Response): Promise<
     applicants,
   });
 });
+
+router.get(
+  '/provider-applicants/:id/documents/:documentType',
+  async (req: Request, res: Response): Promise<void> => {
+    const actorUserId = getAuthenticatedUserId(req);
+    const id = String(req.params.id || '').trim();
+    const documentType = normalizeProviderApplicantDocumentType(req.params.documentType);
+    if (!documentType) {
+      res.status(400).json({ error: 'Invalid provider applicant document type' });
+      return;
+    }
+
+    const requestedDisposition = normalizeProviderApplicantDocumentDisposition(
+      req.query.disposition
+    );
+    if (!requestedDisposition) {
+      res.status(400).json({ error: 'Invalid provider applicant document disposition' });
+      return;
+    }
+
+    const applicant = await getProviderApplicantById(id);
+    if (!applicant) {
+      res.status(404).json({ error: 'Provider applicant not found' });
+      return;
+    }
+
+    const fileRef = getProviderApplicantDocumentRef(applicant, documentType);
+    if (!fileRef) {
+      res.status(404).json({ error: 'Provider applicant document not found' });
+      return;
+    }
+
+    const objectKey = String(fileRef.objectKey || '').trim();
+    const metadata = getUploadObjectAccessMetadata(objectKey);
+    if (
+      !metadata ||
+      metadata.storageProvider !== 'postgres_large_object' ||
+      metadata.access !== 'private' ||
+      metadata.ownerUserId !== String(applicant.userId || '').trim() ||
+      metadata.category !== PROVIDER_APPLICATION_UPLOAD_CATEGORY
+    ) {
+      recordAuditEvent(req, {
+        domain: 'admin',
+        action: 'provider_applicant_document_view',
+        outcome: 'deny',
+        actorUserId,
+        targetUserId: applicant.userId,
+        statusCode: 404,
+        metadata: {
+          applicantId: applicant.id,
+          documentType,
+          reason: 'upload_object_metadata_mismatch',
+        },
+      });
+      res.status(404).json({ error: 'Provider applicant document not found' });
+      return;
+    }
+
+    try {
+      const resolved = await resolveUploadObjectByKey(objectKey);
+      if (!resolved) {
+        res.status(404).json({ error: 'Provider applicant document not found' });
+        return;
+      }
+
+      const mimeType = normalizeDocumentMimeType(fileRef.mimeType || resolved.mimeType);
+      const finalDisposition =
+        requestedDisposition === 'inline' && canInlineProviderApplicantDocument(mimeType)
+          ? 'inline'
+          : 'attachment';
+      const fallbackFilename = documentType === 'resume' ? 'resume' : 'cover-letter';
+      const originalName = sanitizeProviderApplicantDocumentFilename(
+        fileRef.originalName || resolved.originalName,
+        fallbackFilename
+      );
+
+      res.setHeader('Content-Type', mimeType);
+      res.setHeader(
+        'Content-Disposition',
+        buildProviderApplicantDocumentDisposition(finalDisposition, originalName)
+      );
+      res.setHeader('Cache-Control', 'private, no-store');
+      res.setHeader('X-Content-Type-Options', 'nosniff');
+      res.setHeader('Content-Length', String(resolved.buffer.length));
+
+      recordAuditEvent(req, {
+        domain: 'admin',
+        action: 'provider_applicant_document_view',
+        outcome: 'success',
+        actorUserId,
+        targetUserId: applicant.userId,
+        statusCode: 200,
+        metadata: {
+          applicantId: applicant.id,
+          documentType,
+          requestedDisposition,
+          disposition: finalDisposition,
+          mimeType,
+        },
+      });
+
+      res.send(resolved.buffer);
+    } catch (error) {
+      const code = (error as Error & { code?: string })?.code;
+      if (code === 'STORE_UNAVAILABLE') {
+        res.status(503).json({
+          error: 'Upload storage is temporarily unavailable. Retry shortly.',
+        });
+        return;
+      }
+      console.error('[Admin] provider applicant document read failed', error);
+      res.status(500).json({ error: 'Failed to load provider applicant document' });
+    }
+  }
+);
 
 router.get('/provider-applicants/:id', async (req: Request, res: Response): Promise<void> => {
   const actorUserId = getAuthenticatedUserId(req);

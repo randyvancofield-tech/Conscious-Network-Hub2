@@ -1,8 +1,8 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { FileText, KeyRound, Mail, RefreshCw, Save, ShieldCheck, Users } from 'lucide-react';
-import { api, ApiError } from '../services/apiClient';
-import { openPrivateUpload } from '../services/privateUploadService';
+import { Download, Eye, FileText, KeyRound, Mail, RefreshCw, Save, ShieldCheck, Users } from 'lucide-react';
+import { BASE_URL, api, ApiError } from '../services/apiClient';
 import {
+  getAuthToken,
   getAdminElevationToken,
   getProviderControlSession,
   setAdminElevationToken,
@@ -22,6 +22,7 @@ interface ApplicantFileRef {
   originalName?: string;
   url?: string;
   objectKey?: string;
+  mimeType?: string;
 }
 
 interface ProviderApplicantAdminRecord {
@@ -53,6 +54,74 @@ const adminHeaders = (): HeadersInit => {
   return token ? { 'X-Admin-Elevation-Token': token } : {};
 };
 
+type ApplicantDocumentKind = 'resume' | 'cover-letter';
+type ApplicantDocumentDisposition = 'inline' | 'attachment';
+
+const documentLabels: Record<ApplicantDocumentKind, string> = {
+  resume: 'Resume',
+  'cover-letter': 'Cover Letter',
+};
+
+const previewableDocumentMimeTypes = new Set(['application/pdf', 'text/plain']);
+
+const mimeEssence = (mimeType?: string): string =>
+  String(mimeType || '').split(';')[0].trim().toLowerCase();
+
+const canPreviewDocument = (file?: ApplicantFileRef): boolean =>
+  previewableDocumentMimeTypes.has(mimeEssence(file?.mimeType));
+
+const buildApplicantDocumentUrl = (
+  applicantId: string,
+  documentKind: ApplicantDocumentKind,
+  disposition: ApplicantDocumentDisposition
+): string =>
+  `${BASE_URL}/api/admin/provider-applicants/${encodeURIComponent(applicantId)}/documents/${encodeURIComponent(documentKind)}?disposition=${encodeURIComponent(disposition)}`;
+
+const filenameFromContentDisposition = (value: string | null): string | null => {
+  const header = String(value || '').trim();
+  if (!header) return null;
+
+  const encodedMatch = /filename\*=UTF-8''([^;]+)/i.exec(header);
+  if (encodedMatch?.[1]) {
+    try {
+      return decodeURIComponent(encodedMatch[1]);
+    } catch {
+      return encodedMatch[1];
+    }
+  }
+
+  const quotedMatch = /filename="([^"]+)"/i.exec(header);
+  if (quotedMatch?.[1]) return quotedMatch[1];
+  return null;
+};
+
+const triggerBlobDownload = (blob: Blob, filename: string): void => {
+  const objectUrl = URL.createObjectURL(blob);
+  const anchor = document.createElement('a');
+  anchor.href = objectUrl;
+  anchor.download = filename || 'download';
+  anchor.rel = 'noopener noreferrer';
+  anchor.style.position = 'fixed';
+  anchor.style.left = '-9999px';
+  anchor.style.top = '0';
+  document.body.appendChild(anchor);
+  anchor.click();
+  anchor.remove();
+  window.setTimeout(() => URL.revokeObjectURL(objectUrl), 60000);
+};
+
+const parseDocumentError = async (response: Response): Promise<string> => {
+  const fallback = `Document request failed with HTTP ${response.status}`;
+  try {
+    const text = await response.text();
+    if (!text) return fallback;
+    const parsed = JSON.parse(text) as { error?: unknown; message?: unknown };
+    return String(parsed.error || parsed.message || fallback);
+  } catch {
+    return fallback;
+  }
+};
+
 const formatLabel = (value: string): string =>
   value
     .split('_')
@@ -80,6 +149,8 @@ const AdminProviderApplicantsPage: React.FC = () => {
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [elevating, setElevating] = useState(false);
+  const [documentAction, setDocumentAction] = useState<string | null>(null);
+  const [documentError, setDocumentError] = useState('');
   const [error, setError] = useState('');
 
   const isElevated = useMemo(() => Boolean(getAdminElevationToken()), [applicants, error]);
@@ -150,6 +221,7 @@ const AdminProviderApplicantsPage: React.FC = () => {
       setSendEmailDraft(true);
       setApplicantMessageDraft('');
       setCommunicationNotice('');
+      setDocumentError('');
     } catch (error) {
       setError(error instanceof Error ? error.message : 'Unable to load applicant detail.');
     }
@@ -230,6 +302,98 @@ const AdminProviderApplicantsPage: React.FC = () => {
       setError(error instanceof Error ? error.message : 'Unable to update applicant.');
     } finally {
       setSaving(false);
+    }
+  };
+
+  const fetchApplicantDocument = async (
+    applicantId: string,
+    documentKind: ApplicantDocumentKind,
+    disposition: ApplicantDocumentDisposition,
+    file: ApplicantFileRef
+  ): Promise<{ blob: Blob; filename: string; mimeType: string; contentDisposition: string }> => {
+    const authToken = getAuthToken();
+    const elevationToken = getAdminElevationToken();
+    if (!authToken || !elevationToken) {
+      throw new Error('Admin authorization and elevation are required to open applicant documents.');
+    }
+
+    const headers = new Headers();
+    headers.set('Authorization', `Bearer ${authToken}`);
+    headers.set('X-Admin-Elevation-Token', elevationToken);
+
+    const response = await fetch(buildApplicantDocumentUrl(applicantId, documentKind, disposition), {
+      cache: 'no-store',
+      credentials: 'include',
+      headers,
+    });
+
+    if (!response.ok) {
+      throw new Error(await parseDocumentError(response));
+    }
+
+    const contentDisposition = response.headers.get('Content-Disposition') || '';
+    const filename =
+      filenameFromContentDisposition(contentDisposition) ||
+      file.originalName ||
+      documentLabels[documentKind];
+    const mimeType = response.headers.get('Content-Type') || file.mimeType || 'application/octet-stream';
+    return {
+      blob: await response.blob(),
+      filename,
+      mimeType,
+      contentDisposition,
+    };
+  };
+
+  const openApplicantDocument = async (
+    documentKind: ApplicantDocumentKind,
+    disposition: ApplicantDocumentDisposition,
+    file?: ApplicantFileRef
+  ): Promise<void> => {
+    if (!selected || !file) return;
+
+    const actionKey = `${documentKind}:${disposition}`;
+    let previewWindow: Window | null = null;
+    if (disposition === 'inline') {
+      previewWindow = window.open('', '_blank');
+      if (!previewWindow) {
+        setDocumentError('Unable to open the preview tab. Allow pop-ups for this site and try again.');
+        return;
+      }
+      previewWindow.opener = null;
+    }
+
+    setDocumentAction(actionKey);
+    setDocumentError('');
+    setError('');
+
+    try {
+      const document = await fetchApplicantDocument(selected.id, documentKind, disposition, file);
+      const responseDisposition = document.contentDisposition.toLowerCase();
+      const shouldPreview =
+        disposition === 'inline' &&
+        previewWindow &&
+        !responseDisposition.startsWith('attachment') &&
+        previewableDocumentMimeTypes.has(mimeEssence(document.mimeType));
+
+      if (shouldPreview && previewWindow) {
+        const objectUrl = URL.createObjectURL(document.blob);
+        previewWindow.location.href = objectUrl;
+        window.setTimeout(() => URL.revokeObjectURL(objectUrl), 60000);
+        return;
+      }
+
+      if (previewWindow) {
+        previewWindow.close();
+      }
+      triggerBlobDownload(document.blob, document.filename);
+    } catch (error) {
+      if (previewWindow) {
+        previewWindow.close();
+      }
+      setDocumentError(error instanceof Error ? error.message : 'Unable to open applicant document.');
+    } finally {
+      setDocumentAction(null);
     }
   };
 
@@ -409,28 +573,53 @@ const AdminProviderApplicantsPage: React.FC = () => {
 
               <div>
                 <h3 className="text-sm font-black uppercase text-white">Documents</h3>
+                {documentError && <p className="mt-3 text-sm text-amber-200">{documentError}</p>}
                 <div className="mt-3 grid gap-3 md:grid-cols-2">
                   {[
-                    ['Resume', selected.resumeFile],
-                    ['Cover Letter', selected.coverLetterFile],
-                  ].map(([label, file]) => {
+                    ['resume', selected.resumeFile],
+                    ['cover-letter', selected.coverLetterFile],
+                  ].map(([kind, file]) => {
+                    const documentKind = kind as ApplicantDocumentKind;
+                    const label = documentLabels[documentKind];
                     const ref = file as ApplicantFileRef | undefined;
+                    const canPreview = canPreviewDocument(ref);
+                    const previewAction = `${documentKind}:inline`;
+                    const downloadAction = `${documentKind}:attachment`;
                     return (
-                      <button
-                        key={String(label)}
-                        type="button"
-                        onClick={() => {
-                          if (!ref) return;
-                          void openPrivateUpload(ref).catch((error) => {
-                            setError(error instanceof Error ? error.message : 'Unable to open private file.');
-                          });
-                        }}
-                        disabled={!ref}
-                        className="flex items-center gap-3 rounded-2xl border border-white/10 bg-white/[0.04] p-4 text-sm text-slate-200 transition hover:bg-white/[0.08]"
+                      <div
+                        key={documentKind}
+                        className="flex flex-col gap-4 rounded-2xl border border-white/10 bg-white/[0.04] p-4 text-sm text-slate-200"
                       >
-                        <FileText className="h-5 w-5 shrink-0 text-amber-100" />
-                        <span className="min-w-0 break-words leading-5">{ref?.originalName || String(label)}</span>
-                      </button>
+                        <div className="flex min-w-0 items-center gap-3">
+                          <FileText className="h-5 w-5 shrink-0 text-amber-100" />
+                          <div className="min-w-0">
+                            <p className="text-xs font-black uppercase text-slate-500">{label}</p>
+                            <p className="mt-1 break-words leading-5">{ref?.originalName || label}</p>
+                          </div>
+                        </div>
+                        <div className="flex flex-wrap gap-2">
+                          <ActionButton
+                            type="button"
+                            variant="secondary"
+                            disabled={!ref || !canPreview || documentAction === previewAction}
+                            onClick={() => void openApplicantDocument(documentKind, 'inline', ref)}
+                            icon={<Eye className="h-4 w-4" />}
+                            className="min-h-10 px-3 py-2"
+                          >
+                            {documentAction === previewAction ? 'Opening' : 'Preview'}
+                          </ActionButton>
+                          <ActionButton
+                            type="button"
+                            variant="ghost"
+                            disabled={!ref || documentAction === downloadAction}
+                            onClick={() => void openApplicantDocument(documentKind, 'attachment', ref)}
+                            icon={<Download className="h-4 w-4" />}
+                            className="min-h-10 px-3 py-2"
+                          >
+                            {documentAction === downloadAction ? 'Saving' : 'Download'}
+                          </ActionButton>
+                        </div>
+                      </div>
                     );
                   })}
                 </div>
