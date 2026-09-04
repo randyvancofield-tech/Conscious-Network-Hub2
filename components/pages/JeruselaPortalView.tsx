@@ -2,8 +2,9 @@ import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { ArrowLeft, Crown, LockKeyhole, Sparkles, Volume2 } from 'lucide-react';
 import { UserProfile } from '../../types';
 
-type JeruselaPhase = 'void' | 'calling' | 'checking' | 'chosen' | 'gated';
+type JeruselaPhase = 'void' | 'calling' | 'initiation' | 'checking' | 'gated' | 'arrival';
 type JeruselaChoice = 'man' | 'woman';
+type EnvironmentEntityKind = 'human' | 'bird' | 'terrestrial' | 'aquatic' | 'vegetation';
 
 interface JeruselaPortalViewProps {
   user: UserProfile | null;
@@ -15,33 +16,60 @@ interface JeruselaAudioLayer {
   start: () => Promise<void>;
   stop: () => void;
   playChime: () => void;
+  whisperChosen: () => void;
   getEnergy: () => number;
+}
+
+interface PlayerState {
+  name: string;
+  form: JeruselaChoice;
+}
+
+interface EnvironmentEntity {
+  id: string;
+  kind: EnvironmentEntityKind;
+  x: number;
+  y: number;
+  z: number;
+  speed: number;
+  scale: number;
+  palette: string[];
+  motion: 'walk' | 'glide' | 'swim' | 'sway';
+  variant?: 'adult' | 'older' | 'young-adult' | 'curly' | 'coily' | 'straight' | 'wavy';
+}
+
+interface SpatialConfig {
+  horizon: number;
+  player: { x: number; y: number; scale: number };
+  entities: EnvironmentEntity[];
+  rules: Array<{ label: string; x: number; y: number; delay: number }>;
 }
 
 const JOHN_OPENING =
   'In the beginning was the Word, and the Word was with God, and the Word was God. ' +
-  'The same was in the beginning with God. All things were made by him; and without him was not any thing made that was made. ' +
-  'In him was life; and the life was the light of men. And the light shineth in darkness; and the darkness comprehended it not.';
+  'In him was life; and the life was the light of men. ' +
+  'And the light shineth in darkness; and the darkness comprehended it not.';
 
 const membershipUrl = 'https://conscious-network.org/membership';
+const paidTierSignals = ['guided', 'accelerated', 'premium', 'professional', 'founder', 'privileged'];
 
-const isPaidJeruselaMember = (user: UserProfile | null): boolean => {
+const isEligibleJeruselaPlayer = (user: UserProfile | null): boolean => {
   if (!user) return false;
   if (user.role === 'admin' || user.role === 'provider') return true;
 
   const tier = String(user.tier || '').trim().toLowerCase();
-  if (tier.includes('guided') || tier.includes('accelerated')) return true;
   if (tier.includes('free') || tier.includes('community')) return false;
+  if (paidTierSignals.some((signal) => tier.includes(signal))) return true;
 
   const membershipStatus = String(user.membershipStatus || user.subscriptionStatus || '')
     .trim()
     .toLowerCase();
-  return user.hasActiveMembership === true && ['active', 'trialing'].includes(membershipStatus);
+  return user.hasActiveMembership === true && !['free', 'inactive', 'canceled', 'cancelled'].includes(membershipStatus);
 };
 
-const buildCharacterName = (user: UserProfile | null): string => {
+const buildPlayerName = (user: UserProfile | null): string => {
   const name = String(user?.name || '').trim();
-  if (name) return name.split(/\s+/)[0] || name;
+  if (name) return name;
   const emailName = String(user?.email || '').split('@')[0]?.replace(/[._-]+/g, ' ').trim();
   return emailName || 'Traveler';
 };
@@ -63,10 +91,10 @@ const createJeruselaAudioLayer = (onNarrationEnd: () => void): JeruselaAudioLaye
       analyser.fftSize = 256;
       data = new Uint8Array(analyser.frequencyBinCount);
       gain = audioContext.createGain();
-      gain.gain.value = 0.035;
+      gain.gain.value = 0.05;
       oscillator = audioContext.createOscillator();
       oscillator.type = 'sine';
-      oscillator.frequency.value = 46;
+      oscillator.frequency.value = 44;
       oscillator.connect(gain);
       gain.connect(analyser);
       analyser.connect(audioContext.destination);
@@ -81,30 +109,31 @@ const createJeruselaAudioLayer = (onNarrationEnd: () => void): JeruselaAudioLaye
     onNarrationEnd();
   };
 
+  const speak = (text: string, options: { rate?: number; pitch?: number; volume?: number; onEnd?: () => void } = {}) => {
+    if (!('speechSynthesis' in window)) {
+      window.setTimeout(options.onEnd || (() => undefined), 1600);
+      return;
+    }
+    window.speechSynthesis.cancel();
+    const utterance = new SpeechSynthesisUtterance(text);
+    utterance.rate = options.rate ?? 0.82;
+    utterance.pitch = options.pitch ?? 0.72;
+    utterance.volume = options.volume ?? 0.9;
+    if (options.onEnd) {
+      utterance.onend = options.onEnd;
+      utterance.onerror = options.onEnd;
+    }
+    window.speechSynthesis.speak(utterance);
+  };
+
   return {
     async start() {
       const context = ensureContext();
-      if (context?.state === 'suspended') {
-        await context.resume();
-      }
-
-      if ('speechSynthesis' in window) {
-        window.speechSynthesis.cancel();
-        const utterance = new SpeechSynthesisUtterance(JOHN_OPENING);
-        utterance.rate = 0.82;
-        utterance.pitch = 0.72;
-        utterance.volume = 0.92;
-        utterance.onend = finishNarration;
-        utterance.onerror = finishNarration;
-        window.speechSynthesis.speak(utterance);
-      } else {
-        window.setTimeout(finishNarration, 9000);
-      }
+      if (context?.state === 'suspended') await context.resume();
+      speak(JOHN_OPENING, { onEnd: finishNarration });
     },
     stop() {
-      if ('speechSynthesis' in window) {
-        window.speechSynthesis.cancel();
-      }
+      if ('speechSynthesis' in window) window.speechSynthesis.cancel();
       oscillator?.stop();
       oscillator?.disconnect();
       gain?.disconnect();
@@ -125,12 +154,15 @@ const createJeruselaAudioLayer = (onNarrationEnd: () => void): JeruselaAudioLaye
       chime.frequency.setValueAtTime(660, context.currentTime);
       chime.frequency.exponentialRampToValueAtTime(990, context.currentTime + 0.24);
       chimeGain.gain.setValueAtTime(0.0001, context.currentTime);
-      chimeGain.gain.exponentialRampToValueAtTime(0.12, context.currentTime + 0.025);
+      chimeGain.gain.exponentialRampToValueAtTime(0.13, context.currentTime + 0.025);
       chimeGain.gain.exponentialRampToValueAtTime(0.0001, context.currentTime + 0.75);
       chime.connect(chimeGain);
       chimeGain.connect(context.destination);
       chime.start();
       chime.stop(context.currentTime + 0.8);
+    },
+    whisperChosen() {
+      speak('You are chosen.', { rate: 0.72, pitch: 0.6, volume: 0.62 });
     },
     getEnergy() {
       if (!analyser || !data) return 0;
@@ -141,33 +173,202 @@ const createJeruselaAudioLayer = (onNarrationEnd: () => void): JeruselaAudioLaye
   };
 };
 
+const worldConfig: SpatialConfig = {
+  horizon: 0.48,
+  player: { x: 0.5, y: 0.68, scale: 1 },
+  rules: [
+    { label: 'SERVE', x: 0.24, y: 0.3, delay: 0 },
+    { label: 'SHINE', x: 0.5, y: 0.24, delay: 900 },
+    { label: 'ENDURE', x: 0.76, y: 0.32, delay: 1800 },
+  ],
+  entities: [
+    { id: 'elder-teacher', kind: 'human', x: 0.18, y: 0.62, z: 0.7, speed: 0.18, scale: 0.72, motion: 'walk', palette: ['#7a4f37', '#f5f0d6', '#335c67'], variant: 'older' },
+    { id: 'runner', kind: 'human', x: 0.72, y: 0.66, z: 0.8, speed: -0.22, scale: 0.68, motion: 'walk', palette: ['#2f1f18', '#d6a77a', '#8ecae6'], variant: 'coily' },
+    { id: 'artisan', kind: 'human', x: 0.84, y: 0.58, z: 0.5, speed: 0.12, scale: 0.58, motion: 'walk', palette: ['#c7895c', '#172a3a', '#e9c46a'], variant: 'wavy' },
+    { id: 'traveler', kind: 'human', x: 0.31, y: 0.72, z: 0.9, speed: -0.1, scale: 0.64, motion: 'walk', palette: ['#51311d', '#5f0f40', '#e0fbfc'], variant: 'straight' },
+    { id: 'heron', kind: 'bird', x: 0.65, y: 0.18, z: 0.3, speed: -0.28, scale: 0.75, motion: 'glide', palette: ['#dce7ef', '#0b3954'] },
+    { id: 'small-flock', kind: 'bird', x: 0.3, y: 0.22, z: 0.25, speed: 0.34, scale: 0.48, motion: 'glide', palette: ['#1f2937', '#e5e7eb'] },
+    { id: 'deer-like-grazer', kind: 'terrestrial', x: 0.12, y: 0.78, z: 0.95, speed: 0.08, scale: 0.62, motion: 'walk', palette: ['#8b5e34', '#e6ccb2'] },
+    { id: 'fox-like-runner', kind: 'terrestrial', x: 0.61, y: 0.82, z: 1, speed: -0.26, scale: 0.48, motion: 'walk', palette: ['#b45309', '#fff7ed'] },
+    { id: 'shore-fish', kind: 'aquatic', x: 0.76, y: 0.9, z: 1, speed: 0.2, scale: 0.42, motion: 'swim', palette: ['#67e8f9', '#155e75'] },
+    { id: 'silver-school', kind: 'aquatic', x: 0.88, y: 0.86, z: 1, speed: -0.17, scale: 0.36, motion: 'swim', palette: ['#e0f2fe', '#0891b2'] },
+    { id: 'meadow-grass', kind: 'vegetation', x: 0.08, y: 0.7, z: 1, speed: 0.05, scale: 0.95, motion: 'sway', palette: ['#7dd3fc', '#166534'] },
+    { id: 'reed-bank', kind: 'vegetation', x: 0.9, y: 0.74, z: 1, speed: -0.04, scale: 0.92, motion: 'sway', palette: ['#a7f3d0', '#365314'] },
+  ],
+};
+
+const drawHuman = (
+  context: CanvasRenderingContext2D,
+  x: number,
+  y: number,
+  scale: number,
+  entity: EnvironmentEntity,
+  time: number
+) => {
+  const [skin, cloth, accent] = entity.palette;
+  const stride = Math.sin(time * 0.004 + x) * 4 * scale;
+  context.fillStyle = cloth;
+  context.beginPath();
+  context.roundRect(x - 7 * scale, y - 25 * scale, 14 * scale, 26 * scale, 6 * scale);
+  context.fill();
+  context.strokeStyle = accent;
+  context.lineWidth = 2 * scale;
+  context.beginPath();
+  context.moveTo(x - 6 * scale, y - 9 * scale);
+  context.lineTo(x + 7 * scale, y - 2 * scale);
+  context.stroke();
+  context.strokeStyle = skin;
+  context.lineWidth = 3 * scale;
+  context.beginPath();
+  context.moveTo(x - 4 * scale, y);
+  context.lineTo(x - 8 * scale + stride, y + 18 * scale);
+  context.moveTo(x + 4 * scale, y);
+  context.lineTo(x + 8 * scale - stride, y + 18 * scale);
+  context.stroke();
+  context.fillStyle = skin;
+  context.beginPath();
+  context.arc(x, y - 34 * scale, 8 * scale, 0, Math.PI * 2);
+  context.fill();
+  context.fillStyle = entity.variant === 'coily' ? '#111827' : entity.variant === 'wavy' ? '#3f2417' : '#24140d';
+  for (let i = -2; i <= 2; i += 1) {
+    context.beginPath();
+    context.arc(x + i * 4 * scale, y - 41 * scale + Math.sin(time * 0.003 + i) * scale, 4 * scale, 0, Math.PI * 2);
+    context.fill();
+  }
+};
+
+const drawPlayer = (
+  context: CanvasRenderingContext2D,
+  choice: JeruselaChoice,
+  x: number,
+  y: number,
+  scale: number,
+  time: number
+) => {
+  const glow = context.createRadialGradient(x, y - 40 * scale, 0, x, y - 40 * scale, 110 * scale);
+  glow.addColorStop(0, 'rgba(255, 250, 180, 0.72)');
+  glow.addColorStop(0.42, 'rgba(34, 211, 238, 0.2)');
+  glow.addColorStop(1, 'rgba(34, 211, 238, 0)');
+  context.fillStyle = glow;
+  context.beginPath();
+  context.arc(x, y - 40 * scale, 110 * scale, 0, Math.PI * 2);
+  context.fill();
+
+  const entity: EnvironmentEntity = {
+    id: 'player',
+    kind: 'human',
+    x: 0,
+    y: 0,
+    z: 1,
+    speed: 0,
+    scale,
+    motion: 'walk',
+    palette: choice === 'woman' ? ['#8f5f46', '#fff1c2', '#14b8a6'] : ['#5b3525', '#dff7ff', '#60a5fa'],
+    variant: choice === 'woman' ? 'curly' : 'wavy',
+  };
+  drawHuman(context, x, y, scale * 1.42, entity, time);
+};
+
+const drawEntity = (
+  context: CanvasRenderingContext2D,
+  entity: EnvironmentEntity,
+  width: number,
+  height: number,
+  time: number,
+  camera: number
+) => {
+  const drift = Math.sin(time * 0.0007 + entity.x * 9) * entity.speed * 80;
+  const x = ((entity.x * width + drift - camera * entity.z * 120) % (width + 140) + width + 70) % (width + 140) - 70;
+  const y = entity.y * height + Math.sin(time * 0.0015 + entity.z) * 8 * entity.scale;
+  const scale = entity.scale * (0.72 + entity.z * 0.45);
+
+  if (entity.kind === 'human') {
+    drawHuman(context, x, y, scale, entity, time);
+    return;
+  }
+
+  if (entity.kind === 'bird') {
+    context.strokeStyle = entity.palette[0];
+    context.lineWidth = 2 * scale;
+    const wing = Math.sin(time * 0.007 + entity.x) * 7 * scale;
+    context.beginPath();
+    context.moveTo(x - 16 * scale, y + wing);
+    context.quadraticCurveTo(x, y - 8 * scale, x + 16 * scale, y - wing);
+    context.stroke();
+    return;
+  }
+
+  if (entity.kind === 'aquatic') {
+    context.fillStyle = entity.palette[0];
+    context.beginPath();
+    context.ellipse(x, y, 14 * scale, 5 * scale, Math.sin(time * 0.002) * 0.2, 0, Math.PI * 2);
+    context.fill();
+    context.fillStyle = entity.palette[1];
+    context.beginPath();
+    context.moveTo(x - 14 * scale, y);
+    context.lineTo(x - 24 * scale, y - 6 * scale);
+    context.lineTo(x - 24 * scale, y + 6 * scale);
+    context.closePath();
+    context.fill();
+    return;
+  }
+
+  if (entity.kind === 'terrestrial') {
+    context.fillStyle = entity.palette[0];
+    context.beginPath();
+    context.ellipse(x, y, 22 * scale, 10 * scale, 0, 0, Math.PI * 2);
+    context.fill();
+    context.beginPath();
+    context.arc(x + 18 * scale, y - 8 * scale, 7 * scale, 0, Math.PI * 2);
+    context.fill();
+    context.strokeStyle = entity.palette[1];
+    context.lineWidth = 2 * scale;
+    context.beginPath();
+    context.moveTo(x - 10 * scale, y + 8 * scale);
+    context.lineTo(x - 14 * scale, y + 23 * scale);
+    context.moveTo(x + 9 * scale, y + 8 * scale);
+    context.lineTo(x + 14 * scale, y + 23 * scale);
+    context.stroke();
+    return;
+  }
+
+  context.strokeStyle = entity.palette[0];
+  context.lineWidth = 2 * scale;
+  for (let blade = 0; blade < 12; blade += 1) {
+    const offset = (blade - 6) * 5 * scale;
+    const sway = Math.sin(time * 0.002 + blade) * 7 * scale;
+    context.beginPath();
+    context.moveTo(x + offset, y + 28 * scale);
+    context.quadraticCurveTo(x + offset + sway, y, x + offset + sway * 0.5, y - 36 * scale);
+    context.stroke();
+  }
+};
+
 const JeruselaVoidCanvas: React.FC<{
   phase: JeruselaPhase;
+  player: PlayerState | null;
+  reducedMotion: boolean;
   getAudioEnergy: () => number;
-}> = ({ phase, getAudioEnergy }) => {
+}> = ({ phase, player, reducedMotion, getAudioEnergy }) => {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
-  const freezeRef = useRef(false);
-
-  useEffect(() => {
-    freezeRef.current = phase === 'gated';
-  }, [phase]);
 
   useEffect(() => {
     const canvas = canvasRef.current;
     const context = canvas?.getContext('2d');
     if (!canvas || !context) return undefined;
 
-    const particles = Array.from({ length: 150 }, (_, index) => ({
-      angle: (Math.PI * 2 * index) / 150,
-      orbit: 26 + Math.random() * 240,
+    const particles = Array.from({ length: reducedMotion ? 70 : 170 }, (_, index) => ({
+      angle: (Math.PI * 2 * index) / (reducedMotion ? 70 : 170),
+      orbit: 24 + Math.random() * 260,
       speed: 0.00025 + Math.random() * 0.0012,
-      size: 0.7 + Math.random() * 2.7,
+      size: 0.9 + Math.random() * 3.1,
       drift: Math.random() * Math.PI * 2,
     }));
     let width = 0;
     let height = 0;
     let frame = 0;
     let animation = 0;
+    const start = performance.now();
 
     const resize = () => {
       const dpr = Math.min(window.devicePixelRatio || 1, 2);
@@ -180,69 +381,134 @@ const JeruselaVoidCanvas: React.FC<{
       context.setTransform(dpr, 0, 0, dpr, 0, 0);
     };
 
-    const draw = () => {
-      if (!freezeRef.current) frame += 1;
+    const drawVoid = (time: number) => {
+      if (!reducedMotion) frame += 1;
       const cx = width / 2;
       const cy = height / 2;
       const energy = getAudioEnergy();
-      const breath = 0.5 + Math.sin(frame * 0.032) * 0.5;
-      const callBoost = phase === 'calling' || phase === 'checking' ? 1.28 : 1;
-      const chosenBoost = phase === 'chosen' ? 1.48 : 1;
-      const core = (42 + breath * 24 + energy * 72) * callBoost * chosenBoost;
+      const breath = 0.5 + Math.sin(frame * 0.034) * 0.5;
+      const coreBoost = phase === 'calling' || phase === 'initiation' || phase === 'checking' ? 1.55 : 1.18;
+      const core = (66 + breath * 38 + energy * 112) * coreBoost;
 
-      context.fillStyle = 'rgba(1, 3, 9, 0.32)';
+      context.fillStyle = 'rgba(1, 3, 9, 0.28)';
       context.fillRect(0, 0, width, height);
 
-      const backdrop = context.createRadialGradient(cx, cy, 0, cx, cy, Math.max(width, height) * 0.75);
-      backdrop.addColorStop(0, `rgba(250, 252, 210, ${0.18 + energy * 0.22})`);
-      backdrop.addColorStop(0.18, `rgba(95, 214, 232, ${0.08 + breath * 0.07})`);
-      backdrop.addColorStop(0.42, 'rgba(38, 49, 89, 0.08)');
-      backdrop.addColorStop(1, 'rgba(1, 3, 9, 0.92)');
+      const backdrop = context.createRadialGradient(cx, cy, 0, cx, cy, Math.max(width, height) * 0.78);
+      backdrop.addColorStop(0, `rgba(255, 252, 210, ${0.34 + energy * 0.28})`);
+      backdrop.addColorStop(0.18, `rgba(95, 214, 232, ${0.16 + breath * 0.12})`);
+      backdrop.addColorStop(0.42, 'rgba(53, 73, 140, 0.12)');
+      backdrop.addColorStop(1, 'rgba(1, 3, 9, 0.95)');
       context.fillStyle = backdrop;
       context.fillRect(0, 0, width, height);
 
       particles.forEach((particle) => {
-        if (!freezeRef.current) {
+        if (!reducedMotion) {
           particle.angle += particle.speed * (10 + energy * 38);
           particle.drift += 0.006;
         }
         const pulse = Math.sin(frame * 0.018 + particle.drift) * 18;
         const x = cx + Math.cos(particle.angle) * (particle.orbit + pulse);
         const y = cy + Math.sin(particle.angle * 0.78) * (particle.orbit * 0.42 + pulse);
-        const alpha = 0.12 + breath * 0.18 + energy * 0.28;
         context.beginPath();
-        context.fillStyle = `rgba(218, 249, 255, ${alpha})`;
+        context.fillStyle = `rgba(223, 250, 255, ${0.16 + breath * 0.24 + energy * 0.3})`;
         context.arc(x, y, particle.size + energy * 2.2, 0, Math.PI * 2);
         context.fill();
       });
 
-      const halo = context.createRadialGradient(cx, cy, 0, cx, cy, core * 5.6);
-      halo.addColorStop(0, 'rgba(255, 255, 232, 0.98)');
-      halo.addColorStop(0.12, `rgba(251, 246, 176, ${0.72 + energy * 0.2})`);
-      halo.addColorStop(0.34, `rgba(105, 232, 241, ${0.18 + energy * 0.18})`);
-      halo.addColorStop(0.68, 'rgba(70, 81, 150, 0.08)');
+      const halo = context.createRadialGradient(cx, cy, 0, cx, cy, core * 6.4);
+      halo.addColorStop(0, 'rgba(255, 255, 232, 1)');
+      halo.addColorStop(0.08, 'rgba(255, 249, 184, 0.94)');
+      halo.addColorStop(0.24, `rgba(105, 232, 241, ${0.32 + energy * 0.2})`);
+      halo.addColorStop(0.54, 'rgba(70, 81, 150, 0.14)');
       halo.addColorStop(1, 'rgba(0, 0, 0, 0)');
       context.fillStyle = halo;
       context.beginPath();
-      context.arc(cx, cy, core * 5.6, 0, Math.PI * 2);
+      context.arc(cx, cy, core * 6.4, 0, Math.PI * 2);
       context.fill();
 
-      context.fillStyle = 'rgba(255, 255, 245, 0.96)';
+      context.fillStyle = 'rgba(255, 255, 245, 0.98)';
       context.beginPath();
-      context.arc(cx, cy, Math.max(10, core * 0.42), 0, Math.PI * 2);
+      context.arc(cx, cy, Math.max(18, core * 0.48), 0, Math.PI * 2);
+      context.fill();
+    };
+
+    const drawArrival = (time: number) => {
+      const progress = Math.min(1, (time - start) / 6200);
+      const camera = reducedMotion ? 0.28 : progress * 0.5;
+      const horizon = height * worldConfig.horizon;
+
+      const sky = context.createLinearGradient(0, 0, 0, height);
+      sky.addColorStop(0, '#07111f');
+      sky.addColorStop(0.34, '#155e75');
+      sky.addColorStop(0.62, '#3f6212');
+      sky.addColorStop(1, '#092018');
+      context.fillStyle = sky;
+      context.fillRect(0, 0, width, height);
+
+      context.fillStyle = 'rgba(255, 246, 180, 0.82)';
+      context.beginPath();
+      context.arc(width * 0.74, height * 0.18, 42, 0, Math.PI * 2);
       context.fill();
 
+      for (let ridge = 0; ridge < 3; ridge += 1) {
+        context.fillStyle = `rgba(${14 + ridge * 12}, ${38 + ridge * 26}, ${49 + ridge * 18}, ${0.68 - ridge * 0.12})`;
+        context.beginPath();
+        context.moveTo(0, horizon + ridge * 34);
+        for (let x = 0; x <= width; x += 90) {
+          context.lineTo(x, horizon + Math.sin(x * 0.012 + ridge) * 32 + ridge * 38);
+        }
+        context.lineTo(width, height);
+        context.lineTo(0, height);
+        context.closePath();
+        context.fill();
+      }
+
+      const water = context.createLinearGradient(0, height * 0.78, 0, height);
+      water.addColorStop(0, 'rgba(34, 211, 238, 0.28)');
+      water.addColorStop(1, 'rgba(8, 47, 73, 0.72)');
+      context.fillStyle = water;
+      context.beginPath();
+      context.ellipse(width * 0.83, height * 0.89, width * 0.26, height * 0.11, -0.08, 0, Math.PI * 2);
+      context.fill();
+
+      worldConfig.entities
+        .slice()
+        .sort((a, b) => a.z - b.z)
+        .forEach((entity) => drawEntity(context, entity, width, height, time, camera));
+
+      const playerX = width * (worldConfig.player.x + (reducedMotion ? 0 : Math.sin(time * 0.00035) * 0.012));
+      const playerY = height * worldConfig.player.y + Math.max(0, 1 - progress) * height * 0.12;
+      if (player) drawPlayer(context, player.form, playerX, playerY, worldConfig.player.scale, time);
+
+      worldConfig.rules.forEach((rule) => {
+        const ruleProgress = Math.min(1, Math.max(0, (time - start - rule.delay) / 800));
+        if (ruleProgress <= 0) return;
+        context.globalAlpha = ruleProgress;
+        context.font = `900 ${Math.max(18, width * 0.024)}px Orbitron, sans-serif`;
+        context.textAlign = 'center';
+        context.fillStyle = '#f8fafc';
+        context.shadowColor = 'rgba(125, 211, 252, 0.8)';
+        context.shadowBlur = 24;
+        context.fillText(rule.label, width * rule.x, height * rule.y);
+        context.shadowBlur = 0;
+        context.globalAlpha = 1;
+      });
+    };
+
+    const draw = (time: number) => {
+      if (phase === 'arrival') drawArrival(time);
+      else drawVoid(time);
       animation = window.requestAnimationFrame(draw);
     };
 
     resize();
-    draw();
+    draw(start);
     window.addEventListener('resize', resize);
     return () => {
       window.cancelAnimationFrame(animation);
       window.removeEventListener('resize', resize);
     };
-  }, [getAudioEnergy, phase]);
+  }, [getAudioEnergy, phase, player, reducedMotion]);
 
   return <canvas ref={canvasRef} className="fixed inset-0 h-screen w-screen bg-[#010309]" aria-hidden="true" />;
 };
@@ -251,10 +517,16 @@ const JeruselaPortalView: React.FC<JeruselaPortalViewProps> = ({ user, onBack, o
   const [phase, setPhase] = useState<JeruselaPhase>('void');
   const [choice, setChoice] = useState<JeruselaChoice | null>(null);
   const [audioReady, setAudioReady] = useState(false);
-  const [gameState, setGameState] = useState<{ name: string; form: JeruselaChoice } | null>(null);
+  const [player, setPlayer] = useState<PlayerState | null>(null);
+  const [acknowledged, setAcknowledged] = useState(false);
   const audioLayerRef = useRef<JeruselaAudioLayer | null>(null);
 
-  const characterName = useMemo(() => buildCharacterName(user), [user]);
+  const reducedMotion = useMemo(
+    () => typeof window !== 'undefined' && window.matchMedia('(prefers-reduced-motion: reduce)').matches,
+    []
+  );
+  const playerName = useMemo(() => buildPlayerName(user), [user]);
+  const choiceVisible = phase === 'calling';
 
   useEffect(() => {
     audioLayerRef.current = createJeruselaAudioLayer(() => {
@@ -275,38 +547,47 @@ const JeruselaPortalView: React.FC<JeruselaPortalViewProps> = ({ user, onBack, o
     };
   }, []);
 
-  const chooseForm = async (nextChoice: JeruselaChoice) => {
+  const chooseForm = (nextChoice: JeruselaChoice) => {
     setChoice(nextChoice);
+    setPlayer({ name: playerName, form: nextChoice });
+    setAcknowledged(false);
+    setPhase('initiation');
+    audioLayerRef.current?.playChime();
+  };
+
+  const resolveEligibility = async () => {
+    if (!choice) return;
+    setAcknowledged(true);
     setPhase('checking');
     audioLayerRef.current?.playChime();
-    await new Promise((resolve) => window.setTimeout(resolve, 760));
+    await new Promise((resolve) => window.setTimeout(resolve, 900));
 
-    if (isPaidJeruselaMember(user)) {
-      setGameState({ name: characterName, form: nextChoice });
-      setPhase('chosen');
+    if (isEligibleJeruselaPlayer(user)) {
+      audioLayerRef.current?.whisperChosen();
+      setPhase('arrival');
       return;
     }
 
     setPhase('gated');
   };
 
-  const choiceVisible = phase === 'calling';
-
   return (
     <main className="relative min-h-screen overflow-hidden bg-[#010309] text-white">
       <JeruselaVoidCanvas
         phase={phase}
+        player={player}
+        reducedMotion={reducedMotion}
         getAudioEnergy={() => audioLayerRef.current?.getEnergy() || 0}
       />
 
-      <div className="pointer-events-none fixed inset-0 bg-[linear-gradient(180deg,rgba(1,3,9,0.22),rgba(1,3,9,0.88))]" />
+      <div className="pointer-events-none fixed inset-0 bg-[linear-gradient(180deg,rgba(1,3,9,0.1),rgba(1,3,9,0.78))]" />
 
       <div className="relative z-10 flex min-h-screen flex-col">
         <div className="flex items-center justify-between gap-3 p-4 sm:p-6">
           <button
             type="button"
             onClick={onBack}
-            className="inline-flex min-h-11 items-center gap-2 rounded-full border border-white/10 bg-black/25 px-4 py-2 text-[10px] font-black uppercase text-slate-200 backdrop-blur-xl transition hover:bg-white/10"
+            className="inline-flex min-h-11 items-center gap-2 rounded-full border border-white/10 bg-black/25 px-4 py-2 text-[10px] font-black uppercase text-slate-200 backdrop-blur-xl transition hover:bg-white/10 focus:outline-none focus:ring-2 focus:ring-cyan-200/70"
             aria-label="Return"
           >
             <ArrowLeft className="h-4 w-4" />
@@ -319,40 +600,39 @@ const JeruselaPortalView: React.FC<JeruselaPortalViewProps> = ({ user, onBack, o
         </div>
 
         <section className="flex flex-1 items-center justify-center px-4 pb-16 pt-8">
-          <div className="flex min-h-[18rem] w-full max-w-4xl flex-col items-center justify-center text-center">
+          <div className="flex min-h-[20rem] w-full max-w-4xl flex-col items-center justify-center text-center">
             <div
-              className={`flex flex-wrap items-center justify-center gap-4 transition duration-1000 ${
-                choiceVisible ? 'translate-y-0 opacity-100' : 'translate-y-4 opacity-0'
+              className={`transition duration-1000 ${
+                choiceVisible ? 'translate-y-0 opacity-100' : 'pointer-events-none translate-y-4 opacity-0'
               }`}
               aria-hidden={!choiceVisible}
             >
-              {(['man', 'woman'] as const).map((entry) => (
-                <button
-                  key={entry}
-                  type="button"
-                  onClick={() => void chooseForm(entry)}
-                  disabled={!choiceVisible}
-                  className="min-h-14 min-w-36 rounded-full border border-white/15 bg-white/10 px-8 py-4 text-sm font-black uppercase text-white shadow-2xl shadow-cyan-950/30 backdrop-blur-xl transition hover:border-cyan-200/40 hover:bg-cyan-200/15 focus:outline-none focus:ring-2 focus:ring-cyan-200/60 disabled:pointer-events-none"
-                >
-                  {entry === 'man' ? 'Man' : 'Woman'}
-                </button>
-              ))}
+              <p className="mb-6 text-base font-black uppercase text-white sm:text-xl">
+                Choose how you will enter Jerusela.
+              </p>
+              <div className="flex flex-wrap items-center justify-center gap-4">
+                {(['man', 'woman'] as const).map((entry) => (
+                  <button
+                    key={entry}
+                    type="button"
+                    onClick={() => chooseForm(entry)}
+                    disabled={!choiceVisible}
+                    className="min-h-14 min-w-36 rounded-full border border-white/15 bg-white/10 px-8 py-4 text-sm font-black uppercase text-white shadow-2xl shadow-cyan-950/30 backdrop-blur-xl transition hover:border-cyan-200/40 hover:bg-cyan-200/15 focus:outline-none focus:ring-2 focus:ring-cyan-200/60 disabled:pointer-events-none"
+                  >
+                    {entry === 'man' ? 'Man' : 'Woman'}
+                  </button>
+                ))}
+              </div>
             </div>
 
-            {phase === 'checking' && (
-              <div className="animate-pulse text-[10px] font-black uppercase text-cyan-100">
-                Identity Check
-              </div>
-            )}
-
-            {phase === 'chosen' && gameState && (
+            {phase === 'initiation' && player && (
               <div className="mx-auto w-full max-w-3xl rounded-[1.75rem] border border-white/10 bg-black/35 p-6 shadow-2xl shadow-cyan-950/40 backdrop-blur-2xl sm:p-8">
                 <div className="mx-auto mb-5 grid h-16 w-16 place-items-center rounded-full border border-cyan-200/30 bg-cyan-200/15 text-cyan-100">
                   <Sparkles className="h-7 w-7" />
                 </div>
-                <h1 className="text-3xl font-black uppercase text-white sm:text-5xl">You are chosen...</h1>
+                <h1 className="text-3xl font-black uppercase text-white sm:text-5xl">You Are Chosen</h1>
                 <p className="mx-auto mt-4 max-w-2xl text-base leading-7 text-slate-200 sm:text-lg">
-                  {gameState.name}, your goal is to serve as the light and remain bright throughout the darkness.
+                  Jerusela, your goal is to serve as the light and remain bright throughout the darkness.
                 </p>
                 <div className="mt-7 grid gap-3 sm:grid-cols-3">
                   {['Serve', 'Shine', 'Endure'].map((label) => (
@@ -361,6 +641,29 @@ const JeruselaPortalView: React.FC<JeruselaPortalViewProps> = ({ user, onBack, o
                     </div>
                   ))}
                 </div>
+                <button
+                  type="button"
+                  onClick={() => void resolveEligibility()}
+                  disabled={acknowledged}
+                  className="mt-7 inline-flex min-h-12 max-w-2xl items-center justify-center rounded-full bg-cyan-300 px-5 py-3 text-xs font-black uppercase leading-5 text-slate-950 transition hover:bg-cyan-200 focus:outline-none focus:ring-2 focus:ring-white/80 disabled:opacity-70"
+                >
+                  I understand the three guiding principles of Jerusela - Serve, Shine, and Endure - and I am ready to enter.
+                </button>
+              </div>
+            )}
+
+            {phase === 'checking' && (
+              <div className="rounded-full border border-cyan-200/25 bg-black/35 px-6 py-4 text-[10px] font-black uppercase text-cyan-100 backdrop-blur-xl">
+                Resolving Eligibility
+              </div>
+            )}
+
+            {phase === 'arrival' && player && (
+              <div className="pointer-events-none fixed bottom-8 left-1/2 z-10 w-[min(92vw,44rem)] -translate-x-1/2 rounded-[1.5rem] border border-white/10 bg-black/30 p-4 text-center shadow-2xl backdrop-blur-xl">
+                <p className="text-[10px] font-black uppercase text-cyan-100">Core Rules & Spatial Mechanics</p>
+                <p className="mt-2 text-sm leading-6 text-slate-100">
+                  {player.name} enters as the {player.form}. The first light is behavior: serve, shine, endure.
+                </p>
               </div>
             )}
           </div>
@@ -368,14 +671,14 @@ const JeruselaPortalView: React.FC<JeruselaPortalViewProps> = ({ user, onBack, o
       </div>
 
       {phase === 'gated' && (
-        <div className="fixed inset-0 z-20 grid place-items-center bg-black/72 px-4 backdrop-blur-xl">
+        <div className="fixed inset-0 z-20 grid place-items-center bg-black/62 px-4 backdrop-blur-xl">
           <div className="w-full max-w-xl rounded-[1.75rem] border border-white/12 bg-[#07101d]/95 p-6 text-center shadow-2xl shadow-black/50 sm:p-8">
             <div className="mx-auto mb-5 grid h-14 w-14 place-items-center rounded-full border border-amber-200/25 bg-amber-200/12 text-amber-100">
               <LockKeyhole className="h-6 w-6" />
             </div>
-            <h2 className="text-2xl font-black uppercase text-white">Membership Required</h2>
+            <h2 className="text-2xl font-black uppercase text-white">Eligible Membership Required</h2>
             <p className="mx-auto mt-4 max-w-lg text-sm leading-7 text-slate-300">
-              The path of the Light requires an active membership to synchronize your personal dashboard journey and ethical scores with the world of Jerusela.
+              Jerusela requires an eligible Conscious Network Hub membership before your dashboard journey and ethical scores can synchronize with this world.
             </p>
             <div className="mt-6 flex flex-col justify-center gap-3 sm:flex-row">
               <a
@@ -384,15 +687,15 @@ const JeruselaPortalView: React.FC<JeruselaPortalViewProps> = ({ user, onBack, o
                   event.preventDefault();
                   onMembership();
                 }}
-                className="inline-flex min-h-12 items-center justify-center gap-2 rounded-full bg-cyan-300 px-5 py-3 text-xs font-black uppercase text-slate-950 transition hover:bg-cyan-200"
+                className="inline-flex min-h-12 items-center justify-center gap-2 rounded-full bg-cyan-300 px-5 py-3 text-xs font-black uppercase text-slate-950 transition hover:bg-cyan-200 focus:outline-none focus:ring-2 focus:ring-white/80"
               >
                 <Crown className="h-4 w-4" />
-                Upgrade Membership
+                Membership
               </a>
               <button
                 type="button"
                 onClick={onBack}
-                className="inline-flex min-h-12 items-center justify-center rounded-full border border-white/10 bg-white/5 px-5 py-3 text-xs font-black uppercase text-slate-200 transition hover:bg-white/10"
+                className="inline-flex min-h-12 items-center justify-center rounded-full border border-white/10 bg-white/5 px-5 py-3 text-xs font-black uppercase text-slate-200 transition hover:bg-white/10 focus:outline-none focus:ring-2 focus:ring-cyan-200/70"
               >
                 Leave
               </button>
