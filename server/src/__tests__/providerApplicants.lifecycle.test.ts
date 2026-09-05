@@ -47,6 +47,17 @@ jest.mock('../services/notificationStore', () => ({
   ),
 }));
 
+const mockReplies: any[] = [];
+jest.mock('../services/adminMessageStore', () => ({
+  listAdminMessages: jest.fn(async (filters: any) => mockReplies.filter((reply) =>
+    reply.submitterUserId === filters.submitterUserId && reply.metadata.applicantId === filters.applicantId)),
+  createAdminMessage: jest.fn(async (input: any) => {
+    const reply = { ...input, id: `reply-${mockReplies.length}`, createdAt: new Date().toISOString() };
+    mockReplies.push(reply);
+    return reply;
+  }),
+}));
+
 const { providerApplicantProtectedRoutes } = require('../routes/providerApplicants');
 
 let server: http.Server | null = null;
@@ -123,6 +134,7 @@ describe('provider applicant lifecycle status access', () => {
     users.clear();
     applicants.clear();
     notifications.clear();
+    mockReplies.length = 0;
   });
 
   it('lets a formerly approved provider view their rejected applicant status without CRM access', async () => {
@@ -216,4 +228,45 @@ describe('provider applicant lifecycle status access', () => {
     expect(response.status).toBe(403);
     expect(response.body?.error).toBe('Provider application status access only.');
   });
+  it('keeps private review and account fields out of the applicant portal', async () => {
+    users.set('applicant-1', createUser('applicant-1', 'applicant'));
+    applicants.set('applicant-1', { id: 'application-1', status: 'needs_more_info', adminNotes: 'private review', user: { password: 'private hash' }, consentAudit: { ip: 'private' } });
+    const result = await requestJson({ method: 'GET', path: '/api/provider-applicants/current', token: tokenFor('applicant-1') });
+    expect(result.status).toBe(200);
+    expect(result.body.applicant).toEqual({ id: 'application-1', status: 'needs_more_info' });
+  });
+
+  it('persists own follow-ups without changing status and excludes other applicants replies', async () => {
+    users.set('applicant-1', createUser('applicant-1', 'applicant'));
+    applicants.set('applicant-1', { id: 'application-1', status: 'needs_more_info', firstName: 'A', lastName: 'One', email: 'one@example.com' });
+    mockReplies.push({ id: 'other-reply', message: 'private response', createdAt: new Date().toISOString(), submitterUserId: 'other-user', metadata: { applicantId: 'other-app' } });
+    const sent = await requestJson({ method: 'POST', path: '/api/provider-applicants/current/follow-up', token: tokenFor('applicant-1'), body: { message: 'Here is my clarification.' } });
+    expect(sent.status).toBe(201);
+    expect(applicants.get('applicant-1').status).toBe('needs_more_info');
+    const current = await requestJson({ method: 'GET', path: '/api/provider-applicants/current', token: tokenFor('applicant-1') });
+    expect(current.body.replies).toHaveLength(1);
+    expect(current.body.replies[0].message).toBe('Here is my clarification.');
+  });
+
+  it.each([{ message: '' }, { message: 'x'.repeat(4001) }, { message: 'hello', userId: 'someone-else' }, { message: 'hello', status: 'approved' }])('rejects invalid or authority-bearing follow-up payloads', async (body) => {
+    users.set('applicant-1', createUser('applicant-1', 'applicant'));
+    const result = await requestJson({ method: 'POST', path: '/api/provider-applicants/current/follow-up', token: tokenFor('applicant-1'), body });
+    expect(result.status).toBe(400);
+    expect(mockReplies).toHaveLength(0);
+  });
+
+  it('does not let an administrator submit an applicant response', async () => {
+    users.set('admin-1', createUser('admin-1', 'admin'));
+    const result = await requestJson({ method: 'POST', path: '/api/provider-applicants/current/follow-up', token: tokenFor('admin-1'), body: { message: 'hello' } });
+    expect(result.status).toBe(403);
+    expect(mockReplies).toHaveLength(0);
+  });
+
+  it('does not accept follow-ups for a closed application', async () => {
+    users.set('applicant-1', createUser('applicant-1', 'applicant'));
+    applicants.set('applicant-1', { id: 'application-1', status: 'approved' });
+    const result = await requestJson({ method: 'POST', path: '/api/provider-applicants/current/follow-up', token: tokenFor('applicant-1'), body: { message: 'hello' } });
+    expect(result.status).toBe(409);
+  });
+
 });

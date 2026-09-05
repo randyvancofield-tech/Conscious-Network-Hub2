@@ -1,4 +1,5 @@
 import crypto from 'crypto';
+import { protectSensitiveText, revealSensitiveText } from './sensitiveDataPolicy';
 import { Prisma, PrismaClient } from '@prisma/client';
 import { getPrisma } from './prismaClient';
 
@@ -100,6 +101,9 @@ export interface AdminMessageListFilters {
   status?: AdminMessageStatus | 'all';
   type?: AdminMessageType | 'all';
   limit?: number;
+  submitterUserId?: string;
+  source?: string;
+  applicantId?: string;
 }
 
 export const ADMIN_INBOX_RECIPIENT_EMAIL =
@@ -179,7 +183,7 @@ const mapRow = (row: AdminMessageRow): AdminMessage => ({
   status: normalizeAdminMessageStatus(row.status),
   priority: normalizeAdminMessagePriority(row.priority),
   subject: row.subject,
-  message: row.message,
+  message: row.source === 'provider_applicant_follow_up' ? revealSensitiveText('providerApplicant.followUp', row.message) || '' : row.message,
   submitterName: row.submitterName,
   submitterEmail: row.submitterEmail,
   submitterUserId: row.submitterUserId,
@@ -258,7 +262,9 @@ export const createAdminMessage = async (
   const type = normalizeAdminMessageType(input.type);
   const priority = normalizeAdminMessagePriority(input.priority);
   const subject = normalizeText(input.subject, 'Platform message', 240);
-  const message = normalizeText(input.message, 'No message supplied.', 8000);
+  const plainMessage = normalizeText(input.message, 'No message supplied.', 8000);
+  const message = input.source === 'provider_applicant_follow_up'
+    ? protectSensitiveText('providerApplicant.followUp', plainMessage) || '' : plainMessage;
   const source = normalizeText(input.source, 'platform', 120);
   const recipientEmail = normalizeEmail(input.recipientEmail) || ADMIN_INBOX_RECIPIENT_EMAIL;
   const metadata = input.metadata && typeof input.metadata === 'object' ? input.metadata : null;
@@ -321,6 +327,10 @@ export const listAdminMessages = async (
   const type = filters.type && filters.type !== 'all'
     ? normalizeAdminMessageType(filters.type)
     : null;
+
+  if (filters.submitterUserId) clauses.push(Prisma.sql`"submitterUserId" = ${filters.submitterUserId}`);
+  if (filters.source) clauses.push(Prisma.sql`"source" = ${filters.source}`);
+  if (filters.applicantId) clauses.push(Prisma.sql`"metadata"->>'applicantId' = ${filters.applicantId}`);
 
   if (status) clauses.push(Prisma.sql`"status" = ${status}`);
   if (type) clauses.push(Prisma.sql`"type" = ${type}`);

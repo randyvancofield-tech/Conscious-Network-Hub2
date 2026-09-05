@@ -1,3 +1,4 @@
+import ProviderWalletGuide from './components/ProviderWalletGuide';
 
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import Dashboard from './components/Dashboard';
@@ -3914,6 +3915,7 @@ const App: React.FC = () => {
               <div className="mb-6 flex h-14 w-14 items-center justify-center rounded-2xl border border-blue-300/20 bg-blue-500/10 text-blue-100">
                 <WalletCards className="h-6 w-6" />
               </div>
+              {(isProviderWalletBindingRequired || isProviderWalletVerificationRequired) && <ProviderWalletGuide />}
               <h2 className="text-2xl font-black uppercase tracking-tight text-white sm:text-3xl">
                 Approved Provider Sign In
               </h2>
@@ -4100,7 +4102,7 @@ const App: React.FC = () => {
         return (
           <ProviderApplicantSignInPage
             isAdmin={hasAdminRole(user)}
-            onAdminAccess={() => setCurrentView(hasAdminRole(user) ? AppView.PROVIDER_APPLICATION_STATUS : AppView.ADMINISTRATIVE_ACCESS)}
+            onAdminAccess={() => setCurrentView(hasAdminRole(user) ? AppView.ADMIN_DASHBOARD : AppView.ADMINISTRATIVE_ACCESS)}
             onBack={() => setCurrentView(AppView.PROVIDER_ACCESS)}
             onSignIn={handleProviderApplicantSignIn}
             onPasswordReset={requestPasswordResetForEmail}
@@ -4269,7 +4271,7 @@ const App: React.FC = () => {
         return <NotificationsCenter onBack={() => setCurrentView(AppView.DASHBOARD)} />;
       case AppView.ADMIN_DASHBOARD:
         return hasAdminRole(user) ? (
-          <AdminDashboard />
+          <AdminDashboard onApplicantPreview={() => setCurrentView(AppView.PROVIDER_APPLICATION_STATUS)} onApplicantReview={() => setCurrentView(AppView.ADMIN_PROVIDER_APPLICANTS)} />
         ) : (
           <NotFoundPage
             path={activePath}

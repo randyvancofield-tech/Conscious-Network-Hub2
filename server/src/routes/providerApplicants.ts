@@ -1,4 +1,7 @@
 import { Router, Request, Response, NextFunction } from 'express';
+import rateLimit from 'express-rate-limit';
+import { createAdminMessage } from '../services/adminMessageStore';
+import { listApplicantFollowUps, toApplicantPortalRecord } from '../services/applicantPortal';
 import multer, { MulterError } from 'multer';
 import {
   computePasswordFingerprint,
@@ -520,7 +523,7 @@ publicRouter.post(
         token: session.token,
         expiresAt: session.expiresAt,
         user: buildPublicUser(user),
-        applicant,
+        applicant: toApplicantPortalRecord(applicant),
         calendlyUrl: PROVIDER_APPLICANT_CALENDLY_URL,
         recoveryCodes,
         recoveryCodesShownOnce: recoveryCodes.length > 0,
@@ -570,12 +573,13 @@ protectedRouter.get('/current', async (req: Request, res: Response): Promise<voi
     return;
   }
   const notifications = await listNotificationsForUser({ userId, role, limit: 25 });
-  res.json({
-    success: true,
-    applicant,
-    notifications,
-    calendlyUrl: PROVIDER_APPLICANT_CALENDLY_URL,
-  });
+  try {
+    const replies = await listApplicantFollowUps(userId, applicant.id);
+    res.json({ success: true, applicant: toApplicantPortalRecord(applicant), replies,
+      notifications, calendlyUrl: PROVIDER_APPLICANT_CALENDLY_URL });
+  } catch {
+    res.status(503).json({ error: 'Application follow-ups are temporarily unavailable. Please retry.' });
+  }
 });
 
 protectedRouter.post('/current/calendly-shown', async (req: Request, res: Response): Promise<void> => {
@@ -605,9 +609,40 @@ protectedRouter.post('/current/calendly-shown', async (req: Request, res: Respon
   });
   res.json({
     success: true,
-    applicant: updated,
+    applicant: toApplicantPortalRecord(updated),
     calendlyUrl: PROVIDER_APPLICANT_CALENDLY_URL,
   });
+});
+
+protectedRouter.post('/current/follow-up', rateLimit({ windowMs: 15 * 60 * 1000, max: 10 }), async (req: Request, res: Response): Promise<void> => {
+  const userId = getAuthenticatedUserId(req);
+  if (!userId) { res.status(401).json({ error: 'Authentication required' }); return; }
+  if (getAuthenticatedRole(req) === 'admin') {
+    res.status(403).json({ error: 'Use administrative review controls to contact applicants.' }); return;
+  }
+  const body = req.body;
+  if (!body || typeof body.message !== 'string' || !body.message.trim() || body.message.trim().length > 4000 ||
+      Object.keys(body).some((key) => key !== 'message')) {
+    res.status(400).json({ error: 'Provide a message of 1 to 4,000 characters only.' }); return;
+  }
+  try {
+    const applicant = await getProviderApplicantByUserId(userId);
+    if (!applicant) { res.status(404).json({ error: 'Application not found.' }); return; }
+    if (!['submitted', 'under_review', 'discovery_scheduled', 'needs_more_info'].includes(applicant.status)) {
+      res.status(409).json({ error: 'Follow-up is available while your application is being reviewed.' }); return;
+    }
+    const reply = await createAdminMessage({
+      type: 'support', source: 'provider_applicant_follow_up', category: 'provider_application',
+      subject: 'Applicant follow-up', message: body.message.trim(), submitterUserId: userId,
+      submitterName: `${applicant.firstName} ${applicant.lastName}`, submitterEmail: applicant.email,
+      route: '/admin/provider-applicants', metadata: { applicantId: applicant.id },
+    });
+    recordAuditEvent(req, { domain: 'auth', action: 'provider_applicant_follow_up', outcome: 'success',
+      actorUserId: userId, statusCode: 201, metadata: { applicantId: applicant.id, replyId: reply.id } });
+    res.status(201).json({ success: true, reply: { id: reply.id, message: reply.message, createdAt: reply.createdAt } });
+  } catch {
+    res.status(503).json({ error: 'Your reply could not be saved. Please retry shortly.' });
+  }
 });
 
 const handleUploadMiddlewareError = (

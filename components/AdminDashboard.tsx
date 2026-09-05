@@ -484,7 +484,7 @@ const isUserLocked = (user: AdminUserSummary): boolean => {
   return Number.isFinite(lockedUntil.getTime()) && lockedUntil.getTime() > Date.now();
 };
 
-const AdminDashboard: React.FC = () => {
+const AdminDashboard: React.FC<{ onApplicantPreview: () => void; onApplicantReview: () => void }> = ({ onApplicantPreview, onApplicantReview }) => {
   const [password, setPassword] = useState('');
   const [elevationCode, setElevationCode] = useState('');
   const [dashboard, setDashboard] = useState<AdminDashboardPayload | null>(null);
@@ -1150,6 +1150,15 @@ const AdminDashboard: React.FC = () => {
           </SurfacePanel>
         </>
       )}
+
+      <SurfacePanel className="mb-5">
+        <h2 className="text-sm font-bold text-white">Applicant follow-up workspace</h2>
+        <p className="mt-2 text-sm text-slate-300">Review replies, request information, and record decisions in administrative review. Preview opens sample applicant screens with no approval or applicant submission actions.</p>
+        <div className="mt-4 flex flex-wrap gap-3">
+          <ActionButton type="button" onClick={onApplicantReview}>Review applications and follow-ups</ActionButton>
+          <ActionButton type="button" variant="secondary" onClick={onApplicantPreview}>View applicant portal (read-only)</ActionButton>
+        </div>
+      </SurfacePanel>
 
       {activeSection === 'submissions' && (
         <SurfacePanel className="overflow-hidden">

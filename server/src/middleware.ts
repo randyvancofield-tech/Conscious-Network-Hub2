@@ -20,7 +20,7 @@ const isProviderApplicantLifecycleStatusRoute = (req: Request): boolean => {
   const path = String(req.path || '').replace(/\/+$/, '') || '/';
   if (!baseUrl.endsWith('/provider-applicants')) return false;
   if (req.method === 'GET' && path === '/current') return true;
-  if (req.method === 'POST' && path === '/current/calendly-shown') return true;
+  if (req.method === 'POST' && ['/current/calendly-shown', '/current/follow-up'].includes(path)) return true;
   return false;
 };
 

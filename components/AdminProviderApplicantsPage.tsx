@@ -141,6 +141,7 @@ const AdminProviderApplicantsPage: React.FC = () => {
   const [filter, setFilter] = useState('');
   const [applicants, setApplicants] = useState<ProviderApplicantAdminRecord[]>([]);
   const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [replies, setReplies] = useState<Array<{ id: string; message: string; createdAt: string }>>([]);
   const [selected, setSelected] = useState<ProviderApplicantAdminRecord | null>(null);
   const [statusDraft, setStatusDraft] = useState('submitted');
   const [notesDraft, setNotesDraft] = useState('');
@@ -212,11 +213,12 @@ const AdminProviderApplicantsPage: React.FC = () => {
   const loadSelected = async (id: string) => {
     setError('');
     try {
-      const data = await api<{ applicant: ProviderApplicantAdminRecord }>(`/admin/provider-applicants/${encodeURIComponent(id)}`, {
+      const data = await api<{ applicant: ProviderApplicantAdminRecord; replies?: Array<{ id: string; message: string; createdAt: string }> }>(`/admin/provider-applicants/${encodeURIComponent(id)}`, {
         headers: adminHeaders(),
         cache: 'no-store',
       });
       setSelected(data.applicant);
+      setReplies(data.replies || []);
       setStatusDraft(data.applicant.status || 'submitted');
       setNotesDraft(data.applicant.adminNotes || '');
       setSendEmailDraft(true);
@@ -659,6 +661,16 @@ const AdminProviderApplicantsPage: React.FC = () => {
                 </div>
               </div>
 
+              <section className="rounded-2xl border border-white/10 p-4">
+                <h2 className="text-lg font-bold text-white">Applicant follow-ups</h2>
+                <p className="mt-2 text-sm text-slate-300">Replies do not change approval. Review the response, then choose the next status and write an applicant-facing message below. Keep private assessments in Internal Admin Notes.</p>
+                {replies.length === 0 && <p className="mt-3 text-sm text-slate-400">No replies received.</p>}
+                {replies.map((reply) => <article key={reply.id} className="mt-3 rounded-xl bg-white/5 p-4">
+                  <time className="text-xs text-slate-400">{new Date(reply.createdAt).toLocaleString()}</time>
+                  <p className="mt-2 whitespace-pre-wrap text-sm text-white">{reply.message}</p>
+                </article>)}
+              </section>
+
               <label className="block space-y-2">
                 <span className="text-sm font-black uppercase text-white">Internal Admin Notes</span>
                 <textarea
@@ -682,15 +694,14 @@ const AdminProviderApplicantsPage: React.FC = () => {
                 </label>
                 <label className="mt-4 block space-y-2">
                   <span className="text-xs font-black uppercase tracking-widest text-slate-500">
-                    Applicant Message
+                    Applicant Message (visible in portal; email is optional)
                   </span>
                   <textarea
                     value={applicantMessageDraft}
                     onChange={(event) => setApplicantMessageDraft(event.target.value)}
                     rows={4}
                     maxLength={2000}
-                    disabled={!sendEmailDraft}
-                    placeholder="Add a concise applicant-facing update."
+                    placeholder="State what is needed, why, and the next step. Add a concise applicant-facing update."
                     className="w-full resize-y rounded-2xl border border-white/10 bg-slate-950/70 px-4 py-3 text-sm leading-6 text-white outline-none focus:ring-2 focus:ring-blue-500/30 disabled:opacity-50"
                   />
                 </label>

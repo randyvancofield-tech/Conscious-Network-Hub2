@@ -84,7 +84,7 @@ const ProviderApplicantSignInPage: React.FC<ProviderApplicantSignInPageProps> = 
           onClick={onAdminAccess}
           className="mt-5 w-full rounded-xl border border-amber-200/30 px-4 py-3 text-sm text-amber-100 hover:bg-white/10"
         >
-          {isAdmin ? 'Preview applicant portal as administrator' : 'Administrator access'}
+          {isAdmin ? 'Return to administrator workspace' : 'Administrator access'}
         </button>
 
         <form onSubmit={submit} className="mt-7 space-y-5">

@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { Bell, CalendarCheck, ChevronRight, FileText, LockKeyhole, RefreshCw, WalletCards } from 'lucide-react';
+import ProviderWalletGuide from './ProviderWalletGuide';
 import { api } from '../services/apiClient';
 import { openPrivateUpload } from '../services/privateUploadService';
 
@@ -103,6 +104,10 @@ const ProviderApplicationStatusPage: React.FC<ProviderApplicationStatusPageProps
   const [notifications, setNotifications] = useState<ApplicantNotificationRecord[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  const [replyText, setReplyText] = useState('');
+  const [sendingReply, setSendingReply] = useState(false);
+  const [replyNotice, setReplyNotice] = useState('');
+  const [replies, setReplies] = useState<Array<{ id: string; message: string; createdAt: string }>>([]);
 
   const load = async () => {
     setLoading(true);
@@ -121,11 +126,13 @@ const ProviderApplicationStatusPage: React.FC<ProviderApplicationStatusPageProps
       const data = await api<{
         applicant: ProviderApplicantRecord;
         notifications?: ApplicantNotificationRecord[];
+        replies?: Array<{ id: string; message: string; createdAt: string }>;
         calendlyUrl?: string;
       }>('/provider-applicants/current', {
         cache: 'no-store',
       });
       setApplicant(data.applicant);
+      setReplies(data.replies || []);
       setNotifications(Array.isArray(data.notifications) ? data.notifications : []);
       if (['submitted', 'under_review'].includes(String(data.applicant?.status || '').toLowerCase())) {
         void api('/provider-applicants/current/calendly-shown', { method: 'POST', body: {} }).catch(() => undefined);
@@ -140,6 +147,23 @@ const ProviderApplicationStatusPage: React.FC<ProviderApplicationStatusPageProps
   useEffect(() => {
     void load();
   }, [adminPreview]);
+
+  const sendReply = async (event: React.FormEvent) => {
+    event.preventDefault();
+    if (adminPreview || sendingReply || !replyText.trim()) return;
+    setSendingReply(true);
+    setReplyNotice('');
+    try {
+      const data = await api<{ reply: { id: string; message: string; createdAt: string } }>('/provider-applicants/current/follow-up', {
+        method: 'POST', body: { message: replyText.trim() },
+      });
+      setReplies((current) => [data.reply, ...current]);
+      setReplyText('');
+      setReplyNotice('Your reply is saved for administrative review. Your application status has not changed.');
+    } catch (error) {
+      setReplyNotice(error instanceof Error ? error.message : 'Your reply could not be saved. Your draft is still here.');
+    } finally { setSendingReply(false); }
+  };
 
   const nextStep = useMemo(() => {
     const status = String(applicant?.status || '').toLowerCase();
@@ -174,7 +198,7 @@ const ProviderApplicationStatusPage: React.FC<ProviderApplicationStatusPageProps
       <div className="mx-auto max-w-6xl">
         {adminPreview && (
           <div className="mb-5 rounded-xl border border-amber-200/30 bg-amber-400/10 p-4 text-sm text-amber-100">
-            <p>Administrator preview ? sample information only. Your administrator session remains active.</p>
+            <p>Administrator read-only preview - sample information only. Your administrator session remains active.</p>
             <label className="mt-3 flex flex-wrap items-center gap-3">
               Preview application stage
               <select
@@ -277,10 +301,32 @@ const ProviderApplicationStatusPage: React.FC<ProviderApplicationStatusPageProps
                 </div>
               )}
 
+              {['submitted', 'under_review', 'discovery_scheduled', 'needs_more_info'].includes(applicant.status) && (
+                <form onSubmit={sendReply} className="rounded-2xl border border-white/10 p-5">
+                  <h2 className="text-lg font-bold text-white">Follow up with your reviewer</h2>
+                  <p className="mt-2 text-sm leading-6 text-slate-300">Answer each requested item clearly or ask about your next step. Send only information relevant to your application. Never include passwords, wallet recovery phrases, patient details, or payment-card numbers. This form accepts text; ask your reviewer for a secure document submission method if needed.</p>
+                  <label className="mt-4 block text-sm text-white">
+                    Your response
+                    <textarea value={replyText} onChange={(event) => setReplyText(event.target.value)} required maxLength={4000} rows={5} disabled={adminPreview || sendingReply} className="mt-2 w-full rounded-xl bg-slate-900 p-3" />
+                  </label>
+                  <button type="submit" disabled={adminPreview || sendingReply || !replyText.trim()} className="mt-3 rounded-xl bg-amber-300 px-4 py-3 font-bold text-slate-950 disabled:opacity-50">{adminPreview ? 'Send response (preview only)' : sendingReply ? 'Saving response...' : 'Send response'}</button>
+                  <p role="status" className="mt-3 text-sm text-amber-100">{replyNotice}</p>
+                </form>
+              )}
+              {replies.length > 0 && <section className="rounded-2xl border border-white/10 p-5">
+                <h2 className="text-lg font-bold text-white">Your submitted responses</h2>
+                {replies.map((reply) => <article key={reply.id} className="mt-4">
+                  <time className="text-xs text-slate-400">{new Date(reply.createdAt).toLocaleString()}</time>
+                  <p className="mt-2 whitespace-pre-wrap text-sm text-slate-200">{reply.message}</p>
+                </article>)}
+              </section>}
+              {applicant.status === 'approved' && <ProviderWalletGuide />}
+
               {String(applicant.status || '').toLowerCase() === 'approved' && (
                 <button
                   type="button"
                   onClick={onBack}
+                  disabled={adminPreview}
                   className="flex w-full items-center justify-center gap-2 rounded-2xl bg-blue-600 px-5 py-4 text-xs font-black uppercase tracking-widest text-white transition hover:bg-blue-500"
                 >
                   <WalletCards className="h-4 w-4" />
@@ -290,7 +336,8 @@ const ProviderApplicationStatusPage: React.FC<ProviderApplicationStatusPageProps
 
               {['submitted', 'under_review'].includes(String(applicant.status || '').toLowerCase()) && (
                 <a
-                  href={CALENDLY_URL}
+                  href={adminPreview ? undefined : CALENDLY_URL}
+                  aria-disabled={adminPreview}
                   target="_blank"
                   rel="noreferrer"
                   className="flex items-center justify-center gap-2 rounded-2xl bg-amber-400 px-5 py-4 text-xs font-black uppercase tracking-widest text-slate-950 transition hover:bg-amber-300"

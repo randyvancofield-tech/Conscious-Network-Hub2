@@ -1,3 +1,4 @@
+import { listApplicantFollowUps } from '../services/applicantPortal';
 import { Router, Request, Response, NextFunction } from 'express';
 import {
   createAdminElevationToken,
@@ -2121,7 +2122,12 @@ router.get('/provider-applicants/:id', async (req: Request, res: Response): Prom
     metadata: { applicantId: applicant.id, status: applicant.status },
   });
 
-  res.json({ success: true, applicant: toAdminProviderApplicantRecord(applicant) });
+  try {
+    const replies = await listApplicantFollowUps(applicant.userId, applicant.id);
+    res.json({ success: true, applicant: toAdminProviderApplicantRecord(applicant), replies });
+  } catch {
+    res.status(503).json({ error: 'Application follow-ups are temporarily unavailable. Please retry.' });
+  }
 });
 
 router.delete('/provider-applicants/:id', async (req: Request, res: Response): Promise<void> => {
@@ -2233,6 +2239,11 @@ router.patch('/provider-applicants/:id', async (req: Request, res: Response): Pr
     return;
   }
 
+  if (status === 'needs_more_info' && !applicantMessage) {
+    res.status(400).json({ error: 'Explain what the applicant needs to provide in Applicant Message.' });
+    return;
+  }
+
   const updated = await updateProviderApplicantReview(id, {
     ...(status ? { status } : {}),
     ...(adminNotes !== undefined ? { adminNotes } : {}),
@@ -2316,7 +2327,7 @@ router.patch('/provider-applicants/:id', async (req: Request, res: Response): Pr
           ? 'provider'
           : targetUser?.role === 'provider'
           ? 'provider'
-          : 'user',
+          : 'user,applicant',
       metadata: {
         applicantId: id,
         previousStatus: existing.status,

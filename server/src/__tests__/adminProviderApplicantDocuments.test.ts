@@ -66,6 +66,8 @@ jest.mock('../services/uploadBlobStore', () => ({
   resolveUploadObjectByKey: mockResolveUploadObjectByKey,
 }));
 
+jest.mock('../services/applicantPortal', () => ({ listApplicantFollowUps: jest.fn(async () => []) }));
+
 const adminRoutes = require('../routes/admin').default;
 
 let server: http.Server | null = null;
