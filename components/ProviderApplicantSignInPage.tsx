@@ -3,6 +3,8 @@ import { ChevronRight, KeyRound, ShieldCheck } from 'lucide-react';
 
 interface ProviderApplicantSignInPageProps {
   onBack: () => void;
+  isAdmin?: boolean;
+  onAdminAccess: () => void;
   onSignIn: (email: string, password: string) => Promise<void>;
   onPasswordReset: (email: string) => Promise<string>;
   onSignedIn: () => void;
@@ -10,6 +12,8 @@ interface ProviderApplicantSignInPageProps {
 
 const ProviderApplicantSignInPage: React.FC<ProviderApplicantSignInPageProps> = ({
   onBack,
+  isAdmin = false,
+  onAdminAccess,
   onSignIn,
   onPasswordReset,
   onSignedIn,
@@ -74,6 +78,14 @@ const ProviderApplicantSignInPage: React.FC<ProviderApplicantSignInPageProps> = 
           Sign in with the credentials created during your application. This area is limited to
           application status and submitted provider information.
         </p>
+
+        <button
+          type="button"
+          onClick={onAdminAccess}
+          className="mt-5 w-full rounded-xl border border-amber-200/30 px-4 py-3 text-sm text-amber-100 hover:bg-white/10"
+        >
+          {isAdmin ? 'Preview applicant portal as administrator' : 'Administrator access'}
+        </button>
 
         <form onSubmit={submit} className="mt-7 space-y-5">
           <label className="block space-y-2">

@@ -94,4 +94,39 @@ describe('requireCanonicalIdentity', () => {
     expect(res.json).not.toHaveBeenCalled();
     expect(mockedRevokeUserSession).not.toHaveBeenCalled();
   });
+  it.each([
+    ['applicant', null, '/api/social', '/', 'GET', false],
+    ['user', 'submitted', '/api/ai', '/chat', 'POST', false],
+    ['user', 'rejected', '/api/membership', '/checkout', 'POST', false],
+    ['applicant', null, '/api/user', '/profile', 'PATCH', false],
+    ['applicant', null, '/api/provider-applicants', '/current', 'GET', true],
+    ['user', 'submitted', '/api/provider-applicants', '/current/calendly-shown', 'POST', true],
+    ['applicant', null, '/api/user', '/current', 'GET', true],
+    ['applicant', null, '/api/user', '/logout', 'POST', true],
+    ['applicant', null, '/api/upload', '/object/document-key', 'GET', true],
+    ['applicant', null, '/api/upload', '/avatar', 'POST', false],
+    ['applicant', null, '/api/notifications', '/', 'GET', true],
+    ['user', null, '/api/social', '/', 'GET', true],
+    ['admin', 'submitted', '/api/admin', '/dashboard', 'GET', true],
+    ['provider', 'approved', '/api/social', '/', 'GET', true],
+  ])('applies applicant boundary for %s %s %s%s %s', async (role, status, baseUrl, path, method, allowed) => {
+    mockedVerifySessionToken.mockReturnValue({ userId: 'account', sessionId: 'session', issuedAt: Date.now(), expiresAt: Date.now() + 60000 });
+    mockedGetUserSessionById.mockResolvedValue({ id: 'session', userId: 'account', issuedAt: new Date(), expiresAt: new Date(Date.now() + 60000), revokedAt: null });
+    mockedLocalStoreGetUserById.mockResolvedValue({ id: 'account', role, providerApprovalStatus: status, providerApproved: role === 'provider' } as never);
+    mockedIsProviderAccessActive.mockReturnValue(true);
+    const req = { baseUrl, path, method, headers: { authorization: 'Bearer token' } } as Request;
+    const res = { status: jest.fn().mockReturnThis(), json: jest.fn().mockReturnThis() } as unknown as Response;
+    const next = jest.fn();
+    requireCanonicalIdentity(req, res, next);
+    await new Promise<void>((resolve) => setImmediate(resolve));
+    if (allowed) expect(next).toHaveBeenCalledTimes(1);
+    else {
+      expect(next).not.toHaveBeenCalled();
+      expect(res.status).toHaveBeenCalledWith(403);
+      expect(res.json).toHaveBeenCalledWith(expect.objectContaining({ code: 'APPLICANT_ACCESS_ONLY' }));
+    }
+    // A blocked feature must not destroy the applicant's status-portal session.
+    expect(mockedRevokeUserSession).not.toHaveBeenCalled();
+  });
+
 });

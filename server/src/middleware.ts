@@ -24,6 +24,31 @@ const isProviderApplicantLifecycleStatusRoute = (req: Request): boolean => {
   return false;
 };
 
+// Legacy applications were created as users; enforce the same boundary for both roles.
+const hasApplicantOnlyAccess = (user: { role?: string; providerApproved?: boolean; providerApprovalStatus?: string | null }): boolean =>
+  user.role === 'applicant' || (
+    user.role === 'user' && user.providerApproved !== true &&
+    ['submitted', 'under_review', 'needs_more_info', 'discovery_scheduled', 'rejected']
+      .includes(String(user.providerApprovalStatus || '').trim().toLowerCase())
+  );
+
+const isApplicantAllowedRoute = (req: Request): boolean => {
+  const base = String(req.baseUrl || '').replace(/\/+$/, '');
+  const path = String(req.path || '').replace(/\/+$/, '') || '/';
+  if (isProviderApplicantLifecycleStatusRoute(req)) return true;
+  if (base === '/api/user') {
+    return (req.method === 'GET' && path === '/current') ||
+      (req.method === 'POST' && path === '/logout');
+  }
+  // The upload handler separately verifies ownership of the requested document.
+  if (base === '/api/upload') return req.method === 'GET' && /^\/object\/[^/]+$/.test(path);
+  if (base === '/api/notifications') return (
+    (req.method === 'GET' && path === '/') ||
+    (req.method === 'PATCH' && (path === '/read-all' || /^\/[^/]+\/read$/.test(path)))
+  );
+  return false;
+};
+
 /**
  * Input validation middleware
  */
@@ -205,6 +230,14 @@ export function requireCanonicalIdentity(
         role: user.role,
       });
       res.status(403).json({ error: 'Provider access is not active' });
+      return;
+    }
+
+    if (hasApplicantOnlyAccess(user) && !isApplicantAllowedRoute(req)) {
+      res.status(403).json({
+        error: 'Your account is limited to the applicant portal until provider approval.',
+        code: 'APPLICANT_ACCESS_ONLY',
+      });
       return;
     }
 

@@ -7,6 +7,7 @@ const CALENDLY_URL = 'https://calendly.com/randycofield/buildingconnections';
 
 interface ProviderApplicationStatusPageProps {
   onBack: () => void;
+  adminPreview?: boolean;
   onSignOut: () => void;
 }
 
@@ -96,6 +97,7 @@ const FileLink: React.FC<{ label: string; file?: ApplicantFileRef; onError?: (me
 const ProviderApplicationStatusPage: React.FC<ProviderApplicationStatusPageProps> = ({
   onBack,
   onSignOut,
+  adminPreview = false,
 }) => {
   const [applicant, setApplicant] = useState<ProviderApplicantRecord | null>(null);
   const [notifications, setNotifications] = useState<ApplicantNotificationRecord[]>([]);
@@ -105,6 +107,16 @@ const ProviderApplicationStatusPage: React.FC<ProviderApplicationStatusPageProps
   const load = async () => {
     setLoading(true);
     setError('');
+    if (adminPreview) {
+      setApplicant({
+        id: 'admin-preview', email: 'preview@example.com', firstName: 'Preview', lastName: 'Applicant',
+        providerCategory: 'Wellness provider', status: 'submitted',
+        professionalTitle: 'Sample provider', servicesOffered: ['Wellness education'],
+      });
+      setNotifications([]);
+      setLoading(false);
+      return;
+    }
     try {
       const data = await api<{
         applicant: ProviderApplicantRecord;
@@ -127,7 +139,7 @@ const ProviderApplicationStatusPage: React.FC<ProviderApplicationStatusPageProps
 
   useEffect(() => {
     void load();
-  }, []);
+  }, [adminPreview]);
 
   const nextStep = useMemo(() => {
     const status = String(applicant?.status || '').toLowerCase();
@@ -160,6 +172,31 @@ const ProviderApplicationStatusPage: React.FC<ProviderApplicationStatusPageProps
   return (
     <div className="min-h-[100dvh] overflow-y-auto bg-[#100f0a] p-4 text-white sm:p-6 lg:p-8">
       <div className="mx-auto max-w-6xl">
+        {adminPreview && (
+          <div className="mb-5 rounded-xl border border-amber-200/30 bg-amber-400/10 p-4 text-sm text-amber-100">
+            <p>Administrator preview ? sample information only. Your administrator session remains active.</p>
+            <label className="mt-3 flex flex-wrap items-center gap-3">
+              Preview application stage
+              <select
+                value={applicant?.status || 'submitted'}
+                onChange={(event) => {
+                  const status = event.target.value;
+                  setApplicant((current) => current ? { ...current, status } : current);
+                  setNotifications(status === 'needs_more_info' ? [{
+                    id: 'preview-request', type: 'application_update', title: 'Additional information requested',
+                    body: 'Sample request: please provide an updated professional credential.',
+                    metadata: { nextStatus: 'needs_more_info' },
+                  }] : []);
+                }}
+                className="rounded-lg bg-slate-900 p-2 text-white"
+              >
+                {['submitted', 'under_review', 'discovery_scheduled', 'needs_more_info', 'approved', 'rejected'].map((status) => (
+                  <option key={status} value={status}>{formatStatus(status)}</option>
+                ))}
+              </select>
+            </label>
+          </div>
+        )}
         <div className="mb-6 flex flex-wrap items-center justify-between gap-3">
           <button
             type="button"
@@ -174,7 +211,7 @@ const ProviderApplicationStatusPage: React.FC<ProviderApplicationStatusPageProps
             onClick={onSignOut}
             className="rounded-xl border border-white/10 bg-white/5 px-4 py-3 text-[10px] font-black uppercase tracking-widest text-slate-200 transition hover:bg-white/10"
           >
-            Sign Out
+            {adminPreview ? 'Return to administrator dashboard' : 'Sign Out'}
           </button>
         </div>
 

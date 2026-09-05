@@ -4099,6 +4099,8 @@ const App: React.FC = () => {
       case AppView.PROVIDER_APPLICANT_SIGN_IN:
         return (
           <ProviderApplicantSignInPage
+            isAdmin={hasAdminRole(user)}
+            onAdminAccess={() => setCurrentView(hasAdminRole(user) ? AppView.PROVIDER_APPLICATION_STATUS : AppView.ADMINISTRATIVE_ACCESS)}
             onBack={() => setCurrentView(AppView.PROVIDER_ACCESS)}
             onSignIn={handleProviderApplicantSignIn}
             onPasswordReset={requestPasswordResetForEmail}
@@ -4108,8 +4110,9 @@ const App: React.FC = () => {
       case AppView.PROVIDER_APPLICATION_STATUS:
         return (
           <ProviderApplicationStatusPage
-            onBack={() => setCurrentView(AppView.PROVIDER_ACCESS)}
-            onSignOut={handleSignOut}
+            adminPreview={hasAdminRole(user)}
+            onBack={() => setCurrentView(hasAdminRole(user) ? AppView.ADMIN_DASHBOARD : AppView.PROVIDER_ACCESS)}
+            onSignOut={hasAdminRole(user) ? () => setCurrentView(AppView.ADMIN_DASHBOARD) : handleSignOut}
           />
         );
       case AppView.CONSCIOUS_CAREERS:

@@ -382,7 +382,7 @@ publicRouter.post(
       const user = await localStore.createUser({
         email,
         name: `${firstName} ${lastName}`.trim(),
-        role: 'user',
+        role: 'applicant',
         password: hashPassword(password),
         passwordFingerprint,
         tier: '',
@@ -490,7 +490,7 @@ publicRouter.post(
         title: 'Provider application submitted',
         body:
           'Your provider application was received. Use the applicant portal to view review status and next steps.',
-        roleScope: 'user',
+        roleScope: 'applicant',
         metadata: {
           applicantId: applicant.id,
           status: applicant.status,
