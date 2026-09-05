@@ -1,8 +1,5 @@
-const crypto = require('crypto');
-
 const baseUrl = (process.env.BASE_URL || 'http://localhost:3001').replace(/\/+$/, '');
 const origin = process.env.ORIGIN || 'http://localhost:5173';
-const runAuthFlow = process.env.RUN_AUTH_FLOW === 'true';
 
 const requestJson = async (path, options = {}) => {
   const response = await fetch(`${baseUrl}${path}`, {
@@ -54,45 +51,7 @@ const run = async () => {
     body: JSON.stringify({}),
   });
 
-  if (!runAuthFlow) {
-    console.log('SKIP auth create/login/logout flow. Set RUN_AUTH_FLOW=true to enable it.');
-    return;
-  }
-
-  const nonce = crypto.randomBytes(6).toString('hex');
-  const email = `smoke.${nonce}@example.com`;
-  const password = `Aa1!${crypto.randomBytes(8).toString('hex')}`;
-  const name = `Smoke User ${nonce}`;
-
-  const create = await expectStatus('auth create', '/api/user/create', 200, {
-    method: 'POST',
-    body: JSON.stringify({ email, password, name }),
-  });
-  const token = create.body?.token;
-  if (!create.body?.success || !token || !create.body?.user) {
-    throw new Error(`auth create response missing expected fields: ${JSON.stringify(create.body)}`);
-  }
-
-  await expectStatus('current user after create', '/api/user/current', 200, {
-    headers: { Authorization: `Bearer ${token}` },
-  });
-
-  await expectStatus('logout', '/api/user/logout', 200, {
-    method: 'POST',
-    headers: { Authorization: `Bearer ${token}` },
-  });
-
-  await expectStatus('current user rejected after logout', '/api/user/current', 401, {
-    headers: { Authorization: `Bearer ${token}` },
-  });
-
-  const signin = await expectStatus('signin without phone number', '/api/user/signin', 200, {
-    method: 'POST',
-    body: JSON.stringify({ email, password }),
-  });
-  if (!signin.body?.success || !signin.body?.token || !signin.body?.user) {
-    throw new Error(`signin response missing expected fields: ${JSON.stringify(signin.body)}`);
-  }
+  console.log('Account creation is disabled in smoke checks. Run auth lifecycle tests against an isolated test database.');
 };
 
 run().catch((error) => {
