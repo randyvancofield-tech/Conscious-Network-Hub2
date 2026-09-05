@@ -4,7 +4,6 @@ import { UserProfile } from '../../types';
 
 type JeruselaPhase = 'void' | 'calling' | 'initiation' | 'checking' | 'gated' | 'arrival';
 type JeruselaChoice = 'man' | 'woman';
-type EnvironmentEntityKind = 'human' | 'bird' | 'terrestrial' | 'aquatic' | 'vegetation';
 
 interface JeruselaPortalViewProps {
   user: UserProfile | null;
@@ -17,33 +16,12 @@ interface JeruselaAudioLayer {
   start: () => Promise<void>;
   stop: () => void;
   playChime: () => void;
-  whisperChosen: () => void;
   getEnergy: () => number;
 }
 
 interface PlayerState {
   name: string;
   form: JeruselaChoice;
-}
-
-interface EnvironmentEntity {
-  id: string;
-  kind: EnvironmentEntityKind;
-  x: number;
-  y: number;
-  z: number;
-  speed: number;
-  scale: number;
-  palette: string[];
-  motion: 'walk' | 'glide' | 'swim' | 'sway';
-  variant?: 'adult' | 'older' | 'young-adult' | 'curly' | 'coily' | 'straight' | 'wavy';
-}
-
-interface SpatialConfig {
-  horizon: number;
-  player: { x: number; y: number; scale: number };
-  entities: EnvironmentEntity[];
-  rules: Array<{ label: string; x: number; y: number; delay: number }>;
 }
 
 const JOHN_OPENING =
@@ -82,6 +60,8 @@ const createJeruselaAudioLayer = (onNarrationEnd: () => void): JeruselaAudioLaye
   let gain: GainNode | null = null;
   let data: Uint8Array | null = null;
   let narrationEnded = false;
+  let narrationStarted = false;
+  let stopped = false;
 
   const ensureContext = (): AudioContext | null => {
     const AudioContextCtor = window.AudioContext || window.webkitAudioContext;
@@ -105,7 +85,7 @@ const createJeruselaAudioLayer = (onNarrationEnd: () => void): JeruselaAudioLaye
   };
 
   const finishNarration = () => {
-    if (narrationEnded) return;
+    if (narrationEnded || stopped) return;
     narrationEnded = true;
     onNarrationEnd();
   };
@@ -117,8 +97,15 @@ const createJeruselaAudioLayer = (onNarrationEnd: () => void): JeruselaAudioLaye
     }
     window.speechSynthesis.cancel();
     const utterance = new SpeechSynthesisUtterance(text);
-    utterance.rate = options.rate ?? 0.82;
-    utterance.pitch = options.pitch ?? 0.72;
+    const englishVoices = window.speechSynthesis.getVoices().filter((voice) => /^en(?:-|$)/i.test(voice.lang));
+    const voice = englishVoices.find((voice) => /natural|neural|samantha|aria|jenny|google US English/i.test(voice.name))
+      || englishVoices.find((voice) => voice.default)
+      || englishVoices[0];
+    if (voice) utterance.voice = voice;
+    utterance.lang = voice?.lang || 'en-US';
+    // Keep a natural pitch and measured sentence rhythm for a warm narrative reading.
+    utterance.rate = options.rate ?? 0.92;
+    utterance.pitch = options.pitch ?? 1;
     utterance.volume = options.volume ?? 0.9;
     if (options.onEnd) {
       utterance.onend = options.onEnd;
@@ -129,11 +116,14 @@ const createJeruselaAudioLayer = (onNarrationEnd: () => void): JeruselaAudioLaye
 
   return {
     async start() {
+      if (narrationStarted || stopped) return;
+      narrationStarted = true;
       const context = ensureContext();
-      if (context?.state === 'suspended') await context.resume();
+      if (context?.state === 'suspended') void context.resume().catch(() => undefined);
       speak(JOHN_OPENING, { onEnd: finishNarration });
     },
     stop() {
+      stopped = true;
       if ('speechSynthesis' in window) window.speechSynthesis.cancel();
       oscillator?.stop();
       oscillator?.disconnect();
@@ -162,9 +152,6 @@ const createJeruselaAudioLayer = (onNarrationEnd: () => void): JeruselaAudioLaye
       chime.start();
       chime.stop(context.currentTime + 0.8);
     },
-    whisperChosen() {
-      speak('You are chosen.', { rate: 0.72, pitch: 0.6, volume: 0.62 });
-    },
     getEnergy() {
       if (!analyser || !data) return 0;
       analyser.getByteFrequencyData(data);
@@ -174,197 +161,11 @@ const createJeruselaAudioLayer = (onNarrationEnd: () => void): JeruselaAudioLaye
   };
 };
 
-const worldConfig: SpatialConfig = {
-  horizon: 0.48,
-  player: { x: 0.5, y: 0.67, scale: 1.18 },
-  rules: [
-    { label: 'SERVE', x: 0.24, y: 0.3, delay: 0 },
-    { label: 'SHINE', x: 0.5, y: 0.24, delay: 900 },
-    { label: 'ENDURE', x: 0.76, y: 0.32, delay: 1800 },
-  ],
-  entities: [
-    { id: 'elder-teacher', kind: 'human', x: 0.18, y: 0.62, z: 0.7, speed: 0.18, scale: 0.82, motion: 'walk', palette: ['#7a4f37', '#f5f0d6', '#335c67'], variant: 'older' },
-    { id: 'runner', kind: 'human', x: 0.72, y: 0.66, z: 0.8, speed: -0.22, scale: 0.78, motion: 'walk', palette: ['#2f1f18', '#d6a77a', '#8ecae6'], variant: 'coily' },
-    { id: 'artisan', kind: 'human', x: 0.84, y: 0.58, z: 0.5, speed: 0.12, scale: 0.68, motion: 'walk', palette: ['#c7895c', '#172a3a', '#e9c46a'], variant: 'wavy' },
-    { id: 'traveler', kind: 'human', x: 0.31, y: 0.72, z: 0.9, speed: -0.1, scale: 0.74, motion: 'walk', palette: ['#51311d', '#5f0f40', '#e0fbfc'], variant: 'straight' },
-    { id: 'child-guide', kind: 'human', x: 0.43, y: 0.6, z: 0.62, speed: 0.15, scale: 0.56, motion: 'walk', palette: ['#9f6b4d', '#0f766e', '#fde68a'], variant: 'young-adult' },
-    { id: 'heron', kind: 'bird', x: 0.65, y: 0.18, z: 0.3, speed: -0.28, scale: 0.75, motion: 'glide', palette: ['#dce7ef', '#0b3954'] },
-    { id: 'small-flock', kind: 'bird', x: 0.3, y: 0.22, z: 0.25, speed: 0.34, scale: 0.48, motion: 'glide', palette: ['#1f2937', '#e5e7eb'] },
-    { id: 'deer-like-grazer', kind: 'terrestrial', x: 0.12, y: 0.78, z: 0.95, speed: 0.08, scale: 0.62, motion: 'walk', palette: ['#8b5e34', '#e6ccb2'] },
-    { id: 'fox-like-runner', kind: 'terrestrial', x: 0.61, y: 0.82, z: 1, speed: -0.26, scale: 0.48, motion: 'walk', palette: ['#b45309', '#fff7ed'] },
-    { id: 'shore-fish', kind: 'aquatic', x: 0.76, y: 0.9, z: 1, speed: 0.2, scale: 0.42, motion: 'swim', palette: ['#67e8f9', '#155e75'] },
-    { id: 'silver-school', kind: 'aquatic', x: 0.88, y: 0.86, z: 1, speed: -0.17, scale: 0.36, motion: 'swim', palette: ['#e0f2fe', '#0891b2'] },
-    { id: 'meadow-grass', kind: 'vegetation', x: 0.08, y: 0.7, z: 1, speed: 0.05, scale: 0.95, motion: 'sway', palette: ['#7dd3fc', '#166534'] },
-    { id: 'reed-bank', kind: 'vegetation', x: 0.9, y: 0.74, z: 1, speed: -0.04, scale: 0.92, motion: 'sway', palette: ['#a7f3d0', '#365314'] },
-  ],
-};
-
-const drawHuman = (
-  context: CanvasRenderingContext2D,
-  x: number,
-  y: number,
-  scale: number,
-  entity: EnvironmentEntity,
-  time: number
-) => {
-  const [skin, cloth, accent] = entity.palette;
-  const stride = Math.sin(time * 0.004 + x) * 4 * scale;
-  context.fillStyle = cloth;
-  context.beginPath();
-  context.roundRect(x - 7 * scale, y - 25 * scale, 14 * scale, 26 * scale, 6 * scale);
-  context.fill();
-  context.fillStyle = accent;
-  context.beginPath();
-  context.arc(x + 4 * scale, y - 12 * scale, 2.4 * scale, 0, Math.PI * 2);
-  context.fill();
-  context.strokeStyle = accent;
-  context.lineWidth = 2 * scale;
-  context.beginPath();
-  context.moveTo(x - 6 * scale, y - 9 * scale);
-  context.lineTo(x + 7 * scale, y - 2 * scale);
-  context.stroke();
-  context.strokeStyle = skin;
-  context.lineWidth = 3 * scale;
-  context.beginPath();
-  context.moveTo(x - 4 * scale, y);
-  context.lineTo(x - 8 * scale + stride, y + 18 * scale);
-  context.moveTo(x + 4 * scale, y);
-  context.lineTo(x + 8 * scale - stride, y + 18 * scale);
-  context.stroke();
-  context.fillStyle = skin;
-  context.beginPath();
-  context.arc(x, y - 34 * scale, 8 * scale, 0, Math.PI * 2);
-  context.fill();
-  context.fillStyle = entity.variant === 'straight' ? '#21130c' : entity.variant === 'wavy' ? '#3f2417' : '#111827';
-  const hairCount = entity.variant === 'straight' ? 3 : entity.variant === 'older' ? 4 : 5;
-  for (let i = -Math.floor(hairCount / 2); i <= Math.floor(hairCount / 2); i += 1) {
-    context.beginPath();
-    context.arc(x + i * 4 * scale, y - 41 * scale + Math.sin(time * 0.003 + i) * scale, entity.variant === 'straight' ? 3 * scale : 4.4 * scale, 0, Math.PI * 2);
-    context.fill();
-  }
-  if (entity.variant === 'older') {
-    context.strokeStyle = '#e5e7eb';
-    context.lineWidth = 1.4 * scale;
-    context.beginPath();
-    context.moveTo(x + 10 * scale, y - 12 * scale);
-    context.lineTo(x + 14 * scale, y + 18 * scale);
-    context.stroke();
-  }
-};
-
-const drawPlayer = (
-  context: CanvasRenderingContext2D,
-  choice: JeruselaChoice,
-  x: number,
-  y: number,
-  scale: number,
-  time: number
-) => {
-  const glow = context.createRadialGradient(x, y - 40 * scale, 0, x, y - 40 * scale, 110 * scale);
-  glow.addColorStop(0, 'rgba(255, 250, 180, 0.72)');
-  glow.addColorStop(0.42, 'rgba(34, 211, 238, 0.2)');
-  glow.addColorStop(1, 'rgba(34, 211, 238, 0)');
-  context.fillStyle = glow;
-  context.beginPath();
-  context.arc(x, y - 40 * scale, 110 * scale, 0, Math.PI * 2);
-  context.fill();
-
-  const entity: EnvironmentEntity = {
-    id: 'player',
-    kind: 'human',
-    x: 0,
-    y: 0,
-    z: 1,
-    speed: 0,
-    scale,
-    motion: 'walk',
-    palette: choice === 'woman' ? ['#8f5f46', '#fff1c2', '#14b8a6'] : ['#5b3525', '#dff7ff', '#60a5fa'],
-    variant: choice === 'woman' ? 'curly' : 'wavy',
-  };
-  drawHuman(context, x, y, scale * 1.42, entity, time);
-};
-
-const drawEntity = (
-  context: CanvasRenderingContext2D,
-  entity: EnvironmentEntity,
-  width: number,
-  height: number,
-  time: number,
-  camera: number
-) => {
-  const drift = Math.sin(time * 0.0007 + entity.x * 9) * entity.speed * 80;
-  const x = ((entity.x * width + drift - camera * entity.z * 120) % (width + 140) + width + 70) % (width + 140) - 70;
-  const y = entity.y * height + Math.sin(time * 0.0015 + entity.z) * 8 * entity.scale;
-  const scale = entity.scale * (0.72 + entity.z * 0.45);
-
-  if (entity.kind === 'human') {
-    drawHuman(context, x, y, scale, entity, time);
-    return;
-  }
-
-  if (entity.kind === 'bird') {
-    context.strokeStyle = entity.palette[0];
-    context.lineWidth = 2 * scale;
-    const wing = Math.sin(time * 0.007 + entity.x) * 7 * scale;
-    context.beginPath();
-    context.moveTo(x - 16 * scale, y + wing);
-    context.quadraticCurveTo(x, y - 8 * scale, x + 16 * scale, y - wing);
-    context.stroke();
-    return;
-  }
-
-  if (entity.kind === 'aquatic') {
-    context.fillStyle = entity.palette[0];
-    context.beginPath();
-    context.ellipse(x, y, 14 * scale, 5 * scale, Math.sin(time * 0.002) * 0.2, 0, Math.PI * 2);
-    context.fill();
-    context.fillStyle = entity.palette[1];
-    context.beginPath();
-    context.moveTo(x - 14 * scale, y);
-    context.lineTo(x - 24 * scale, y - 6 * scale);
-    context.lineTo(x - 24 * scale, y + 6 * scale);
-    context.closePath();
-    context.fill();
-    return;
-  }
-
-  if (entity.kind === 'terrestrial') {
-    context.fillStyle = entity.palette[0];
-    context.beginPath();
-    context.ellipse(x, y, 22 * scale, 10 * scale, 0, 0, Math.PI * 2);
-    context.fill();
-    context.beginPath();
-    context.arc(x + 18 * scale, y - 8 * scale, 7 * scale, 0, Math.PI * 2);
-    context.fill();
-    context.strokeStyle = entity.palette[1];
-    context.lineWidth = 2 * scale;
-    context.beginPath();
-    context.moveTo(x - 10 * scale, y + 8 * scale);
-    context.lineTo(x - 14 * scale, y + 23 * scale);
-    context.moveTo(x + 9 * scale, y + 8 * scale);
-    context.lineTo(x + 14 * scale, y + 23 * scale);
-    context.stroke();
-    return;
-  }
-
-  context.strokeStyle = entity.palette[0];
-  context.lineWidth = 2 * scale;
-  for (let blade = 0; blade < 12; blade += 1) {
-    const offset = (blade - 6) * 5 * scale;
-    const sway = Math.sin(time * 0.002 + blade) * 7 * scale;
-    context.beginPath();
-    context.moveTo(x + offset, y + 28 * scale);
-    context.quadraticCurveTo(x + offset + sway, y, x + offset + sway * 0.5, y - 36 * scale);
-    context.stroke();
-  }
-};
-
 const JeruselaVoidCanvas: React.FC<{
   phase: JeruselaPhase;
-  player: PlayerState | null;
   reducedMotion: boolean;
   getAudioEnergy: () => number;
-}> = ({ phase, player, reducedMotion, getAudioEnergy }) => {
+}> = ({ phase, reducedMotion, getAudioEnergy }) => {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
 
   useEffect(() => {
@@ -447,99 +248,8 @@ const JeruselaVoidCanvas: React.FC<{
       context.fill();
     };
 
-    const drawArrival = (time: number) => {
-      const progress = Math.min(1, (time - start) / 6200);
-      const camera = reducedMotion ? 0.28 : progress * 0.5;
-      const horizon = height * worldConfig.horizon;
-
-      const sky = context.createLinearGradient(0, 0, 0, height);
-      sky.addColorStop(0, '#07111f');
-      sky.addColorStop(0.34, '#155e75');
-      sky.addColorStop(0.62, '#3f6212');
-      sky.addColorStop(1, '#092018');
-      context.fillStyle = sky;
-      context.fillRect(0, 0, width, height);
-
-      context.fillStyle = 'rgba(255, 246, 180, 0.82)';
-      context.beginPath();
-      context.arc(width * 0.74, height * 0.18, 42, 0, Math.PI * 2);
-      context.fill();
-
-      for (let ridge = 0; ridge < 3; ridge += 1) {
-        context.fillStyle = `rgba(${14 + ridge * 12}, ${38 + ridge * 26}, ${49 + ridge * 18}, ${0.68 - ridge * 0.12})`;
-        context.beginPath();
-        context.moveTo(0, horizon + ridge * 34);
-        for (let x = 0; x <= width; x += 90) {
-          context.lineTo(x, horizon + Math.sin(x * 0.012 + ridge) * 32 + ridge * 38);
-        }
-        context.lineTo(width, height);
-        context.lineTo(0, height);
-        context.closePath();
-        context.fill();
-      }
-
-      const water = context.createLinearGradient(0, height * 0.78, 0, height);
-      water.addColorStop(0, 'rgba(34, 211, 238, 0.28)');
-      water.addColorStop(1, 'rgba(8, 47, 73, 0.72)');
-      context.fillStyle = water;
-      context.beginPath();
-      context.ellipse(width * 0.83, height * 0.89, width * 0.26, height * 0.11, -0.08, 0, Math.PI * 2);
-      context.fill();
-      context.strokeStyle = 'rgba(186, 230, 253, 0.42)';
-      context.lineWidth = 2;
-      for (let wave = 0; wave < 4; wave += 1) {
-        context.beginPath();
-        for (let x = width * 0.62; x <= width; x += 18) {
-          const y = height * (0.83 + wave * 0.028) + Math.sin(time * 0.002 + x * 0.03 + wave) * 4;
-          if (x === width * 0.62) context.moveTo(x, y);
-          else context.lineTo(x, y);
-        }
-        context.stroke();
-      }
-
-      worldConfig.entities
-        .slice()
-        .sort((a, b) => a.z - b.z)
-        .forEach((entity) => drawEntity(context, entity, width, height, time, camera));
-
-      const playerX = width * (worldConfig.player.x + (reducedMotion ? 0 : Math.sin(time * 0.00035) * 0.012));
-      const playerY = height * worldConfig.player.y + Math.max(0, 1 - progress) * height * 0.12;
-      if (player) drawPlayer(context, player.form, playerX, playerY, worldConfig.player.scale, time);
-
-      const mechanicsProgress = Math.min(1, Math.max(0, (time - start - 2300) / 900));
-      if (mechanicsProgress > 0) {
-        context.globalAlpha = mechanicsProgress;
-        context.textAlign = 'center';
-        context.font = `900 ${Math.max(13, Math.min(18, width * 0.018))}px Orbitron, sans-serif`;
-        context.fillStyle = '#cffafe';
-        context.shadowColor = 'rgba(8, 145, 178, 0.9)';
-        context.shadowBlur = 18;
-        context.fillText('Core Rules / Spatial Mechanics', playerX, playerY - 146 * worldConfig.player.scale);
-        context.font = `700 ${Math.max(12, Math.min(16, width * 0.014))}px Inter, sans-serif`;
-        context.fillStyle = '#f8fafc';
-        context.fillText('Move through darkness by how you serve, shine, and endure.', playerX, playerY - 122 * worldConfig.player.scale);
-        context.shadowBlur = 0;
-        context.globalAlpha = 1;
-      }
-
-      worldConfig.rules.forEach((rule) => {
-        const ruleProgress = Math.min(1, Math.max(0, (time - start - rule.delay) / 800));
-        if (ruleProgress <= 0) return;
-        context.globalAlpha = ruleProgress;
-        context.font = `900 ${Math.max(18, width * 0.024)}px Orbitron, sans-serif`;
-        context.textAlign = 'center';
-        context.fillStyle = '#f8fafc';
-        context.shadowColor = 'rgba(125, 211, 252, 0.8)';
-        context.shadowBlur = 24;
-        context.fillText(rule.label, width * rule.x, height * rule.y);
-        context.shadowBlur = 0;
-        context.globalAlpha = 1;
-      });
-    };
-
     const draw = (time: number) => {
-      if (phase === 'arrival') drawArrival(time);
-      else drawVoid(time);
+      drawVoid(time);
       animation = window.requestAnimationFrame(draw);
     };
 
@@ -550,7 +260,7 @@ const JeruselaVoidCanvas: React.FC<{
       window.cancelAnimationFrame(animation);
       window.removeEventListener('resize', resize);
     };
-  }, [getAudioEnergy, phase, player, reducedMotion]);
+  }, [getAudioEnergy, phase, reducedMotion]);
 
   return <canvas ref={canvasRef} className="pointer-events-none fixed inset-0 h-screen w-screen bg-[#010309]" aria-hidden="true" />;
 };
@@ -582,7 +292,6 @@ const JeruselaPortalView: React.FC<JeruselaPortalViewProps> = ({ user, onBack, o
       void audioLayerRef.current?.start();
     };
 
-    start();
     window.addEventListener('pointerdown', start, { once: true });
     return () => {
       window.removeEventListener('pointerdown', start);
@@ -610,7 +319,7 @@ const JeruselaPortalView: React.FC<JeruselaPortalViewProps> = ({ user, onBack, o
     setEligibilityResolving(false);
 
     if (isEligibleJeruselaPlayer(user)) {
-      audioLayerRef.current?.whisperChosen();
+      audioLayerRef.current?.stop();
       setPhase('arrival');
       return;
     }
@@ -620,12 +329,11 @@ const JeruselaPortalView: React.FC<JeruselaPortalViewProps> = ({ user, onBack, o
 
   return (
     <main className="relative min-h-screen overflow-hidden bg-[#010309] text-white">
-      <JeruselaVoidCanvas
+      {phase !== 'arrival' && <JeruselaVoidCanvas
         phase={phase}
-        player={player}
         reducedMotion={reducedMotion}
         getAudioEnergy={() => audioLayerRef.current?.getEnergy() || 0}
-      />
+      />}
 
       <div className="pointer-events-none fixed inset-0 bg-[linear-gradient(180deg,rgba(1,3,9,0.1),rgba(1,3,9,0.78))]" />
 
@@ -642,15 +350,27 @@ const JeruselaPortalView: React.FC<JeruselaPortalViewProps> = ({ user, onBack, o
           </button>
           <div className="inline-flex items-center gap-2 rounded-full border border-white/10 bg-black/25 px-4 py-2 text-[10px] font-black uppercase text-slate-300 backdrop-blur-xl">
             <Volume2 className="h-4 w-4 text-cyan-200" />
-            {audioReady ? 'Signal Active' : 'Signal Waiting'}
+            {audioReady ? (phase === 'arrival' ? 'Signal Complete' : 'Signal Active') : 'Signal Waiting'}
           </div>
         </div>
 
         <section className="flex flex-1 items-center justify-center px-4 pb-16 pt-8">
           <div className="flex min-h-[20rem] w-full max-w-4xl flex-col items-center justify-center text-center">
+            {!audioReady && (
+              <button
+                type="button"
+                onClick={() => {
+                  setAudioReady(true);
+                  void audioLayerRef.current?.start();
+                }}
+                className="rounded-full border border-white/20 bg-white/10 px-8 py-4 text-sm font-bold text-white focus:outline-none focus:ring-2 focus:ring-cyan-200"
+              >
+                Begin narration
+              </button>
+            )}
             <div
               className={`transition duration-1000 ${
-                choiceVisible ? 'translate-y-0 opacity-100' : 'pointer-events-none translate-y-4 opacity-0'
+                choiceVisible ? 'translate-y-0 opacity-100' : 'hidden'
               } pointer-events-auto relative z-20`}
               aria-hidden={!choiceVisible}
             >
@@ -734,10 +454,10 @@ const JeruselaPortalView: React.FC<JeruselaPortalViewProps> = ({ user, onBack, o
               </div>
             )}
 
-            {phase === 'arrival' && player && (
-              <p className="sr-only">
-                {player.name} enters Jerusela as the {player.form}. Core Rules and Spatial Mechanics begin in the world: Serve, Shine, Endure.
-              </p>
+            {phase === 'arrival' && (
+              <h1 className="text-4xl font-black tracking-[0.15em] text-white sm:text-6xl" aria-live="polite">
+                COMING 2027
+              </h1>
             )}
           </div>
         </section>
