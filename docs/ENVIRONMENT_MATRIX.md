@@ -42,7 +42,7 @@ Canonical environment values for the current backend architecture.
 | Render | `EMAIL_DELIVERY_ENABLED` | `false` | No | Explicit launch flag for outbound email. Keep `false` until CNH has a production email provider. |
 | Render | `REQUIRE_EMAIL_DELIVERY` | `false` | No | Set `true` only when startup should fail without Gmail/SMTP config. |
 | Render | `EMAIL_USER` + `EMAIL_PASSWORD`, or `SMTP_HOST` + `SMTP_PORT` | none | Only when email delivery is enabled/required | Optional outbound email provider for future password reset and provider lifecycle emails. When disabled, recovery codes, in-app notifications, and portals are primary. |
-| Render | `EMAIL_FROM` | `noreply@conscious-network.org` | No | Sender address used by account and provider lifecycle emails. |
+| Render | `EMAIL_FROM` | `higherconscious.network1@gmail.com` | No | Sender for account and provider lifecycle emails. Gmail transport uses EMAIL_USER as From, overriding stale aliases. See GMAIL_EMAIL.md. |
 | Render | `ADMIN_NOTIFICATION_EMAIL` | `higherconscious.network1@gmail.com` | No | Recipient for internal provider application/admin notifications. |
 | Render | `ENABLE_PASSWORD_RESET` | `true` | No | Set to `false` only to deliberately disable native password reset. |
 | Render | `ENABLE_USER_2FA` | `false` | No | Optional legacy enrolled 2FA flag. Default member sign-in does not require SMS. |

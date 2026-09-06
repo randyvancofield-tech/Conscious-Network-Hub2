@@ -10,14 +10,14 @@ export interface EmailOptions {
 
 class EmailService {
   private transporter: Transporter | null = null;
-  private fromEmail = 'noreply@conscious-network.org';
+  private fromEmail = 'higherconscious.network1@gmail.com';
   private isConfigured = false;
   private initialized = false;
 
   private initializeTransport(): void {
     if (this.initialized) return;
     this.initialized = true;
-    this.fromEmail = process.env.EMAIL_FROM || 'noreply@conscious-network.org';
+    this.fromEmail = process.env.EMAIL_FROM || 'higherconscious.network1@gmail.com';
 
     try {
       if (!isEmailDeliveryEnabled()) {
@@ -26,6 +26,10 @@ class EmailService {
       }
 
       if (process.env.EMAIL_USER && process.env.EMAIL_PASSWORD) {
+        // Gmail sends as the authenticated mailbox; ignore stale domain From overrides.
+        if ((process.env.EMAIL_SERVICE || 'gmail').trim().toLowerCase() === 'gmail') {
+          this.fromEmail = process.env.EMAIL_USER.trim();
+        }
         this.transporter = nodemailer.createTransport({
           service: process.env.EMAIL_SERVICE || 'gmail',
           auth: {
@@ -58,7 +62,7 @@ class EmailService {
 
       console.log('[EmailService] No email config - safe dev mode');
     } catch (err) {
-      console.error('[EmailService] Transport init failed:', err);
+      console.error('[EmailService] Transport initialization failed');
       this.transporter = null;
       this.isConfigured = false;
     }
@@ -83,7 +87,7 @@ class EmailService {
       console.log('[EmailService.send] Email sent:', info.messageId);
       return { ok: true, messageId: info.messageId };
     } catch (error) {
-      console.error('[EmailService.send] Send failed:', error);
+      console.error('[EmailService.send] Delivery failed; check provider authentication and sending limits');
       return { ok: false, error: 'Email send failed' };
     }
   }
