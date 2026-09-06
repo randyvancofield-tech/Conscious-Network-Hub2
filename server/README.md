@@ -53,7 +53,7 @@ Optional integration values:
 - `AI_LOCAL_FALLBACK_ENABLED`: enables the deterministic privacy-safe local fallback when external models are unavailable.
 - `AI_CRAWLER_ENABLED`, `AI_CRAWLER_INTERVAL_MS`: control the public-only AI context crawler.
 - `STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET`, `STRIPE_PRICE_FREE`, `STRIPE_PRICE_GUIDED`, `STRIPE_PRICE_ACCELERATED`, `STRIPE_MODE`, `STRIPE_SUCCESS_URL`, `STRIPE_CANCEL_URL`: enable membership checkout and webhooks.
-- Outbound mail (account recovery, provider lifecycle, support, admin reports): configure production Gmail using [the email guide](../docs/GMAIL_EMAIL.md). Local examples intentionally disable delivery.
+- Correspondence: [internal HCN mailbox](../docs/INTERNAL_CORRESPONDENCE.md) handles applicant/provider/member/admin mail, support and issues without SMTP. [Optional external Gmail](../docs/GMAIL_EMAIL.md) remains for password recovery only.
 - `TWILIO_*`: optional legacy SMS settings only; default member sign-in and onboarding do not require Twilio.
 - `HCN_PROFILE_ANCHOR_CONTRACT_ADDRESS`, `HCN_PROFILE_ANCHOR_CHAIN_ID`, RPC keys: enable integrity anchoring.
 

@@ -14,8 +14,7 @@ import {
   requireCanonicalIdentity,
 } from '../middleware';
 import { listRecentAuditEvents, recordAuditEvent } from '../services/auditTelemetry';
-import emailService from '../services/emailService';
-import { buildProviderApplicantStatusEmail } from '../services/emailTemplates';
+import { deliverLifecycleCorrespondence } from '../services/mailboxStore';
 import { createNotification } from '../services/notificationStore';
 import { localStore, type LocalUserRecord } from '../services/persistenceStore';
 import { validateJsonBody } from '../validation/jsonSchema';
@@ -2226,7 +2225,6 @@ router.patch('/provider-applicants/:id', async (req: Request, res: Response): Pr
     req.body?.applicantMessage === undefined
       ? undefined
       : String(req.body?.applicantMessage || '').trim().slice(0, 2000);
-  const sendEmail = req.body?.sendEmail === undefined ? true : req.body?.sendEmail === true;
 
   if (status && !PROVIDER_APPLICANT_STATUSES.includes(status as any)) {
     res.status(400).json({ error: 'Invalid provider applicant status' });
@@ -2288,40 +2286,22 @@ router.patch('/provider-applicants/:id', async (req: Request, res: Response): Pr
   const nextStatus = status || updated.status;
   const targetUser = await localStore.getUserById(existing.userId);
   const shouldNotifyApplicant = Boolean(status) || Boolean(applicantMessage);
-  const shouldSendStatusEmail = sendEmail && shouldNotifyApplicant;
-  let applicantEmailResult: Awaited<ReturnType<typeof emailService.send>> | null = null;
-  if (shouldSendStatusEmail) {
-    const applicantEmail = buildProviderApplicantStatusEmail({
-      firstName: updated.firstName,
-      lastName: updated.lastName,
-      email: updated.email,
-      providerCategory: updated.providerCategory,
-      status: nextStatus,
-      frontendBaseUrl: resolveFrontendBaseUrl(req),
-      applicantPortalUrl: buildFrontendUrl(req, '/provider/applicant-sign-in'),
-      providerAccessUrl: buildFrontendUrl(req, '/provider-access'),
-      calendlyUrl: PROVIDER_APPLICANT_CALENDLY_URL,
-      applicantMessage,
-    });
-    applicantEmailResult = await emailService.send({
-      to: updated.email,
-      ...applicantEmail,
-    });
-  }
+  const correspondenceTitle = nextStatus === 'approved' ? 'Provider application approved' : 'Provider application status updated';
+  const correspondenceBody = [
+    `Your provider application status is now ${formatApplicantStatus(nextStatus)}.`,
+    applicantMessage,
+    nextStatus === 'approved' ? 'Sign in through Provider Access and complete wallet verification to open provider tools.' : '',
+  ].filter(Boolean).join('\n\n');
+  const internalMessageId = shouldNotifyApplicant ? await deliverLifecycleCorrespondence({
+    userId: existing.userId, actorUserId, applicantId: id, subject: correspondenceTitle, message: correspondenceBody,
+  }) : null;
 
   if (shouldNotifyApplicant) {
     await createNotification({
       userId: existing.userId,
       type: nextStatus === 'approved' ? 'provider_application_approved' : 'provider_application_status',
-      title:
-        nextStatus === 'approved'
-          ? 'Provider application approved'
-          : 'Provider application status updated',
-      body:
-        nextStatus === 'approved'
-          ? 'Your provider account has been approved. Sign in through Provider Access and complete wallet verification to open provider tools.'
-          : applicantMessage ||
-            `Your provider application status is now ${formatApplicantStatus(nextStatus)}.`,
+      title: correspondenceTitle,
+      body: correspondenceBody,
       roleScope:
         nextStatus === 'approved'
           ? 'provider'
@@ -2333,8 +2313,8 @@ router.patch('/provider-applicants/:id', async (req: Request, res: Response): Pr
         previousStatus: existing.status,
         nextStatus,
         applicantMessage: applicantMessage || null,
-        emailSkipped: Boolean(applicantEmailResult?.skipped),
-        emailSent: applicantEmailResult?.ok === true && !applicantEmailResult?.skipped,
+        internalMessageId,
+        delivery: 'internal',
       },
     });
   }
@@ -2352,8 +2332,7 @@ router.patch('/provider-applicants/:id', async (req: Request, res: Response): Pr
       nextStatus: updated.status,
       adminNotesUpdated: adminNotes !== undefined,
       applicantMessageSent: Boolean(applicantMessage),
-      statusEmailRequested: shouldSendStatusEmail,
-      statusEmailSkipped: Boolean(applicantEmailResult?.skipped),
+      internalDelivered: Boolean(internalMessageId),
       nativeProviderAccessGranted: providerAccessChange?.granted === true,
       nativeProviderAccessRevoked: providerAccessChange?.granted === false,
       revokedSessions:
@@ -2365,10 +2344,8 @@ router.patch('/provider-applicants/:id', async (req: Request, res: Response): Pr
     success: true,
     applicant: toAdminProviderApplicantRecord(updated),
     communication: {
-      emailConfigured: emailService.configured(),
-      emailAttempted: shouldSendStatusEmail,
-      emailSkipped: Boolean(applicantEmailResult?.skipped),
-      emailSent: applicantEmailResult?.ok === true && !applicantEmailResult?.skipped,
+      internalDelivered: Boolean(internalMessageId),
+      emailConfigured: false, emailAttempted: false, emailSkipped: true, emailSent: false,
     },
   });
 });

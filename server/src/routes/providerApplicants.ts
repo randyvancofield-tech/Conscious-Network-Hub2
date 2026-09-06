@@ -18,11 +18,7 @@ import { localStore } from '../services/persistenceStore';
 import { persistUploadObject } from '../services/uploadBlobStore';
 import { applyAuthResponseHeaders, issueCanonicalSession } from '../services/sessionLifecycle';
 import { getBackendPublicBaseUrl } from '../services/publicUrl';
-import emailService from '../services/emailService';
-import {
-  buildProviderApplicationAdminEmail,
-  buildProviderApplicationSubmittedEmail,
-} from '../services/emailTemplates';
+import { deliverLifecycleCorrespondence } from '../services/mailboxStore';
 import { createNotification, listNotificationsForUser } from '../services/notificationStore';
 import { createRecoveryCodesForUser } from '../services/recoveryCodeService';
 import {
@@ -460,33 +456,18 @@ publicRouter.post(
       const session = await issueCanonicalSession(user.id);
       applyAuthResponseHeaders(res);
       const recoveryCodes = await createRecoveryCodesForUser(user.id);
-      const applicantPortalUrl = buildFrontendUrl(req, '/provider/applicant-sign-in');
-      const providerAccessUrl = buildFrontendUrl(req, '/provider-access');
-      const applicantEmail = buildProviderApplicationSubmittedEmail({
-        firstName,
-        lastName,
-        email,
-        providerCategory,
-        status: applicant.status,
-        frontendBaseUrl: resolveFrontendBaseUrl(req),
-        applicantPortalUrl,
-        providerAccessUrl,
-        calendlyUrl: PROVIDER_APPLICANT_CALENDLY_URL,
+      const internalMessageId = await deliverLifecycleCorrespondence({ userId: user.id, applicantId: applicant.id,
+        subject: 'Provider application submitted',
+        message: 'Your provider application was received. Use this applicant portal to view review status, correspondence, and next steps.',
       });
-      const applicantEmailResult = await emailService.send({
-        to: email,
-        ...applicantEmail,
-      });
-      const adminEmailResult = await emailService.send(
-        buildProviderApplicationAdminEmail({
-          adminEmail: emailService.adminRecipient(),
-          applicantName: `${firstName} ${lastName}`.trim(),
-          applicantEmail: email,
-          providerCategory,
-          status: applicant.status,
-          submittedAt: applicant.submittedAt,
-        })
-      );
+      let adminIntakeDelivered = false;
+      try {
+        await createAdminMessage({ type: 'provider', source: 'provider_application_intake',
+          subject: 'New provider application', message: `${firstName} ${lastName} submitted a provider application. Review it in the applicant administration area.`,
+          submitterUserId: user.id, submitterName: `${firstName} ${lastName}`, metadata: { applicantId: applicant.id },
+        });
+        adminIntakeDelivered = true;
+      } catch { console.error('[MAIL] Application intake correspondence failed; application remains available in administration.'); }
       await createNotification({
         userId: user.id,
         type: 'provider_application_submitted',
@@ -497,8 +478,7 @@ publicRouter.post(
         metadata: {
           applicantId: applicant.id,
           status: applicant.status,
-          emailSkipped: Boolean(applicantEmailResult?.skipped),
-          emailSent: applicantEmailResult?.ok === true && !applicantEmailResult?.skipped,
+          internalMessageId, delivery: 'internal',
         },
       });
 
@@ -528,10 +508,9 @@ publicRouter.post(
         recoveryCodes,
         recoveryCodesShownOnce: recoveryCodes.length > 0,
         communication: {
-          applicantEmailConfigured: emailService.configured(),
-          applicantEmailSkipped: Boolean(applicantEmailResult?.skipped),
-          applicantEmailSent: applicantEmailResult?.ok === true && !applicantEmailResult?.skipped,
-          adminEmailSkipped: Boolean(adminEmailResult?.skipped),
+          internalDelivered: Boolean(internalMessageId), adminIntakeDelivered,
+          applicantEmailConfigured: false, applicantEmailSkipped: true, applicantEmailSent: false,
+          adminEmailSkipped: true,
         },
       });
     } catch (error) {

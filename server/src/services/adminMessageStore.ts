@@ -18,6 +18,8 @@ export type AdminMessageStatus = 'new' | 'reviewing' | 'in_progress' | 'resolved
 export type AdminMessagePriority = 'low' | 'normal' | 'high' | 'urgent';
 
 export interface AdminMessageInput {
+  // Server-generated ID permits receipt reconciliation after an uncertain database response.
+  id?: string;
   type: AdminMessageType;
   subject: string;
   message: string;
@@ -183,7 +185,7 @@ const mapRow = (row: AdminMessageRow): AdminMessage => ({
   status: normalizeAdminMessageStatus(row.status),
   priority: normalizeAdminMessagePriority(row.priority),
   subject: row.subject,
-  message: row.source === 'provider_applicant_follow_up' ? revealSensitiveText('providerApplicant.followUp', row.message) || '' : row.message,
+  message: ['provider_applicant_follow_up', 'internal_mail'].includes(row.source) ? revealSensitiveText('providerApplicant.followUp', row.message) || '' : row.message,
   submitterName: row.submitterName,
   submitterEmail: row.submitterEmail,
   submitterUserId: row.submitterUserId,
@@ -258,12 +260,12 @@ export const createAdminMessage = async (
 ): Promise<AdminMessage> => {
   await ensureAdminMessageTable(db);
   const now = new Date();
-  const id = `adminmsg_${crypto.randomUUID()}`;
+  const id = input.id || `adminmsg_${crypto.randomUUID()}`;
   const type = normalizeAdminMessageType(input.type);
   const priority = normalizeAdminMessagePriority(input.priority);
   const subject = normalizeText(input.subject, 'Platform message', 240);
   const plainMessage = normalizeText(input.message, 'No message supplied.', 8000);
-  const message = input.source === 'provider_applicant_follow_up'
+  const message = ['provider_applicant_follow_up', 'internal_mail'].includes(input.source || '')
     ? protectSensitiveText('providerApplicant.followUp', plainMessage) || '' : plainMessage;
   const source = normalizeText(input.source, 'platform', 120);
   const recipientEmail = normalizeEmail(input.recipientEmail) || ADMIN_INBOX_RECIPIENT_EMAIL;
@@ -423,11 +425,6 @@ export const updateAdminMessage = async (
   const resolvedAt = nextStatus === 'resolved'
     ? current.resolvedAt ? new Date(current.resolvedAt) : now
     : null;
-  const metadata = {
-    ...(current.metadata || {}),
-    lastUpdatedByUserId: actorUserId || null,
-  };
-
   const updated = await db.$queryRaw<AdminMessageRow[]>(Prisma.sql`
     UPDATE "AdminMessage"
     SET
@@ -440,7 +437,7 @@ export const updateAdminMessage = async (
           : normalizeNullableText(input.resolutionSummary, 8000)
       },
       "resolvedAt" = ${resolvedAt},
-      "metadata" = ${metadata as Prisma.InputJsonValue},
+      "metadata" = COALESCE("metadata", '{}'::jsonb) || ${JSON.stringify({lastUpdatedByUserId: actorUserId || null})}::jsonb,
       "updatedAt" = ${now}
     WHERE "id" = ${id}
     RETURNING *

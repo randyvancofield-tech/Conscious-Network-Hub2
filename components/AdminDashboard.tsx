@@ -1,3 +1,4 @@
+import Mailbox from './Mailbox';
 import React, { useEffect, useMemo, useState } from 'react';
 import { Activity, BookOpen, Download, Eye, EyeOff, FileArchive, FileText, Inbox, KeyRound, LockKeyhole, MessageSquare, RefreshCw, ShieldCheck, Trash2, UnlockKeyhole, UserPlus, Users } from 'lucide-react';
 import { BASE_URL, api, ApiError } from '../services/apiClient';
@@ -1395,6 +1396,8 @@ const AdminDashboard: React.FC<{ onApplicantPreview: () => void; onApplicantRevi
       )}
 
       {activeSection === 'messages' && (
+        <div className="space-y-5"><Mailbox admin />
+        <details><summary className="cursor-pointer rounded-xl border border-white/10 p-4 text-sm text-white">Intake triage and internal notes</summary>
         <SurfacePanel className="overflow-hidden">
         <div className="mb-5 flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
           <div className="flex min-w-0 items-start gap-3">
@@ -1402,7 +1405,7 @@ const AdminDashboard: React.FC<{ onApplicantPreview: () => void; onApplicantRevi
             <div className="min-w-0">
               <h2 className="text-sm font-black uppercase text-white">Messages & Reports</h2>
               <p className="mt-1 text-xs leading-5 text-slate-500">
-                Contact requests and issue reports are received here for {adminInbox?.recipientEmail || 'admin review'}.
+                Contact requests and issue reports are retained here for administrative review. Notes in this area remain internal.
               </p>
             </div>
           </div>
@@ -1571,7 +1574,7 @@ const AdminDashboard: React.FC<{ onApplicantPreview: () => void; onApplicantRevi
             })}
           </div>
         )}
-      </SurfacePanel>
+      </SurfacePanel></details></div>
       )}
 
       {activeSection === 'courses' && (

@@ -16,6 +16,7 @@ const NAV_VIEW_BY_ID: Record<string, AppView> = {
   courses: AppView.KNOWLEDGE_PATHWAYS,
   careers: AppView.CONSCIOUS_CAREERS,
   community: AppView.COMMUNITY,
+  mailbox: AppView.MAILBOX,
   profile: AppView.MY_CONSCIOUS_IDENTITY,
   membership: AppView.MEMBERSHIP,
   admin: AppView.ADMIN_DASHBOARD,
@@ -45,6 +46,7 @@ const BASE_ACCESS_VIEWS = [
     AppView.NIST_MAPPING_SUMMARY,
     AppView.AI_SAFETY_GOVERNANCE,
     AppView.NOTIFICATIONS,
+    AppView.MAILBOX,
     AppView.NOT_FOUND,
   ] as const;
 

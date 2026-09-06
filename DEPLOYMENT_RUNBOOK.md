@@ -139,4 +139,4 @@ Deploy `dist/` to the current frontend host for `https://conscious-network.org` 
 
 Cloud Run scripts remain in the repository for historical/legacy operations, but they are not the current production Stripe webhook target. Do not use the old Cloud Run URL when configuring Stripe webhooks for CNH launch.
 
-Outbound production email: follow [Gmail configuration](docs/GMAIL_EMAIL.md). Gmail SMTP requires a Render instance with outbound SMTP access; free web services block it. No mail setting changes application login authentication.
+Core correspondence uses the [internal mailbox](docs/INTERNAL_CORRESPONDENCE.md), without SMTP or a schema migration. [Optional Gmail recovery delivery](docs/GMAIL_EMAIL.md) requires working SMTP egress. Deploy backend and frontend together; existing login and recovery behavior are preserved.

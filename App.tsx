@@ -1,3 +1,4 @@
+import Mailbox from './components/Mailbox';
 import ProviderWalletGuide from './components/ProviderWalletGuide';
 
 import React, { useState, useEffect, useMemo, useRef } from 'react';
@@ -275,6 +276,8 @@ const routePathForView = (view: AppView, params: Record<string, string> = {}): s
       return '/profile';
     case AppView.MEMBERSHIP:
       return '/membership';
+    case AppView.MAILBOX:
+      return '/mailbox';
     case AppView.NOTIFICATIONS:
       return '/notifications';
     case AppView.ADMIN_DASHBOARD:
@@ -348,6 +351,7 @@ const resolveRoute = (pathname: string, search = ''): RouteState => {
     '/profile': AppView.MY_CONSCIOUS_IDENTITY,
     '/membership': AppView.MEMBERSHIP,
     '/notifications': AppView.NOTIFICATIONS,
+    '/mailbox': AppView.MAILBOX,
     '/admin': AppView.ADMIN_DASHBOARD,
     '/admin/provider-applicants': AppView.ADMIN_PROVIDER_APPLICANTS,
     '/privacy-policy': AppView.PRIVACY_POLICY,
@@ -404,6 +408,7 @@ const requiresStoredSession = (view: AppView): boolean =>
     AppView.MY_COURSES,
     AppView.MY_CONSCIOUS_IDENTITY,
     AppView.NOTIFICATIONS,
+    AppView.MAILBOX,
     AppView.ADMIN_DASHBOARD,
     AppView.ADMIN_PROVIDER_APPLICANTS,
     AppView.PROVIDER_CRM,
@@ -460,6 +465,7 @@ const isNoTierSignedInAllowedView = (view: AppView): boolean =>
     AppView.PROVIDER_APPLICATION_STATUS,
     AppView.PROVIDER_CRM,
     AppView.NOTIFICATIONS,
+    AppView.MAILBOX,
     AppView.CONSCIOUS_CAREERS,
     AppView.GRANT_APPLICATION,
     AppView.ENTREPRENEURSHIP_SUPPORT,
@@ -3060,6 +3066,7 @@ const App: React.FC = () => {
     'my-courses': AppView.MY_COURSES,
     courses: AppView.KNOWLEDGE_PATHWAYS,
     careers: AppView.ENTREPRENEURSHIP_SUPPORT,
+    mailbox: AppView.MAILBOX,
     profile: AppView.MY_CONSCIOUS_IDENTITY,
     membership: AppView.MEMBERSHIP,
     admin: AppView.ADMIN_DASHBOARD,
@@ -3079,14 +3086,14 @@ const App: React.FC = () => {
       return NAVIGATION_ITEMS.filter(
         (item) =>
           item.id !== 'admin' &&
-          (item.id === 'provider-crm' || item.id === 'jerusela' || canTierAccessNavItem(user.tier, item.id))
+          (item.id === 'provider-crm' || item.id === 'mailbox' || item.id === 'jerusela' || canTierAccessNavItem(user.tier, item.id))
       );
     }
     if (!hasConfirmedMembership(user)) {
-      return NAVIGATION_ITEMS.filter((item) => item.id === 'membership' || item.id === 'careers' || item.id === 'jerusela');
+      return NAVIGATION_ITEMS.filter((item) => item.id === 'membership' || item.id === 'careers' || item.id === 'mailbox' || item.id === 'jerusela');
     }
     return NAVIGATION_ITEMS.filter(
-      (item) => item.id !== 'admin' && item.id !== 'provider-crm' && (item.id === 'jerusela' || canTierAccessNavItem(user.tier, item.id))
+      (item) => item.id !== 'admin' && item.id !== 'provider-crm' && (item.id === 'mailbox' || item.id === 'jerusela' || canTierAccessNavItem(user.tier, item.id))
     );
   }, [user]);
 
@@ -3101,6 +3108,7 @@ const App: React.FC = () => {
         AppView.PROVIDER_APPLICANT_SIGN_IN,
         AppView.PROVIDER_APPLICATION_STATUS,
         AppView.NOTIFICATIONS,
+        AppView.MAILBOX,
         AppView.CONSCIOUS_CAREERS,
         AppView.ENTREPRENEURSHIP_SUPPORT,
         AppView.PRIVACY_POLICY,
@@ -3183,19 +3191,7 @@ const App: React.FC = () => {
           route: typeof window !== 'undefined' ? window.location.pathname : routePathForView(currentView, routeParams),
         },
       });
-      const emailStatus =
-        typeof data.delivery === 'object' && data.delivery?.email
-          ? data.delivery.email
-          : data.emailStatus;
-      setContactStatus(
-        `Request received${data.ticketId ? `: ${data.ticketId}` : ''}. ${
-          emailStatus === 'sent'
-            ? 'Admin notification email was sent.'
-            : emailStatus === 'configuration-required'
-              ? 'The request is in the admin inbox; outbound email requires server email configuration.'
-              : ''
-        }`.trim()
-      );
+      setContactStatus(`Request received${data.ticketId ? `: ${data.ticketId}` : ''}. Your request is saved for administrative review.`);
       setContactMessage('');
       setContactSubject('');
     } catch (error) {
@@ -3392,6 +3388,7 @@ const App: React.FC = () => {
         AppView.PROVIDER_APPLICANT_SIGN_IN,
         AppView.PROVIDER_APPLICATION_STATUS,
         AppView.NOTIFICATIONS,
+        AppView.MAILBOX,
         AppView.NOT_FOUND,
       ].includes(currentView)
     ) {
@@ -4267,6 +4264,8 @@ const App: React.FC = () => {
             onSignIn={openMemberLogin}
           />
         );
+      case AppView.MAILBOX:
+        return <Mailbox admin={hasAdminRole(user)} onBack={() => setCurrentView(hasAdminRole(user) ? AppView.ADMIN_DASHBOARD : hasApplicantRole(user) ? AppView.PROVIDER_APPLICATION_STATUS : AppView.DASHBOARD)} />;
       case AppView.NOTIFICATIONS:
         return <NotificationsCenter onBack={() => setCurrentView(AppView.DASHBOARD)} />;
       case AppView.ADMIN_DASHBOARD:

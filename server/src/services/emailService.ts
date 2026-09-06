@@ -68,51 +68,6 @@ class EmailService {
     return this.isConfigured;
   }
 
-  adminRecipient(): string {
-    return resolveEmailConfig().adminRecipient;
-  }
-
-  async sendIssueReport(options: {
-    userEmail?: string;
-    title: string;
-    description: string;
-    category: string;
-    priority?: string;
-    analysis?: string;
-  }): Promise<{ ok: boolean; [key: string]: any }> {
-    const html = `
-      <h2>New Platform Issue</h2>
-      <p><strong>Title:</strong> ${this.escape(options.title)}</p>
-      <p><strong>Category:</strong> ${this.escape(options.category)}</p>
-      ${options.priority ? `<p><strong>Priority:</strong> ${this.escape(options.priority)}</p>` : ''}
-      ${options.userEmail ? `<p><strong>User:</strong> ${this.escape(options.userEmail)}</p>` : ''}
-      <hr/>
-      <p>${this.escape(options.description).replace(/\n/g, '<br/>')}</p>
-      ${options.analysis ? `<hr/><p><strong>AI Analysis:</strong><br/>${this.escape(options.analysis)}</p>` : ''}
-      <hr/>
-      <small>${new Date().toISOString()}</small>
-    `;
-
-    return this.send({
-      to: this.adminRecipient(),
-      subject: `[${options.category.toUpperCase()}] ${options.title}`,
-      html,
-      text: options.description,
-    });
-  }
-
-  private escape(value: string): string {
-    return value.replace(/[&<>"']/g, (char) => {
-      const map: Record<string, string> = {
-        '&': '&amp;',
-        '<': '&lt;',
-        '>': '&gt;',
-        '"': '&quot;',
-        "'": '&#039;',
-      };
-      return map[char];
-    });
-  }
 }
 
 export default new EmailService();

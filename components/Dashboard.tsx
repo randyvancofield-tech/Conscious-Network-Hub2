@@ -238,7 +238,7 @@ const Dashboard: React.FC<DashboardProps> = ({
             <h2 className="text-lg font-black uppercase leading-tight text-white">Support Pipeline</h2>
           </div>
           <p className="mt-5 text-sm leading-6 text-slate-300">
-            Questions and issue reports route to the internal admin message pipeline. Outbound email notification depends on configured server mail credentials and is never claimed unless the backend confirms delivery.
+            Questions and issue reports are saved for administrative review. Open your HCN Mailbox to correspond with administration and follow up.
           </p>
           <button
             type="button"

@@ -58,7 +58,7 @@ Purpose: preserve launch readiness state, known risks, exact stop/resume context
 | `www.conscious-network.org` returns Cloudflare 522 | Users visiting `www` may fail to load the site. | Fix Cloudflare Pages custom-domain/DNS binding for `www`; verify it points to the same Pages project as root. |
 | Cloudflare dashboard settings not fully machine-verifiable here | Edge cache/routing/security settings could still differ from repo expectations. | Manually confirm Pages project, production branch, build command, output directory, custom domains, cache rules, redirects, WAF, and TLS mode. |
 | Mobile wallet/provider verification not fully automated | Provider/admin wallet flows may behave differently on mobile wallets. | Test wallet nonce/signature/bind/verify on desktop browser, mobile browser, and mobile wallet in-app browser. |
-| Email delivery may be disabled by launch policy | Users may rely on in-app notification/recovery-code fallback unless SMTP/Gmail is enabled. | Decide whether production email is required; if yes, configure email credentials and run a real provider/application/password-recovery email smoke test. |
+| External recovery delivery may be unavailable | Core correspondence uses the internal mailbox; pre-login email recovery still requires working external delivery. | Verify internal correspondence separately from authorized recovery testing. See INTERNAL_CORRESPONDENCE.md and GMAIL_EMAIL.md. |
 | Alert-only UI notices were converted in active app paths | Remaining risk is visual polish, not unsupported browser alerts. | Continue replacing local status banners with the final toast/modal pattern in a polish pass. |
 | Full authenticated visual regression was not completed in this pass | Headless guest checks cannot prove every role-specific screen after wallet/admin elevation. | Founder/admin manual walkthrough required before inviting external users. |
 
@@ -105,7 +105,7 @@ Backend:
 - `PROVIDER_CRM_ADMIN_WALLET_ADDRESS` or `ADMIN_WALLET_ADDRESS`
 - `EMAIL_FROM`
 - `EMAIL_DELIVERY_ENABLED` / `REQUIRE_EMAIL_DELIVERY`
-- Production Gmail settings: see [GMAIL_EMAIL.md](../GMAIL_EMAIL.md); both delivery flags must be true in production.
+- Production Gmail settings: see [GMAIL_EMAIL.md](../GMAIL_EMAIL.md); both flags apply only to optional external recovery delivery; core correspondence does not require SMTP.
 - `OPENAI_API_KEY` or approved AI provider configuration if enhanced AI responses are required
 
 ## Manual Tests Still Required

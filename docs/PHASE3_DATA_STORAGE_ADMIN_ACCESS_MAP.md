@@ -63,7 +63,7 @@ Generated for Phase 3 only: storage, persistence, route mapping, and admin/provi
 | Provider CRM workspace | `ProviderCrmShell.tsx` | `/api/provider/crm/*` | Uses `ProviderCrmRecord`, `Course`, `ProviderRoundtableReservation`, `MeetingSession`, `ProviderCrmToolVisibility`; scoped by provider session |
 | Meetings | `ConsciousMeetings.tsx`, meeting pages | `/api/meeting/provider/*`, `/user/*`, `/guest/*` | Stores sessions, invited members, participants, external links, and signals in `MeetingSession` |
 | Conscious Careers grant application | `GrantApplicationPage.tsx` via `App.tsx` | `POST /api/conscious-careers/grant-applications` | Creates `ConsciousCareerGrantApplication`; no admin review/list route currently present |
-| Contact/support form | `App.tsx` | `POST /api/support/contact` | Sends through `emailService`, emits audit event, returns ticket ID; persists an AdminMessage before attempting email |
+| Contact/support form | `App.tsx` | `POST /api/support/contact` | Persists administrative intake in AdminMessage, emits audit event and returns ticket ID; no SMTP dependency |
 | AI chat/wisdom/report issue/trending | `EthicalAIInsight.tsx`, `backendApiService.ts` | `/api/ai/*` | Generates responses; current routes do not persist `AiInteraction`. Issue reports may send email and return confirmation |
 | Notifications center | `NotificationsCenter.tsx` | `GET/PATCH /api/notifications` | Reads and marks authenticated user's `Notification` rows only; role scope is enforced server-side |
 
@@ -98,4 +98,4 @@ Generated for Phase 3 only: storage, persistence, route mapping, and admin/provi
 - Membership activation/cancel/past-due: after Stripe checkout confirmation and webhook membership sync.
 - Provider request created/updated: after `AnchorLinkRequest` create/update in `providers.ts`.
 - Meeting invites/external links: after provider meeting invite/link creation in `meeting.ts`.
-- Support/contact: `support.ts` already calls `emailService`; submissions now persist in AdminMessage even if the outbound email attempt fails.
+- Support/contact: `support.ts` persists AdminMessage intake for administrative review. Internal correspondence supersedes outbound support email; see INTERNAL_CORRESPONDENCE.md.

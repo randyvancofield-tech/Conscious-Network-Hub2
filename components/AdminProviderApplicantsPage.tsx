@@ -145,7 +145,6 @@ const AdminProviderApplicantsPage: React.FC = () => {
   const [selected, setSelected] = useState<ProviderApplicantAdminRecord | null>(null);
   const [statusDraft, setStatusDraft] = useState('submitted');
   const [notesDraft, setNotesDraft] = useState('');
-  const [sendEmailDraft, setSendEmailDraft] = useState(true);
   const [applicantMessageDraft, setApplicantMessageDraft] = useState('');
   const [communicationNotice, setCommunicationNotice] = useState('');
   const [loading, setLoading] = useState(false);
@@ -221,7 +220,6 @@ const AdminProviderApplicantsPage: React.FC = () => {
       setReplies(data.replies || []);
       setStatusDraft(data.applicant.status || 'submitted');
       setNotesDraft(data.applicant.adminNotes || '');
-      setSendEmailDraft(true);
       setApplicantMessageDraft('');
       setCommunicationNotice('');
       setDocumentError('');
@@ -276,30 +274,21 @@ const AdminProviderApplicantsPage: React.FC = () => {
     try {
       const data = await api<{
         applicant: ProviderApplicantAdminRecord;
-        communication?: { emailAttempted?: boolean; emailSent?: boolean; emailSkipped?: boolean };
+        communication?: { internalDelivered?: boolean };
       }>(`/admin/provider-applicants/${encodeURIComponent(selected.id)}`, {
         method: 'PATCH',
         headers: adminHeaders(),
         body: {
           status: statusDraft,
           adminNotes: notesDraft,
-          sendEmail: sendEmailDraft,
           applicantMessage: applicantMessageDraft,
         },
       });
       setSelected(data.applicant);
       setApplicantMessageDraft('');
-      if (data.communication?.emailAttempted) {
-        setCommunicationNotice(
-          data.communication.emailSent
-            ? 'Applicant status email sent.'
-            : data.communication.emailSkipped
-              ? 'Applicant email skipped in this environment.'
-              : 'Applicant status email attempted.'
-        );
-      } else {
-        setCommunicationNotice('Applicant status saved without email.');
-      }
+      setCommunicationNotice(data.communication?.internalDelivered
+        ? 'Status saved and correspondence delivered to the applicant mailbox.'
+        : 'Status saved, but mailbox delivery could not be confirmed. Use the admin mailbox to send the update again.');
       await loadApplicants();
     } catch (error) {
       setError(error instanceof Error ? error.message : 'Unable to update applicant.');
@@ -682,19 +671,10 @@ const AdminProviderApplicantsPage: React.FC = () => {
               </label>
 
               <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-4">
-                <label className="flex items-center gap-3 text-sm font-bold text-slate-200">
-                  <input
-                    type="checkbox"
-                    checked={sendEmailDraft}
-                    onChange={(event) => setSendEmailDraft(event.target.checked)}
-                    className="h-4 w-4 rounded border-white/20 bg-slate-950"
-                  />
-                  <Mail className="h-4 w-4 text-blue-200" />
-                  Send applicant status email
-                </label>
+                <p className="text-sm text-slate-200">Status updates are delivered inside the applicant mailbox. Use the admin mailbox for replies and attachments.</p>
                 <label className="mt-4 block space-y-2">
                   <span className="text-xs font-black uppercase tracking-widest text-slate-500">
-                    Applicant Message (visible in portal; email is optional)
+                    Applicant correspondence (visible in their HCN mailbox)
                   </span>
                   <textarea
                     value={applicantMessageDraft}

@@ -15,6 +15,16 @@ export interface AuthenticatedRequest extends Request {
 
 export type PlatformRole = 'guest' | 'user' | 'applicant' | 'provider' | 'admin';
 
+// Mailbox-only access for applicants and inactive providers; each handler checks participants.
+const isMailboxRoute = (req: Request): boolean => {
+  if (req.baseUrl !== '/api/mail') return false;
+  const path = req.path.replace(/\/+$/, '') || '/';
+  if (req.method === 'GET') return /^\/(recipients|messages)$/.test(path) ||
+    /^\/messages\/[^/]+\/(thread|export)$/.test(path) || /^\/messages\/[^/]+\/attachments\/[^/]+$/.test(path);
+  if (req.method === 'POST') return path === '/messages';
+  return req.method === 'PATCH' && /^\/messages\/[^/]+\/read$/.test(path);
+};
+
 const isProviderApplicantLifecycleStatusRoute = (req: Request): boolean => {
   const baseUrl = String(req.baseUrl || '').replace(/\/+$/, '');
   const path = String(req.path || '').replace(/\/+$/, '') || '/';
@@ -35,7 +45,7 @@ const hasApplicantOnlyAccess = (user: { role?: string; providerApproved?: boolea
 const isApplicantAllowedRoute = (req: Request): boolean => {
   const base = String(req.baseUrl || '').replace(/\/+$/, '');
   const path = String(req.path || '').replace(/\/+$/, '') || '/';
-  if (isProviderApplicantLifecycleStatusRoute(req)) return true;
+  if (isProviderApplicantLifecycleStatusRoute(req) || isMailboxRoute(req)) return true;
   if (base === '/api/user') {
     return (req.method === 'GET' && path === '/current') ||
       (req.method === 'POST' && path === '/logout');
@@ -219,7 +229,7 @@ export function requireCanonicalIdentity(
     if (
       user.role === 'provider' &&
       !isProviderAccessActive(user) &&
-      !isProviderApplicantLifecycleStatusRoute(req)
+      !isProviderApplicantLifecycleStatusRoute(req) && !isMailboxRoute(req)
     ) {
       if (payload.sessionId) {
         await revokeUserSession(payload.sessionId);

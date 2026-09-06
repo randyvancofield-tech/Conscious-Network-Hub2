@@ -10,7 +10,6 @@ import {
 import { getVertexAIService } from '../services/vertexAiService';
 import { chatWithOpenAI, isOpenAIConfigured } from "../services/openAiService";
 import { createAdminMessage, normalizeAdminMessagePriority } from '../services/adminMessageStore';
-import emailService from '../services/emailService';
 import {
   buildAiContext,
   getAiContextIndexStatus,
@@ -706,26 +705,10 @@ router.post('/report-issue', validateChatInput, async (req: Request, res: Respon
       metadata: {
         delivery: 'admin_console',
         aiTriagePriority: priority,
-        emailNotification: emailService.configured() ? 'attempt_pending' : 'configuration_required',
-        targetRecipient: emailService.adminRecipient(),
+        emailNotification: 'not-applicable',
       },
     });
-    const emailConfigured = emailService.configured();
-    const emailResult = emailConfigured
-      ? await emailService.sendIssueReport({
-          userEmail,
-          title,
-          description,
-          category,
-          priority,
-          analysis,
-        })
-      : { ok: true, skipped: true, reason: 'email_not_configured' };
-    const emailStatus = emailConfigured
-      ? emailResult.ok && !emailResult.skipped
-        ? 'sent'
-        : 'failed'
-      : 'configuration-required';
+    const emailStatus = 'not-applicable';
 
     // Always return success response to frontend
     console.log('[API] Returning success response to client');
@@ -743,8 +726,8 @@ router.post('/report-issue', validateChatInput, async (req: Request, res: Respon
         internal: 'admin-console',
         email: emailStatus,
       },
-      emailConfigured,
-      emailSent: emailStatus === 'sent',
+      emailConfigured: false,
+      emailSent: false,
       emailStatus,
     });
   } catch (error) {

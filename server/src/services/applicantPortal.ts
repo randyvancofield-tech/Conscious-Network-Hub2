@@ -12,7 +12,7 @@ export const toApplicantPortalRecord = (row: Record<string, unknown>) => {
 
 export const listApplicantFollowUps = async (userId: string, applicantId: string) => {
   const messages = await listAdminMessages({
-    submitterUserId: userId, applicantId, source: 'provider_applicant_follow_up', limit: 250,
+    submitterUserId: userId, applicantId, limit: 250,
   });
   return messages.map(({ id, message, createdAt }) => ({ id, message, createdAt }))
     .sort((a, b) => b.createdAt.localeCompare(a.createdAt));
