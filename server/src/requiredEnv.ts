@@ -1,3 +1,5 @@
+import { hasEmailDeliveryConfig, isEmailDeliveryEnabled, isEmailDeliveryRequired } from './services/emailConfig';
+export { hasEmailDeliveryConfig, isEmailDeliveryEnabled, isEmailDeliveryRequired } from './services/emailConfig';
 const hasNonEmptyEnv = (name: string): boolean => {
   const value = process.env[name];
   return typeof value === 'string' && value.trim().length > 0;
@@ -101,18 +103,6 @@ const parseBooleanEnv = (name: string): boolean | null => {
 
 const hasSensitiveDataKey = (): boolean => hasNonEmptyEnv('SENSITIVE_DATA_KEY');
 const hasUploadObjectKeySecret = (): boolean => hasNonEmptyEnv('UPLOAD_OBJECT_KEY_SECRET');
-export const hasEmailDeliveryConfig = (): boolean =>
-  (hasNonEmptyEnv('EMAIL_USER') && hasNonEmptyEnv('EMAIL_PASSWORD')) ||
-  (hasNonEmptyEnv('SMTP_HOST') && hasNonEmptyEnv('SMTP_PORT'));
-export const isEmailDeliveryRequired = (): boolean =>
-  parseBooleanEnv('REQUIRE_EMAIL_DELIVERY') === true ||
-  parseBooleanEnv('EMAIL_DELIVERY_ENABLED') === true;
-export const isEmailDeliveryEnabled = (): boolean => {
-  const deliveryFlag = parseBooleanEnv('EMAIL_DELIVERY_ENABLED');
-  if (deliveryFlag !== null) return deliveryFlag;
-  if (parseBooleanEnv('REQUIRE_EMAIL_DELIVERY') === true) return true;
-  return false;
-};
 const hasSmsDeliveryConfig = (): boolean =>
   hasNonEmptyEnv('TWILIO_ACCOUNT_SID') &&
   hasNonEmptyEnv('TWILIO_AUTH_TOKEN') &&
@@ -313,7 +303,7 @@ export const validateRequiredEnv = (): void => {
 
   if (isProduction && isEmailDeliveryRequired() && !hasEmailDeliveryConfig()) {
     throw new Error(
-      '[STARTUP][FATAL] Email delivery is enabled/required but not configured. Set EMAIL_USER + EMAIL_PASSWORD or SMTP_HOST + SMTP_PORT, or disable EMAIL_DELIVERY_ENABLED/REQUIRE_EMAIL_DELIVERY.'
+      '[STARTUP][FATAL] Email delivery is enabled/required but not configured. Use EMAIL_SERVICE=gmail, EMAIL_USER=higherconscious.network1@gmail.com and a backend EMAIL_PASSWORD secret; required delivery cannot be disabled.'
     );
   }
 

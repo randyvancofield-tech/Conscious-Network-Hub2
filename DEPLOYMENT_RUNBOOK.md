@@ -73,9 +73,6 @@ Optional for AI routes only:
 
 Production delivery integrations:
 
-- `EMAIL_USER` + `EMAIL_PASSWORD`, or `SMTP_HOST` + `SMTP_PORT`: required in production; enables native password reset, provider applicant lifecycle, and admin notification email delivery. Normal sign-in does not require email verification gates.
-- `EMAIL_FROM`: sender address for account and provider lifecycle emails.
-- `ADMIN_NOTIFICATION_EMAIL`: internal recipient for provider application/admin email notifications.
 - `TWILIO_ACCOUNT_SID`, `TWILIO_AUTH_TOKEN`, `TWILIO_FROM_NUMBER`: optional legacy SMS settings only. Member/provider sign-in does not require Twilio.
 - `ENABLE_PASSWORD_RESET=false`: deliberately disables native password reset email flow.
 - `ENABLE_USER_2FA=false`: leave disabled for launch; legacy 2FA fields are non-blocking.
@@ -141,3 +138,5 @@ Deploy `dist/` to the current frontend host for `https://conscious-network.org` 
 ## Legacy Cloud Run Scripts
 
 Cloud Run scripts remain in the repository for historical/legacy operations, but they are not the current production Stripe webhook target. Do not use the old Cloud Run URL when configuring Stripe webhooks for CNH launch.
+
+Outbound production email: follow [Gmail configuration](docs/GMAIL_EMAIL.md). Gmail SMTP requires a Render instance with outbound SMTP access; free web services block it. No mail setting changes application login authentication.

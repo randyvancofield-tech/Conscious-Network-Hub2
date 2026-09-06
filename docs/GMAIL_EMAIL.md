@@ -15,9 +15,9 @@ Set the following only in the deployed backend environment (currently documented
 | EMAIL_DELIVERY_ENABLED | true, after the secret is stored |
 | REQUIRE_EMAIL_DELIVERY | true |
 
-Keep ENABLE_PASSWORD_RESET=true for email recovery. ADMIN_NOTIFICATION_EMAIL can remain higherconscious.network1@gmail.com. SMTP_HOST, SMTP_PORT, SMTP_SECURE, SMTP_USER and SMTP_PASSWORD are not needed for this Gmail service configuration; remove stale SMTP overrides to avoid ambiguity. FRONTEND_BASE_URL should remain https://conscious-network.org.
+Keep ENABLE_PASSWORD_RESET=true for email recovery. ADMIN_NOTIFICATION_EMAIL can remain higherconscious.network1@gmail.com. Remove legacy SMTP_* overrides; generic SMTP selection is no longer supported by this application. Remove SUPPORT_EMAIL_TO and EMAIL_ADMIN_TO; ADMIN_NOTIFICATION_EMAIL is the sole outbound internal-recipient setting. FRONTEND_BASE_URL should remain https://conscious-network.org.
 
-The Gmail transport uses the authenticated EMAIL_USER as the From address, even if a stale EMAIL_FROM domain address remains in the hosting settings. The separate generic SMTP transport retains its explicit From setting for deployments using another mail provider. No domain-mail authentication or send-as alias is assumed.
+The Gmail transport uses the authenticated EMAIL_USER as the From address, even if a stale EMAIL_FROM domain address remains in the hosting settings. EMAIL_SERVICE must be gmail and EMAIL_USER must match the designated production account. Transport, sender, enablement and recipient policy are centralized in server/src/services/emailConfig.ts. No domain-mail authentication or send-as alias is assumed.
 
 ## Authentication and security
 
@@ -40,3 +40,13 @@ Jessica's submission and follow-up previously recorded emailSent=false and email
 - https://support.google.com/accounts/answer/185833
 - https://support.google.com/mail/answer/7104828
 - https://support.google.com/mail/answer/22839
+
+## Failed production verification and next diagnostic attempt
+
+The September 6 support/contact test recorded an internal ticket, emailConfigured=true and emailSent=false. Configuration presence does not prove Gmail authentication. The request waited a long time before returning failure. Without Render logs the exact cause is unconfirmed. A connection timeout is plausible, not established.
+
+Render free web services block outbound ports 25, 465 and 587. Gmail SMTP therefore needs a paid Render instance with SMTP egress. Confirm the current instance type before retrying. Changing mailbox defaults or App Passwords cannot fix an egress block. Source: https://render.com/docs/free
+
+After deploying this remediation, a single controlled test to the admin mailbox is appropriate if SMTP egress is available. Never resend Jessica's message as a diagnostic probe. Logs now emit only a fixed failure class, allowlisted error code, and numeric SMTP error status; no raw error, response, command, credentials, message body, or recipient. EAUTH indicates authentication; ETIMEDOUT/connection codes indicate network or greeting problems; TLS/socket and delivery rejection have distinct classes. Unknown failures remain unknown rather than leaking raw details. Connection/greeting waits are 15 seconds each, with a 30-second idle socket timeout. These diagnostics do not make transport configured() a connectivity check.
+
+Disabled flags in server/.env.example and email-disabled test cases are intentional local/test safeguards. They are not production instructions. Invalid enabled configuration fails rather than selecting a legacy fallback. Both production flags must be true. Internal notices use ADMIN_NOTIFICATION_EMAIL, defaulting to higherconscious.network1@gmail.com.

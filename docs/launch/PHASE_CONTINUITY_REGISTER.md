@@ -105,7 +105,7 @@ Backend:
 - `PROVIDER_CRM_ADMIN_WALLET_ADDRESS` or `ADMIN_WALLET_ADDRESS`
 - `EMAIL_FROM`
 - `EMAIL_DELIVERY_ENABLED` / `REQUIRE_EMAIL_DELIVERY`
-- `EMAIL_USER` + `EMAIL_PASSWORD` or `SMTP_HOST` + `SMTP_PORT` if email is enabled
+- Production Gmail settings: see [GMAIL_EMAIL.md](../GMAIL_EMAIL.md); both delivery flags must be true in production.
 - `OPENAI_API_KEY` or approved AI provider configuration if enhanced AI responses are required
 
 ## Manual Tests Still Required

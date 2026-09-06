@@ -1,11 +1,12 @@
 jest.mock('nodemailer', () => ({ __esModule: true, default: { createTransport: jest.fn() } }));
-jest.mock('../requiredEnv', () => ({ isEmailDeliveryEnabled: jest.fn(() => true) }));
 
 describe('email sender configuration', () => {
   const originalEnv = { ...process.env };
   beforeEach(() => {
     jest.resetModules();
     process.env = { ...originalEnv };
+    process.env.EMAIL_DELIVERY_ENABLED = 'true';
+    process.env.REQUIRE_EMAIL_DELIVERY = 'true';
     for (const key of ['EMAIL_FROM', 'EMAIL_USER', 'EMAIL_PASSWORD', 'EMAIL_SERVICE', 'SMTP_HOST', 'SMTP_PORT', 'SMTP_USER', 'SMTP_PASSWORD']) delete process.env[key];
   });
   afterEach(() => { process.env = { ...originalEnv }; jest.restoreAllMocks(); });
@@ -25,21 +26,22 @@ describe('email sender configuration', () => {
     expect((await service.send(message)).skipped).toBeUndefined();
     expect(sendMail).toHaveBeenCalledWith(expect.objectContaining({ from: 'higherconscious.network1@gmail.com' }));
   });
-  it('preserves explicit From for a separately configured SMTP service', async () => {
+  it('rejects legacy SMTP configuration instead of silently selecting another transport', async () => {
     process.env.SMTP_HOST = 'smtp.example.com'; process.env.SMTP_PORT = '465';
     process.env.EMAIL_FROM = 'sender@example.com';
     const { service, sendMail } = setup();
-    await service.send(message);
-    expect(sendMail).toHaveBeenCalledWith(expect.objectContaining({ from: 'sender@example.com' }));
+    expect((await service.send(message)).ok).toBe(false);
+    expect(sendMail).not.toHaveBeenCalled();
   });
-  it('skips without credentials and does not queue a message', async () => {
+  it('fails enabled delivery without credentials and does not queue a message', async () => {
     const { service, mailer } = setup();
-    expect(await service.send(message)).toEqual({ ok: true, skipped: true });
+    expect((await service.send(message)).ok).toBe(false);
     expect(mailer.createTransport).not.toHaveBeenCalled();
   });
   it('keeps delivery disabled even when configuration is present', async () => {
     process.env.EMAIL_USER = 'higherconscious.network1@gmail.com'; process.env.EMAIL_PASSWORD = 'unit-test-placeholder';
-    require('../requiredEnv').isEmailDeliveryEnabled.mockReturnValue(false);
+    process.env.EMAIL_DELIVERY_ENABLED = 'false';
+    process.env.REQUIRE_EMAIL_DELIVERY = 'false';
     const { service, mailer } = setup();
     expect(await service.send(message)).toEqual({ ok: true, skipped: true });
     expect(mailer.createTransport).not.toHaveBeenCalled();

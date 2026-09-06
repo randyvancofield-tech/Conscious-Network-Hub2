@@ -1,5 +1,5 @@
 import nodemailer, { Transporter } from 'nodemailer';
-import { isEmailDeliveryEnabled } from '../requiredEnv';
+import { resolveEmailConfig, emailFailureDiagnostics, PRODUCTION_EMAIL_ADDRESS } from './emailConfig';
 
 export interface EmailOptions {
   to: string;
@@ -10,59 +10,29 @@ export interface EmailOptions {
 
 class EmailService {
   private transporter: Transporter | null = null;
-  private fromEmail = 'higherconscious.network1@gmail.com';
+  private fromEmail = PRODUCTION_EMAIL_ADDRESS;
   private isConfigured = false;
   private initialized = false;
 
   private initializeTransport(): void {
     if (this.initialized) return;
     this.initialized = true;
-    this.fromEmail = process.env.EMAIL_FROM || 'higherconscious.network1@gmail.com';
-
+    const config = resolveEmailConfig();
+    this.fromEmail = config.from;
+    if (!config.enabled) {
+      console.info('[EmailService] Outbound delivery disabled');
+      return;
+    }
+    if (!config.valid) {
+      console.error('[EmailService] Invalid outbound Gmail configuration', { failureClass: 'configuration' });
+      return;
+    }
     try {
-      if (!isEmailDeliveryEnabled()) {
-        console.warn('[EmailService] Email delivery disabled - in-app/recovery-code launch mode');
-        return;
-      }
-
-      if (process.env.EMAIL_USER && process.env.EMAIL_PASSWORD) {
-        // Gmail sends as the authenticated mailbox; ignore stale domain From overrides.
-        if ((process.env.EMAIL_SERVICE || 'gmail').trim().toLowerCase() === 'gmail') {
-          this.fromEmail = process.env.EMAIL_USER.trim();
-        }
-        this.transporter = nodemailer.createTransport({
-          service: process.env.EMAIL_SERVICE || 'gmail',
-          auth: {
-            user: process.env.EMAIL_USER,
-            pass: process.env.EMAIL_PASSWORD,
-          },
-        });
-        this.isConfigured = true;
-        console.log('[EmailService] Gmail transport configured');
-        return;
-      }
-
-      if (process.env.SMTP_HOST && process.env.SMTP_PORT) {
-        this.transporter = nodemailer.createTransport({
-          host: process.env.SMTP_HOST,
-          port: Number(process.env.SMTP_PORT),
-          secure: process.env.SMTP_SECURE === 'true',
-          auth:
-            process.env.SMTP_USER && process.env.SMTP_PASSWORD
-              ? {
-                  user: process.env.SMTP_USER,
-                  pass: process.env.SMTP_PASSWORD,
-                }
-              : undefined,
-        });
-        this.isConfigured = true;
-        console.log('[EmailService] SMTP transport configured');
-        return;
-      }
-
-      console.log('[EmailService] No email config - safe dev mode');
-    } catch (err) {
-      console.error('[EmailService] Transport initialization failed');
+      this.transporter = nodemailer.createTransport(config.transport);
+      this.isConfigured = true;
+      console.info('[EmailService] Gmail transport configured; authentication is verified on send');
+    } catch (error) {
+      console.error('[EmailService] Transport initialization failed', emailFailureDiagnostics(error));
       this.transporter = null;
       this.isConfigured = false;
     }
@@ -71,6 +41,7 @@ class EmailService {
   async send(options: EmailOptions): Promise<{ ok: boolean; [key: string]: any }> {
     this.initializeTransport();
     if (!this.isConfigured || !this.transporter) {
+      if (resolveEmailConfig().enabled) return { ok: false, error: 'Email configuration invalid' };
       console.log('[EmailService.send] Skipped (not configured)');
       return { ok: true, skipped: true };
     }
@@ -87,7 +58,7 @@ class EmailService {
       console.log('[EmailService.send] Email sent:', info.messageId);
       return { ok: true, messageId: info.messageId };
     } catch (error) {
-      console.error('[EmailService.send] Delivery failed; check provider authentication and sending limits');
+      console.error('[EmailService.send] Delivery failed', emailFailureDiagnostics(error));
       return { ok: false, error: 'Email send failed' };
     }
   }
@@ -98,12 +69,7 @@ class EmailService {
   }
 
   adminRecipient(): string {
-    return (
-      process.env.ADMIN_NOTIFICATION_EMAIL ||
-      process.env.SUPPORT_EMAIL_TO ||
-      process.env.EMAIL_ADMIN_TO ||
-      'higherconscious.network1@gmail.com'
-    );
+    return resolveEmailConfig().adminRecipient;
   }
 
   async sendIssueReport(options: {

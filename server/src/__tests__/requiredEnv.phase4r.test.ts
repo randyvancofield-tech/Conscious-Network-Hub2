@@ -47,7 +47,7 @@ describe('Phase 4R email environment policy', () => {
     expect(isEmailDeliveryEnabled()).toBe(false);
   });
 
-  it('requires Gmail or SMTP config when email delivery is explicitly enabled', () => {
+  it('requires the designated Gmail config when email delivery is explicitly enabled', () => {
     process.env.EMAIL_DELIVERY_ENABLED = 'true';
 
     const { validateRequiredEnv } = require('../requiredEnv');

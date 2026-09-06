@@ -39,11 +39,6 @@ Canonical environment values for the current backend architecture.
 | Render | `DATABASE_POOL_MODE` | `transaction` | Yes | Must match the Neon pooler mode for `DATABASE_URL`. |
 | Render | `HSTS_ALLOWED_HOSTS` | final production API/custom domain host | Yes for custom prod domains | Optional comma-separated override for hosts that should receive Strict-Transport-Security. Defaults to the host from `FRONTEND_BASE_URL`. |
 | Render | `HSTS_MAX_AGE_SECONDS` | `31536000` | No | HSTS max-age for production HTTPS requests on allowed hosts. |
-| Render | `EMAIL_DELIVERY_ENABLED` | `false` | No | Explicit launch flag for outbound email. Keep `false` until CNH has a production email provider. |
-| Render | `REQUIRE_EMAIL_DELIVERY` | `false` | No | Set `true` only when startup should fail without Gmail/SMTP config. |
-| Render | `EMAIL_USER` + `EMAIL_PASSWORD`, or `SMTP_HOST` + `SMTP_PORT` | none | Only when email delivery is enabled/required | Optional outbound email provider for future password reset and provider lifecycle emails. When disabled, recovery codes, in-app notifications, and portals are primary. |
-| Render | `EMAIL_FROM` | `higherconscious.network1@gmail.com` | No | Sender for account and provider lifecycle emails. Gmail transport uses EMAIL_USER as From, overriding stale aliases. See GMAIL_EMAIL.md. |
-| Render | `ADMIN_NOTIFICATION_EMAIL` | `higherconscious.network1@gmail.com` | No | Recipient for internal provider application/admin notifications. |
 | Render | `ENABLE_PASSWORD_RESET` | `true` | No | Set to `false` only to deliberately disable native password reset. |
 | Render | `ENABLE_USER_2FA` | `false` | No | Optional legacy enrolled 2FA flag. Default member sign-in does not require SMS. |
 | Render | `TWILIO_ACCOUNT_SID`, `TWILIO_AUTH_TOKEN`, `TWILIO_FROM_NUMBER` | none | No | Optional legacy SMS settings only; not required for member sign-in, onboarding, or Render startup. |
@@ -65,3 +60,7 @@ Canonical environment values for the current backend architecture.
 - Use `npm --prefix server run test:required-secrets` before deploy.
 - Current Stripe webhook URL: `https://conscious-network-backend.onrender.com/api/membership/stripe/webhook`.
 - Use Render logs and health checks after deploy. Legacy Cloud Run check scripts remain for historical operations only.
+
+## Production outbound mail
+
+Use the exact Gmail settings in [GMAIL_EMAIL.md](GMAIL_EMAIL.md). Both delivery flags are true in production. Disabled values in server/.env.example are local-development safeguards, not Render configuration. emailConfig.ts is the single runtime source for transport, sender, flags, and admin recipient.
